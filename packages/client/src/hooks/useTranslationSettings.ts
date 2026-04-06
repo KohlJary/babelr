@@ -7,11 +7,18 @@ const STORAGE_KEY = 'babelr:translation-settings';
 function loadSettings(): TranslationSettings {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Migrate: add provider field if missing (pre-M6 settings)
+      if (!parsed.provider) {
+        parsed.provider = parsed.apiKey ? 'anthropic' : 'local';
+      }
+      return parsed;
+    }
   } catch {
     // Ignore parse errors
   }
-  return { apiKey: '', preferredLanguage: 'en', enabled: true };
+  return { apiKey: '', preferredLanguage: 'en', enabled: true, provider: 'local' };
 }
 
 export function useTranslationSettings() {

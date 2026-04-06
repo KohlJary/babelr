@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { MessageWithAuthor } from '@babelr/shared';
 import {
   AnthropicProvider,
+  TransformersJsProvider,
   getCached,
   setCached,
   type TranslationProvider,
@@ -16,14 +17,16 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
   const providerRef = useRef<TranslationProvider | null>(null);
   const inflightRef = useRef<Set<string>>(new Set());
 
-  // Create/update provider when API key changes
+  // Create/update provider based on settings
   useEffect(() => {
-    if (settings.apiKey) {
+    if (settings.provider === 'local') {
+      providerRef.current = new TransformersJsProvider();
+    } else if (settings.provider === 'anthropic' && settings.apiKey) {
       providerRef.current = new AnthropicProvider(settings.apiKey);
     } else {
       providerRef.current = null;
     }
-  }, [settings.apiKey]);
+  }, [settings.apiKey, settings.provider]);
 
   // Translate uncached messages
   useEffect(() => {
@@ -88,7 +91,7 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
           inflightRef.current.delete(m.message.id);
         }
       });
-  }, [messages, settings.enabled, settings.preferredLanguage, settings.apiKey]);
+  }, [messages, settings.enabled, settings.preferredLanguage, settings.apiKey, settings.provider]);
 
   // Merge in-memory state with cache
   const allTranslations = useMemo(() => {

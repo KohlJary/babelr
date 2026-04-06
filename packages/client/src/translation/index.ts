@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 export { AnthropicProvider } from './anthropic-provider';
+export { TransformersJsProvider } from './transformers-provider';
 export { getCached, setCached, clearCache } from './cache';
-export type { TranslationProvider, CachedTranslation, TranslationSettings } from './types';
+export type {
+  TranslationProvider,
+  CachedTranslation,
+  TranslationSettings,
+  ProviderType,
+} from './types';

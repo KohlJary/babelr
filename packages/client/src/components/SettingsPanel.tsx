@@ -39,17 +39,49 @@ export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProp
         </div>
 
         <div className="settings-field">
-          <label>Anthropic API Key</label>
-          <input
-            type="password"
-            placeholder="sk-ant-..."
-            value={settings.apiKey}
-            onChange={(e) => onUpdate({ apiKey: e.target.value })}
-          />
-          <p className="settings-hint">
-            Your key is stored locally in your browser. It is never saved on the server.
-          </p>
+          <label>Translation engine</label>
+          <div className="auth-tabs">
+            <button
+              type="button"
+              className={`auth-tab ${settings.provider === 'anthropic' ? 'active' : ''}`}
+              onClick={() => onUpdate({ provider: 'anthropic' })}
+            >
+              Cloud (Claude)
+            </button>
+            <button
+              type="button"
+              className={`auth-tab ${settings.provider === 'local' ? 'active' : ''}`}
+              onClick={() => onUpdate({ provider: 'local' })}
+            >
+              Local (Browser)
+            </button>
+          </div>
         </div>
+
+        {settings.provider === 'anthropic' && (
+          <div className="settings-field">
+            <label>Anthropic API Key</label>
+            <input
+              type="password"
+              placeholder="sk-ant-..."
+              value={settings.apiKey}
+              onChange={(e) => onUpdate({ apiKey: e.target.value })}
+            />
+            <p className="settings-hint">
+              Your key is stored locally in your browser. It is never saved on the server.
+            </p>
+          </div>
+        )}
+
+        {settings.provider === 'local' && (
+          <div className="settings-field">
+            <p className="settings-hint">
+              Translations run entirely in your browser. First use downloads a ~50MB model per
+              language pair. Tone, intent, and idiom annotations are not available with local
+              translation.
+            </p>
+          </div>
+        )}
 
         <div className="settings-field">
           <label>Read messages in</label>

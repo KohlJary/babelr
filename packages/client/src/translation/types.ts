@@ -19,8 +19,11 @@ export interface CachedTranslation {
   metadata?: TranslationMetadata;
 }
 
+export type ProviderType = 'anthropic' | 'local';
+
 export interface TranslationSettings {
   apiKey: string;
   preferredLanguage: string;
   enabled: boolean;
+  provider: ProviderType;
 }
