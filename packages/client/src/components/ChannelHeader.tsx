@@ -6,9 +6,16 @@ interface ChannelHeaderProps {
   actor: ActorProfile;
   connected: boolean;
   onLogout: () => void;
+  onOpenSettings: () => void;
 }
 
-export function ChannelHeader({ channel, actor, connected, onLogout }: ChannelHeaderProps) {
+export function ChannelHeader({
+  channel,
+  actor,
+  connected,
+  onLogout,
+  onOpenSettings,
+}: ChannelHeaderProps) {
   return (
     <header className="channel-header">
       <div className="channel-info">
@@ -19,6 +26,9 @@ export function ChannelHeader({ channel, actor, connected, onLogout }: ChannelHe
       </div>
       <div className="user-info">
         <span className="username">{actor.preferredUsername}</span>
+        <button className="settings-btn" onClick={onOpenSettings} title="Translation settings">
+          &#9881;
+        </button>
         <button className="logout-btn" onClick={onLogout}>
           Log out
         </button>

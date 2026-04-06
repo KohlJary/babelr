@@ -13,6 +13,7 @@ import healthRoutes from './routes/health.ts';
 import authRoutes from './routes/auth.ts';
 import channelRoutes from './routes/channels.ts';
 import wsRoutes from './routes/ws.ts';
+import translateRoutes from './routes/translate.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -58,6 +59,7 @@ export async function buildApp() {
   await app.register(authRoutes);
   await app.register(channelRoutes);
   await app.register(wsRoutes);
+  await app.register(translateRoutes);
 
   return app;
 }

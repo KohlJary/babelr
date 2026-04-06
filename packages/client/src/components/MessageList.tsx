@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useEffect, useRef } from 'react';
 import type { MessageWithAuthor } from '@babelr/shared';
+import type { CachedTranslation } from '../translation';
 import { MessageItem } from './MessageItem';
 
 interface MessageListProps {
@@ -8,9 +9,18 @@ interface MessageListProps {
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
+  translations: Map<string, CachedTranslation>;
+  isTranslating: (messageId: string) => boolean;
 }
 
-export function MessageList({ messages, loading, hasMore, onLoadMore }: MessageListProps) {
+export function MessageList({
+  messages,
+  loading,
+  hasMore,
+  onLoadMore,
+  translations,
+  isTranslating,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
@@ -47,7 +57,15 @@ export function MessageList({ messages, loading, hasMore, onLoadMore }: MessageL
       {messages.map((item, i) => {
         const prevItem = i > 0 ? messages[i - 1] : null;
         const compact = prevItem?.author.id === item.author.id;
-        return <MessageItem key={item.message.id} data={item} compact={compact} />;
+        return (
+          <MessageItem
+            key={item.message.id}
+            data={item}
+            compact={compact}
+            translation={translations.get(item.message.id)}
+            isTranslating={isTranslating(item.message.id)}
+          />
+        );
       })}
       <div ref={bottomRef} />
     </div>
