@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node --env-file=../../.env dist/server.js",
     "db:generate": "drizzle-kit --env-file=../../.env generate",
-    "db:migrate": "drizzle-kit --env-file=../../.env migrate"
+    "db:migrate": "drizzle-kit --env-file=../../.env migrate",
+    "benchmark": "tsx --env-file=../../.env src/benchmark/cli.ts"
   },
   "dependencies": {
     "@babelr/shared": "*",

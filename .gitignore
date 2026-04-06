@@ -29,3 +29,6 @@ packages/client/.vite/
 # Converted files
 *.txt
 !packages/**/*.txt
+
+# Benchmark results
+benchmark-results/
