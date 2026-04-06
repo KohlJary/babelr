@@ -62,6 +62,7 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
             detectedLanguage: r.detectedLanguage,
             skipped: r.skipped,
             targetLanguage: targetLang,
+            metadata: r.metadata,
           };
           setCached(r.id, targetLang, entry);
           newTranslations.set(r.id, entry);

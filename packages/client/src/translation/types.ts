@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { TranslationResult } from '@babelr/shared';
+import type { TranslationResult, TranslationMetadata } from '@babelr/shared';
 
 export interface TranslationProvider {
   name: string;
@@ -16,6 +16,7 @@ export interface CachedTranslation {
   detectedLanguage: string;
   skipped: boolean;
   targetLanguage: string;
+  metadata?: TranslationMetadata;
 }
 
 export interface TranslationSettings {
