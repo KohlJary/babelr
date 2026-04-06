@@ -26,7 +26,7 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 
 ```bash
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/babelr.git
+git clone https://github.com/KohlJary/babelr.git
 cd babelr
 npm install
 

@@ -6,7 +6,7 @@ The fastest way to run Babelr:
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/babelr.git
+git clone https://github.com/KohlJary/babelr.git
 cd babelr
 
 # Generate a session secret

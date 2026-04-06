@@ -8,7 +8,7 @@ Babelr is licensed under the [Hippocratic License 3.0](LICENSE.md). By contribut
 
 ```bash
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/babelr.git
+git clone https://github.com/KohlJary/babelr.git
 cd babelr
 npm install
 
