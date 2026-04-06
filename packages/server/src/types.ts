@@ -2,6 +2,8 @@
 import type { Database } from './db/index.ts';
 import type { Config } from './config.ts';
 import type { actors } from './db/schema/actors.ts';
+import type { WsServerMessage } from '@babelr/shared';
+import type { WebSocket } from 'ws';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -12,6 +14,10 @@ declare module 'fastify' {
       request: import('fastify').FastifyRequest,
       reply: import('fastify').FastifyReply,
     ) => Promise<void>;
+    broadcastToChannel: (channelId: string, message: WsServerMessage) => void;
+    wsSubscribe: (ws: WebSocket, channelId: string) => void;
+    wsUnsubscribe: (ws: WebSocket, channelId: string) => void;
+    wsRemoveClient: (ws: WebSocket) => void;
   }
 
   interface FastifyRequest {

@@ -7,8 +7,12 @@ import './types.ts';
 import { createDb } from './db/index.ts';
 import { loadConfig } from './config.ts';
 import authPlugin from './plugins/auth.ts';
+import wsPlugin from './plugins/ws.ts';
+import seedPlugin from './plugins/seed.ts';
 import healthRoutes from './routes/health.ts';
 import authRoutes from './routes/auth.ts';
+import channelRoutes from './routes/channels.ts';
+import wsRoutes from './routes/ws.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -46,10 +50,14 @@ export async function buildApp() {
     credentials: true,
   });
   await app.register(authPlugin);
+  await app.register(wsPlugin);
+  await app.register(seedPlugin);
 
   // Routes
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(channelRoutes);
+  await app.register(wsRoutes);
 
   return app;
 }
