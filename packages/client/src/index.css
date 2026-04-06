@@ -382,6 +382,10 @@ body {
   font-size: 1.1rem;
 }
 
+.e2e-lock {
+  font-size: 0.85rem;
+}
+
 .connection-status {
   font-size: 0.75rem;
   padding: 0.15rem 0.5rem;

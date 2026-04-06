@@ -7,6 +7,7 @@ import { useDMs } from '../hooks/useDMs';
 import { useChat } from '../hooks/useChat';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useTranslation } from '../hooks/useTranslation';
+import { useE2E } from '../hooks/useE2E';
 import { ServerSidebar } from './ServerSidebar';
 import { ChannelSidebar } from './ChannelSidebar';
 import { ChannelHeader } from './ChannelHeader';
@@ -34,12 +35,20 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
     dmMode ? null : selectedServer?.id ?? null,
   );
   const { conversations, selectedDM, selectDM, startDM } = useDMs();
+  const e2e = useE2E();
 
   const activeChannelId = dmMode ? selectedDM?.id ?? null : selectedChannel?.id ?? null;
+
+  // Derive the DM recipient ID for E2E encryption
+  const recipientId = dmMode && selectedDM
+    ? selectedDM.participants.find((p) => p.id !== actor.id)?.id ?? ''
+    : '';
+
   const { messages, loading, hasMore, connected, sendMessage, loadMore } = useChat(
     actor,
     activeChannelId,
     dmMode,
+    dmMode && e2e.ready && recipientId ? { e2e, recipientId } : undefined,
   );
 
   const { settings, updateSettings } = useTranslationSettings();
@@ -95,6 +104,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           channelName={headerName}
           actor={actor}
           connected={connected}
+          encrypted={dmMode && e2e.ready}
           onLogout={onLogout}
           onOpenSettings={() => setShowSettings(true)}
         />

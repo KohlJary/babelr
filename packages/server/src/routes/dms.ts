@@ -276,7 +276,8 @@ export default async function dmRoutes(fastify: FastifyInstance) {
 
     if (!membership) return reply.status(403).send({ error: 'Not a participant' });
 
-    const result = await createMessageInChannel(fastify, dmId, content, request.actor);
+    const { properties } = request.body;
+    const result = await createMessageInChannel(fastify, dmId, content, request.actor, properties);
     return reply.status(201).send(result);
   });
 }

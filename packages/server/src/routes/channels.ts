@@ -28,12 +28,18 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
 }
 
 export function toMessageView(obj: typeof objects.$inferSelect): MessageView {
+  const props = obj.properties as Record<string, unknown> | null;
+  const messageProps: Record<string, unknown> = {};
+  if (props?.encrypted) messageProps.encrypted = true;
+  if (props?.iv) messageProps.iv = props.iv;
+
   return {
     id: obj.id,
     content: obj.content ?? '',
     channelId: obj.context ?? '',
     authorId: obj.attributedTo ?? '',
     published: obj.published.toISOString(),
+    ...(Object.keys(messageProps).length > 0 && { properties: messageProps }),
   };
 }
 
@@ -86,6 +92,7 @@ export async function createMessageInChannel(
   channelId: string,
   content: string,
   actor: typeof actors.$inferSelect,
+  messageProperties?: Record<string, unknown>,
 ): Promise<MessageWithAuthor> {
   const db = fastify.db;
   const config = fastify.config;
@@ -101,6 +108,7 @@ export async function createMessageInChannel(
       context: channelId,
       to: [],
       cc: [],
+      ...(messageProperties && { properties: messageProperties }),
     })
     .returning();
 

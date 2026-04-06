@@ -116,11 +116,12 @@ export async function sendMessage(
   channelId: string,
   content: string,
   isDM = false,
+  properties?: Record<string, unknown>,
 ): Promise<MessageWithAuthor> {
   const prefix = isDM ? '/dms' : '/channels';
   return apiFetch(`${prefix}/${channelId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(properties && { properties }) }),
   });
 }
 
@@ -135,6 +136,20 @@ export async function startDM(participantId: string): Promise<DMConversation> {
 
 export async function getUsers(): Promise<{ id: string; preferredUsername: string; displayName: string | null }[]> {
   return apiFetch('/users');
+}
+
+// E2E encryption
+export async function setPublicKey(publicKey: JsonWebKey): Promise<void> {
+  await apiFetch('/auth/publickey', {
+    method: 'PUT',
+    body: JSON.stringify({ publicKey }),
+  });
+}
+
+export async function getUserPublicKey(
+  userId: string,
+): Promise<{ publicKey: JsonWebKey | null }> {
+  return apiFetch(`/users/${userId}/publickey`);
 }
 
 export { ApiError };

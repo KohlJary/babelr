@@ -5,6 +5,7 @@ interface ChannelHeaderProps {
   channelName: string;
   actor: ActorProfile;
   connected: boolean;
+  encrypted?: boolean;
   onLogout: () => void;
   onOpenSettings: () => void;
 }
@@ -13,13 +14,17 @@ export function ChannelHeader({
   channelName,
   actor,
   connected,
+  encrypted,
   onLogout,
   onOpenSettings,
 }: ChannelHeaderProps) {
   return (
     <header className="channel-header">
       <div className="channel-info">
-        <span className="channel-name">{channelName}</span>
+        <span className="channel-name">
+          {encrypted && <span className="e2e-lock" title="End-to-end encrypted">&#128274; </span>}
+          {channelName}
+        </span>
         <span className={`connection-status ${connected ? 'online' : 'offline'}`}>
           {connected ? 'connected' : 'reconnecting...'}
         </span>

@@ -146,4 +146,47 @@ export default async function authRoutes(fastify: FastifyInstance) {
       displayName: u.displayName,
     }));
   });
+
+  // Store own public key for E2E encryption
+  fastify.put<{ Body: { publicKey: JsonWebKey } }>('/auth/publickey', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const { publicKey } = request.body;
+    if (!publicKey) {
+      return reply.status(400).send({ error: 'publicKey is required' });
+    }
+
+    const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};
+    await db
+      .update(actors)
+      .set({ properties: { ...currentProps, publicKey } })
+      .where(eq(actors.id, request.actor.id));
+
+    return { ok: true };
+  });
+
+  // Get a user's public key
+  fastify.get<{ Params: { userId: string } }>(
+    '/users/:userId/publickey',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const [user] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.userId))
+        .limit(1);
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      const props = user.properties as Record<string, unknown> | null;
+      return { publicKey: props?.publicKey ?? null };
+    },
+  );
 }

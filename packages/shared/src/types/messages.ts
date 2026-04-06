@@ -6,6 +6,7 @@ export interface MessageView {
   channelId: string;
   authorId: string;
   published: string;
+  properties?: Record<string, unknown>;
 }
 
 export interface AuthorView {
@@ -46,6 +47,7 @@ export interface MessageListResponse {
 
 export interface CreateMessageInput {
   content: string;
+  properties?: Record<string, unknown>;
 }
 
 export interface CreateServerInput {
