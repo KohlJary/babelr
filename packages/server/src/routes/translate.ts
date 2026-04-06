@@ -5,7 +5,7 @@ import type { TranslateProxyRequest, TranslateProxyResponse } from '@babelr/shar
 import { buildPrompt, parseResponse } from '../benchmark/prompt.ts';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
+const MODEL = 'claude-haiku-4-5-20251001';
 const MAX_TOKENS = 8192;
 const MAX_BATCH_SIZE = 100;
 
