@@ -134,6 +134,49 @@ export default async function serverRoutes(fastify: FastifyInstance) {
     return results;
   });
 
+  // Discover all servers (for join dialog)
+  fastify.get('/servers/discover', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const actor = request.actor;
+
+    // Get user's current memberships
+    const memberships = await db
+      .select({ collectionUri: collectionItems.collectionUri })
+      .from(collectionItems)
+      .where(eq(collectionItems.itemUri, actor.uri));
+
+    const memberUris = new Set(memberships.map((m) => m.collectionUri));
+
+    // Get all local Group actors
+    const servers = await db
+      .select()
+      .from(actors)
+      .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
+
+    const results = [];
+    for (const server of servers) {
+      if (!server.followersUri) continue;
+
+      const [count] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(collectionItems)
+        .where(eq(collectionItems.collectionUri, server.followersUri));
+
+      results.push({
+        id: server.id,
+        name: server.displayName ?? server.preferredUsername,
+        description: server.summary,
+        memberCount: count?.count ?? 0,
+        joined: memberUris.has(server.followersUri),
+      });
+    }
+
+    return results;
+  });
+
   // Get server details
   fastify.get<{ Params: { serverId: string } }>('/servers/:serverId', async (request, reply) => {
     if (!request.actor) {

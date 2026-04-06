@@ -64,6 +64,14 @@ export async function getServers(): Promise<ServerView[]> {
   return apiFetch('/servers');
 }
 
+export interface DiscoverableServer extends ServerView {
+  joined: boolean;
+}
+
+export async function discoverServers(): Promise<DiscoverableServer[]> {
+  return apiFetch('/servers/discover');
+}
+
 export async function createServer(input: CreateServerInput): Promise<ServerView> {
   return apiFetch('/servers', { method: 'POST', body: JSON.stringify(input) });
 }

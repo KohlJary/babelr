@@ -300,6 +300,67 @@ body {
   border-color: #555;
 }
 
+/* Server discover list */
+.discover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.discover-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border-radius: 6px;
+  background: #0f0f0f;
+  border: 1px solid #222;
+}
+
+.discover-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.discover-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.discover-meta {
+  font-size: 0.75rem;
+  color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discover-join-btn {
+  padding: 0.3rem 0.75rem;
+  background: #2563eb;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.discover-join-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.discover-joined {
+  color: #555;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
 /* Channel header */
 .channel-header {
   display: flex;
