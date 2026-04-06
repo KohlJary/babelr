@@ -15,6 +15,7 @@ import { MessageInput } from './MessageInput';
 import { SettingsPanel } from './SettingsPanel';
 import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
+import { NewDMModal } from './NewDMModal';
 
 interface ChatViewProps {
   actor: ActorProfile;
@@ -26,12 +27,13 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showNewDM, setShowNewDM] = useState(false);
 
   const { servers, selectedServer, selectServer, createServer, joinServer } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
     dmMode ? null : selectedServer?.id ?? null,
   );
-  const { conversations, selectedDM, selectDM } = useDMs();
+  const { conversations, selectedDM, selectDM, startDM } = useDMs();
 
   const activeChannelId = dmMode ? selectedDM?.id ?? null : selectedChannel?.id ?? null;
   const { messages, loading, hasMore, connected, sendMessage, loadMore } = useChat(
@@ -86,6 +88,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         onSelectChannel={selectChannel}
         onSelectDM={selectDM}
         onCreateChannel={() => setShowCreateChannel(true)}
+        onNewDM={() => setShowNewDM(true)}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -132,6 +135,14 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
             await createChannel({ name });
           }}
           onClose={() => setShowCreateChannel(false)}
+        />
+      )}
+      {showNewDM && (
+        <NewDMModal
+          onStartDM={async (participantId) => {
+            await startDM(participantId);
+          }}
+          onClose={() => setShowNewDM(false)}
         />
       )}
     </div>

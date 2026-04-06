@@ -133,4 +133,8 @@ export async function startDM(participantId: string): Promise<DMConversation> {
   return apiFetch('/dms', { method: 'POST', body: JSON.stringify({ participantId }) });
 }
 
+export async function getUsers(): Promise<{ id: string; preferredUsername: string; displayName: string | null }[]> {
+  return apiFetch('/users');
+}
+
 export { ApiError };

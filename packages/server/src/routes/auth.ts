@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
 import * as argon2 from 'argon2';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ne } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
@@ -127,5 +127,23 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Not authenticated' });
     }
     return toProfile(request.actor);
+  });
+
+  // List other users (for starting DMs)
+  fastify.get('/users', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const users = await db
+      .select()
+      .from(actors)
+      .where(and(eq(actors.type, 'Person'), eq(actors.local, true), ne(actors.id, request.actor.id)));
+
+    return users.map((u) => ({
+      id: u.id,
+      preferredUsername: u.preferredUsername,
+      displayName: u.displayName,
+    }));
   });
 }

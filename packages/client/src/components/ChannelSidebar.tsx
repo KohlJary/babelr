@@ -12,6 +12,7 @@ interface ChannelSidebarProps {
   onSelectChannel: (id: string) => void;
   onSelectDM: (id: string) => void;
   onCreateChannel: () => void;
+  onNewDM: () => void;
 }
 
 export function ChannelSidebar({
@@ -25,12 +26,16 @@ export function ChannelSidebar({
   onSelectChannel,
   onSelectDM,
   onCreateChannel,
+  onNewDM,
 }: ChannelSidebarProps) {
   if (mode === 'dms') {
     return (
       <div className="channel-sidebar">
         <div className="sidebar-header">Direct Messages</div>
         <div className="sidebar-list">
+          <button className="sidebar-item add-channel" onClick={onNewDM}>
+            + New message
+          </button>
           {conversations.length === 0 && (
             <div className="sidebar-empty">No conversations yet</div>
           )}
