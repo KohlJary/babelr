@@ -17,6 +17,20 @@ export interface AuthorView {
 export interface ChannelView {
   id: string;
   name: string;
+  serverId: string | null;
+}
+
+export interface ServerView {
+  id: string;
+  name: string;
+  description: string | null;
+  memberCount: number;
+}
+
+export interface DMConversation {
+  id: string;
+  participants: AuthorView[];
+  lastMessage?: MessageView;
 }
 
 export interface MessageWithAuthor {
@@ -32,4 +46,13 @@ export interface MessageListResponse {
 
 export interface CreateMessageInput {
   content: string;
+}
+
+export interface CreateServerInput {
+  name: string;
+  description?: string;
+}
+
+export interface CreateChannelInput {
+  name: string;
 }

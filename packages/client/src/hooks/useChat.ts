@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { ActorProfile, ChannelView, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
+import { useState, useEffect, useCallback } from 'react';
+import type { ActorProfile, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
 import { useWebSocket } from './useWebSocket';
 
-export function useChat(actor: ActorProfile) {
-  const [channel, setChannel] = useState<ChannelView | null>(null);
+export function useChat(actor: ActorProfile, channelId: string | null, isDM = false) {
   const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>();
-  const channelRef = useRef<ChannelView | null>(null);
 
   const handleWsMessage = useCallback((msg: WsServerMessage) => {
     if (msg.type === 'message:new') {
@@ -20,65 +18,54 @@ export function useChat(actor: ActorProfile) {
 
   const { connected, send } = useWebSocket(!!actor, handleWsMessage);
 
-  // Load channels on mount
+  // Load history when channel changes
   useEffect(() => {
-    api.getChannels().then((channels) => {
-      if (channels.length > 0) {
-        setChannel(channels[0]);
-        channelRef.current = channels[0];
-      }
-    });
-  }, []);
-
-  // Subscribe to channel and load history when channel is set
-  useEffect(() => {
-    if (!channel) return;
+    if (!channelId) {
+      setMessages([]);
+      return;
+    }
 
     setLoading(true);
     setMessages([]);
     setCursor(undefined);
 
-    api.getMessages(channel.id).then((res) => {
-      // API returns newest-first, reverse for chronological display
+    api.getMessages(channelId, undefined, isDM).then((res) => {
       setMessages(res.messages.reverse());
       setHasMore(res.hasMore);
       if (res.cursor) setCursor(res.cursor);
       setLoading(false);
     });
-  }, [channel]);
+  }, [channelId, isDM]);
 
   // Subscribe via WS when channel and connection are ready
   useEffect(() => {
-    if (!channel || !connected) return;
+    if (!channelId || !connected) return;
 
-    send({ type: 'channel:subscribe', payload: { channelId: channel.id } });
+    send({ type: 'channel:subscribe', payload: { channelId } });
 
     return () => {
-      send({ type: 'channel:unsubscribe', payload: { channelId: channel.id } });
+      send({ type: 'channel:unsubscribe', payload: { channelId } });
     };
-  }, [channel, connected, send]);
+  }, [channelId, connected, send]);
 
   const loadMore = useCallback(async () => {
-    if (!channel || !cursor || !hasMore) return;
+    if (!channelId || !cursor || !hasMore) return;
 
-    const res = await api.getMessages(channel.id, cursor);
-    // Prepend older messages (reversed from newest-first to oldest-first)
+    const res = await api.getMessages(channelId, cursor, isDM);
     setMessages((prev) => [...res.messages.reverse(), ...prev]);
     setHasMore(res.hasMore);
     if (res.cursor) setCursor(res.cursor);
-  }, [channel, cursor, hasMore]);
+  }, [channelId, cursor, hasMore, isDM]);
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!channel) return;
-      await api.sendMessage(channel.id, content);
-      // Message will arrive via WebSocket broadcast
+      if (!channelId) return;
+      await api.sendMessage(channelId, content, isDM);
     },
-    [channel],
+    [channelId, isDM],
   );
 
   return {
-    channel,
     messages,
     loading,
     hasMore,

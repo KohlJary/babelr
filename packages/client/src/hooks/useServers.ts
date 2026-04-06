@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: Hippocratic-3.0
+import { useState, useEffect, useCallback } from 'react';
+import type { ServerView, CreateServerInput } from '@babelr/shared';
+import * as api from '../api';
+
+export function useServers() {
+  const [servers, setServers] = useState<ServerView[]>([]);
+  const [selectedServer, setSelectedServer] = useState<ServerView | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .getServers()
+      .then((s) => {
+        setServers(s);
+        if (s.length > 0) setSelectedServer(s[0]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const selectServer = useCallback(
+    (id: string) => {
+      const server = servers.find((s) => s.id === id);
+      if (server) setSelectedServer(server);
+    },
+    [servers],
+  );
+
+  const handleCreateServer = useCallback(async (input: CreateServerInput) => {
+    const server = await api.createServer(input);
+    setServers((prev) => [...prev, server]);
+    setSelectedServer(server);
+    return server;
+  }, []);
+
+  const handleJoinServer = useCallback(async (serverId: string) => {
+    await api.joinServer(serverId);
+    const refreshed = await api.getServers();
+    setServers(refreshed);
+    const joined = refreshed.find((s) => s.id === serverId);
+    if (joined) setSelectedServer(joined);
+  }, []);
+
+  const handleLeaveServer = useCallback(
+    async (serverId: string) => {
+      await api.leaveServer(serverId);
+      setServers((prev) => prev.filter((s) => s.id !== serverId));
+      if (selectedServer?.id === serverId) {
+        setSelectedServer(servers.find((s) => s.id !== serverId) ?? null);
+      }
+    },
+    [selectedServer, servers],
+  );
+
+  return {
+    servers,
+    selectedServer,
+    loading,
+    selectServer,
+    createServer: handleCreateServer,
+    joinServer: handleJoinServer,
+    leaveServer: handleLeaveServer,
+  };
+}

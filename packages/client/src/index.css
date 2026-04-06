@@ -130,11 +130,174 @@ body {
   cursor: not-allowed;
 }
 
-/* Chat layout */
-.chat-view {
+/* Three-panel layout */
+.app-layout {
+  display: flex;
+  height: 100vh;
+}
+
+/* Server sidebar */
+.server-sidebar {
+  width: 72px;
+  flex-shrink: 0;
+  background: #0a0a0a;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  align-items: center;
+  padding: 0.5rem 0;
+  gap: 0.5rem;
+  overflow-y: auto;
+  border-right: 1px solid #1a1a1a;
+}
+
+.server-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #2a2a2a;
+  border: none;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-radius 0.15s, background 0.15s;
+  font-weight: 600;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.server-icon:hover,
+.server-icon.active {
+  border-radius: 16px;
+  background: #2563eb;
+}
+
+.server-icon.dm-icon {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.server-icon.add-server {
+  background: transparent;
+  border: 2px dashed #333;
+  color: #555;
+  font-size: 1.5rem;
+  font-weight: 300;
+}
+
+.server-icon.add-server:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: transparent;
+}
+
+.server-divider {
+  width: 32px;
+  height: 1px;
+  background: #333;
+  flex-shrink: 0;
+}
+
+/* Channel sidebar */
+.channel-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #141414;
+  border-right: 1px solid #222;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-bottom: 1px solid #222;
+  flex-shrink: 0;
+}
+
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.sidebar-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0.4rem 1rem;
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  transition: all 0.1s;
+}
+
+.sidebar-item:hover {
+  background: #1a1a1a;
+  color: #e0e0e0;
+}
+
+.sidebar-item.active {
+  background: #222;
+  color: #e0e0e0;
+}
+
+.sidebar-item-name {
+  font-weight: 500;
+}
+
+.sidebar-item-preview {
+  font-size: 0.75rem;
+  color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-item.add-channel {
+  color: #555;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.sidebar-item.add-channel:hover {
+  color: #2563eb;
+}
+
+.sidebar-empty {
+  padding: 1rem;
+  color: #555;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* Chat panel (right side) */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Modal inputs */
+.modal-input {
+  padding: 0.6rem 0.75rem;
+  background: #0f0f0f;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  outline: none;
+  width: 100%;
+}
+
+.modal-input:focus {
+  border-color: #555;
 }
 
 /* Channel header */

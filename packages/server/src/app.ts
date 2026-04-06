@@ -14,6 +14,8 @@ import authRoutes from './routes/auth.ts';
 import channelRoutes from './routes/channels.ts';
 import wsRoutes from './routes/ws.ts';
 import translateRoutes from './routes/translate.ts';
+import serverRoutes from './routes/servers.ts';
+import dmRoutes from './routes/dms.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -60,6 +62,8 @@ export async function buildApp() {
   await app.register(channelRoutes);
   await app.register(wsRoutes);
   await app.register(translateRoutes);
+  await app.register(serverRoutes);
+  await app.register(dmRoutes);
 
   return app;
 }

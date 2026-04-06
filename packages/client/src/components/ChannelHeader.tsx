@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { ActorProfile, ChannelView } from '@babelr/shared';
+import type { ActorProfile } from '@babelr/shared';
 
 interface ChannelHeaderProps {
-  channel: ChannelView | null;
+  channelName: string;
   actor: ActorProfile;
   connected: boolean;
   onLogout: () => void;
@@ -10,7 +10,7 @@ interface ChannelHeaderProps {
 }
 
 export function ChannelHeader({
-  channel,
+  channelName,
   actor,
   connected,
   onLogout,
@@ -19,7 +19,7 @@ export function ChannelHeader({
   return (
     <header className="channel-header">
       <div className="channel-info">
-        <span className="channel-name"># {channel?.name ?? '...'}</span>
+        <span className="channel-name">{channelName}</span>
         <span className={`connection-status ${connected ? 'online' : 'offline'}`}>
           {connected ? 'connected' : 'reconnecting...'}
         </span>
