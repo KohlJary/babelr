@@ -25,6 +25,7 @@ export default async function webfingerRoute(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Unknown domain' });
       }
 
+      // Search both Person and Group actors
       const [actor] = await fastify.db
         .select()
         .from(actors)
@@ -32,7 +33,6 @@ export default async function webfingerRoute(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
           ),
         )
         .limit(1);

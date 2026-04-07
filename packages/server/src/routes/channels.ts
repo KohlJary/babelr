@@ -15,8 +15,9 @@ import type {
   CreateMessageInput,
   CreateChannelInput,
 } from '@babelr/shared';
-import { broadcastCreate } from '../federation/delivery.ts';
+import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
+import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -132,16 +133,24 @@ export async function createMessageInChannel(
     payload: { message: messageView, author: authorView },
   });
 
-  // Federation: deliver to remote followers (non-blocking, public channels only)
+  // Federation: enqueue delivery to remote followers (public channels only)
   if (!messageProperties?.encrypted && actor.local) {
-    setImmediate(async () => {
-      try {
-        const actorWithKeys = await ensureActorKeys(db, actor);
-        await broadcastCreate(fastify, note, actorWithKeys);
-      } catch (err) {
-        fastify.log.error(err, 'Federation delivery failed');
+    ensureActorKeys(db, actor)
+      .then((actorWithKeys) => broadcastCreate(fastify, note, actorWithKeys))
+      .catch((err) => fastify.log.error(err, 'Federation enqueue failed'));
+
+    // Also deliver to Group followers if channel belongs to a server
+    if (note.context) {
+      const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+      if (channel?.belongsTo) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        if (group) {
+          ensureActorKeys(db, group)
+            .then((groupWithKeys) => broadcastToGroupFollowers(fastify, note, actor, groupWithKeys))
+            .catch((err) => fastify.log.error(err, 'Group federation enqueue failed'));
+        }
       }
-    });
+    }
   }
 
   return { message: messageView, author: authorView };
@@ -294,5 +303,116 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
     const result = await createMessageInChannel(fastify, channelId, content, request.actor);
     return reply.status(201).send(result);
+  });
+
+  // Edit a message
+  fastify.put<{
+    Params: { channelId: string; messageId: string };
+    Body: { content: string };
+  }>('/channels/:channelId/messages/:messageId', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const { channelId, messageId } = request.params;
+    const { content } = request.body;
+
+    if (!content || content.trim().length === 0) {
+      return reply.status(400).send({ error: 'Message content is required' });
+    }
+
+    const [message] = await db
+      .select()
+      .from(objects)
+      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .limit(1);
+
+    if (!message) return reply.status(404).send({ error: 'Message not found' });
+    if (message.attributedTo !== request.actor.id) {
+      return reply.status(403).send({ error: 'Can only edit your own messages' });
+    }
+
+    const [updated] = await db
+      .update(objects)
+      .set({ content: content.trim(), updated: new Date() })
+      .where(eq(objects.id, messageId))
+      .returning();
+
+    // Create Update activity and enqueue federation delivery
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+    const actor = request.actor;
+
+    await db.insert(activities).values({
+      uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
+      type: 'Update',
+      actorId: actor.id,
+      objectUri: updated.uri,
+      objectId: updated.id,
+    });
+
+    if (actor.local) {
+      const noteJson = serializeNote(updated, actor.uri);
+      const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+      const activity = serializeActivity(activityUri, 'Update', actor.uri, noteJson, ['https://www.w3.org/ns/activitystreams#Public'], []);
+
+      ensureActorKeys(db, actor)
+        .then((actorWithKeys) => enqueueToFollowers(fastify, actorWithKeys, activity))
+        .catch((err) => fastify.log.error(err, 'Update federation enqueue failed'));
+    }
+
+    return toMessageView(updated);
+  });
+
+  // Delete a message
+  fastify.delete<{
+    Params: { channelId: string; messageId: string };
+  }>('/channels/:channelId/messages/:messageId', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const { channelId, messageId } = request.params;
+
+    const [message] = await db
+      .select()
+      .from(objects)
+      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .limit(1);
+
+    if (!message) return reply.status(404).send({ error: 'Message not found' });
+    if (message.attributedTo !== request.actor.id) {
+      return reply.status(403).send({ error: 'Can only delete your own messages' });
+    }
+
+    // Tombstone the message
+    await db
+      .update(objects)
+      .set({ type: 'Tombstone', content: null, updated: new Date() })
+      .where(eq(objects.id, messageId));
+
+    // Create Delete activity and enqueue federation delivery
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+    const actor = request.actor;
+
+    await db.insert(activities).values({
+      uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
+      type: 'Delete',
+      actorId: actor.id,
+      objectUri: message.uri,
+      objectId: message.id,
+    });
+
+    if (actor.local) {
+      const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+      const activity = serializeActivity(activityUri, 'Delete', actor.uri, message.uri, ['https://www.w3.org/ns/activitystreams#Public'], []);
+
+      ensureActorKeys(db, actor)
+        .then((actorWithKeys) => enqueueToFollowers(fastify, actorWithKeys, activity))
+        .catch((err) => fastify.log.error(err, 'Delete federation enqueue failed'));
+    }
+
+    return { ok: true };
   });
 }

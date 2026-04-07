@@ -57,4 +57,32 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
       return serializeOrderedCollection(actor.followingUri, count?.count ?? 0);
     },
   );
+
+  // Group followers
+  fastify.get<{ Params: { slug: string } }>(
+    '/groups/:slug/followers',
+    async (request, reply) => {
+      const allGroups = await fastify.db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
+
+      const actor = allGroups.find((g) =>
+        g.preferredUsername === request.params.slug ||
+        g.uri.includes(`/groups/${request.params.slug}`),
+      );
+
+      if (!actor?.followersUri) {
+        return reply.status(404).send({ error: 'Group not found' });
+      }
+
+      const [count] = await fastify.db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(collectionItems)
+        .where(eq(collectionItems.collectionUri, actor.followersUri));
+
+      reply.header('Content-Type', 'application/activity+json; charset=utf-8');
+      return serializeOrderedCollection(actor.followersUri, count?.count ?? 0);
+    },
+  );
 }
