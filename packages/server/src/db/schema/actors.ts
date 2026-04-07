@@ -22,6 +22,7 @@ export const actors = pgTable(
     summary: text('summary'),
     email: varchar('email', { length: 256 }),
     passwordHash: text('password_hash'),
+    privateKeyPem: text('private_key_pem'),
     inboxUri: text('inbox_uri').notNull(),
     outboxUri: text('outbox_uri').notNull(),
     followersUri: text('followers_uri'),

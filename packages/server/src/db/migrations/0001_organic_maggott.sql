@@ -1,0 +1,1 @@
+ALTER TABLE "actors" ADD COLUMN "private_key_pem" text;

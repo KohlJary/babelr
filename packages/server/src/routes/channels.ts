@@ -15,6 +15,8 @@ import type {
   CreateMessageInput,
   CreateChannelInput,
 } from '@babelr/shared';
+import { broadcastCreate } from '../federation/delivery.ts';
+import { ensureActorKeys } from '../federation/keys.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -129,6 +131,18 @@ export async function createMessageInChannel(
     type: 'message:new',
     payload: { message: messageView, author: authorView },
   });
+
+  // Federation: deliver to remote followers (non-blocking, public channels only)
+  if (!messageProperties?.encrypted && actor.local) {
+    setImmediate(async () => {
+      try {
+        const actorWithKeys = await ensureActorKeys(db, actor);
+        await broadcastCreate(fastify, note, actorWithKeys);
+      } catch (err) {
+        fastify.log.error(err, 'Federation delivery failed');
+      }
+    });
+  }
 
   return { message: messageView, author: authorView };
 }
