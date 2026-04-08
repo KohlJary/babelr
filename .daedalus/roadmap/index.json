@@ -19,65 +19,58 @@
     {
       "id": "typing-indicators",
       "title": "Typing indicators",
-      "description": "Show '(User) is typing...' in real-time. WS typing:start/typing:stop events, debounced broadcast, UI display.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "unread-badges",
       "title": "Unread message badges/counters",
-      "description": "Per-channel unread count tracking, mark-as-read on channel view, badge display on channel list and server icons.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "user-presence",
       "title": "User presence (online/away/offline)",
-      "description": "Heartbeat mechanism via WS, presence state tracking, broadcast status changes to relevant users, status dots in member list and DM sidebar.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "emoji-reactions",
       "title": "Emoji reactions on messages",
-      "description": "Reaction picker, reactions table (actor+message+emoji), WS broadcast, display under messages, federated via Like activities.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "mentions",
       "title": "@ mentions with notifications",
-      "description": "Parse @username in message content, autocomplete dropdown in input, highlight mentions in rendered messages, notification badge for mentions.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "threaded-replies",
       "title": "Threaded replies",
-      "description": "Reply to specific messages. inReplyTo field already exists in objects table. Thread view panel, reply count indicator on parent message.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "message-search",
       "title": "Message search",
-      "description": "Full-text search across channels. Postgres tsvector index on objects.content, search endpoint, search UI with results panel.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready",
-      "assigned": null
+      "status": "done",
+      "assigned": "daedalus"
     },
     {
       "id": "markdown-formatting",
@@ -85,16 +78,16 @@
       "description": "Parse markdown in message content (bold, italic, strikethrough, lists, inline code, code blocks with syntax highlighting).",
       "type": "feature",
       "priority": "P2",
-      "status": "ready",
-      "assigned": null
+      "status": "in_progress",
+      "assigned": "daedalus"
     },
     {
       "id": "file-uploads",
       "title": "File and image uploads",
-      "description": "Upload endpoint with local or S3 storage, image preview in messages, file attachment UI, drag-and-drop support.",
+      "description": "Upload endpoint with local storage, image preview in messages, file attachment UI, drag-and-drop support.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -103,7 +96,7 @@
       "description": "Avatar upload, bio/status message, profile display panel, avatar display in messages and member list.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -112,7 +105,7 @@
       "description": "Show (edited) badge on edited messages, optionally show edit history on click.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -121,7 +114,7 @@
       "description": "Per-channel and per-server mute preferences, notification filtering.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -130,7 +123,7 @@
       "description": "Group channels under collapsible categories within a server.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -139,7 +132,7 @@
       "description": "Permission-based channel visibility. Only invited members can see/join private channels.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -148,7 +141,7 @@
       "description": "Channel-level glossary stored in properties.glossary, sent to translation pipeline as context.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog",
+      "status": "ready",
       "assigned": null
     },
     {
@@ -192,5 +185,5 @@
       "assigned": null
     }
   ],
-  "version": 2
+  "version": 3
 }

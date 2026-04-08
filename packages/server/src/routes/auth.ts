@@ -9,12 +9,15 @@ import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 
 function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
+  const props = actor.properties as Record<string, unknown> | null;
   return {
     id: actor.id,
     uri: actor.uri,
     preferredUsername: actor.preferredUsername,
     displayName: actor.displayName,
     preferredLanguage: actor.preferredLanguage ?? 'en',
+    avatarUrl: (props?.avatarUrl as string) ?? null,
+    summary: actor.summary,
     createdAt: actor.createdAt,
   };
 }
@@ -146,6 +149,40 @@ export default async function authRoutes(fastify: FastifyInstance) {
       displayName: u.displayName,
     }));
   });
+
+  // Update profile (displayName, summary/bio, avatarUrl)
+  fastify.put<{ Body: { displayName?: string; summary?: string; avatarUrl?: string } }>(
+    '/auth/profile',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { displayName, summary, avatarUrl } = request.body;
+      const updates: Record<string, unknown> = {};
+
+      if (displayName !== undefined) updates.displayName = displayName || null;
+      if (summary !== undefined) updates.summary = summary || null;
+
+      if (avatarUrl !== undefined) {
+        const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};
+        updates.properties = { ...currentProps, avatarUrl: avatarUrl || null };
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db.update(actors).set(updates).where(eq(actors.id, request.actor.id));
+      }
+
+      // Return updated profile
+      const [updated] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.actor.id))
+        .limit(1);
+
+      return toProfile(updated);
+    },
+  );
 
   // Store own public key for E2E encryption
   fastify.put<{ Body: { publicKey: JsonWebKey } }>('/auth/publickey', async (request, reply) => {

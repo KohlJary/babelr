@@ -18,5 +18,7 @@ export interface ActorProfile {
   preferredUsername: string;
   displayName: string | null;
   preferredLanguage: string;
+  avatarUrl?: string | null;
+  summary?: string | null;
   createdAt: Date;
 }
