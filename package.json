@@ -16,13 +16,16 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -b",
     "db:generate": "npm run db:generate -w packages/server",
-    "db:migrate": "npm run db:migrate -w packages/server"
+    "db:migrate": "npm run db:migrate -w packages/server",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.1.3"
   }
 }
