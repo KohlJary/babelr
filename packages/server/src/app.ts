@@ -18,6 +18,10 @@ import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
 import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { join } from 'node:path';
+import uploadRoutes from './routes/uploads.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -54,6 +58,12 @@ export async function buildApp() {
     origin: true,
     credentials: true,
   });
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  await app.register(fastifyStatic, {
+    root: join(process.cwd(), 'uploads'),
+    prefix: '/uploads/',
+    decorateReply: false,
+  });
   await app.register(authPlugin);
   await app.register(wsPlugin);
   await app.register(seedPlugin);
@@ -68,6 +78,7 @@ export async function buildApp() {
   await app.register(dmRoutes);
   await app.register(searchRoutes);
   await app.register(federationPlugin);
+  await app.register(uploadRoutes);
 
   return app;
 }

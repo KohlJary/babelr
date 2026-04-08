@@ -32,3 +32,6 @@ packages/client/.vite/
 
 # Benchmark results
 benchmark-results/
+
+# User uploads
+uploads/
