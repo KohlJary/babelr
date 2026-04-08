@@ -15,6 +15,7 @@ interface ChannelSidebarProps {
   onCreateChannel: () => void;
   onNewDM: () => void;
   onShowMembers: () => void;
+  onShowGlossary: () => void;
 }
 
 export function ChannelSidebar({
@@ -31,6 +32,7 @@ export function ChannelSidebar({
   onCreateChannel,
   onNewDM,
   onShowMembers,
+  onShowGlossary,
 }: ChannelSidebarProps) {
   if (mode === 'dms') {
     return (
@@ -92,6 +94,9 @@ export function ChannelSidebar({
         </button>
         <button className="sidebar-item add-channel" onClick={onShowMembers}>
           Members
+        </button>
+        <button className="sidebar-item add-channel" onClick={onShowGlossary}>
+          Glossary
         </button>
       </div>
     </div>

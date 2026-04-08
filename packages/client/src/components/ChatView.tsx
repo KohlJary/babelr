@@ -20,6 +20,7 @@ import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
+import { GlossaryEditor } from './GlossaryEditor';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -36,6 +37,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showNewDM, setShowNewDM] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
 
   const { servers, selectedServer, selectServer, createServer, joinServer } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
@@ -116,6 +118,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         onCreateChannel={() => setShowCreateChannel(true)}
         onNewDM={() => setShowNewDM(true)}
         onShowMembers={() => setShowMembers(true)}
+        onShowGlossary={() => setShowGlossary(true)}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -186,6 +189,12 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           onSetRole={setRole}
           onKick={kick}
           onClose={() => setShowMembers(false)}
+        />
+      )}
+      {showGlossary && activeChannelId && (
+        <GlossaryEditor
+          channelId={activeChannelId}
+          onClose={() => setShowGlossary(false)}
         />
       )}
     </div>

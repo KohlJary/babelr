@@ -253,4 +253,20 @@ export async function kickMember(serverId: string, userId: string): Promise<void
   });
 }
 
+// Glossary
+export async function getGlossary(channelId: string): Promise<Record<string, string>> {
+  const res = await apiFetch<{ glossary: Record<string, string> }>(`/channels/${channelId}/glossary`);
+  return res.glossary;
+}
+
+export async function updateGlossary(
+  channelId: string,
+  glossary: Record<string, string>,
+): Promise<void> {
+  await apiFetch(`/channels/${channelId}/glossary`, {
+    method: 'PUT',
+    body: JSON.stringify({ glossary }),
+  });
+}
+
 export { ApiError };

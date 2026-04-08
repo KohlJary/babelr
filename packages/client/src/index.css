@@ -580,6 +580,64 @@ body {
   font-style: italic;
 }
 
+/* Glossary editor */
+.glossary-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.glossary-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: #0f0f0f;
+  border: 1px solid #222;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.glossary-term {
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.glossary-arrow {
+  color: #555;
+}
+
+.glossary-meaning {
+  color: #aaa;
+  flex: 1;
+}
+
+.glossary-remove {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 0.2rem;
+}
+
+.glossary-remove:hover {
+  color: #e74c3c;
+}
+
+.glossary-add {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.glossary-add .modal-input {
+  flex: 1;
+}
+
 .message-content {
   font-size: 0.95rem;
   line-height: 1.4;

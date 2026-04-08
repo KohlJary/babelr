@@ -22,9 +22,13 @@ export function buildPrompt(
   messages: { id: string; content: string }[],
   targetLanguage: string,
   sourceLanguage?: string,
+  glossary?: Record<string, string>,
 ): string {
   const sourceHint = sourceLanguage ? ` The source language is likely ${sourceLanguage}.` : '';
   const messageList = messages.map((m) => `[${m.id}]: ${m.content}`).join('\n');
+  const glossarySection = glossary && Object.keys(glossary).length > 0
+    ? `\n\nGLOSSARY: The following terms have specific meanings in this channel. Use these translations:\n${Object.entries(glossary).map(([term, meaning]) => `- "${term}" → "${meaning}"`).join('\n')}`
+    : '';
 
   return `You are a tone-preserving translation engine. For each message below, execute this pipeline internally:
 
@@ -56,7 +60,7 @@ Return ONLY a JSON array. Each element must have exactly these fields:
   - "idioms": array of objects, each with "original" (string), "explanation" (string), and optionally "equivalent" (string). Empty array if no idioms detected.
 
 Messages:
-${messageList}
+${messageList}${glossarySection}
 
 Respond with ONLY the JSON array. No markdown fences, no explanation.`;
 }

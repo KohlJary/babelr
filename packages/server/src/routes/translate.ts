@@ -15,7 +15,7 @@ export default async function translateRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Not authenticated' });
     }
 
-    const { apiKey, messages, targetLanguage, sourceLanguage } = request.body;
+    const { apiKey, messages, targetLanguage, sourceLanguage, glossary } = request.body;
 
     if (!apiKey || typeof apiKey !== 'string') {
       return reply.status(400).send({ error: 'API key is required' });
@@ -33,7 +33,7 @@ export default async function translateRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Target language is required' });
     }
 
-    const prompt = buildPrompt(messages, targetLanguage, sourceLanguage);
+    const prompt = buildPrompt(messages, targetLanguage, sourceLanguage, glossary);
 
     try {
       const res = await fetch(ANTHROPIC_API_URL, {

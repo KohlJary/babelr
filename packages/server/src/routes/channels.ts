@@ -851,4 +851,50 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
     return reply.status(201).send({ message: messageView, author: authorView });
   });
+
+  // Get channel glossary
+  fastify.get<{ Params: { channelId: string } }>(
+    '/channels/:channelId/glossary',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const [channel] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, request.params.channelId), eq(objects.type, 'OrderedCollection')))
+        .limit(1);
+
+      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
+
+      const props = channel.properties as Record<string, unknown> | null;
+      return { glossary: (props?.glossary as Record<string, string>) ?? {} };
+    },
+  );
+
+  // Update channel glossary
+  fastify.put<{ Params: { channelId: string }; Body: { glossary: Record<string, string> } }>(
+    '/channels/:channelId/glossary',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { channelId } = request.params;
+      const { glossary } = request.body;
+
+      const [channel] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
+        .limit(1);
+
+      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
+
+      const props = (channel.properties as Record<string, unknown>) ?? {};
+      await db
+        .update(objects)
+        .set({ properties: { ...props, glossary } })
+        .where(eq(objects.id, channelId));
+
+      return { ok: true };
+    },
+  );
 }

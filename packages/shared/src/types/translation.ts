@@ -5,6 +5,7 @@ export interface TranslateProxyRequest {
   messages: { id: string; content: string }[];
   targetLanguage: string;
   sourceLanguage?: string;
+  glossary?: Record<string, string>;
 }
 
 export type Register =
