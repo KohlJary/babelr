@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { ActorProfile, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import type { ActorProfile, AuthorView, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
 import { useWebSocket } from './useWebSocket';
 import type { E2EContext } from './useE2E';
@@ -20,8 +20,13 @@ export function useChat(
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>();
+  type TypingEntry = { actor: AuthorView; timeout: ReturnType<typeof setTimeout> };
+  const [typingMap, setTypingMap] = useState<Map<string, TypingEntry>>(() => new Map());
   const e2eRef = useRef(e2eOptions);
   e2eRef.current = e2eOptions;
+  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const typingUsers = useMemo(() => Array.from(typingMap.values()).map((v) => v.actor), [typingMap]);
 
   const handleWsMessage = useCallback(
     (msg: WsServerMessage) => {
@@ -34,6 +39,32 @@ export function useChat(
         } else {
           setMessages((prev) => [...prev, msg.payload]);
         }
+        // Clear typing indicator when user sends a message
+        if (msg.payload.author) {
+          setTypingMap((prev) => {
+            const next = new Map(prev);
+            const entry = next.get(msg.payload.author.id);
+            if (entry) clearTimeout(entry.timeout);
+            next.delete(msg.payload.author.id);
+            return next;
+          });
+        }
+      } else if (msg.type === 'typing:start') {
+        const { actor: typingActor } = msg.payload;
+        setTypingMap((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(typingActor.id);
+          if (existing) clearTimeout(existing.timeout);
+          const timeout = setTimeout(() => {
+            setTypingMap((p) => {
+              const n = new Map(p);
+              n.delete(typingActor.id);
+              return n;
+            });
+          }, 3000);
+          next.set(typingActor.id, { actor: typingActor, timeout });
+          return next;
+        });
       }
     },
     [isDM],
@@ -113,6 +144,15 @@ export function useChat(
     [channelId, isDM],
   );
 
+  const notifyTyping = useCallback(() => {
+    if (!channelId || !connected) return;
+    if (typingDebounceRef.current) return; // Already sent recently
+    send({ type: 'typing:start', payload: { channelId } });
+    typingDebounceRef.current = setTimeout(() => {
+      typingDebounceRef.current = undefined;
+    }, 2000);
+  }, [channelId, connected, send]);
+
   return {
     messages,
     loading,
@@ -120,5 +160,7 @@ export function useChat(
     connected,
     sendMessage,
     loadMore,
+    typingUsers,
+    notifyTyping,
   };
 }

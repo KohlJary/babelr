@@ -36,6 +36,28 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           case 'channel:unsubscribe':
             fastify.wsUnsubscribe(socket, msg.payload.channelId);
             break;
+          case 'typing:start': {
+            // Broadcast to channel subscribers, excluding sender
+            const typingMsg: WsServerMessage = {
+              type: 'typing:start',
+              payload: {
+                channelId: msg.payload.channelId,
+                actor: {
+                  id: actor.id,
+                  preferredUsername: actor.preferredUsername,
+                  displayName: actor.displayName,
+                },
+              },
+            };
+            const data = JSON.stringify(typingMsg);
+            const subs = fastify.wsGetChannelSubs(msg.payload.channelId);
+            for (const ws of subs) {
+              if (ws !== socket && ws.readyState === ws.OPEN) {
+                ws.send(data);
+              }
+            }
+            break;
+          }
         }
       } catch {
         // Ignore malformed messages

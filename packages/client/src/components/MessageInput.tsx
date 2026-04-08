@@ -4,9 +4,10 @@ import { useState, useRef } from 'react';
 interface MessageInputProps {
   onSend: (content: string) => Promise<void>;
   disabled: boolean;
+  onTyping?: () => void;
 }
 
-export function MessageInput({ onSend, disabled }: MessageInputProps) {
+export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +38,10 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
       <textarea
         ref={inputRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          if (e.target.value.length > 0) onTyping?.();
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Send a message..."
         disabled={disabled || sending}

@@ -18,6 +18,7 @@ import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
 import { MemberList } from './MemberList';
+import { TypingIndicator } from './TypingIndicator';
 import { useMembers } from '../hooks/useMembers';
 
 interface ChatViewProps {
@@ -51,7 +52,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
     ? selectedDM.participants.find((p) => p.id !== actor.id)?.id ?? ''
     : '';
 
-  const { messages, loading, hasMore, connected, sendMessage, loadMore } = useChat(
+  const { messages, loading, hasMore, connected, sendMessage, loadMore, typingUsers, notifyTyping } = useChat(
     actor,
     activeChannelId,
     dmMode,
@@ -124,7 +125,8 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           translations={translations}
           isTranslating={isTranslating}
         />
-        <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} />
+        <TypingIndicator users={typingUsers} />
+        <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
       </div>
 
       {showSettings && (

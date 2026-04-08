@@ -1,1 +1,196 @@
-{"items": [], "version": 1}
+{
+  "items": [
+    {
+      "id": "test-suite",
+      "title": "Automated test suite",
+      "type": "chore",
+      "priority": "P1",
+      "status": "done",
+      "assigned": "daedalus"
+    },
+    {
+      "id": "admin-moderation",
+      "title": "Admin and moderation tooling",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done",
+      "assigned": "daedalus"
+    },
+    {
+      "id": "typing-indicators",
+      "title": "Typing indicators",
+      "description": "Show '(User) is typing...' in real-time. WS typing:start/typing:stop events, debounced broadcast, UI display.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "unread-badges",
+      "title": "Unread message badges/counters",
+      "description": "Per-channel unread count tracking, mark-as-read on channel view, badge display on channel list and server icons.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "user-presence",
+      "title": "User presence (online/away/offline)",
+      "description": "Heartbeat mechanism via WS, presence state tracking, broadcast status changes to relevant users, status dots in member list and DM sidebar.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "emoji-reactions",
+      "title": "Emoji reactions on messages",
+      "description": "Reaction picker, reactions table (actor+message+emoji), WS broadcast, display under messages, federated via Like activities.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "mentions",
+      "title": "@ mentions with notifications",
+      "description": "Parse @username in message content, autocomplete dropdown in input, highlight mentions in rendered messages, notification badge for mentions.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "threaded-replies",
+      "title": "Threaded replies",
+      "description": "Reply to specific messages. inReplyTo field already exists in objects table. Thread view panel, reply count indicator on parent message.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "message-search",
+      "title": "Message search",
+      "description": "Full-text search across channels. Postgres tsvector index on objects.content, search endpoint, search UI with results panel.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "markdown-formatting",
+      "title": "Markdown formatting and code blocks",
+      "description": "Parse markdown in message content (bold, italic, strikethrough, lists, inline code, code blocks with syntax highlighting).",
+      "type": "feature",
+      "priority": "P2",
+      "status": "ready",
+      "assigned": null
+    },
+    {
+      "id": "file-uploads",
+      "title": "File and image uploads",
+      "description": "Upload endpoint with local or S3 storage, image preview in messages, file attachment UI, drag-and-drop support.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "user-profiles",
+      "title": "User profiles and avatars",
+      "description": "Avatar upload, bio/status message, profile display panel, avatar display in messages and member list.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "edit-history",
+      "title": "Edit history indicator",
+      "description": "Show (edited) badge on edited messages, optionally show edit history on click.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "notification-settings",
+      "title": "Notification settings (mute channels/servers)",
+      "description": "Per-channel and per-server mute preferences, notification filtering.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "channel-categories",
+      "title": "Channel categories",
+      "description": "Group channels under collapsible categories within a server.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "private-channels",
+      "title": "Private channels",
+      "description": "Permission-based channel visibility. Only invited members can see/join private channels.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "per-room-glossary",
+      "title": "Per-room glossaries for in-group terminology",
+      "description": "Channel-level glossary stored in properties.glossary, sent to translation pipeline as context.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "phase3-mobile",
+      "title": "Mobile responsive / native apps",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "phase3-voice",
+      "title": "Voice/video translation",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "dm-federation",
+      "title": "DM federation with cross-instance key exchange",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "bots-webhooks",
+      "title": "Bot API and webhooks",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog",
+      "assigned": null
+    },
+    {
+      "id": "2fa",
+      "title": "Two-factor authentication",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog",
+      "assigned": null
+    }
+  ],
+  "version": 2
+}

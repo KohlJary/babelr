@@ -18,6 +18,7 @@ declare module 'fastify' {
     wsSubscribe: (ws: WebSocket, channelId: string) => void;
     wsUnsubscribe: (ws: WebSocket, channelId: string) => void;
     wsRemoveClient: (ws: WebSocket) => void;
+    wsGetChannelSubs: (channelId: string) => Set<WebSocket>;
   }
 
   interface FastifyRequest {

@@ -57,6 +57,10 @@ async function wsPlugin(fastify: FastifyInstance) {
     }
   });
 
+  fastify.decorate('wsGetChannelSubs', (channelId: string): Set<WebSocket> => {
+    return channelSubscriptions.get(channelId) ?? new Set();
+  });
+
   // Export subscribe/unsubscribe for the WS route
   fastify.decorate('wsSubscribe', subscribe);
   fastify.decorate('wsUnsubscribe', unsubscribe);
