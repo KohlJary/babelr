@@ -41,6 +41,7 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
     id: obj.id,
     name: (props?.name as string) ?? 'unnamed',
     serverId: obj.belongsTo,
+    ...(props?.category ? { category: props.category as string } : {}),
   };
 }
 
@@ -282,7 +283,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { name } = request.body;
+      const { name, category } = request.body;
       if (!name || name.trim().length === 0) {
         return reply.status(400).send({ error: 'Channel name is required' });
       }
@@ -307,7 +308,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           uri: `${protocol}://${config.domain}/channels/${crypto.randomUUID()}`,
           type: 'OrderedCollection',
           belongsTo: server.id,
-          properties: { name: name.trim() },
+          properties: { name: name.trim(), ...(category ? { category: category.trim() } : {}) },
         })
         .returning();
 

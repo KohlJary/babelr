@@ -33,6 +33,7 @@ export interface ChannelView {
   id: string;
   name: string;
   serverId: string | null;
+  category?: string;
 }
 
 export interface ServerView {
@@ -71,4 +72,5 @@ export interface CreateServerInput {
 
 export interface CreateChannelInput {
   name: string;
+  category?: string;
 }

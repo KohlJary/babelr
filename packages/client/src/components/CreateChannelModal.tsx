@@ -2,12 +2,13 @@
 import { useState } from 'react';
 
 interface CreateChannelModalProps {
-  onCreateChannel: (name: string) => Promise<void>;
+  onCreateChannel: (name: string, category?: string) => Promise<void>;
   onClose: () => void;
 }
 
 export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelModalProps) {
   const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -15,7 +16,7 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await onCreateChannel(name.trim());
+      await onCreateChannel(name.trim(), category.trim() || undefined);
       onClose();
     } catch {
       // Error handling could be added
@@ -40,6 +41,13 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            className="modal-input"
+          />
+          <input
+            type="text"
+            placeholder="Category (optional)"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
             className="modal-input"
           />
           <button type="submit" className="auth-submit" disabled={submitting}>

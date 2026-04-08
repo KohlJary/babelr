@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
+import { useState } from 'react';
 import type { ChannelView, DMConversation, ActorProfile } from '@babelr/shared';
 
 interface ChannelSidebarProps {
@@ -70,25 +71,58 @@ export function ChannelSidebar({
     );
   }
 
+  // Group channels by category
+  const categorized = new Map<string, ChannelView[]>();
+  const uncategorized: ChannelView[] = [];
+  for (const ch of channels) {
+    if (ch.category) {
+      const list = categorized.get(ch.category) ?? [];
+      list.push(ch);
+      categorized.set(ch.category, list);
+    } else {
+      uncategorized.push(ch);
+    }
+  }
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  const toggleCategory = (cat: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const renderChannel = (ch: ChannelView) => {
+    const unreadCount = unreadCounts?.get(ch.id) ?? 0;
+    return (
+      <button
+        key={ch.id}
+        className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
+        onClick={() => onSelectChannel(ch.id)}
+      >
+        <span className="sidebar-item-name"># {ch.name}</span>
+        {unreadCount > 0 && <span className="unread-badge">{unreadCount}</span>}
+      </button>
+    );
+  };
+
   return (
     <div className="channel-sidebar">
       <div className="sidebar-header">{serverName ?? 'Server'}</div>
       <div className="sidebar-list">
-        {channels.map((ch) => {
-          const unreadCount = unreadCounts?.get(ch.id) ?? 0;
-          return (
-            <button
-              key={ch.id}
-              className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
-              onClick={() => onSelectChannel(ch.id)}
-            >
-              <span className="sidebar-item-name"># {ch.name}</span>
-              {unreadCount > 0 && (
-                <span className="unread-badge">{unreadCount}</span>
-              )}
+        {Array.from(categorized.entries()).map(([cat, chs]) => (
+          <div key={cat} className="channel-category">
+            <button className="category-header" onClick={() => toggleCategory(cat)}>
+              <span className="category-arrow">{collapsed.has(cat) ? '\u25B6' : '\u25BC'}</span>
+              <span className="category-name">{cat}</span>
             </button>
-          );
-        })}
+            {!collapsed.has(cat) && chs.map(renderChannel)}
+          </div>
+        ))}
+        {uncategorized.map(renderChannel)}
         <button className="sidebar-item add-channel" onClick={onCreateChannel}>
           + Create channel
         </button>
