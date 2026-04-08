@@ -152,4 +152,33 @@ export async function getUserPublicKey(
   return apiFetch(`/users/${userId}/publickey`);
 }
 
+// Members
+export interface MemberView {
+  id: string;
+  preferredUsername: string;
+  displayName: string | null;
+  role: string;
+}
+
+export async function getMembers(serverId: string): Promise<MemberView[]> {
+  return apiFetch(`/servers/${serverId}/members`);
+}
+
+export async function setMemberRole(
+  serverId: string,
+  userId: string,
+  role: string,
+): Promise<void> {
+  await apiFetch(`/servers/${serverId}/members/${userId}/role`, {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function kickMember(serverId: string, userId: string): Promise<void> {
+  await apiFetch(`/servers/${serverId}/members/${userId}`, {
+    method: 'DELETE',
+  });
+}
+
 export { ApiError };

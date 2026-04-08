@@ -54,12 +54,13 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       })
       .returning();
 
-    // Add creator as member
+    // Add creator as owner
     await db.insert(collectionItems).values({
       collectionUri: server.followersUri!,
       collectionId: null,
       itemUri: actor.uri,
       itemId: actor.id,
+      properties: { role: 'owner' },
     });
 
     // Create Follow activity
@@ -291,6 +292,172 @@ export default async function serverRoutes(fastify: FastifyInstance) {
           and(
             eq(collectionItems.collectionUri, server.followersUri),
             eq(collectionItems.itemUri, request.actor.uri),
+          ),
+        );
+
+      return { ok: true };
+    },
+  );
+
+  // List server members with roles
+  fastify.get<{ Params: { serverId: string } }>(
+    '/servers/:serverId/members',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.id, request.params.serverId), eq(actors.type, 'Group')))
+        .limit(1);
+
+      if (!server?.followersUri) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      const members = await db
+        .select({ member: actors, item: collectionItems })
+        .from(collectionItems)
+        .innerJoin(actors, eq(collectionItems.itemId, actors.id))
+        .where(eq(collectionItems.collectionUri, server.followersUri));
+
+      return members.map((m) => {
+        const itemProps = m.item.properties as Record<string, unknown> | null;
+        return {
+          id: m.member.id,
+          preferredUsername: m.member.preferredUsername,
+          displayName: m.member.displayName,
+          role: (itemProps?.role as string) ?? 'member',
+        };
+      });
+    },
+  );
+
+  // Set member role (owner only)
+  fastify.put<{ Params: { serverId: string; userId: string }; Body: { role: string } }>(
+    '/servers/:serverId/members/:userId/role',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { serverId, userId } = request.params;
+      const { role } = request.body;
+
+      if (!['admin', 'moderator', 'member'].includes(role)) {
+        return reply.status(400).send({ error: 'Invalid role' });
+      }
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.id, serverId), eq(actors.type, 'Group')))
+        .limit(1);
+
+      if (!server?.followersUri) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      // Only owner can set roles
+      const serverProps = server.properties as Record<string, unknown> | null;
+      if (serverProps?.ownerId !== request.actor.id) {
+        return reply.status(403).send({ error: 'Only the server owner can manage roles' });
+      }
+
+      // Can't change owner's role
+      if (userId === request.actor.id) {
+        return reply.status(400).send({ error: "Cannot change owner's role" });
+      }
+
+      // Find the member's collection_items entry
+      const [target] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, userId))
+        .limit(1);
+
+      if (!target) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      await db
+        .update(collectionItems)
+        .set({ properties: { role } })
+        .where(
+          and(
+            eq(collectionItems.collectionUri, server.followersUri),
+            eq(collectionItems.itemUri, target.uri),
+          ),
+        );
+
+      return { ok: true };
+    },
+  );
+
+  // Kick member (admin+ only)
+  fastify.delete<{ Params: { serverId: string; userId: string } }>(
+    '/servers/:serverId/members/:userId',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { serverId, userId } = request.params;
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.id, serverId), eq(actors.type, 'Group')))
+        .limit(1);
+
+      if (!server?.followersUri) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      // Check caller has admin+ role
+      const [callerMembership] = await db
+        .select()
+        .from(collectionItems)
+        .where(
+          and(
+            eq(collectionItems.collectionUri, server.followersUri),
+            eq(collectionItems.itemUri, request.actor.uri),
+          ),
+        )
+        .limit(1);
+
+      const callerProps = callerMembership?.properties as Record<string, unknown> | null;
+      const callerRole = (callerProps?.role as string) ?? 'member';
+
+      if (!['owner', 'admin'].includes(callerRole)) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      // Can't kick the owner
+      const serverProps = server.properties as Record<string, unknown> | null;
+      if (serverProps?.ownerId === userId) {
+        return reply.status(400).send({ error: 'Cannot kick the server owner' });
+      }
+
+      // Find target user
+      const [target] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, userId))
+        .limit(1);
+
+      if (!target) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      await db
+        .delete(collectionItems)
+        .where(
+          and(
+            eq(collectionItems.collectionUri, server.followersUri),
+            eq(collectionItems.itemUri, target.uri),
           ),
         );
 

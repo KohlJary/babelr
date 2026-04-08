@@ -5,6 +5,7 @@ import {
   text,
   integer,
   timestamp,
+  jsonb,
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
@@ -19,6 +20,7 @@ export const collectionItems = pgTable(
     itemUri: text('item_uri').notNull(),
     itemId: uuid('item_id'),
     position: integer('position'),
+    properties: jsonb('properties').default({}),
     addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

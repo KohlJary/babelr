@@ -17,6 +17,8 @@ import { SettingsPanel } from './SettingsPanel';
 import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
+import { MemberList } from './MemberList';
+import { useMembers } from '../hooks/useMembers';
 
 interface ChatViewProps {
   actor: ActorProfile;
@@ -29,6 +31,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showNewDM, setShowNewDM] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
 
   const { servers, selectedServer, selectServer, createServer, joinServer } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
@@ -36,6 +39,10 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   );
   const { conversations, selectedDM, selectDM, startDM } = useDMs();
   const e2e = useE2E();
+  const { members, setRole, kick } = useMembers(
+    dmMode ? null : selectedServer?.id ?? null,
+  );
+  const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
   const activeChannelId = dmMode ? selectedDM?.id ?? null : selectedChannel?.id ?? null;
 
@@ -98,6 +105,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         onSelectDM={selectDM}
         onCreateChannel={() => setShowCreateChannel(true)}
         onNewDM={() => setShowNewDM(true)}
+        onShowMembers={() => setShowMembers(true)}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -153,6 +161,16 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
             await startDM(participantId);
           }}
           onClose={() => setShowNewDM(false)}
+        />
+      )}
+      {showMembers && selectedServer && (
+        <MemberList
+          members={members}
+          actor={actor}
+          callerRole={callerRole}
+          onSetRole={setRole}
+          onKick={kick}
+          onClose={() => setShowMembers(false)}
         />
       )}
     </div>

@@ -1,0 +1,1 @@
+ALTER TABLE "collection_items" ADD COLUMN "properties" jsonb DEFAULT '{}'::jsonb;

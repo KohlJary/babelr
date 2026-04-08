@@ -196,6 +196,27 @@ async function checkChannelAccess(
   return { allowed: !!membership, channel };
 }
 
+async function getMemberRole(
+  db: ReturnType<typeof import('../db/index.ts').createDb>,
+  serverFollowersUri: string,
+  actorUri: string,
+): Promise<string | null> {
+  const [membership] = await db
+    .select()
+    .from(collectionItems)
+    .where(
+      and(
+        eq(collectionItems.collectionUri, serverFollowersUri),
+        eq(collectionItems.itemUri, actorUri),
+      ),
+    )
+    .limit(1);
+
+  if (!membership) return null;
+  const props = membership.properties as Record<string, unknown> | null;
+  return (props?.role as string) ?? 'member';
+}
+
 export default async function channelRoutes(fastify: FastifyInstance) {
   const db = fastify.db;
 
@@ -381,8 +402,21 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       .limit(1);
 
     if (!message) return reply.status(404).send({ error: 'Message not found' });
-    if (message.attributedTo !== request.actor.id) {
-      return reply.status(403).send({ error: 'Can only delete your own messages' });
+
+    // Allow delete if: author OR server admin/moderator/owner
+    let canDelete = message.attributedTo === request.actor.id;
+    if (!canDelete) {
+      const { channel: ch } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (ch?.belongsTo) {
+        const [server] = await db.select().from(actors).where(eq(actors.id, ch.belongsTo)).limit(1);
+        if (server?.followersUri) {
+          const role = await getMemberRole(db, server.followersUri, request.actor.uri);
+          canDelete = ['owner', 'admin', 'moderator'].includes(role ?? '');
+        }
+      }
+    }
+    if (!canDelete) {
+      return reply.status(403).send({ error: 'Insufficient permissions to delete this message' });
     }
 
     // Tombstone the message
