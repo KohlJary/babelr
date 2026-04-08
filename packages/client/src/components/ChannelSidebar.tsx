@@ -103,7 +103,7 @@ export function ChannelSidebar({
         className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
         onClick={() => onSelectChannel(ch.id)}
       >
-        <span className="sidebar-item-name"># {ch.name}</span>
+        <span className="sidebar-item-name">{ch.isPrivate ? '\uD83D\uDD12 ' : '# '}{ch.name}</span>
         {unreadCount > 0 && <span className="unread-badge">{unreadCount}</span>}
       </button>
     );

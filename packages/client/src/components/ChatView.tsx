@@ -166,8 +166,8 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
       )}
       {showCreateChannel && selectedServer && (
         <CreateChannelModal
-          onCreateChannel={async (name, category) => {
-            await createChannel({ name, category });
+          onCreateChannel={async (name, category, isPrivate) => {
+            await createChannel({ name, category, isPrivate });
           }}
           onClose={() => setShowCreateChannel(false)}
         />

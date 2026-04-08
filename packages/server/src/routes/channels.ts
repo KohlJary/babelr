@@ -42,6 +42,7 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
     name: (props?.name as string) ?? 'unnamed',
     serverId: obj.belongsTo,
     ...(props?.category ? { category: props.category as string } : {}),
+    ...(props?.isPrivate ? { isPrivate: true } : {}),
   };
 }
 
@@ -226,7 +227,25 @@ async function checkChannelAccess(
     )
     .limit(1);
 
-  return { allowed: !!membership, channel };
+  if (!membership) return { allowed: false, channel };
+
+  // For private channels, also check channel-level membership
+  const props = channel.properties as Record<string, unknown> | null;
+  if (props?.isPrivate) {
+    const [channelMembership] = await db
+      .select({ id: collectionItems.id })
+      .from(collectionItems)
+      .where(
+        and(
+          eq(collectionItems.collectionUri, channel.uri),
+          eq(collectionItems.itemUri, actorUri),
+        ),
+      )
+      .limit(1);
+    return { allowed: !!channelMembership, channel };
+  }
+
+  return { allowed: true, channel };
 }
 
 async function getMemberRole(
@@ -271,7 +290,23 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           ),
         );
 
-      return channels.map(toChannelView);
+      // Filter out private channels the user isn't a member of
+      const visible = [];
+      for (const ch of channels) {
+        const props = ch.properties as Record<string, unknown> | null;
+        if (props?.isPrivate) {
+          const [membership] = await db
+            .select({ id: collectionItems.id })
+            .from(collectionItems)
+            .where(and(eq(collectionItems.collectionUri, ch.uri), eq(collectionItems.itemUri, request.actor!.uri)))
+            .limit(1);
+          if (membership) visible.push(ch);
+        } else {
+          visible.push(ch);
+        }
+      }
+
+      return visible.map(toChannelView);
     },
   );
 
@@ -283,7 +318,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { name, category } = request.body;
+      const { name, category, isPrivate } = request.body;
       if (!name || name.trim().length === 0) {
         return reply.status(400).send({ error: 'Channel name is required' });
       }
@@ -308,9 +343,23 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           uri: `${protocol}://${config.domain}/channels/${crypto.randomUUID()}`,
           type: 'OrderedCollection',
           belongsTo: server.id,
-          properties: { name: name.trim(), ...(category ? { category: category.trim() } : {}) },
+          properties: {
+            name: name.trim(),
+            ...(category ? { category: category.trim() } : {}),
+            ...(isPrivate ? { isPrivate: true } : {}),
+          },
         })
         .returning();
+
+      // For private channels, add creator as member
+      if (isPrivate && request.actor) {
+        await db.insert(collectionItems).values({
+          collectionUri: channel.uri,
+          collectionId: channel.id,
+          itemUri: request.actor.uri,
+          itemId: request.actor.id,
+        });
+      }
 
       return reply.status(201).send(toChannelView(channel));
     },
@@ -894,6 +943,45 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         .update(objects)
         .set({ properties: { ...props, glossary } })
         .where(eq(objects.id, channelId));
+
+      return { ok: true };
+    },
+  );
+
+  // Invite user to private channel
+  fastify.post<{ Params: { channelId: string }; Body: { userId: string } }>(
+    '/channels/:channelId/invite',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { channelId } = request.params;
+      const { userId } = request.body;
+
+      const [channel] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
+        .limit(1);
+
+      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
+
+      const props = channel.properties as Record<string, unknown> | null;
+      if (!props?.isPrivate) {
+        return reply.status(400).send({ error: 'Channel is not private' });
+      }
+
+      const [user] = await db.select().from(actors).where(eq(actors.id, userId)).limit(1);
+      if (!user) return reply.status(404).send({ error: 'User not found' });
+
+      await db
+        .insert(collectionItems)
+        .values({
+          collectionUri: channel.uri,
+          collectionId: channel.id,
+          itemUri: user.uri,
+          itemId: user.id,
+        })
+        .onConflictDoNothing();
 
       return { ok: true };
     },

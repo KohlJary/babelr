@@ -2,13 +2,14 @@
 import { useState } from 'react';
 
 interface CreateChannelModalProps {
-  onCreateChannel: (name: string, category?: string) => Promise<void>;
+  onCreateChannel: (name: string, category?: string, isPrivate?: boolean) => Promise<void>;
   onClose: () => void;
 }
 
 export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelModalProps) {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,7 +17,7 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await onCreateChannel(name.trim(), category.trim() || undefined);
+      await onCreateChannel(name.trim(), category.trim() || undefined, isPrivate || undefined);
       onClose();
     } catch {
       // Error handling could be added
@@ -50,6 +51,14 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
             onChange={(e) => setCategory(e.target.value)}
             className="modal-input"
           />
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={(e) => setIsPrivate(e.target.checked)}
+            />
+            <span>Private channel (invite only)</span>
+          </label>
           <button type="submit" className="auth-submit" disabled={submitting}>
             {submitting ? '...' : 'Create'}
           </button>
