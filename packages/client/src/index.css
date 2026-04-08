@@ -574,6 +574,12 @@ body {
   font-size: 0.75rem;
 }
 
+.edited-badge {
+  color: #666;
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
 .message-content {
   font-size: 0.95rem;
   line-height: 1.4;

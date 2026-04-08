@@ -117,7 +117,10 @@ export function MessageItem({
     <div className="message">
       <div className="message-header">
         <span className="message-author">{author.displayName ?? author.preferredUsername}</span>
-        <span className="message-time">{formatTime(message.published)}</span>
+        <span className="message-time">
+          {formatTime(message.published)}
+          {message.updated && <span className="edited-badge"> (edited)</span>}
+        </span>
       </div>
       <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
       {(indicator || metadataBadge) && (

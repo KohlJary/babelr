@@ -7,6 +7,7 @@ export interface MessageView {
   channelId: string;
   authorId: string;
   published: string;
+  updated?: string;
   properties?: Record<string, unknown>;
   inReplyTo?: string;
   replyCount?: number;

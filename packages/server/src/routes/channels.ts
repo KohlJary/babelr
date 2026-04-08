@@ -56,6 +56,7 @@ export function toMessageView(obj: typeof objects.$inferSelect, reactionsData?: 
     channelId: obj.context ?? '',
     authorId: obj.attributedTo ?? '',
     published: obj.published.toISOString(),
+    ...(obj.updated && obj.updated.getTime() !== obj.published.getTime() && { updated: obj.updated.toISOString() }),
     ...(Object.keys(messageProps).length > 0 && { properties: messageProps }),
     ...(reactionsData && { reactions: reactionsData }),
   };
