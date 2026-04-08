@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
+import { renderMarkdown } from '../utils/markdown';
 
 interface MessageItemProps {
   data: MessageWithAuthor;
@@ -100,7 +101,7 @@ export function MessageItem({
     return (
       <div className="message compact">
         <span className="message-time-hover">{formatTime(message.published)}</span>
-        <div className={contentClass}>{displayContent}</div>
+        <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
         {(indicator || metadataBadge) && (
           <div className="translation-info">
             {indicator}
@@ -118,7 +119,7 @@ export function MessageItem({
         <span className="message-author">{author.displayName ?? author.preferredUsername}</span>
         <span className="message-time">{formatTime(message.published)}</span>
       </div>
-      <div className={contentClass}>{displayContent}</div>
+      <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
       {(indicator || metadataBadge) && (
         <div className="translation-info">
           {indicator}
