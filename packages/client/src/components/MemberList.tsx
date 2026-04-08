@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { ActorProfile } from '@babelr/shared';
+import type { ActorProfile, PresenceStatus } from '@babelr/shared';
 import type { MemberView } from '../api';
 
 interface MemberListProps {
   members: MemberView[];
   actor: ActorProfile;
   callerRole: string;
+  presenceStatus?: Map<string, PresenceStatus>;
   onSetRole: (userId: string, role: string) => void;
   onKick: (userId: string) => void;
   onClose: () => void;
@@ -17,6 +18,7 @@ export function MemberList({
   members,
   actor,
   callerRole,
+  presenceStatus,
   onSetRole,
   onKick,
   onClose,
@@ -36,12 +38,21 @@ export function MemberList({
         <div className="discover-list">
           {members.map((member) => {
             const isSelf = member.id === actor.id;
+            const status = presenceStatus?.get(member.id) ?? 'offline';
+            const statusColor = status === 'online' ? '#10b981' : status === 'away' ? '#f59e0b' : '#6b7280';
             return (
               <div key={member.id} className="discover-item">
                 <div className="discover-info">
-                  <span className="discover-name">
-                    {member.displayName ?? member.preferredUsername}
-                  </span>
+                  <div className="member-presence">
+                    <span
+                      className="presence-dot"
+                      style={{ backgroundColor: statusColor }}
+                      title={status}
+                    />
+                    <span className="discover-name">
+                      {member.displayName ?? member.preferredUsername}
+                    </span>
+                  </div>
                   <span className="discover-meta">
                     @{member.preferredUsername} &middot; {member.role}
                   </span>

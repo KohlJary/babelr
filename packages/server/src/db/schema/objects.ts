@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, text, varchar, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, varchar, timestamp, jsonb, index, customType } from 'drizzle-orm/pg-core';
 import { actors } from './actors.ts';
+
+// Custom type for tsvector
+const tsvector = customType<{ data: string; notNull: true; default: true }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
 
 export const objects = pgTable(
   'objects',
@@ -21,6 +28,7 @@ export const objects = pgTable(
     properties: jsonb('properties').default({}),
     published: timestamp('published', { withTimezone: true }).notNull().defaultNow(),
     updated: timestamp('updated', { withTimezone: true }),
+    contentSearch: tsvector('content_search'),
   },
   (table) => [
     index('objects_context_published_idx').on(table.context, table.published),

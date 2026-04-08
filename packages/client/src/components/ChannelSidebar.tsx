@@ -9,6 +9,7 @@ interface ChannelSidebarProps {
   conversations: DMConversation[];
   selectedDMId: string | null;
   actor: ActorProfile;
+  unreadCounts?: Map<string, number>;
   onSelectChannel: (id: string) => void;
   onSelectDM: (id: string) => void;
   onCreateChannel: () => void;
@@ -24,6 +25,7 @@ export function ChannelSidebar({
   conversations,
   selectedDMId,
   actor,
+  unreadCounts,
   onSelectChannel,
   onSelectDM,
   onCreateChannel,
@@ -70,15 +72,21 @@ export function ChannelSidebar({
     <div className="channel-sidebar">
       <div className="sidebar-header">{serverName ?? 'Server'}</div>
       <div className="sidebar-list">
-        {channels.map((ch) => (
-          <button
-            key={ch.id}
-            className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
-            onClick={() => onSelectChannel(ch.id)}
-          >
-            <span className="sidebar-item-name"># {ch.name}</span>
-          </button>
-        ))}
+        {channels.map((ch) => {
+          const unreadCount = unreadCounts?.get(ch.id) ?? 0;
+          return (
+            <button
+              key={ch.id}
+              className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
+              onClick={() => onSelectChannel(ch.id)}
+            >
+              <span className="sidebar-item-name"># {ch.name}</span>
+              {unreadCount > 0 && (
+                <span className="unread-badge">{unreadCount}</span>
+              )}
+            </button>
+          );
+        })}
         <button className="sidebar-item add-channel" onClick={onCreateChannel}>
           + Create channel
         </button>

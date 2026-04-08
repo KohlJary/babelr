@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
+import type { PresenceStatus } from './ws.js';
 
 export interface MessageView {
   id: string;
@@ -7,12 +8,24 @@ export interface MessageView {
   authorId: string;
   published: string;
   properties?: Record<string, unknown>;
+  inReplyTo?: string;
+  replyCount?: number;
+  reactions?: Record<string, string[]>;
+}
+
+export interface ChannelWithUnread extends ChannelView {
+  unreadCount?: number;
+}
+
+export interface MentionBadge {
+  unreadMentionCount?: number;
 }
 
 export interface AuthorView {
   id: string;
   preferredUsername: string;
   displayName: string | null;
+  presence?: PresenceStatus;
 }
 
 export interface ChannelView {

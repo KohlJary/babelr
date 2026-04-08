@@ -8,6 +8,7 @@ import { useChat } from '../hooks/useChat';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useTranslation } from '../hooks/useTranslation';
 import { useE2E } from '../hooks/useE2E';
+import { useUnreadBadges } from '../hooks/useUnreadBadges';
 import { ServerSidebar } from './ServerSidebar';
 import { ChannelSidebar } from './ChannelSidebar';
 import { ChannelHeader } from './ChannelHeader';
@@ -20,6 +21,8 @@ import { NewDMModal } from './NewDMModal';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { useMembers } from '../hooks/useMembers';
+import { usePresence } from '../hooks/usePresence';
+import { useReactions } from '../hooks/useReactions';
 
 interface ChatViewProps {
   actor: ActorProfile;
@@ -42,6 +45,11 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const e2e = useE2E();
   const { members, setRole, kick } = useMembers(
     dmMode ? null : selectedServer?.id ?? null,
+  );
+  const { unreadCounts } = useUnreadBadges();
+  const { presenceStatus } = usePresence(!!actor);
+  const { messageReactions, toggleReaction } = useReactions(
+    dmMode ? null : selectedChannel?.id ?? null,
   );
   const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
@@ -102,6 +110,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         conversations={conversations}
         selectedDMId={selectedDM?.id ?? null}
         actor={actor}
+        unreadCounts={unreadCounts}
         onSelectChannel={selectChannel}
         onSelectDM={selectDM}
         onCreateChannel={() => setShowCreateChannel(true)}
@@ -124,6 +133,9 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           onLoadMore={loadMore}
           translations={translations}
           isTranslating={isTranslating}
+          actor={actor}
+          messageReactions={messageReactions}
+          onToggleReaction={toggleReaction}
         />
         <TypingIndicator users={typingUsers} />
         <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
@@ -170,6 +182,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           members={members}
           actor={actor}
           callerRole={callerRole}
+          presenceStatus={presenceStatus}
           onSetRole={setRole}
           onKick={kick}
           onClose={() => setShowMembers(false)}

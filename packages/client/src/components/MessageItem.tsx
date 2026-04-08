@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState } from 'react';
-import type { MessageWithAuthor, IdiomAnnotation } from '@babelr/shared';
+import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
+import { EmojiPicker } from './EmojiPicker';
 
 interface MessageItemProps {
   data: MessageWithAuthor;
   compact: boolean;
   translation?: CachedTranslation;
   isTranslating?: boolean;
+  actor?: ActorProfile;
+  messageReactions?: Record<string, string[]>;
+  onToggleReaction?: (emoji: string) => void;
 }
 
 function formatTime(iso: string): string {
@@ -44,9 +48,18 @@ function IdiomGlosses({ idioms }: { idioms: IdiomAnnotation[] }) {
   );
 }
 
-export function MessageItem({ data, compact, translation, isTranslating }: MessageItemProps) {
+export function MessageItem({
+  data,
+  compact,
+  translation,
+  isTranslating,
+  actor,
+  messageReactions,
+  onToggleReaction,
+}: MessageItemProps) {
   const { message, author } = data;
   const [showOriginal, setShowOriginal] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   const hasTranslation = translation && !translation.skipped;
   const displayContent =
@@ -113,6 +126,51 @@ export function MessageItem({ data, compact, translation, isTranslating }: Messa
         </div>
       )}
       {idiomLine}
+      {messageReactions && Object.keys(messageReactions).length > 0 && (
+        <div className="message-reactions">
+          {Object.entries(messageReactions).map(([emoji, reactorIds]) => (
+            <button
+              key={emoji}
+              className={`reaction-btn ${actor && reactorIds.includes(actor.id) ? 'reacted' : ''}`}
+              onClick={() => onToggleReaction?.(emoji)}
+              title={`${reactorIds.length} ${reactorIds.length === 1 ? 'reaction' : 'reactions'}`}
+            >
+              <span className="reaction-emoji">{emoji}</span>
+              <span className="reaction-count">{reactorIds.length}</span>
+            </button>
+          ))}
+          <button
+            className="reaction-add-btn"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            title="Add reaction"
+          >
+            +
+          </button>
+          {showEmojiPicker && (
+            <EmojiPicker
+              onSelect={(emoji) => onToggleReaction?.(emoji)}
+              onClose={() => setShowEmojiPicker(false)}
+            />
+          )}
+        </div>
+      )}
+      {!messageReactions && onToggleReaction && (
+        <div className="message-reactions">
+          <button
+            className="reaction-add-btn"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            title="Add reaction"
+          >
+            +
+          </button>
+          {showEmojiPicker && (
+            <EmojiPicker
+              onSelect={(emoji) => onToggleReaction(emoji)}
+              onClose={() => setShowEmojiPicker(false)}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

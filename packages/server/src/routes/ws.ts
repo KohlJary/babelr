@@ -18,6 +18,9 @@ export default async function wsRoutes(fastify: FastifyInstance) {
 
     const actor = request.actor;
 
+    // Register the connection for presence tracking
+    fastify.wsRegisterActorConnection(socket, actor.id);
+
     // Send connected confirmation
     const connected: WsServerMessage = {
       type: 'connected',
@@ -56,6 +59,11 @@ export default async function wsRoutes(fastify: FastifyInstance) {
                 ws.send(data);
               }
             }
+            break;
+          }
+          case 'presence:heartbeat': {
+            // Reset heartbeat timeout by re-registering
+            fastify.wsRegisterActorConnection(socket, actor.id);
             break;
           }
         }

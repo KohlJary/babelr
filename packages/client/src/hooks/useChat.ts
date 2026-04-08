@@ -66,6 +66,7 @@ export function useChat(
           return next;
         });
       }
+      // Note: reaction:add and reaction:remove are handled by useReactions hook
     },
     [isDM],
   );
@@ -97,6 +98,13 @@ export function useChat(
       if (res.cursor) setCursor(res.cursor);
       setLoading(false);
     });
+
+    // Mark channel as read when viewing
+    if (!isDM) {
+      api.markChannelAsRead(channelId).catch((err) => {
+        console.error('Failed to mark as read:', err);
+      });
+    }
   }, [channelId, isDM]);
 
   // Subscribe via WS when channel and connection are ready

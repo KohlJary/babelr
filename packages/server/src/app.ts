@@ -16,6 +16,7 @@ import wsRoutes from './routes/ws.ts';
 import translateRoutes from './routes/translate.ts';
 import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
+import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
 
 export async function buildApp() {
@@ -65,6 +66,7 @@ export async function buildApp() {
   await app.register(translateRoutes);
   await app.register(serverRoutes);
   await app.register(dmRoutes);
+  await app.register(searchRoutes);
   await app.register(federationPlugin);
 
   return app;

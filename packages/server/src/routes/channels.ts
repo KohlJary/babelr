@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { eq, and, lt, desc } from 'drizzle-orm';
+import { eq, and, lt, desc, gt, inArray } from 'drizzle-orm';
 import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { readPositions } from '../db/schema/read-positions.ts';
+import { reactions } from '../db/schema/reactions.ts';
 import type {
   ChannelView,
   MessageView,
@@ -14,12 +16,24 @@ import type {
   MessageListResponse,
   CreateMessageInput,
   CreateChannelInput,
+  WsServerMessage,
 } from '@babelr/shared';
 import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 
 const DEFAULT_LIMIT = 50;
+
+// Parse @mentions from content and return array of mentioned usernames
+function parseMentions(content: string): string[] {
+  const mentions: Set<string> = new Set();
+  const mentionRegex = /@(\w+)/g;
+  let match;
+  while ((match = mentionRegex.exec(content)) !== null) {
+    mentions.add(match[1]);
+  }
+  return Array.from(mentions);
+}
 
 export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
   const props = obj.properties as Record<string, unknown> | null;
@@ -30,7 +44,7 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
   };
 }
 
-export function toMessageView(obj: typeof objects.$inferSelect): MessageView {
+export function toMessageView(obj: typeof objects.$inferSelect, reactionsData?: Record<string, string[]>): MessageView {
   const props = obj.properties as Record<string, unknown> | null;
   const messageProps: Record<string, unknown> = {};
   if (props?.encrypted) messageProps.encrypted = true;
@@ -43,6 +57,7 @@ export function toMessageView(obj: typeof objects.$inferSelect): MessageView {
     authorId: obj.attributedTo ?? '',
     published: obj.published.toISOString(),
     ...(Object.keys(messageProps).length > 0 && { properties: messageProps }),
+    ...(reactionsData && { reactions: reactionsData }),
   };
 }
 
@@ -101,6 +116,19 @@ export async function createMessageInChannel(
   const config = fastify.config;
   const protocol = config.secureCookies ? 'https' : 'http';
 
+  // Parse mentions from content
+  const mentionedUsernames = parseMentions(content);
+
+  // Look up mentioned actors
+  const mentionedActors = mentionedUsernames.length > 0
+    ? await db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(inArray(actors.preferredUsername, mentionedUsernames))
+    : [];
+
+  const mentionedIds = mentionedActors.map((a) => a.id);
+
   const [note] = await db
     .insert(objects)
     .values({
@@ -111,7 +139,10 @@ export async function createMessageInChannel(
       context: channelId,
       to: [],
       cc: [],
-      ...(messageProperties && { properties: messageProperties }),
+      properties: {
+        ...messageProperties,
+        ...(mentionedIds.length > 0 && { mentions: mentionedIds }),
+      },
     })
     .returning();
 
@@ -448,5 +479,375 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     }
 
     return { ok: true };
+  });
+
+  // Get unread count for a channel
+  fastify.get<{ Params: { channelId: string } }>(
+    '/channels/:channelId/unread',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { channelId } = request.params;
+
+      // Check channel exists
+      const [channel] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
+        .limit(1);
+
+      if (!channel) {
+        return reply.status(404).send({ error: 'Channel not found' });
+      }
+
+      // Get read position for this actor
+      const [readPosition] = await db
+        .select()
+        .from(readPositions)
+        .where(and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)))
+        .limit(1);
+
+      // Count messages after read position (or all messages if never read)
+      const conditions = [eq(objects.context, channelId), eq(objects.type, 'Note')];
+      if (readPosition) {
+        conditions.push(gt(objects.published, readPosition.lastReadAt));
+      }
+
+      const unreadMessages = await db
+        .select({ id: objects.id })
+        .from(objects)
+        .where(and(...conditions));
+
+      return { count: unreadMessages.length };
+    },
+  );
+
+  // Mark channel as read
+  fastify.put<{ Params: { channelId: string } }>(
+    '/channels/:channelId/read',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { channelId } = request.params;
+      const now = new Date();
+
+      // Check channel exists
+      const [channel] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
+        .limit(1);
+
+      if (!channel) {
+        return reply.status(404).send({ error: 'Channel not found' });
+      }
+
+      // Upsert read position
+      const [existing] = await db
+        .select()
+        .from(readPositions)
+        .where(and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)))
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(readPositions)
+          .set({ lastReadAt: now })
+          .where(eq(readPositions.id, existing.id));
+      } else {
+        await db.insert(readPositions).values({
+          actorId: request.actor.id,
+          channelId,
+          lastReadAt: now,
+        });
+      }
+
+      return { ok: true };
+    },
+  );
+
+  // Add emoji reaction
+  fastify.post<{
+    Params: { channelId: string; messageId: string };
+    Body: { emoji: string };
+  }>('/channels/:channelId/messages/:messageId/reactions', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const { channelId, messageId } = request.params;
+    const { emoji } = request.body;
+
+    if (!emoji || emoji.trim().length === 0) {
+      return reply.status(400).send({ error: 'Emoji is required' });
+    }
+
+    // Check message exists
+    const [message] = await db
+      .select()
+      .from(objects)
+      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .limit(1);
+
+    if (!message) {
+      return reply.status(404).send({ error: 'Message not found' });
+    }
+
+    // Check if reaction already exists
+    const [existing] = await db
+      .select()
+      .from(reactions)
+      .where(
+        and(
+          eq(reactions.objectId, messageId),
+          eq(reactions.actorId, request.actor.id),
+          eq(reactions.emoji, emoji),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      return reply.status(400).send({ error: 'Already reacted with this emoji' });
+    }
+
+    // Add reaction
+    await db.insert(reactions).values({
+      objectId: messageId,
+      actorId: request.actor.id,
+      emoji,
+    });
+
+    // Broadcast reaction
+    const reactionMsg: WsServerMessage = {
+      type: 'reaction:add',
+      payload: {
+        messageId,
+        emoji,
+        actor: toAuthorView(request.actor),
+      },
+    };
+    fastify.broadcastToChannel(channelId, reactionMsg);
+
+    return { ok: true };
+  });
+
+  // Remove emoji reaction
+  fastify.delete<{
+    Params: { channelId: string; messageId: string };
+    Querystring: { emoji?: string };
+  }>('/channels/:channelId/messages/:messageId/reactions', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const { channelId, messageId } = request.params;
+    const { emoji } = request.query;
+
+    if (!emoji) {
+      return reply.status(400).send({ error: 'Emoji is required' });
+    }
+
+    // Check message exists
+    const [message] = await db
+      .select()
+      .from(objects)
+      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .limit(1);
+
+    if (!message) {
+      return reply.status(404).send({ error: 'Message not found' });
+    }
+
+    // Remove reaction
+    await db
+      .delete(reactions)
+      .where(
+        and(
+          eq(reactions.objectId, messageId),
+          eq(reactions.actorId, request.actor.id),
+          eq(reactions.emoji, emoji),
+        ),
+      );
+
+    // Broadcast removal
+    const reactionMsg: WsServerMessage = {
+      type: 'reaction:remove',
+      payload: {
+        messageId,
+        emoji,
+        actorId: request.actor.id,
+      },
+    };
+    fastify.broadcastToChannel(channelId, reactionMsg);
+
+    return { ok: true };
+  });
+
+  // Get messages mentioning current actor
+  fastify.get<{ Querystring: { cursor?: string; limit?: string } }>(
+    '/mentions',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const limit = Math.min(parseInt(request.query.limit ?? String(DEFAULT_LIMIT), 10), 100);
+
+      const conditions = [eq(objects.type, 'Note')];
+
+      const rows = await db
+        .select({ object: objects, actor: actors })
+        .from(objects)
+        .innerJoin(actors, eq(objects.attributedTo, actors.id))
+        .where(and(...conditions))
+        .orderBy(desc(objects.published))
+        .limit(limit + 1);
+
+      // Filter for messages that mention the current actor
+      const messages: MessageWithAuthor[] = rows
+        .map((row) => ({
+          message: toMessageView(row.object),
+          author: toAuthorView(row.actor),
+        }))
+        .filter((item) => {
+          const props = (item.message.properties as Record<string, unknown>) ?? {};
+          const mentions = (props.mentions as string[]) ?? [];
+          return mentions.includes(request.actor!.id);
+        });
+
+      const hasMore = rows.length > limit;
+      const response: MessageListResponse = {
+        messages: messages.slice(0, limit),
+        hasMore,
+      };
+      if (hasMore && messages.length > 0) {
+        response.cursor = messages[Math.min(limit - 1, messages.length - 1)].message.published;
+      }
+      return response;
+    },
+  );
+
+  // Get replies/thread for a message
+  fastify.get<{ Params: { channelId: string; messageId: string } }>(
+    '/channels/:channelId/messages/:messageId/replies',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { channelId, messageId } = request.params;
+
+      // Check parent message exists
+      const [parentMessage] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+        .limit(1);
+
+      if (!parentMessage) {
+        return reply.status(404).send({ error: 'Message not found' });
+      }
+
+      // Get all replies to this message
+      const rows = await db
+        .select({ object: objects, actor: actors })
+        .from(objects)
+        .innerJoin(actors, eq(objects.attributedTo, actors.id))
+        .where(
+          and(eq(objects.inReplyTo, messageId), eq(objects.type, 'Note')),
+        )
+        .orderBy(desc(objects.published));
+
+      const messages: MessageWithAuthor[] = rows.map((row) => ({
+        message: toMessageView(row.object),
+        author: toAuthorView(row.actor),
+      }));
+
+      return { messages, hasMore: false };
+    },
+  );
+
+  // Create a reply to a message
+  fastify.post<{
+    Params: { channelId: string; messageId: string };
+    Body: CreateMessageInput;
+  }>('/channels/:channelId/messages/:messageId/replies', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const { channelId, messageId } = request.params;
+    const { content } = request.body;
+
+    if (!content || content.trim().length === 0) {
+      return reply.status(400).send({ error: 'Message content is required' });
+    }
+
+    // Check parent message exists
+    const [parentMessage] = await db
+      .select()
+      .from(objects)
+      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .limit(1);
+
+    if (!parentMessage) {
+      return reply.status(404).send({ error: 'Message not found' });
+    }
+
+    const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+    if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
+
+    // Parse mentions
+    const mentionedUsernames = parseMentions(content);
+    const mentionedActors = mentionedUsernames.length > 0
+      ? await db
+          .select({ id: actors.id })
+          .from(actors)
+          .where(inArray(actors.preferredUsername, mentionedUsernames))
+      : [];
+    const mentionedIds = mentionedActors.map((a) => a.id);
+
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+
+    const [reply_msg] = await db
+      .insert(objects)
+      .values({
+        uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
+        type: 'Note',
+        attributedTo: request.actor.id,
+        content: content.trim(),
+        context: channelId,
+        inReplyTo: messageId,
+        to: [],
+        cc: [],
+        properties: mentionedIds.length > 0 ? { mentions: mentionedIds } : {},
+      })
+      .returning();
+
+    await db.insert(activities).values({
+      uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
+      type: 'Create',
+      actorId: request.actor.id,
+      objectUri: reply_msg.uri,
+      objectId: reply_msg.id,
+      to: [],
+      cc: [],
+    });
+
+    const messageView = toMessageView(reply_msg);
+    const authorView = toAuthorView(request.actor);
+
+    // Broadcast as regular message (client filters by inReplyTo for thread view)
+    fastify.broadcastToChannel(channelId, {
+      type: 'message:new',
+      payload: { message: messageView, author: authorView },
+    });
+
+    return reply.status(201).send({ message: messageView, author: authorView });
   });
 }

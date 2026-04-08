@@ -125,6 +125,78 @@ export async function sendMessage(
   });
 }
 
+// Unread badges
+export async function getUnreadCount(channelId: string): Promise<{ count: number }> {
+  return apiFetch(`/channels/${channelId}/unread`);
+}
+
+export async function markChannelAsRead(channelId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/channels/${channelId}/read`, { method: 'PUT' });
+}
+
+// Mentions
+export async function getMentions(cursor?: string, limit?: string): Promise<MessageListResponse> {
+  const params = new URLSearchParams();
+  if (cursor) params.set('cursor', cursor);
+  if (limit) params.set('limit', limit);
+  const qs = params.toString();
+  return apiFetch(`/mentions${qs ? `?${qs}` : ''}`);
+}
+
+// Threaded replies
+export async function getReplies(
+  channelId: string,
+  messageId: string,
+): Promise<MessageListResponse> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/replies`);
+}
+
+export async function sendReply(
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<MessageWithAuthor> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/replies`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+}
+
+// Search
+export async function searchMessages(
+  query: string,
+  channelId?: string,
+  limit?: string,
+): Promise<MessageListResponse> {
+  const params = new URLSearchParams();
+  params.set('q', query);
+  if (channelId) params.set('channelId', channelId);
+  if (limit) params.set('limit', limit);
+  return apiFetch(`/search?${params.toString()}`);
+}
+
+// Reactions
+export async function addReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/reactions`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji }),
+  });
+}
+
+export async function removeReaction(
+  channelId: string,
+  messageId: string,
+  emoji: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`, {
+    method: 'DELETE',
+  });
+}
+
 // DMs
 export async function getDMs(): Promise<DMConversation[]> {
   return apiFetch('/dms');

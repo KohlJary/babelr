@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useEffect, useRef } from 'react';
-import type { MessageWithAuthor } from '@babelr/shared';
+import type { MessageWithAuthor, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { MessageItem } from './MessageItem';
 
@@ -11,6 +11,9 @@ interface MessageListProps {
   onLoadMore: () => void;
   translations: Map<string, CachedTranslation>;
   isTranslating: (messageId: string) => boolean;
+  actor?: ActorProfile;
+  messageReactions?: Map<string, Record<string, string[]>>;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
 }
 
 export function MessageList({
@@ -20,6 +23,9 @@ export function MessageList({
   onLoadMore,
   translations,
   isTranslating,
+  actor,
+  messageReactions,
+  onToggleReaction,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -64,6 +70,11 @@ export function MessageList({
             compact={compact}
             translation={translations.get(item.message.id)}
             isTranslating={isTranslating(item.message.id)}
+            actor={actor}
+            messageReactions={messageReactions?.get(item.message.id)}
+            onToggleReaction={
+              onToggleReaction ? (emoji) => onToggleReaction(item.message.id, emoji) : undefined
+            }
           />
         );
       })}
