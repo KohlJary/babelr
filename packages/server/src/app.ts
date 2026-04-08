@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: Hippocratic-3.0
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import fp from 'fastify-plugin';
 import './types.ts';
 import { createDb } from './db/index.ts';
@@ -18,17 +23,30 @@ import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
 import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
-import multipart from '@fastify/multipart';
-import fastifyStatic from '@fastify/static';
-import { join } from 'node:path';
 import uploadRoutes from './routes/uploads.ts';
 
 export async function buildApp() {
   const config = loadConfig();
   const db = createDb(config.databaseUrl);
+  const isProduction = process.env.NODE_ENV === 'production';
 
   const app = Fastify({
-    logger: true,
+    logger: {
+      level: isProduction ? 'info' : 'debug',
+    },
+    trustProxy: isProduction,
+  });
+
+  // Production error handler — no stack traces leaked
+  app.setErrorHandler((error, _request, reply) => {
+    const err = error as { statusCode?: number; message?: string };
+    const statusCode = err.statusCode ?? 500;
+    if (statusCode >= 500) {
+      app.log.error(error);
+      reply.status(500).send({ error: 'Internal server error' });
+    } else {
+      reply.status(statusCode).send({ error: err.message ?? 'Error' });
+    }
   });
 
   // Decorate with db and config
@@ -42,28 +60,50 @@ export async function buildApp() {
     ),
   );
 
-  // The config-plugin is the same registration, just needs the name for dependency ordering
   app.register(
-    fp(
-      async () => {
-        // config already decorated above
-      },
-      { name: 'config-plugin' },
-    ),
+    fp(async () => {}, { name: 'config-plugin' }),
   );
 
-  // Plugins
+  // CORS — locked to configured domain in production
+  const allowedOrigins = isProduction
+    ? [`https://${config.domain}`, `http://${config.domain}`]
+    : true;
+
   await app.register(cookie);
   await app.register(cors, {
-    origin: true,
+    origin: allowedOrigins,
     credentials: true,
   });
+
+  // Rate limiting
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
+
+  // File handling
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+  // Uploads directory
+  const uploadsDir = join(process.cwd(), isProduction ? 'uploads' : '../../uploads');
   await app.register(fastifyStatic, {
-    root: join(process.cwd(), 'uploads'),
+    root: uploadsDir,
     prefix: '/uploads/',
     decorateReply: false,
   });
+
+  // Serve client build in production
+  const clientDistDir = join(process.cwd(), isProduction ? '../client/dist' : '../../packages/client/dist');
+  if (existsSync(clientDistDir)) {
+    await app.register(fastifyStatic, {
+      root: clientDistDir,
+      prefix: '/',
+      decorateReply: false,
+      wildcard: false,
+    });
+  }
+
+  // Plugins
   await app.register(authPlugin);
   await app.register(wsPlugin);
   await app.register(seedPlugin);
@@ -79,6 +119,35 @@ export async function buildApp() {
   await app.register(searchRoutes);
   await app.register(federationPlugin);
   await app.register(uploadRoutes);
+
+  // SPA fallback — serve index.html for all non-API paths
+  if (existsSync(clientDistDir)) {
+    app.setNotFoundHandler((request, reply) => {
+      // Don't serve HTML for API/federation/upload paths
+      const path = request.url;
+      if (
+        path.startsWith('/auth/') ||
+        path.startsWith('/servers') ||
+        path.startsWith('/channels') ||
+        path.startsWith('/dms') ||
+        path.startsWith('/translate') ||
+        path.startsWith('/upload') ||
+        path.startsWith('/users/') ||
+        path.startsWith('/groups/') ||
+        path.startsWith('/objects/') ||
+        path.startsWith('/inbox') ||
+        path.startsWith('/ws') ||
+        path.startsWith('/health') ||
+        path.startsWith('/search') ||
+        path.startsWith('/notifications') ||
+        path.startsWith('/mentions') ||
+        path.startsWith('/.well-known')
+      ) {
+        return reply.status(404).send({ error: 'Not found' });
+      }
+      return reply.sendFile('index.html', clientDistDir);
+    });
+  }
 
   return app;
 }

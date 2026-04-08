@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
 import * as argon2 from 'argon2';
-import { eq, and, ne } from 'drizzle-orm';
+import { eq, and, ne, sql } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
+import { collectionItems } from '../db/schema/collections.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
@@ -85,6 +86,41 @@ export default async function authRoutes(fastify: FastifyInstance) {
         local: true,
       })
       .returning();
+
+    // First user becomes instance admin
+    const [userCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(actors)
+      .where(and(eq(actors.type, 'Person'), eq(actors.local, true)));
+
+    if (userCount.count === 1) {
+      const currentProps = (actor.properties as Record<string, unknown>) ?? {};
+      await db
+        .update(actors)
+        .set({ properties: { ...currentProps, instanceAdmin: true } })
+        .where(eq(actors.id, actor.id));
+
+      // Auto-join default server as owner
+      const [defaultServer] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.type, 'Group'), eq(actors.local, true)))
+        .limit(1);
+
+      if (defaultServer?.followersUri) {
+        await db
+          .insert(collectionItems)
+          .values({
+            collectionUri: defaultServer.followersUri,
+            itemUri: actor.uri,
+            itemId: actor.id,
+            properties: { role: 'owner' },
+          })
+          .onConflictDoNothing();
+      }
+
+      fastify.log.info({ username: actor.preferredUsername }, 'First user registered as instance admin');
+    }
 
     await fastify.createSession(actor.id, reply);
 

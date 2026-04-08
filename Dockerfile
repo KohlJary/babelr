@@ -32,11 +32,17 @@ COPY --from=build /app/packages/shared/dist packages/shared/dist/
 COPY --from=build /app/packages/server/package.json packages/server/
 COPY --from=build /app/packages/server/dist packages/server/dist/
 COPY --from=build /app/packages/server/src/db/migrations packages/server/src/db/migrations/
+COPY --from=build /app/packages/server/drizzle.config.ts packages/server/
+COPY --from=build /app/packages/client/package.json packages/client/
 COPY --from=build /app/packages/client/dist packages/client/dist/
 
-# Install production deps only
-RUN npm ci --omit=dev --ignore-scripts && npm rebuild argon2
+# Install production deps (includes drizzle-kit for migrations)
+RUN npm ci --ignore-scripts && npm rebuild argon2
+
+# Create uploads directory
+RUN mkdir -p /app/uploads
 
 EXPOSE 3000
 
-CMD ["node", "--env-file=/app/.env", "packages/server/dist/server.js"]
+# Run migrations then start server
+CMD ["sh", "-c", "cd packages/server && npx drizzle-kit migrate && cd /app && node packages/server/dist/server.js"]

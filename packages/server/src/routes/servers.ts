@@ -6,6 +6,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { invites } from '../db/schema/invites.ts';
 import type { CreateServerInput, ServerView } from '@babelr/shared';
 
 function slugify(name: string): string {
@@ -462,6 +463,132 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         );
 
       return { ok: true };
+    },
+  );
+
+  // Create invite link for a server
+  fastify.post<{ Params: { serverId: string }; Body: { maxUses?: number; expiresInHours?: number } }>(
+    '/servers/:serverId/invites',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { serverId } = request.params;
+      const { maxUses, expiresInHours } = request.body ?? {};
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.id, serverId), eq(actors.type, 'Group')))
+        .limit(1);
+
+      if (!server) return reply.status(404).send({ error: 'Server not found' });
+
+      const code = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+      const expiresAt = expiresInHours
+        ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
+        : null;
+
+      const [invite] = await db
+        .insert(invites)
+        .values({
+          code,
+          serverId,
+          createdBy: request.actor.id,
+          maxUses: maxUses ?? null,
+          expiresAt,
+        })
+        .returning();
+
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
+
+      return reply.status(201).send({
+        code: invite.code,
+        url: `${protocol}://${config.domain}/invite/${invite.code}`,
+        maxUses: invite.maxUses,
+        expiresAt: invite.expiresAt?.toISOString() ?? null,
+      });
+    },
+  );
+
+  // Join via invite code
+  fastify.post<{ Params: { code: string } }>(
+    '/invites/:code/join',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const [invite] = await db
+        .select()
+        .from(invites)
+        .where(eq(invites.code, request.params.code))
+        .limit(1);
+
+      if (!invite) return reply.status(404).send({ error: 'Invalid invite code' });
+
+      if (invite.expiresAt && invite.expiresAt < new Date()) {
+        return reply.status(410).send({ error: 'Invite has expired' });
+      }
+
+      if (invite.maxUses && invite.uses >= invite.maxUses) {
+        return reply.status(410).send({ error: 'Invite has been used up' });
+      }
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, invite.serverId))
+        .limit(1);
+
+      if (!server?.followersUri) return reply.status(404).send({ error: 'Server not found' });
+
+      // Add member (idempotent)
+      await db
+        .insert(collectionItems)
+        .values({
+          collectionUri: server.followersUri,
+          itemUri: request.actor.uri,
+          itemId: request.actor.id,
+        })
+        .onConflictDoNothing();
+
+      // Increment use count
+      await db
+        .update(invites)
+        .set({ uses: invite.uses + 1 })
+        .where(eq(invites.id, invite.id));
+
+      return {
+        ok: true,
+        server: {
+          id: server.id,
+          name: server.displayName ?? server.preferredUsername,
+        },
+      };
+    },
+  );
+
+  // List invites for a server
+  fastify.get<{ Params: { serverId: string } }>(
+    '/servers/:serverId/invites',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const serverInvites = await db
+        .select()
+        .from(invites)
+        .where(eq(invites.serverId, request.params.serverId));
+
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
+
+      return serverInvites.map((inv) => ({
+        code: inv.code,
+        url: `${protocol}://${config.domain}/invite/${inv.code}`,
+        maxUses: inv.maxUses,
+        uses: inv.uses,
+        expiresAt: inv.expiresAt?.toISOString() ?? null,
+        createdAt: inv.createdAt.toISOString(),
+      }));
     },
   );
 }

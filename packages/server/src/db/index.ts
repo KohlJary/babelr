@@ -4,7 +4,9 @@ import postgres from 'postgres';
 import * as schema from './schema/index.js';
 
 export function createDb(databaseUrl: string) {
-  const client = postgres(databaseUrl);
+  const client = postgres(databaseUrl, {
+    max: parseInt(process.env.DB_POOL_SIZE ?? '20', 10),
+  });
   return drizzle(client, { schema });
 }
 
