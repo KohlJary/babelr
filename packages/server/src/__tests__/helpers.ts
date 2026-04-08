@@ -97,5 +97,5 @@ export async function createTestUser(
 
 export async function cleanDb(db: ReturnType<typeof createDb>) {
   // Truncate all tables in dependency order
-  await db.execute(sql`TRUNCATE sessions, activities, delivery_queue, collection_items, read_positions, reactions, objects, actors CASCADE`);
+  await db.execute(sql`TRUNCATE sessions, activities, delivery_queue, collection_items, read_positions, reactions, notification_preferences, objects, actors CASCADE`);
 }

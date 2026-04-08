@@ -269,4 +269,21 @@ export async function updateGlossary(
   });
 }
 
+// Notification preferences
+export async function getMutedChannels(): Promise<Record<string, boolean>> {
+  const res = await apiFetch<{ muted: Record<string, boolean> }>('/notifications/preferences');
+  return res.muted;
+}
+
+export async function setMutePreference(
+  targetId: string,
+  targetType: string,
+  muted: boolean,
+): Promise<void> {
+  await apiFetch('/notifications/preferences', {
+    method: 'PUT',
+    body: JSON.stringify({ targetId, targetType, muted }),
+  });
+}
+
 export { ApiError };

@@ -8,6 +8,7 @@ import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { readPositions } from '../db/schema/read-positions.ts';
 import { reactions } from '../db/schema/reactions.ts';
+import { notificationPreferences } from '../db/schema/notification-preferences.ts';
 import type {
   ChannelView,
   MessageView,
@@ -982,6 +983,59 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           itemId: user.id,
         })
         .onConflictDoNothing();
+
+      return { ok: true };
+    },
+  );
+
+  // Get notification preferences
+  fastify.get('/notifications/preferences', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+    const prefs = await db
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.actorId, request.actor.id));
+
+    const mutedMap: Record<string, boolean> = {};
+    for (const p of prefs) {
+      if (p.muted) mutedMap[p.targetId] = true;
+    }
+    return { muted: mutedMap };
+  });
+
+  // Set mute preference
+  fastify.put<{ Body: { targetId: string; targetType: string; muted: boolean } }>(
+    '/notifications/preferences',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { targetId, targetType, muted } = request.body;
+
+      const [existing] = await db
+        .select()
+        .from(notificationPreferences)
+        .where(
+          and(
+            eq(notificationPreferences.actorId, request.actor.id),
+            eq(notificationPreferences.targetId, targetId),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(notificationPreferences)
+          .set({ muted })
+          .where(eq(notificationPreferences.id, existing.id));
+      } else {
+        await db.insert(notificationPreferences).values({
+          actorId: request.actor.id,
+          targetId,
+          targetType,
+          muted,
+        });
+      }
 
       return { ok: true };
     },
