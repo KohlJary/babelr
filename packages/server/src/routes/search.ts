@@ -5,7 +5,7 @@ import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { actors } from '../db/schema/actors.ts';
 import type { MessageListResponse, MessageWithAuthor } from '@babelr/shared';
-import { toMessageView, toAuthorView } from './channels.ts';
+import { toMessageView, toAuthorView, checkChannelAccess } from './channels.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -34,6 +34,8 @@ export default async function searchRoutes(fastify: FastifyInstance) {
     ];
 
     if (channelId) {
+      const { allowed } = await checkChannelAccess(db, channelId, request.actor!.uri);
+      if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
       conditions.push(eq(objects.context, channelId));
     }
 

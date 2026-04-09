@@ -286,4 +286,27 @@ export async function setMutePreference(
   });
 }
 
+// Channel invites
+export async function inviteToChannel(channelId: string, userId: string): Promise<void> {
+  await apiFetch(`/channels/${channelId}/invite`, {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+// Server invites
+export async function createServerInvite(
+  serverId: string,
+  options?: { maxUses?: number; expiresInHours?: number },
+): Promise<{ code: string; url: string }> {
+  return apiFetch(`/servers/${serverId}/invites`, {
+    method: 'POST',
+    body: JSON.stringify(options ?? {}),
+  });
+}
+
+export async function joinViaInvite(code: string): Promise<{ ok: boolean; server: { id: string; name: string } }> {
+  return apiFetch(`/invites/${code}/join`, { method: 'POST' });
+}
+
 export { ApiError };

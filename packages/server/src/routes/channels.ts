@@ -192,7 +192,7 @@ export async function createMessageInChannel(
 }
 
 // Check if actor is a member of the server that owns a channel
-async function checkChannelAccess(
+export async function checkChannelAccess(
   db: ReturnType<typeof import('../db/index.ts').createDb>,
   channelId: string,
   actorUri: string,
@@ -638,6 +638,10 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Emoji is required' });
     }
 
+    // Check channel access
+    const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+    if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
+
     // Check message exists
     const [message] = await db
       .select()
@@ -702,6 +706,10 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     if (!emoji) {
       return reply.status(400).send({ error: 'Emoji is required' });
     }
+
+    // Check channel access
+    const { allowed: canAccess } = await checkChannelAccess(db, channelId, request.actor.uri);
+    if (!canAccess) return reply.status(403).send({ error: 'Not a member of this channel' });
 
     // Check message exists
     const [message] = await db
