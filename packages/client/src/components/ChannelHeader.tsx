@@ -9,6 +9,7 @@ interface ChannelHeaderProps {
   onLogout: () => void;
   onOpenSettings: () => void;
   onOpenProfile: () => void;
+  onOpenMentions: () => void;
 }
 
 export function ChannelHeader({
@@ -19,6 +20,7 @@ export function ChannelHeader({
   onLogout,
   onOpenSettings,
   onOpenProfile,
+  onOpenMentions,
 }: ChannelHeaderProps) {
   return (
     <header className="channel-header">
@@ -34,6 +36,9 @@ export function ChannelHeader({
       <div className="user-info">
         <button className="username-btn" onClick={onOpenProfile} title="Edit profile">
           {actor.displayName ?? actor.preferredUsername}
+        </button>
+        <button className="settings-btn" onClick={onOpenMentions} title="Mentions">
+          @
         </button>
         <button className="settings-btn" onClick={onOpenSettings} title="Settings">
           &#9881;

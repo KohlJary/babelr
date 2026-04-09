@@ -25,6 +25,8 @@ import { GlossaryEditor } from './GlossaryEditor';
 import { ProfilePanel } from './ProfilePanel';
 import { ThreadPanel } from './ThreadPanel';
 import { ServerSettingsPanel } from './ServerSettingsPanel';
+import { MentionsPanel } from './MentionsPanel';
+import { ChannelInviteModal } from './ChannelInviteModal';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -44,6 +46,9 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showGlossary, setShowGlossary] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showServerSettings, setShowServerSettings] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const [showChannelInvite, setShowChannelInvite] = useState(false);
+  const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -79,6 +84,42 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
 
   const { settings, updateSettings } = useTranslationSettings();
   const { translations, isTranslating } = useTranslation(messages, settings);
+
+  // Load muted channels
+  useEffect(() => {
+    api.getMutedChannels().then((muted) => {
+      setMutedChannels(new Set(Object.keys(muted)));
+    });
+  }, []);
+
+  const handleToggleMute = useCallback(async (channelId: string, muted: boolean) => {
+    await api.setMutePreference(channelId, 'channel', muted);
+    setMutedChannels((prev) => {
+      const next = new Set(prev);
+      if (muted) next.add(channelId);
+      else next.delete(channelId);
+      return next;
+    });
+  }, []);
+
+  // Handle invite links (/invite/:code)
+  useEffect(() => {
+    const path = window.location.pathname;
+    const match = path.match(/^\/invite\/(\w+)$/);
+    if (match) {
+      const code = match[1];
+      api.joinViaInvite(code).then((res) => {
+        if (res.ok) {
+          alert(`Joined server: ${res.server.name}`);
+          window.history.replaceState(null, '', '/');
+          window.location.reload();
+        }
+      }).catch(() => {
+        alert('Invalid or expired invite link');
+        window.history.replaceState(null, '', '/');
+      });
+    }
+  }, []);
 
   // Initialize preferredLanguage from actor profile
   useEffect(() => {
@@ -164,6 +205,10 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         onShowServerSettings={
           ['owner', 'admin'].includes(callerRole) ? () => setShowServerSettings(true) : undefined
         }
+        mutedChannels={mutedChannels}
+        onToggleMute={handleToggleMute}
+        selectedChannelIsPrivate={!dmMode && selectedChannel?.isPrivate}
+        onInviteToChannel={!dmMode && selectedChannel?.isPrivate ? () => setShowChannelInvite(true) : undefined}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -174,6 +219,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           onLogout={onLogout}
           onOpenSettings={() => setShowSettings(true)}
           onOpenProfile={() => setShowProfile(true)}
+          onOpenMentions={() => setShowMentions(true)}
         />
         <MessageList
           messages={messages}
@@ -273,6 +319,15 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
             window.location.reload();
           }}
           onClose={() => setShowProfile(false)}
+        />
+      )}
+      {showMentions && (
+        <MentionsPanel onClose={() => setShowMentions(false)} />
+      )}
+      {showChannelInvite && activeChannelId && (
+        <ChannelInviteModal
+          channelId={activeChannelId}
+          onClose={() => setShowChannelInvite(false)}
         />
       )}
     </div>

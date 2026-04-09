@@ -18,6 +18,10 @@ interface ChannelSidebarProps {
   onShowMembers: () => void;
   onShowGlossary: () => void;
   onShowServerSettings?: () => void;
+  mutedChannels?: Set<string>;
+  onToggleMute?: (channelId: string, muted: boolean) => void;
+  selectedChannelIsPrivate?: boolean;
+  onInviteToChannel?: () => void;
 }
 
 export function ChannelSidebar({
@@ -36,6 +40,10 @@ export function ChannelSidebar({
   onShowMembers,
   onShowGlossary,
   onShowServerSettings,
+  mutedChannels,
+  onToggleMute,
+  selectedChannelIsPrivate,
+  onInviteToChannel,
 }: ChannelSidebarProps) {
   if (mode === 'dms') {
     return (
@@ -99,15 +107,26 @@ export function ChannelSidebar({
 
   const renderChannel = (ch: ChannelView) => {
     const unreadCount = unreadCounts?.get(ch.id) ?? 0;
+    const isMuted = mutedChannels?.has(ch.id) ?? false;
     return (
-      <button
-        key={ch.id}
-        className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
-        onClick={() => onSelectChannel(ch.id)}
-      >
-        <span className="sidebar-item-name">{ch.isPrivate ? '\uD83D\uDD12 ' : '# '}{ch.name}</span>
-        {unreadCount > 0 && <span className="unread-badge">{unreadCount}</span>}
-      </button>
+      <div key={ch.id} className={`sidebar-channel-row ${isMuted ? 'muted' : ''}`}>
+        <button
+          className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
+          onClick={() => onSelectChannel(ch.id)}
+        >
+          <span className="sidebar-item-name">{ch.isPrivate ? '\uD83D\uDD12 ' : '# '}{ch.name}</span>
+          {unreadCount > 0 && !isMuted && <span className="unread-badge">{unreadCount}</span>}
+        </button>
+        {onToggleMute && (
+          <button
+            className="channel-mute-btn"
+            onClick={() => onToggleMute(ch.id, !isMuted)}
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? '\uD83D\uDD15' : '\uD83D\uDD14'}
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -134,6 +153,11 @@ export function ChannelSidebar({
         <button className="sidebar-item add-channel" onClick={onShowGlossary}>
           Glossary
         </button>
+        {selectedChannelIsPrivate && onInviteToChannel && (
+          <button className="sidebar-item add-channel" onClick={onInviteToChannel}>
+            Invite to Channel
+          </button>
+        )}
         {onShowServerSettings && (
           <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
             Server Settings
