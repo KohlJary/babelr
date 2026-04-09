@@ -22,7 +22,17 @@ interface MessageItemProps {
 
 function formatTime(iso: string): string {
   const date = new Date(iso);
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+  if (isToday) return `Today at ${time}`;
+  if (isYesterday) return `Yesterday at ${time}`;
+  return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
 }
 
 function ConfidenceDot({ confidence }: { confidence: number }) {
