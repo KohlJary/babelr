@@ -63,6 +63,24 @@ export function useReactions(channelId: string | null, actorId: string, messages
       const currentReactors = msgReactions?.[emoji] ?? [];
       const hasReacted = currentReactors.includes(actorId);
 
+      // Optimistic update
+      setMessageReactions((prev) => {
+        const next = new Map(prev);
+        const reactions = { ...(next.get(messageId) ?? {}) };
+        if (hasReacted) {
+          reactions[emoji] = currentReactors.filter((id) => id !== actorId);
+          if (reactions[emoji].length === 0) delete reactions[emoji];
+        } else {
+          reactions[emoji] = [...currentReactors, actorId];
+        }
+        if (Object.keys(reactions).length === 0) {
+          next.delete(messageId);
+        } else {
+          next.set(messageId, reactions);
+        }
+        return next;
+      });
+
       try {
         if (hasReacted) {
           await api.removeReaction(channelId, messageId, emoji);
@@ -71,6 +89,7 @@ export function useReactions(channelId: string | null, actorId: string, messages
         }
       } catch (error) {
         console.error('Failed to toggle reaction:', error);
+        // TODO: revert optimistic update on failure
       }
     },
     [channelId, actorId, messageReactions],
