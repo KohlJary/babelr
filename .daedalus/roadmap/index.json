@@ -17,118 +17,26 @@
     { "id": "channel-categories", "title": "Channel categories", "type": "feature", "priority": "P2", "status": "done" },
     { "id": "private-channels", "title": "Private channels", "type": "feature", "priority": "P2", "status": "done" },
     { "id": "per-room-glossary", "title": "Per-room glossaries", "type": "feature", "priority": "P2", "status": "done" },
-    {
-      "id": "serve-client",
-      "title": "Serve client build from server in production",
-      "description": "Add fastifyStatic for client dist + SPA fallback route for all non-API paths. Required for Docker deployment.",
-      "type": "chore",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "admin-bootstrap",
-      "title": "First-user-becomes-admin / setup token",
-      "description": "On fresh instance, first registered user becomes instance admin. Or env var ADMIN_SETUP_TOKEN required for first registration.",
-      "type": "feature",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "invite-links",
-      "title": "Server invite links",
-      "description": "Generate shareable invite links for servers. Optional invite-only registration mode for the instance.",
-      "type": "feature",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "cors-lockdown",
-      "title": "Lock down CORS for production",
-      "description": "Configure allowed origins from BABELR_DOMAIN env var instead of origin: true.",
-      "type": "security",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "rate-limiting",
-      "title": "Rate limiting on all public endpoints",
-      "description": "Add @fastify/rate-limit. Tighter limits on auth endpoints, moderate on messaging, light on reads.",
-      "type": "security",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "error-handler",
-      "title": "Production error handler (no stack traces)",
-      "description": "Custom Fastify error handler that sanitizes 500 responses in production. Log full error server-side.",
-      "type": "security",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "docker-migrations",
-      "title": "Run DB migrations on Docker startup",
-      "description": "Docker entrypoint runs drizzle-kit migrate before starting server.",
-      "type": "chore",
-      "priority": "P0",
-      "status": "ready"
-    },
-    {
-      "id": "db-pooling",
-      "title": "Database connection pooling config",
-      "description": "Configure postgres.js pool size (max connections) for production workloads.",
-      "type": "chore",
-      "priority": "P1",
-      "status": "ready"
-    },
-    {
-      "id": "security-headers",
-      "title": "Security headers (@fastify/helmet)",
-      "description": "Add CSP, X-Frame-Options, HSTS, etc.",
-      "type": "security",
-      "priority": "P1",
-      "status": "backlog"
-    },
-    {
-      "id": "federation-rate-limit",
-      "title": "Federation inbox rate limiting",
-      "description": "Per-instance rate limits on AP inbox endpoints to prevent federation spam.",
-      "type": "security",
-      "priority": "P1",
-      "status": "backlog"
-    },
+    { "id": "serve-client", "title": "Serve client build from server", "type": "chore", "priority": "P0", "status": "done" },
+    { "id": "admin-bootstrap", "title": "First-user-becomes-admin", "type": "feature", "priority": "P0", "status": "done" },
+    { "id": "invite-links", "title": "Server invite links", "type": "feature", "priority": "P0", "status": "done" },
+    { "id": "cors-lockdown", "title": "CORS lockdown for production", "type": "security", "priority": "P0", "status": "done" },
+    { "id": "rate-limiting", "title": "Rate limiting", "type": "security", "priority": "P0", "status": "done" },
+    { "id": "error-handler", "title": "Production error handler", "type": "security", "priority": "P0", "status": "done" },
+    { "id": "docker-migrations", "title": "DB migrations on Docker startup", "type": "chore", "priority": "P0", "status": "done" },
+    { "id": "db-pooling", "title": "Database connection pooling", "type": "chore", "priority": "P1", "status": "done" },
+    { "id": "security-headers", "title": "Security headers (helmet)", "type": "security", "priority": "P1", "status": "done" },
+    { "id": "federation-rate-limit", "title": "Federation inbox rate limiting", "type": "security", "priority": "P1", "status": "done" },
+    { "id": "graceful-shutdown", "title": "Graceful shutdown handler", "type": "chore", "priority": "P2", "status": "done" },
+    { "id": "nodeinfo", "title": "NodeInfo endpoint", "type": "feature", "priority": "P2", "status": "done" },
+    { "id": "desktop-app", "title": "Tauri desktop application", "type": "feature", "priority": "P2", "status": "done" },
     {
       "id": "email-verification",
       "title": "Email verification on registration",
-      "description": "Verify email before activating account. Prevents spam registrations.",
+      "description": "Verify email before activating account. Prevents spam registrations. Needs SMTP configuration.",
       "type": "feature",
       "priority": "P2",
       "status": "backlog"
-    },
-    {
-      "id": "graceful-shutdown",
-      "title": "Graceful shutdown handler",
-      "description": "Close WS connections, drain DB pool, finish pending deliveries on SIGTERM.",
-      "type": "chore",
-      "priority": "P2",
-      "status": "backlog"
-    },
-    {
-      "id": "nodeinfo",
-      "title": "NodeInfo endpoint for Mastodon compatibility",
-      "description": "/.well-known/nodeinfo for instance discovery by Mastodon and other fediverse software.",
-      "type": "feature",
-      "priority": "P2",
-      "status": "backlog"
-    },
-    {
-      "id": "desktop-app",
-      "title": "Tauri desktop application",
-      "description": "Native desktop app using Tauri (Rust + OS webview). Connects to configurable server URL. System tray, native notifications, auto-update, deep links (babelr://invite/CODE). Same React client, no fork.",
-      "type": "feature",
-      "priority": "P2",
-      "status": "in_progress",
-      "assigned": "daedalus"
     },
     { "id": "phase3-mobile", "title": "Mobile responsive / native apps", "type": "feature", "priority": "P3", "status": "backlog" },
     { "id": "phase3-voice", "title": "Voice/video translation", "type": "feature", "priority": "P3", "status": "backlog" },
@@ -136,5 +44,5 @@
     { "id": "bots-webhooks", "title": "Bot API and webhooks", "type": "feature", "priority": "P3", "status": "backlog" },
     { "id": "2fa", "title": "Two-factor authentication", "type": "feature", "priority": "P3", "status": "backlog" }
   ],
-  "version": 4
+  "version": 5
 }
