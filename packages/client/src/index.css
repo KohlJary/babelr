@@ -1167,6 +1167,36 @@ body {
   font-weight: 600;
 }
 
+/* Message action buttons */
+.message-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action-btn {
+  padding: 0.2rem 0.6rem;
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: all 0.15s;
+}
+
+.message-action-btn:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+}
+
 .reaction-add-btn {
   width: 28px;
   height: 28px;
