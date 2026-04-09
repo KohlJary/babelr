@@ -34,11 +34,8 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
 
     await pipeline(data.file, createWriteStream(filePath));
 
-    const config = fastify.config;
-    const protocol = config.secureCookies ? 'https' : 'http';
-
     return {
-      url: `${protocol}://${config.domain}/uploads/${safeName}`,
+      url: `/uploads/${safeName}`,
       filename: data.filename,
       contentType: data.mimetype,
     };
