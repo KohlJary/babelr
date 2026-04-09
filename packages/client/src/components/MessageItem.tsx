@@ -61,6 +61,12 @@ export function MessageItem({
   const { message, author } = data;
   const [showOriginal, setShowOriginal] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | undefined>();
+
+  const openPicker = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setPickerAnchor(e.currentTarget.getBoundingClientRect());
+    setShowEmojiPicker(true);
+  };
 
   const hasTranslation = translation && !translation.skipped;
   const displayContent =
@@ -157,7 +163,7 @@ export function MessageItem({
           ))}
           <button
             className="reaction-add-btn"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            onClick={openPicker}
             title="Add reaction"
           >
             +
@@ -166,6 +172,7 @@ export function MessageItem({
             <EmojiPicker
               onSelect={(emoji) => onToggleReaction?.(emoji)}
               onClose={() => setShowEmojiPicker(false)}
+              anchorRect={pickerAnchor}
             />
           )}
         </div>
@@ -174,7 +181,7 @@ export function MessageItem({
         <div className="message-reactions">
           <button
             className="reaction-add-btn"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            onClick={openPicker}
             title="Add reaction"
           >
             +
@@ -183,6 +190,7 @@ export function MessageItem({
             <EmojiPicker
               onSelect={(emoji) => onToggleReaction(emoji)}
               onClose={() => setShowEmojiPicker(false)}
+              anchorRect={pickerAnchor}
             />
           )}
         </div>

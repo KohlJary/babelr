@@ -1192,22 +1192,20 @@ body {
 .emoji-picker-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 999;
 }
 
 .emoji-picker {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
+  position: fixed;
+  z-index: 1000;
   background: #1a1a1a;
   border: 1px solid #333;
   border-radius: 8px;
   padding: 0.5rem;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 0.25rem;
-  margin-bottom: 0.5rem;
-  box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .emoji-btn {
