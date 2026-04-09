@@ -8,6 +8,7 @@ import inboxRoutes from '../federation/inbox.ts';
 import outboxRoute from '../federation/outbox.ts';
 import collectionRoutes from '../federation/collections.ts';
 import objectRoute from '../federation/objects.ts';
+import nodeinfoRoutes from '../federation/nodeinfo.ts';
 import { startQueueProcessor } from '../federation/delivery.ts';
 
 async function federationPlugin(fastify: FastifyInstance) {
@@ -17,6 +18,7 @@ async function federationPlugin(fastify: FastifyInstance) {
   await fastify.register(outboxRoute);
   await fastify.register(collectionRoutes);
   await fastify.register(objectRoute);
+  await fastify.register(nodeinfoRoutes);
 
   // Start the delivery queue processor
   startQueueProcessor(fastify);

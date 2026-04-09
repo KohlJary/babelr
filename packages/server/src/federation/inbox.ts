@@ -54,9 +54,10 @@ async function verifyInboxRequest(
 }
 
 export default async function inboxRoutes(fastify: FastifyInstance) {
-  // Person inbox
+  // Person inbox (rate-limited: 30 req/min per IP)
   fastify.post<{ Params: { username: string }; Body: APActivity }>(
     '/users/:username/inbox',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const [localActor] = await fastify.db
         .select()
@@ -83,9 +84,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // Group inbox
+  // Group inbox (rate-limited: 30 req/min per IP)
   fastify.post<{ Params: { slug: string }; Body: APActivity }>(
     '/groups/:slug/inbox',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
       // Match group by URI prefix (slug may contain UUID suffix)
       const allGroups = await fastify.db
@@ -111,8 +113,8 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // Shared inbox (instance-level)
-  fastify.post<{ Body: APActivity }>('/inbox', async (request, reply) => {
+  // Shared inbox (instance-level, rate-limited: 60 req/min per IP)
+  fastify.post<{ Body: APActivity }>('/inbox', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     const remoteActor = await verifyInboxRequest(fastify, request);
     if (!remoteActor) return reply.status(401).send({ error: 'Signature verification failed' });
 

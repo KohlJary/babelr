@@ -5,6 +5,7 @@ import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import fp from 'fastify-plugin';
@@ -73,6 +74,11 @@ export async function buildApp() {
   await app.register(cors, {
     origin: allowedOrigins,
     credentials: true,
+  });
+
+  // Security headers
+  await app.register(helmet, {
+    contentSecurityPolicy: false, // CSP handled by Tauri for desktop; web uses default
   });
 
   // Rate limiting
