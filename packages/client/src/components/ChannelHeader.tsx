@@ -8,6 +8,7 @@ interface ChannelHeaderProps {
   encrypted?: boolean;
   onLogout: () => void;
   onOpenSettings: () => void;
+  onOpenProfile: () => void;
 }
 
 export function ChannelHeader({
@@ -17,6 +18,7 @@ export function ChannelHeader({
   encrypted,
   onLogout,
   onOpenSettings,
+  onOpenProfile,
 }: ChannelHeaderProps) {
   return (
     <header className="channel-header">
@@ -30,8 +32,10 @@ export function ChannelHeader({
         </span>
       </div>
       <div className="user-info">
-        <span className="username">{actor.preferredUsername}</span>
-        <button className="settings-btn" onClick={onOpenSettings} title="Translation settings">
+        <button className="username-btn" onClick={onOpenProfile} title="Edit profile">
+          {actor.displayName ?? actor.preferredUsername}
+        </button>
+        <button className="settings-btn" onClick={onOpenSettings} title="Settings">
           &#9881;
         </button>
         <button className="logout-btn" onClick={onLogout}>

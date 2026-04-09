@@ -21,6 +21,7 @@ import { NewDMModal } from './NewDMModal';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
+import { ProfilePanel } from './ProfilePanel';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -38,6 +39,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showNewDM, setShowNewDM] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const { servers, selectedServer, selectServer, createServer, joinServer } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
@@ -128,6 +130,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           encrypted={dmMode && e2e.ready}
           onLogout={onLogout}
           onOpenSettings={() => setShowSettings(true)}
+          onOpenProfile={() => setShowProfile(true)}
         />
         <MessageList
           messages={messages}
@@ -195,6 +198,16 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         <GlossaryEditor
           channelId={activeChannelId}
           onClose={() => setShowGlossary(false)}
+        />
+      )}
+      {showProfile && (
+        <ProfilePanel
+          actor={actor}
+          onUpdate={() => {
+            // Profile updated — reload will pick up changes via getMe()
+            window.location.reload();
+          }}
+          onClose={() => setShowProfile(false)}
         />
       )}
     </div>

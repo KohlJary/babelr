@@ -220,6 +220,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
+export async function updateProfile(
+  profile: { displayName?: string; summary?: string; avatarUrl?: string },
+): Promise<ActorProfile> {
+  return apiFetch('/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(profile),
+  });
+}
+
 export async function setPublicKey(publicKey: JsonWebKey): Promise<void> {
   await apiFetch('/auth/publickey', {
     method: 'PUT',

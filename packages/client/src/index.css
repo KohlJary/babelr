@@ -1035,6 +1035,55 @@ body {
   margin: 0.5rem 0;
 }
 
+/* Profile */
+.username-btn {
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.username-btn:hover {
+  background: #222;
+}
+
+.profile-avatar-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-avatar-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.profile-avatar-default {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.profile-avatar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .settings-toggle {
   display: flex;
   align-items: center;
