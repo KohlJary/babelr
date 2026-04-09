@@ -156,6 +156,43 @@ export default async function authRoutes(fastify: FastifyInstance) {
     return toProfile(actor);
   });
 
+  // Change password
+  fastify.put<{ Body: { currentPassword: string; newPassword: string } }>(
+    '/auth/password',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { currentPassword, newPassword } = request.body;
+
+      if (!currentPassword || !newPassword) {
+        return reply.status(400).send({ error: 'Current and new passwords are required' });
+      }
+
+      if (newPassword.length < 12) {
+        return reply.status(400).send({ error: 'New password must be at least 12 characters' });
+      }
+
+      if (!request.actor.passwordHash) {
+        return reply.status(400).send({ error: 'No password set for this account' });
+      }
+
+      const valid = await argon2.verify(request.actor.passwordHash, currentPassword);
+      if (!valid) {
+        return reply.status(403).send({ error: 'Current password is incorrect' });
+      }
+
+      const newHash = await argon2.hash(newPassword);
+      await db
+        .update(actors)
+        .set({ passwordHash: newHash })
+        .where(eq(actors.id, request.actor.id));
+
+      return { ok: true };
+    },
+  );
+
   fastify.post('/auth/logout', async (request, reply) => {
     await fastify.destroySession(request, reply);
     return { ok: true };
