@@ -8,7 +8,7 @@ export default defineConfig({
     exclude: ['@huggingface/transformers'],
   },
   server: {
-    port: 5173,
+    port: 1111,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

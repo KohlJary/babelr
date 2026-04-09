@@ -5,7 +5,7 @@
   "license": "Hippocratic-3.0",
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
+    "dev": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
     "build": "tauri build",
     "tauri": "tauri"
   },

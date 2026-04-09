@@ -4,7 +4,7 @@
   "identifier": "com.babelr.app",
   "build": {
     "frontendDist": "../../client/dist",
-    "devUrl": "http://localhost:5173",
+    "devUrl": "http://localhost:1111",
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },
