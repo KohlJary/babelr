@@ -115,6 +115,68 @@ export function MessageItem({
       <IdiomGlosses idioms={metadata.idioms} />
     ) : null;
 
+  const actionsBlock = editing ? (
+    <div className="message-edit-form">
+      <textarea
+        className="modal-input"
+        value={editContent}
+        onChange={(e) => setEditContent(e.target.value)}
+        rows={2}
+        style={{ resize: 'vertical', fontFamily: 'inherit' }}
+      />
+      <div className="message-edit-actions">
+        <button className="message-action-btn" onClick={() => { onEdit?.(editContent); setEditing(false); }}>Save</button>
+        <button className="message-action-btn" onClick={() => { setEditing(false); setEditContent(message.content); }}>Cancel</button>
+      </div>
+    </div>
+  ) : (
+    <div className="message-actions">
+      {onReply && (
+        <button className="message-action-btn" onClick={onReply}>
+          {replyCount ? `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
+        </button>
+      )}
+      {onEdit && actor?.id === author.id && (
+        <button className="message-action-btn" onClick={() => setEditing(true)}>Edit</button>
+      )}
+      {canDelete && (
+        <button className="message-action-btn message-action-danger" onClick={onDelete}>Delete</button>
+      )}
+    </div>
+  );
+
+  const reactionsBlock = (
+    <>
+      {messageReactions && Object.keys(messageReactions).length > 0 && (
+        <div className="message-reactions">
+          {Object.entries(messageReactions).map(([emoji, reactorIds]) => (
+            <button
+              key={emoji}
+              className={`reaction-btn ${actor && reactorIds.includes(actor.id) ? 'reacted' : ''}`}
+              onClick={() => onToggleReaction?.(emoji)}
+              title={`${reactorIds.length} ${reactorIds.length === 1 ? 'reaction' : 'reactions'}`}
+            >
+              <span className="reaction-emoji">{emoji}</span>
+              <span className="reaction-count">{reactorIds.length}</span>
+            </button>
+          ))}
+          <button className="reaction-add-btn" onClick={openPicker} title="Add reaction">+</button>
+          {showEmojiPicker && (
+            <EmojiPicker onSelect={(emoji) => onToggleReaction?.(emoji)} onClose={() => setShowEmojiPicker(false)} anchorRect={pickerAnchor} />
+          )}
+        </div>
+      )}
+      {!messageReactions && onToggleReaction && (
+        <div className="message-reactions">
+          <button className="reaction-add-btn" onClick={openPicker} title="Add reaction">+</button>
+          {showEmojiPicker && (
+            <EmojiPicker onSelect={(emoji) => onToggleReaction(emoji)} onClose={() => setShowEmojiPicker(false)} anchorRect={pickerAnchor} />
+          )}
+        </div>
+      )}
+    </>
+  );
+
   if (compact) {
     return (
       <div className="message compact">
@@ -127,6 +189,8 @@ export function MessageItem({
           </div>
         )}
         {idiomLine}
+        {reactionsBlock}
+        {actionsBlock}
       </div>
     );
   }
@@ -160,96 +224,8 @@ export function MessageItem({
         </div>
       )}
       {idiomLine}
-      {messageReactions && Object.keys(messageReactions).length > 0 && (
-        <div className="message-reactions">
-          {Object.entries(messageReactions).map(([emoji, reactorIds]) => (
-            <button
-              key={emoji}
-              className={`reaction-btn ${actor && reactorIds.includes(actor.id) ? 'reacted' : ''}`}
-              onClick={() => onToggleReaction?.(emoji)}
-              title={`${reactorIds.length} ${reactorIds.length === 1 ? 'reaction' : 'reactions'}`}
-            >
-              <span className="reaction-emoji">{emoji}</span>
-              <span className="reaction-count">{reactorIds.length}</span>
-            </button>
-          ))}
-          <button
-            className="reaction-add-btn"
-            onClick={openPicker}
-            title="Add reaction"
-          >
-            +
-          </button>
-          {showEmojiPicker && (
-            <EmojiPicker
-              onSelect={(emoji) => onToggleReaction?.(emoji)}
-              onClose={() => setShowEmojiPicker(false)}
-              anchorRect={pickerAnchor}
-            />
-          )}
-        </div>
-      )}
-      {!messageReactions && onToggleReaction && (
-        <div className="message-reactions">
-          <button
-            className="reaction-add-btn"
-            onClick={openPicker}
-            title="Add reaction"
-          >
-            +
-          </button>
-          {showEmojiPicker && (
-            <EmojiPicker
-              onSelect={(emoji) => onToggleReaction(emoji)}
-              onClose={() => setShowEmojiPicker(false)}
-              anchorRect={pickerAnchor}
-            />
-          )}
-        </div>
-      )}
-      {editing ? (
-        <div className="message-edit-form">
-          <textarea
-            className="modal-input"
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            rows={2}
-            style={{ resize: 'vertical', fontFamily: 'inherit' }}
-          />
-          <div className="message-edit-actions">
-            <button
-              className="message-action-btn"
-              onClick={() => {
-                onEdit?.(editContent);
-                setEditing(false);
-              }}
-            >
-              Save
-            </button>
-            <button className="message-action-btn" onClick={() => { setEditing(false); setEditContent(message.content); }}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="message-actions">
-          {onReply && (
-            <button className="message-action-btn" onClick={onReply}>
-              {replyCount ? `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
-            </button>
-          )}
-          {onEdit && actor?.id === author.id && (
-            <button className="message-action-btn" onClick={() => setEditing(true)}>
-              Edit
-            </button>
-          )}
-          {canDelete && (
-            <button className="message-action-btn message-action-danger" onClick={onDelete}>
-              Delete
-            </button>
-          )}
-        </div>
-      )}
+      {reactionsBlock}
+      {actionsBlock}
     </div>
   );
 }
