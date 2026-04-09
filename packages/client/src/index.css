@@ -1197,6 +1197,24 @@ body {
   background: rgba(37, 99, 235, 0.08);
 }
 
+.message-action-danger:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+  background: rgba(231, 76, 60, 0.08);
+}
+
+.message-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.message-edit-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
 .reaction-add-btn {
   width: 28px;
   height: 28px;

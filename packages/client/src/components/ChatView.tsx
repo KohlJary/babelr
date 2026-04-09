@@ -24,6 +24,7 @@ import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
 import { ProfilePanel } from './ProfilePanel';
 import { ThreadPanel } from './ThreadPanel';
+import { ServerSettingsPanel } from './ServerSettingsPanel';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -42,6 +43,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showMembers, setShowMembers] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showServerSettings, setShowServerSettings] = useState(false);
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -107,6 +109,20 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
     setThreadReplies(res.messages);
   }, [activeChannelId, threadMessageId]);
 
+  const handleEditMessage = useCallback(async (messageId: string, content: string) => {
+    if (!activeChannelId) return;
+    await api.editMessage(activeChannelId, messageId, content);
+    // Message will update on next load — for now just reload
+    window.location.reload();
+  }, [activeChannelId]);
+
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
+    if (!activeChannelId) return;
+    await api.deleteMessage(activeChannelId, messageId);
+    // Remove from local state
+    window.location.reload();
+  }, [activeChannelId]);
+
   // Derive header display name
   const headerName = dmMode
     ? selectedDM
@@ -147,6 +163,9 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         onNewDM={() => setShowNewDM(true)}
         onShowMembers={() => setShowMembers(true)}
         onShowGlossary={() => setShowGlossary(true)}
+        onShowServerSettings={
+          ['owner', 'admin'].includes(callerRole) ? () => setShowServerSettings(true) : undefined
+        }
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -169,6 +188,9 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           messageReactions={messageReactions}
           onToggleReaction={toggleReaction}
           onOpenThread={openThread}
+          onEditMessage={handleEditMessage}
+          onDeleteMessage={handleDeleteMessage}
+          callerRole={callerRole}
         />
         <TypingIndicator users={typingUsers} />
         <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
@@ -237,6 +259,12 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
             setThreadMessageId(null);
             setThreadReplies([]);
           }}
+        />
+      )}
+      {showServerSettings && selectedServer && (
+        <ServerSettingsPanel
+          server={selectedServer}
+          onClose={() => setShowServerSettings(false)}
         />
       )}
       {showProfile && (

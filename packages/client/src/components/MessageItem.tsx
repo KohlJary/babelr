@@ -15,6 +15,9 @@ interface MessageItemProps {
   onToggleReaction?: (emoji: string) => void;
   onReply?: () => void;
   replyCount?: number;
+  onEdit?: (content: string) => void;
+  onDelete?: () => void;
+  canDelete?: boolean;
 }
 
 function formatTime(iso: string): string {
@@ -61,9 +64,14 @@ export function MessageItem({
   onToggleReaction,
   onReply,
   replyCount,
+  onEdit,
+  onDelete,
+  canDelete,
 }: MessageItemProps) {
   const { message, author } = data;
   const [showOriginal, setShowOriginal] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | undefined>();
 
@@ -199,13 +207,49 @@ export function MessageItem({
           )}
         </div>
       )}
-      <div className="message-actions">
-        {onReply && (
-          <button className="message-action-btn" onClick={onReply}>
-            {replyCount ? `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
-          </button>
-        )}
-      </div>
+      {editing ? (
+        <div className="message-edit-form">
+          <textarea
+            className="modal-input"
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            rows={2}
+            style={{ resize: 'vertical', fontFamily: 'inherit' }}
+          />
+          <div className="message-edit-actions">
+            <button
+              className="message-action-btn"
+              onClick={() => {
+                onEdit?.(editContent);
+                setEditing(false);
+              }}
+            >
+              Save
+            </button>
+            <button className="message-action-btn" onClick={() => { setEditing(false); setEditContent(message.content); }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="message-actions">
+          {onReply && (
+            <button className="message-action-btn" onClick={onReply}>
+              {replyCount ? `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
+            </button>
+          )}
+          {onEdit && actor?.id === author.id && (
+            <button className="message-action-btn" onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          )}
+          {canDelete && (
+            <button className="message-action-btn message-action-danger" onClick={onDelete}>
+              Delete
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

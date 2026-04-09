@@ -6,6 +6,7 @@ import type {
   ChannelView,
   ServerView,
   DMConversation,
+  MessageView,
   MessageListResponse,
   MessageWithAuthor,
   CreateServerInput,
@@ -197,6 +198,41 @@ export async function removeReaction(
   return apiFetch(`/channels/${channelId}/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`, {
     method: 'DELETE',
   });
+}
+
+// Message management
+export async function editMessage(
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<MessageView> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function deleteMessage(
+  channelId: string,
+  messageId: string,
+): Promise<void> {
+  await apiFetch(`/channels/${channelId}/messages/${messageId}`, {
+    method: 'DELETE',
+  });
+}
+
+// Server invite management
+export interface InviteView {
+  code: string;
+  url: string;
+  maxUses: number | null;
+  uses: number;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export async function listServerInvites(serverId: string): Promise<InviteView[]> {
+  return apiFetch(`/servers/${serverId}/invites`);
 }
 
 // Threads

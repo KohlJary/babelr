@@ -17,6 +17,7 @@ interface ChannelSidebarProps {
   onNewDM: () => void;
   onShowMembers: () => void;
   onShowGlossary: () => void;
+  onShowServerSettings?: () => void;
 }
 
 export function ChannelSidebar({
@@ -34,6 +35,7 @@ export function ChannelSidebar({
   onNewDM,
   onShowMembers,
   onShowGlossary,
+  onShowServerSettings,
 }: ChannelSidebarProps) {
   if (mode === 'dms') {
     return (
@@ -132,6 +134,11 @@ export function ChannelSidebar({
         <button className="sidebar-item add-channel" onClick={onShowGlossary}>
           Glossary
         </button>
+        {onShowServerSettings && (
+          <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
+            Server Settings
+          </button>
+        )}
       </div>
     </div>
   );

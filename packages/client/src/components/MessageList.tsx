@@ -15,6 +15,9 @@ interface MessageListProps {
   messageReactions?: Map<string, Record<string, string[]>>;
   onToggleReaction?: (messageId: string, emoji: string) => void;
   onOpenThread?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, content: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  callerRole?: string;
 }
 
 export function MessageList({
@@ -28,6 +31,9 @@ export function MessageList({
   messageReactions,
   onToggleReaction,
   onOpenThread,
+  onEditMessage,
+  onDeleteMessage,
+  callerRole,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +85,12 @@ export function MessageList({
             }
             onReply={onOpenThread ? () => onOpenThread(item.message.id) : undefined}
             replyCount={item.message.replyCount}
+            onEdit={onEditMessage ? (content) => onEditMessage(item.message.id, content) : undefined}
+            onDelete={onDeleteMessage ? () => onDeleteMessage(item.message.id) : undefined}
+            canDelete={
+              actor?.id === item.message.authorId ||
+              ['owner', 'admin', 'moderator'].includes(callerRole ?? '')
+            }
           />
         );
       })}
