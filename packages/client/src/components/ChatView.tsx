@@ -52,9 +52,6 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   );
   const { unreadCounts } = useUnreadBadges();
   const { presenceStatus } = usePresence(!!actor);
-  const { messageReactions, toggleReaction } = useReactions(
-    dmMode ? null : selectedChannel?.id ?? null,
-  );
   const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
   const activeChannelId = dmMode ? selectedDM?.id ?? null : selectedChannel?.id ?? null;
@@ -70,6 +67,8 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
     dmMode,
     dmMode && e2e.ready && recipientId ? { e2e, recipientId } : undefined,
   );
+
+  const { messageReactions, toggleReaction } = useReactions(activeChannelId, actor.id, messages);
 
   const { settings, updateSettings } = useTranslationSettings();
   const { translations, isTranslating } = useTranslation(messages, settings);
