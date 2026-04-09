@@ -52,6 +52,7 @@ export function toMessageView(obj: typeof objects.$inferSelect, reactionsData?: 
   const messageProps: Record<string, unknown> = {};
   if (props?.encrypted) messageProps.encrypted = true;
   if (props?.iv) messageProps.iv = props.iv;
+  if (props?.attachments) messageProps.attachments = props.attachments;
 
   return {
     id: obj.id,
