@@ -161,6 +161,20 @@ export function useChat(
     }, 2000);
   }, [channelId, connected, send]);
 
+  const updateMessageContent = useCallback((messageId: string, content: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.message.id === messageId
+          ? { ...m, message: { ...m.message, content, updated: new Date().toISOString() } }
+          : m,
+      ),
+    );
+  }, []);
+
+  const removeMessage = useCallback((messageId: string) => {
+    setMessages((prev) => prev.filter((m) => m.message.id !== messageId));
+  }, []);
+
   return {
     messages,
     loading,
@@ -170,5 +184,7 @@ export function useChat(
     loadMore,
     typingUsers,
     notifyTyping,
+    updateMessageContent,
+    removeMessage,
   };
 }

@@ -68,7 +68,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
     ? selectedDM.participants.find((p) => p.id !== actor.id)?.id ?? ''
     : '';
 
-  const { messages, loading, hasMore, connected, sendMessage, loadMore, typingUsers, notifyTyping } = useChat(
+  const { messages, loading, hasMore, connected, sendMessage, loadMore, typingUsers, notifyTyping, updateMessageContent, removeMessage } = useChat(
     actor,
     activeChannelId,
     dmMode,
@@ -112,16 +112,14 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const handleEditMessage = useCallback(async (messageId: string, content: string) => {
     if (!activeChannelId) return;
     await api.editMessage(activeChannelId, messageId, content);
-    // Message will update on next load — for now just reload
-    window.location.reload();
-  }, [activeChannelId]);
+    updateMessageContent(messageId, content);
+  }, [activeChannelId, updateMessageContent]);
 
   const handleDeleteMessage = useCallback(async (messageId: string) => {
     if (!activeChannelId) return;
     await api.deleteMessage(activeChannelId, messageId);
-    // Remove from local state
-    window.location.reload();
-  }, [activeChannelId]);
+    removeMessage(messageId);
+  }, [activeChannelId, removeMessage]);
 
   // Derive header display name
   const headerName = dmMode
