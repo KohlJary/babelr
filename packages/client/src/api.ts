@@ -12,7 +12,9 @@ import type {
   CreateChannelInput,
 } from '@babelr/shared';
 
-const API_BASE = '/api';
+const API_BASE = (typeof window !== 'undefined' && localStorage.getItem('babelr:server-url'))
+  ? localStorage.getItem('babelr:server-url')!
+  : '/api';
 
 class ApiError extends Error {
   constructor(

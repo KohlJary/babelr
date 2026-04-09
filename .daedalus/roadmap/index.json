@@ -121,6 +121,15 @@
       "priority": "P2",
       "status": "backlog"
     },
+    {
+      "id": "desktop-app",
+      "title": "Tauri desktop application",
+      "description": "Native desktop app using Tauri (Rust + OS webview). Connects to configurable server URL. System tray, native notifications, auto-update, deep links (babelr://invite/CODE). Same React client, no fork.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "in_progress",
+      "assigned": "daedalus"
+    },
     { "id": "phase3-mobile", "title": "Mobile responsive / native apps", "type": "feature", "priority": "P3", "status": "backlog" },
     { "id": "phase3-voice", "title": "Voice/video translation", "type": "feature", "priority": "P3", "status": "backlog" },
     { "id": "dm-federation", "title": "DM federation", "type": "feature", "priority": "P3", "status": "backlog" },

@@ -35,3 +35,6 @@ benchmark-results/
 
 # User uploads
 uploads/
+
+# Rust/Tauri build
+packages/desktop/src-tauri/target/

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui-org/nicegui/main/nicegui/static/tauri/capabilities.schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for the Babelr desktop app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "notification:allow-request-permission",
+    "notification:allow-notify",
+    "notification:allow-is-permission-granted",
+    "deep-link:default",
+    "shell:allow-open"
+  ]
+}
