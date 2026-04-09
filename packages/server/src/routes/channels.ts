@@ -99,8 +99,27 @@ export async function getMessagesForChannel(
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
 
+  // Load reactions for these messages
+  const messageIds = items.map((row) => row.object.id);
+  const reactionRows = messageIds.length > 0
+    ? await db
+        .select()
+        .from(reactions)
+        .where(inArray(reactions.objectId, messageIds))
+    : [];
+
+  // Group reactions by message → emoji → actor IDs
+  const reactionsByMessage = new Map<string, Record<string, string[]>>();
+  for (const r of reactionRows) {
+    const msgReactions = reactionsByMessage.get(r.objectId) ?? {};
+    const list = msgReactions[r.emoji] ?? [];
+    list.push(r.actorId);
+    msgReactions[r.emoji] = list;
+    reactionsByMessage.set(r.objectId, msgReactions);
+  }
+
   const messages: MessageWithAuthor[] = items.map((row) => ({
-    message: toMessageView(row.object),
+    message: toMessageView(row.object, reactionsByMessage.get(row.object.id)),
     author: toAuthorView(row.actor),
   }));
 
