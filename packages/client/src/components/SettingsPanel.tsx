@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
+import { useState } from 'react';
 import type { TranslationSettings } from '../translation';
+import * as api from '../api';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -28,11 +30,37 @@ interface SettingsPanelProps {
 }
 
 export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProps) {
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [pwStatus, setPwStatus] = useState<string | null>(null);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPw || !newPw) return;
+    if (newPw.length < 12) {
+      setPwStatus('New password must be at least 12 characters');
+      return;
+    }
+    setPwSubmitting(true);
+    setPwStatus(null);
+    try {
+      await api.changePassword(currentPw, newPw);
+      setPwStatus('Password changed successfully');
+      setCurrentPw('');
+      setNewPw('');
+    } catch (err) {
+      setPwStatus(err instanceof Error ? err.message : 'Failed to change password');
+    } finally {
+      setPwSubmitting(false);
+    }
+  };
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Translation Settings</h2>
+          <h2>Settings</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
@@ -107,6 +135,34 @@ export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProp
             <span>Enable translation</span>
           </label>
         </div>
+
+        <div className="settings-divider" />
+
+        <form className="settings-field" onSubmit={handlePasswordChange} style={{ gap: '0.5rem' }}>
+          <label>Change password</label>
+          <input
+            type="password"
+            placeholder="Current password"
+            value={currentPw}
+            onChange={(e) => setCurrentPw(e.target.value)}
+            className="modal-input"
+          />
+          <input
+            type="password"
+            placeholder="New password (min 12 chars)"
+            value={newPw}
+            onChange={(e) => setNewPw(e.target.value)}
+            className="modal-input"
+          />
+          {pwStatus && (
+            <p className={`settings-hint ${pwStatus.includes('success') ? 'success' : 'error'}`}>
+              {pwStatus}
+            </p>
+          )}
+          <button type="submit" className="auth-submit" disabled={pwSubmitting || !currentPw || !newPw}>
+            {pwSubmitting ? '...' : 'Update password'}
+          </button>
+        </form>
       </div>
     </div>
   );

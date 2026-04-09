@@ -213,6 +213,13 @@ export async function getUsers(): Promise<{ id: string; preferredUsername: strin
 }
 
 // E2E encryption
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiFetch('/auth/password', {
+    method: 'PUT',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
 export async function setPublicKey(publicKey: JsonWebKey): Promise<void> {
   await apiFetch('/auth/publickey', {
     method: 'PUT',

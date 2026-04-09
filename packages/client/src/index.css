@@ -1021,6 +1021,20 @@ body {
   color: #555;
 }
 
+.settings-hint.success {
+  color: #22c55e;
+}
+
+.settings-hint.error {
+  color: #e74c3c;
+}
+
+.settings-divider {
+  height: 1px;
+  background: #333;
+  margin: 0.5rem 0;
+}
+
 .settings-toggle {
   display: flex;
   align-items: center;
