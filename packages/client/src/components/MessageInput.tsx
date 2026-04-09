@@ -69,10 +69,7 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
 
     setSending(true);
     try {
-      const messageContent = attachments.length > 0 && !content
-        ? attachments.map((a) => a.filename).join(', ')
-        : content;
-      await onSend(messageContent, attachments.length > 0 ? attachments : undefined);
+      await onSend(content || '', attachments.length > 0 ? attachments : undefined);
       setValue('');
       setAttachments([]);
       inputRef.current?.focus();

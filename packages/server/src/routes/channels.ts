@@ -419,8 +419,9 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     const { channelId } = request.params;
     const { content, properties } = request.body;
 
-    if (!content || content.trim().length === 0) {
-      return reply.status(400).send({ error: 'Message content is required' });
+    const hasAttachments = properties?.attachments && Array.isArray(properties.attachments) && properties.attachments.length > 0;
+    if ((!content || content.trim().length === 0) && !hasAttachments) {
+      return reply.status(400).send({ error: 'Message content or attachment is required' });
     }
 
     const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
