@@ -99,6 +99,25 @@ export function MessageItem({
     .filter(Boolean)
     .join(' ');
 
+  const props = message.properties as Record<string, unknown> | undefined;
+  const messageAttachments = (props?.attachments as { url: string; filename: string; contentType: string }[]) ?? [];
+
+  const attachmentsBlock = messageAttachments.length > 0 ? (
+    <div className="message-attachments">
+      {messageAttachments.map((att, i) =>
+        att.contentType.startsWith('image/') ? (
+          <a key={i} href={att.url} target="_blank" rel="noopener noreferrer">
+            <img src={att.url} alt={att.filename} className="message-attachment-img" />
+          </a>
+        ) : (
+          <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="message-attachment-file">
+            {att.filename}
+          </a>
+        ),
+      )}
+    </div>
+  ) : null;
+
   const indicator = hasTranslation ? (
     <button
       className="translation-indicator"
@@ -192,6 +211,7 @@ export function MessageItem({
       <div className="message compact">
         <span className="message-time-hover">{formatTime(message.published)}</span>
         <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
+        {attachmentsBlock}
         {(indicator || metadataBadge) && (
           <div className="translation-info">
             {indicator}
@@ -227,6 +247,7 @@ export function MessageItem({
         </span>
       </div>
       <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
+      {attachmentsBlock}
       {(indicator || metadataBadge) && (
         <div className="translation-info">
           {indicator}

@@ -812,13 +812,120 @@ body {
   }
 }
 
+/* Message input wrapper */
+.message-input-wrapper {
+  flex-shrink: 0;
+  border-top: 1px solid #222;
+}
+
+.message-input-wrapper.drag-over {
+  background: rgba(37, 99, 235, 0.05);
+  border-top-color: #2563eb;
+}
+
+.attachment-preview {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0;
+  flex-wrap: wrap;
+}
+
+.attachment-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.attachment-thumb {
+  max-width: 120px;
+  max-height: 80px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid #333;
+}
+
+.attachment-file {
+  padding: 0.3rem 0.6rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #aaa;
+  font-size: 0.8rem;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #e74c3c;
+  border: none;
+  color: white;
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.upload-btn {
+  padding: 0.65rem 0.75rem;
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #888;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.upload-btn:hover:not(:disabled) {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+/* Message attachments in messages */
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.message-attachment-img {
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: 6px;
+  object-fit: contain;
+  border: 1px solid #333;
+  cursor: pointer;
+}
+
+.message-attachment-file {
+  display: inline-block;
+  padding: 0.3rem 0.6rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #60a5fa;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.message-attachment-file:hover {
+  border-color: #2563eb;
+}
+
 /* Message input */
 .message-input {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  border-top: 1px solid #222;
   flex-shrink: 0;
 }
 

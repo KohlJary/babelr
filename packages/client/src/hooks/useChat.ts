@@ -135,8 +135,13 @@ export function useChat(
   }, [channelId, cursor, hasMore, isDM]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachments?: { url: string; filename: string; contentType: string }[]) => {
       if (!channelId) return;
+
+      const properties: Record<string, unknown> = {};
+      if (attachments && attachments.length > 0) {
+        properties.attachments = attachments;
+      }
 
       const e2e = e2eRef.current;
       if (isDM && e2e?.e2e.ready) {
@@ -144,9 +149,11 @@ export function useChat(
         await api.sendMessage(channelId, encrypted.ciphertext, true, {
           encrypted: true,
           iv: encrypted.iv,
+          ...properties,
         });
       } else {
-        await api.sendMessage(channelId, content, isDM);
+        const hasProps = Object.keys(properties).length > 0;
+        await api.sendMessage(channelId, content, isDM, hasProps ? properties : undefined);
       }
     },
     [channelId, isDM],

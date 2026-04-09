@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useRef } from 'react';
 
+interface Attachment {
+  url: string;
+  filename: string;
+  contentType: string;
+}
+
 interface MessageInputProps {
-  onSend: (content: string) => Promise<void>;
+  onSend: (content: string, attachments?: Attachment[]) => Promise<void>;
   disabled: boolean;
   onTyping?: () => void;
 }
@@ -10,16 +16,65 @@ interface MessageInputProps {
 export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) {
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setAttachments((prev) => [...prev, data]);
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(uploadFile);
+    }
+    e.target.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      Array.from(files).forEach(uploadFile);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async () => {
     const content = value.trim();
-    if (!content || sending) return;
+    if ((!content && attachments.length === 0) || sending) return;
 
     setSending(true);
     try {
-      await onSend(content);
+      const messageContent = attachments.length > 0 && !content
+        ? attachments.map((a) => a.filename).join(', ')
+        : content;
+      await onSend(messageContent, attachments.length > 0 ? attachments : undefined);
       setValue('');
+      setAttachments([]);
       inputRef.current?.focus();
     } finally {
       setSending(false);
@@ -33,23 +88,61 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
     }
   };
 
+  const isImage = (ct: string) => ct.startsWith('image/');
+
   return (
-    <div className="message-input">
-      <textarea
-        ref={inputRef}
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          if (e.target.value.length > 0) onTyping?.();
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder="Send a message..."
-        disabled={disabled || sending}
-        rows={1}
-      />
-      <button onClick={handleSubmit} disabled={disabled || sending || !value.trim()}>
-        Send
-      </button>
+    <div
+      className={`message-input-wrapper ${dragOver ? 'drag-over' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={handleDrop}
+    >
+      {attachments.length > 0 && (
+        <div className="attachment-preview">
+          {attachments.map((att, i) => (
+            <div key={i} className="attachment-item">
+              {isImage(att.contentType) ? (
+                <img src={att.url} alt={att.filename} className="attachment-thumb" />
+              ) : (
+                <span className="attachment-file">{att.filename}</span>
+              )}
+              <button className="attachment-remove" onClick={() => removeAttachment(i)}>&times;</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="message-input">
+        <button
+          className="upload-btn"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || uploading}
+          title="Upload file"
+        >
+          {uploading ? '...' : '+'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
+        <textarea
+          ref={inputRef}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (e.target.value.length > 0) onTyping?.();
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder={dragOver ? 'Drop files here...' : 'Send a message...'}
+          disabled={disabled || sending}
+          rows={1}
+        />
+        <button onClick={handleSubmit} disabled={disabled || sending || (!value.trim() && attachments.length === 0)}>
+          Send
+        </button>
+      </div>
     </div>
   );
 }
