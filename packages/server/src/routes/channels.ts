@@ -417,7 +417,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     }
 
     const { channelId } = request.params;
-    const { content } = request.body;
+    const { content, properties } = request.body;
 
     if (!content || content.trim().length === 0) {
       return reply.status(400).send({ error: 'Message content is required' });
@@ -427,7 +427,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     if (!channel) return reply.status(404).send({ error: 'Channel not found' });
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
 
-    const result = await createMessageInChannel(fastify, channelId, content, request.actor);
+    const result = await createMessageInChannel(fastify, channelId, content, request.actor, properties);
     return reply.status(201).send(result);
   });
 
