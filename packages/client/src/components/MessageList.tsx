@@ -14,6 +14,7 @@ interface MessageListProps {
   actor?: ActorProfile;
   messageReactions?: Map<string, Record<string, string[]>>;
   onToggleReaction?: (messageId: string, emoji: string) => void;
+  onOpenThread?: (messageId: string) => void;
 }
 
 export function MessageList({
@@ -26,6 +27,7 @@ export function MessageList({
   actor,
   messageReactions,
   onToggleReaction,
+  onOpenThread,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,8 @@ export function MessageList({
             onToggleReaction={
               onToggleReaction ? (emoji) => onToggleReaction(item.message.id, emoji) : undefined
             }
+            onReply={onOpenThread ? () => onOpenThread(item.message.id) : undefined}
+            replyCount={item.message.replyCount}
           />
         );
       })}

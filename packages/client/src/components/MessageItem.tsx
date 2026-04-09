@@ -13,6 +13,8 @@ interface MessageItemProps {
   actor?: ActorProfile;
   messageReactions?: Record<string, string[]>;
   onToggleReaction?: (emoji: string) => void;
+  onReply?: () => void;
+  replyCount?: number;
 }
 
 function formatTime(iso: string): string {
@@ -57,6 +59,8 @@ export function MessageItem({
   actor,
   messageReactions,
   onToggleReaction,
+  onReply,
+  replyCount,
 }: MessageItemProps) {
   const { message, author } = data;
   const [showOriginal, setShowOriginal] = useState(false);
@@ -195,6 +199,13 @@ export function MessageItem({
           )}
         </div>
       )}
+      <div className="message-actions">
+        {onReply && (
+          <button className="message-action-btn" onClick={onReply}>
+            {replyCount ? `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -199,6 +199,25 @@ export async function removeReaction(
   });
 }
 
+// Threads
+export async function getThreadReplies(
+  channelId: string,
+  messageId: string,
+): Promise<MessageListResponse> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/replies`);
+}
+
+export async function sendThreadReply(
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<MessageWithAuthor> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/replies`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+}
+
 // DMs
 export async function getDMs(): Promise<DMConversation[]> {
   return apiFetch('/dms');

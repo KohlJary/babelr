@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useEffect } from 'react';
-import type { ActorProfile } from '@babelr/shared';
+import { useState, useEffect, useCallback } from 'react';
+import type { ActorProfile, MessageWithAuthor } from '@babelr/shared';
+import * as api from '../api';
 import { useServers } from '../hooks/useServers';
 import { useChannels } from '../hooks/useChannels';
 import { useDMs } from '../hooks/useDMs';
@@ -22,6 +23,7 @@ import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
 import { ProfilePanel } from './ProfilePanel';
+import { ThreadPanel } from './ThreadPanel';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -40,6 +42,9 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showMembers, setShowMembers] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
+  const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
 
   const { servers, selectedServer, selectServer, createServer, joinServer } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
@@ -79,6 +84,28 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
       updateSettings({ preferredLanguage: actor.preferredLanguage });
     }
   }, [actor.preferredLanguage, updateSettings]);
+
+  const openThread = useCallback(async (messageId: string) => {
+    if (!activeChannelId) return;
+    setThreadMessageId(messageId);
+    setThreadLoading(true);
+    try {
+      const res = await api.getThreadReplies(activeChannelId, messageId);
+      setThreadReplies(res.messages);
+    } catch {
+      setThreadReplies([]);
+    } finally {
+      setThreadLoading(false);
+    }
+  }, [activeChannelId]);
+
+  const sendThreadReply = useCallback(async (content: string) => {
+    if (!activeChannelId || !threadMessageId) return;
+    await api.sendThreadReply(activeChannelId, threadMessageId, content);
+    // Reload thread
+    const res = await api.getThreadReplies(activeChannelId, threadMessageId);
+    setThreadReplies(res.messages);
+  }, [activeChannelId, threadMessageId]);
 
   // Derive header display name
   const headerName = dmMode
@@ -141,6 +168,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           actor={actor}
           messageReactions={messageReactions}
           onToggleReaction={toggleReaction}
+          onOpenThread={openThread}
         />
         <TypingIndicator users={typingUsers} />
         <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
@@ -197,6 +225,18 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         <GlossaryEditor
           channelId={activeChannelId}
           onClose={() => setShowGlossary(false)}
+        />
+      )}
+      {threadMessageId && (
+        <ThreadPanel
+          parentMessage={messages.find((m) => m.message.id === threadMessageId)!}
+          replies={threadReplies}
+          loading={threadLoading}
+          onSendReply={sendThreadReply}
+          onClose={() => {
+            setThreadMessageId(null);
+            setThreadReplies([]);
+          }}
         />
       )}
       {showProfile && (
