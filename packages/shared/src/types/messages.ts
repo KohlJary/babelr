@@ -26,6 +26,7 @@ export interface AuthorView {
   id: string;
   preferredUsername: string;
   displayName: string | null;
+  avatarUrl?: string | null;
   presence?: PresenceStatus;
 }
 

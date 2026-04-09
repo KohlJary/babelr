@@ -113,9 +113,21 @@ export function MessageItem({
     );
   }
 
+  const avatarEl = author.avatarUrl ? (
+    <img className="message-avatar" src={author.avatarUrl} alt="" />
+  ) : (
+    <span
+      className="message-avatar-default"
+      style={{ backgroundColor: ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2'][author.preferredUsername.charCodeAt(0) % 6] }}
+    >
+      {author.preferredUsername.charAt(0).toUpperCase()}
+    </span>
+  );
+
   return (
     <div className="message">
       <div className="message-header">
+        {avatarEl}
         <span className="message-author">{author.displayName ?? author.preferredUsername}</span>
         <span className="message-time">
           {formatTime(message.published)}

@@ -66,10 +66,12 @@ export function toMessageView(obj: typeof objects.$inferSelect, reactionsData?: 
 }
 
 export function toAuthorView(actor: typeof actors.$inferSelect): AuthorView {
+  const props = actor.properties as Record<string, unknown> | null;
   return {
     id: actor.id,
     preferredUsername: actor.preferredUsername,
     displayName: actor.displayName,
+    avatarUrl: (props?.avatarUrl as string) ?? null,
   };
 }
 
