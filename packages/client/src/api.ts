@@ -90,6 +90,16 @@ export async function updateServer(
   });
 }
 
+export async function updateChannel(
+  channelId: string,
+  input: import('@babelr/shared').UpdateChannelInput,
+): Promise<import('@babelr/shared').ChannelView> {
+  return apiFetch(`/channels/${channelId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function joinServer(serverId: string): Promise<void> {
   await apiFetch(`/servers/${serverId}/join`, { method: 'POST' });
 }

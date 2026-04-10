@@ -17,6 +17,7 @@ import type {
   MessageListResponse,
   CreateMessageInput,
   CreateChannelInput,
+  UpdateChannelInput,
   WsServerMessage,
 } from '@babelr/shared';
 import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, deliverDMCreate, deliverDMRead } from '../federation/delivery.ts';
@@ -44,6 +45,11 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
     serverId: obj.belongsTo,
     ...(props?.category ? { category: props.category as string } : {}),
     ...(props?.isPrivate ? { isPrivate: true } : {}),
+    ...(props?.topic ? { topic: props.topic as string } : {}),
+    ...(props?.description ? { description: props.description as string } : {}),
+    ...(typeof props?.slowMode === 'number' && props.slowMode > 0
+      ? { slowMode: props.slowMode as number }
+      : {}),
   };
 }
 
@@ -414,6 +420,92 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Update channel settings (owner/admin/moderator)
+  fastify.put<{ Params: { channelId: string }; Body: UpdateChannelInput }>(
+    '/channels/:channelId',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const { channelId } = request.params;
+      const [channel] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
+        .limit(1);
+
+      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
+      if (!channel.belongsTo) return reply.status(400).send({ error: 'Not a server channel' });
+
+      // Verify caller has mod+ role on the owning server
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, channel.belongsTo))
+        .limit(1);
+      if (!server?.followersUri) return reply.status(404).send({ error: 'Server not found' });
+
+      const [membership] = await db
+        .select()
+        .from(collectionItems)
+        .where(
+          and(
+            eq(collectionItems.collectionUri, server.followersUri),
+            eq(collectionItems.itemUri, request.actor.uri),
+          ),
+        )
+        .limit(1);
+      const memberProps = membership?.properties as Record<string, unknown> | null;
+      const role = (memberProps?.role as string) ?? 'member';
+      const serverProps = server.properties as Record<string, unknown> | null;
+      const isOwner = serverProps?.ownerId === request.actor.id;
+      if (!isOwner && !['owner', 'admin', 'moderator'].includes(role)) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const { name, category, topic, description, slowMode } = request.body ?? {};
+      const currentProps = (channel.properties as Record<string, unknown> | null) ?? {};
+      const nextProps = { ...currentProps };
+
+      if (name !== undefined) {
+        const trimmed = name.trim();
+        if (trimmed.length === 0) {
+          return reply.status(400).send({ error: 'Channel name cannot be empty' });
+        }
+        nextProps.name = trimmed;
+      }
+      if (category !== undefined) {
+        const t = category?.trim();
+        if (t) nextProps.category = t;
+        else delete nextProps.category;
+      }
+      if (topic !== undefined) {
+        const t = topic?.trim();
+        if (t) nextProps.topic = t;
+        else delete nextProps.topic;
+      }
+      if (description !== undefined) {
+        const t = description?.trim();
+        if (t) nextProps.description = t;
+        else delete nextProps.description;
+      }
+      if (slowMode !== undefined) {
+        const n = Math.max(0, Math.min(21600, Math.floor(slowMode))); // cap at 6 hours
+        if (n > 0) nextProps.slowMode = n;
+        else delete nextProps.slowMode;
+      }
+
+      const [updated] = await db
+        .update(objects)
+        .set({ properties: nextProps, updated: new Date() })
+        .where(eq(objects.id, channel.id))
+        .returning();
+
+      return toChannelView(updated);
+    },
+  );
+
   // Get messages for a channel (with membership check)
   fastify.get<{
     Params: { channelId: string };
@@ -453,6 +545,64 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!channel) return reply.status(404).send({ error: 'Channel not found' });
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
+
+    // Slow mode enforcement — bypassed for mod+ roles
+    const channelProps = channel.properties as Record<string, unknown> | null;
+    const slowMode = typeof channelProps?.slowMode === 'number' ? (channelProps.slowMode as number) : 0;
+    if (slowMode > 0 && channel.belongsTo) {
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, channel.belongsTo))
+        .limit(1);
+      const [membership] = server?.followersUri
+        ? await db
+            .select()
+            .from(collectionItems)
+            .where(
+              and(
+                eq(collectionItems.collectionUri, server.followersUri),
+                eq(collectionItems.itemUri, request.actor.uri),
+              ),
+            )
+            .limit(1)
+        : [null];
+      const memberProps = (membership?.properties as Record<string, unknown> | null) ?? null;
+      const role = (memberProps?.role as string) ?? 'member';
+      const serverProps = server?.properties as Record<string, unknown> | null;
+      const isMod =
+        serverProps?.ownerId === request.actor.id ||
+        ['owner', 'admin', 'moderator'].includes(role);
+
+      if (!isMod) {
+        const [lastOwn] = await db
+          .select()
+          .from(objects)
+          .where(
+            and(
+              eq(objects.context, channelId),
+              eq(objects.type, 'Note'),
+              eq(objects.attributedTo, request.actor.id),
+            ),
+          )
+          .orderBy(desc(objects.published))
+          .limit(1);
+
+        if (lastOwn) {
+          const ageMs = Date.now() - lastOwn.published.getTime();
+          const remainingMs = slowMode * 1000 - ageMs;
+          if (remainingMs > 0) {
+            return reply
+              .status(429)
+              .send({
+                error: 'Slow mode',
+                message: `Please wait ${Math.ceil(remainingMs / 1000)}s before sending another message.`,
+                retryAfter: Math.ceil(remainingMs / 1000),
+              });
+          }
+        }
+      }
+    }
 
     const result = await createMessageInChannel(fastify, channelId, content, request.actor, properties);
     return reply.status(201).send(result);

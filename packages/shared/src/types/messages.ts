@@ -38,6 +38,20 @@ export interface ChannelView {
   serverId: string | null;
   category?: string;
   isPrivate?: boolean;
+  /** One-line topic shown in the channel header */
+  topic?: string | null;
+  /** Longer description (markdown permitted) */
+  description?: string | null;
+  /** Minimum seconds between messages per user (0 = off) */
+  slowMode?: number;
+}
+
+export interface UpdateChannelInput {
+  name?: string;
+  category?: string | null;
+  topic?: string | null;
+  description?: string | null;
+  slowMode?: number;
 }
 
 export interface ServerView {

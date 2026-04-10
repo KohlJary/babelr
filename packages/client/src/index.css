@@ -1966,3 +1966,10 @@ textarea.modal-input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.channel-topic {
+  font-size: 0.8rem;
+  color: #888;
+  font-style: italic;
+  margin-left: 0.5rem;
+}

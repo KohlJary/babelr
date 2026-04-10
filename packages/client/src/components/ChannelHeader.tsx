@@ -3,6 +3,7 @@ import type { ActorProfile } from '@babelr/shared';
 
 interface ChannelHeaderProps {
   channelName: string;
+  channelTopic?: string | null;
   actor: ActorProfile;
   connected: boolean;
   encrypted?: boolean;
@@ -14,6 +15,7 @@ interface ChannelHeaderProps {
 
 export function ChannelHeader({
   channelName,
+  channelTopic,
   actor,
   connected,
   encrypted,
@@ -29,6 +31,7 @@ export function ChannelHeader({
           {encrypted && <span className="e2e-lock" title="End-to-end encrypted">&#128274; </span>}
           {channelName}
         </span>
+        {channelTopic && <span className="channel-topic">{channelTopic}</span>}
         <span className={`connection-status ${connected ? 'online' : 'offline'}`}>
           {connected ? 'connected' : 'reconnecting...'}
         </span>

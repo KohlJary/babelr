@@ -43,11 +43,17 @@ export function useChannels(serverId: string | null) {
     [serverId],
   );
 
+  const updateChannel = useCallback((updated: ChannelView) => {
+    setChannels((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setSelectedChannel((prev) => (prev?.id === updated.id ? updated : prev));
+  }, []);
+
   return {
     channels,
     selectedChannel,
     loading,
     selectChannel,
     createChannel: handleCreateChannel,
+    updateChannel,
   };
 }

@@ -28,6 +28,7 @@ import { ServerSettingsPanel } from './ServerSettingsPanel';
 import { MentionsPanel } from './MentionsPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
 import { FriendsPanel } from './FriendsPanel';
+import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -50,13 +51,14 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showMentions, setShowMentions] = useState(false);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
 
   const { servers, selectedServer, selectServer, createServer, joinServer, updateServer } = useServers();
-  const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
+  const { channels, selectedChannel, selectChannel, createChannel, updateChannel } = useChannels(
     dmMode ? null : selectedServer?.id ?? null,
   );
   const { conversations, selectedDM, selectDM, startDM } = useDMs();
@@ -213,10 +215,13 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         selectedChannelIsPrivate={!dmMode && selectedChannel?.isPrivate}
         onInviteToChannel={!dmMode && selectedChannel?.isPrivate ? () => setShowChannelInvite(true) : undefined}
         onShowFriends={dmMode ? () => setShowFriends(true) : undefined}
+        canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
+        onEditChannel={(channelId) => setEditingChannelId(channelId)}
       />
       <div className="chat-panel">
         <ChannelHeader
           channelName={headerName}
+          channelTopic={dmMode ? undefined : selectedChannel?.topic}
           actor={actor}
           connected={connected}
           encrypted={dmMode && e2e.ready}
@@ -354,6 +359,17 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           onClose={() => setShowFriends(false)}
         />
       )}
+      {editingChannelId && (() => {
+        const ch = channels.find((c) => c.id === editingChannelId);
+        if (!ch) return null;
+        return (
+          <ChannelSettingsPanel
+            channel={ch}
+            onClose={() => setEditingChannelId(null)}
+            onUpdated={updateChannel}
+          />
+        );
+      })()}
     </div>
   );
 }

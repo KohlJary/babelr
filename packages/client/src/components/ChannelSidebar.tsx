@@ -24,6 +24,8 @@ interface ChannelSidebarProps {
   selectedChannelIsPrivate?: boolean;
   onInviteToChannel?: () => void;
   onShowFriends?: () => void;
+  canManageChannels?: boolean;
+  onEditChannel?: (channelId: string) => void;
 }
 
 export function ChannelSidebar({
@@ -48,6 +50,8 @@ export function ChannelSidebar({
   selectedChannelIsPrivate,
   onInviteToChannel,
   onShowFriends,
+  canManageChannels,
+  onEditChannel,
 }: ChannelSidebarProps) {
   if (mode === 'dms') {
     return (
@@ -133,6 +137,15 @@ export function ChannelSidebar({
             title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? '\uD83D\uDD15' : '\uD83D\uDD14'}
+          </button>
+        )}
+        {canManageChannels && onEditChannel && (
+          <button
+            className="channel-mute-btn"
+            onClick={() => onEditChannel(ch.id)}
+            title="Channel settings"
+          >
+            {'\u2699'}
           </button>
         )}
       </div>
