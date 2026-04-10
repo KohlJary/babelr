@@ -11,6 +11,8 @@ export interface VoicePeerState {
   actorId: string;
   actor: AuthorView;
   connected: boolean;
+  speaking: boolean;
+  volume: number;
 }
 
 export interface UseVoiceState {
@@ -19,6 +21,9 @@ export interface UseVoiceState {
   channelId: string | null;
   peers: VoicePeerState[];
   micMuted: boolean;
+  deafened: boolean;
+  pushToTalk: boolean;
+  localSpeaking: boolean;
 }
 
 interface PeerEntry {
@@ -26,7 +31,27 @@ interface PeerEntry {
   pc: RTCPeerConnection;
   audio: HTMLAudioElement;
   connected: boolean;
+  analyser: AnalyserNode | null;
+  analyserBuf: Uint8Array<ArrayBuffer> | null;
+  speaking: boolean;
+  volume: number;
 }
+
+/** Signal-strength threshold (0–255) above which we consider a track "speaking". */
+const SPEAKING_THRESHOLD = 18;
+/** Key that gates voice transmission when push-to-talk mode is enabled. */
+const PTT_KEY = '`';
+
+const IDLE_STATE: UseVoiceState = {
+  status: 'idle',
+  error: null,
+  channelId: null,
+  peers: [],
+  micMuted: false,
+  deafened: false,
+  pushToTalk: false,
+  localSpeaking: false,
+};
 
 /**
  * WebRTC mesh voice channel hook.
@@ -44,22 +69,29 @@ interface PeerEntry {
  * 7. leave() — tears down peers, releases mic, closes WS
  */
 export function useVoice() {
-  const [state, setState] = useState<UseVoiceState>({
-    status: 'idle',
-    error: null,
-    channelId: null,
-    peers: [],
-    micMuted: false,
-  });
+  const [state, setState] = useState<UseVoiceState>(IDLE_STATE);
 
   const wsRef = useRef<WebSocket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const localMeterRef = useRef<{
-    ctx: AudioContext;
+  // Shared AudioContext for all analyser nodes (local mic + each peer).
+  // Created lazily on join() so we don't spin up audio machinery for
+  // users who never enter a voice channel.
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const localAnalyserRef = useRef<{
     analyser: AnalyserNode;
     source: MediaStreamAudioSourceNode;
-    interval: ReturnType<typeof setInterval>;
+    buf: Uint8Array<ArrayBuffer>;
   } | null>(null);
+  const localMicLogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const speakingRafRef = useRef<number | null>(null);
+  // Push-to-talk runtime state. When `pushToTalk` is true in state, the
+  // mic is muted by default and only un-muted while PTT_KEY is held down.
+  // These refs let the keydown/keyup listeners read the latest values
+  // without re-binding on every state change.
+  const pttEnabledRef = useRef(false);
+  const pttKeyHeldRef = useRef(false);
+  const micMutedRef = useRef(false);
+  const deafenedRef = useRef(false);
   const peersRef = useRef<Map<string, PeerEntry>>(new Map());
   // Actor metadata for participants we know about — populated from
   // voice:room-state (existing participants at join time) and
@@ -72,9 +104,35 @@ export function useVoice() {
   const syncPeersToState = useCallback(() => {
     const arr: VoicePeerState[] = [];
     for (const [actorId, entry] of peersRef.current) {
-      arr.push({ actorId, actor: entry.actor, connected: entry.connected });
+      arr.push({
+        actorId,
+        actor: entry.actor,
+        connected: entry.connected,
+        speaking: entry.speaking,
+        volume: entry.volume,
+      });
     }
     setState((s) => ({ ...s, peers: arr }));
+  }, []);
+
+  /** Compute whether the local mic track should currently be enabled. */
+  const applyMicEnabled = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const allowed =
+      !micMutedRef.current &&
+      !deafenedRef.current &&
+      (!pttEnabledRef.current || pttKeyHeldRef.current);
+    for (const track of stream.getAudioTracks()) {
+      track.enabled = allowed;
+    }
+  }, []);
+
+  /** Apply the deafened state to every remote audio element. */
+  const applyDeafened = useCallback(() => {
+    for (const entry of peersRef.current.values()) {
+      entry.audio.muted = deafenedRef.current;
+    }
   }, []);
 
   const sendWs = useCallback((msg: WsClientMessage) => {
@@ -113,7 +171,25 @@ export function useVoice() {
           ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
         audio.srcObject = stream;
         audio.volume = 1.0;
-        audio.muted = false;
+        audio.muted = deafenedRef.current;
+        // Attach an AnalyserNode to this remote stream for the speaking
+        // indicator. Uses the shared AudioContext created in join().
+        const ctx = audioCtxRef.current;
+        if (ctx) {
+          try {
+            const src = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 512;
+            src.connect(analyser);
+            const e = peersRef.current.get(actor.id);
+            if (e) {
+              e.analyser = analyser;
+              e.analyserBuf = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+            }
+          } catch (err) {
+            console.warn('voice: failed to attach peer analyser', err);
+          }
+        }
         console.log('voice: ontrack', {
           from: actor.id,
           kind: ev.track.kind,
@@ -199,7 +275,16 @@ export function useVoice() {
         syncPeersToState();
       };
 
-      const entry: PeerEntry = { actor, pc, audio, connected: false };
+      const entry: PeerEntry = {
+        actor,
+        pc,
+        audio,
+        connected: false,
+        analyser: null,
+        analyserBuf: null,
+        speaking: false,
+        volume: 1.0,
+      };
       peersRef.current.set(actor.id, entry);
       syncPeersToState();
       return entry;
@@ -360,29 +445,25 @@ export function useVoice() {
         console.warn('Already in a voice channel');
         return;
       }
-      setState({ status: 'connecting', error: null, channelId, peers: [], micMuted: false });
+      setState({ ...IDLE_STATE, status: 'connecting', channelId });
       channelIdRef.current = channelId;
 
       // Environment capability checks before attempting anything
       if (typeof RTCPeerConnection === 'undefined') {
         setState({
+          ...IDLE_STATE,
           status: 'error',
           error:
             'Voice channels require WebRTC, which is not available in this webview. On Linux, Arch and some other distributions ship webkit2gtk without WebRTC — open Babelr in Firefox or Chromium to join voice.',
-          channelId: null,
-          peers: [],
-          micMuted: false,
         });
         channelIdRef.current = null;
         return;
       }
       if (!navigator.mediaDevices?.getUserMedia) {
         setState({
+          ...IDLE_STATE,
           status: 'error',
           error: 'Media capture is not available in this webview. Open Babelr in a browser to join voice.',
-          channelId: null,
-          peers: [],
-          micMuted: false,
         });
         channelIdRef.current = null;
         return;
@@ -405,19 +486,22 @@ export function useVoice() {
           })),
         );
 
-        // Local mic level meter — logs the average signal strength every
-        // 2 seconds. If this stays at 0 while you speak into the mic, the
-        // microphone isn't actually capturing audio (wrong input device,
-        // muted at OS level, or Chrome's AEC is muzzling everything).
+        // Shared AudioContext + local analyser for both the diagnostic
+        // level log and the speaking indicator loop.
         try {
-          const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-          const ctx = new AudioCtx();
-          const source = ctx.createMediaStreamSource(localStreamRef.current);
-          const analyser = ctx.createAnalyser();
+          const AudioCtx =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          audioCtxRef.current = new AudioCtx();
+          const source = audioCtxRef.current.createMediaStreamSource(localStreamRef.current);
+          const analyser = audioCtxRef.current.createAnalyser();
           analyser.fftSize = 512;
           source.connect(analyser);
-          const buf = new Uint8Array(analyser.frequencyBinCount);
-          const interval = setInterval(() => {
+          const buf = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+          localAnalyserRef.current = { analyser, source, buf };
+          // Diagnostic log every 2s for "silent mic" troubleshooting.
+          // Still useful even with the speaking indicator in place.
+          localMicLogIntervalRef.current = setInterval(() => {
             analyser.getByteFrequencyData(buf);
             let sum = 0;
             let peak = 0;
@@ -428,9 +512,8 @@ export function useVoice() {
             const avg = sum / buf.length;
             console.log(`voice: local mic level avg=${avg.toFixed(1)} peak=${peak}`);
           }, 2000);
-          localMeterRef.current = { ctx, analyser, source, interval };
         } catch (err) {
-          console.warn('voice: failed to start local mic meter', err);
+          console.warn('voice: failed to start audio analyser', err);
         }
       } catch (err) {
         const message =
@@ -440,11 +523,9 @@ export function useVoice() {
               ? `Microphone error: ${err.message}`
               : 'Microphone access failed.';
         setState({
+          ...IDLE_STATE,
           status: 'error',
           error: message,
-          channelId: null,
-          peers: [],
-          micMuted: false,
         });
         channelIdRef.current = null;
         return;
@@ -476,18 +557,50 @@ export function useVoice() {
             closePeer(actorId);
           }
           knownActorsRef.current.clear();
+          teardownAudioRuntime();
           if (localStreamRef.current) {
             for (const track of localStreamRef.current.getTracks()) track.stop();
             localStreamRef.current = null;
           }
           channelIdRef.current = null;
           wsRef.current = null;
-          setState({ status: 'idle', error: null, channelId: null, peers: [], micMuted: false });
+          setState(IDLE_STATE);
         }
       };
     },
     [sendWs, handleMessage, closePeer],
   );
+
+  /**
+   * Tear down the AudioContext, analyser nodes, mic level interval, and
+   * speaking rAF loop. Safe to call multiple times.
+   */
+  const teardownAudioRuntime = useCallback(() => {
+    if (localMicLogIntervalRef.current) {
+      clearInterval(localMicLogIntervalRef.current);
+      localMicLogIntervalRef.current = null;
+    }
+    if (speakingRafRef.current) {
+      cancelAnimationFrame(speakingRafRef.current);
+      speakingRafRef.current = null;
+    }
+    if (localAnalyserRef.current) {
+      try {
+        localAnalyserRef.current.source.disconnect();
+      } catch {
+        /* ignore */
+      }
+      localAnalyserRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      try {
+        void audioCtxRef.current.close();
+      } catch {
+        /* ignore */
+      }
+      audioCtxRef.current = null;
+    }
+  }, []);
 
   const leave = useCallback(() => {
     const current = channelIdRef.current;
@@ -497,16 +610,7 @@ export function useVoice() {
       closePeer(actorId);
     }
     knownActorsRef.current.clear();
-    if (localMeterRef.current) {
-      clearInterval(localMeterRef.current.interval);
-      try {
-        localMeterRef.current.source.disconnect();
-        void localMeterRef.current.ctx.close();
-      } catch {
-        /* ignore */
-      }
-      localMeterRef.current = null;
-    }
+    teardownAudioRuntime();
     if (localStreamRef.current) {
       for (const track of localStreamRef.current.getTracks()) track.stop();
       localStreamRef.current = null;
@@ -514,17 +618,150 @@ export function useVoice() {
     wsRef.current?.close();
     wsRef.current = null;
     channelIdRef.current = null;
-    setState({ status: 'idle', error: null, channelId: null, peers: [], micMuted: false });
-  }, [sendWs, closePeer]);
+    pttEnabledRef.current = false;
+    pttKeyHeldRef.current = false;
+    micMutedRef.current = false;
+    deafenedRef.current = false;
+    setState(IDLE_STATE);
+  }, [sendWs, closePeer, teardownAudioRuntime]);
 
   const toggleMute = useCallback(() => {
     if (!localStreamRef.current) return;
-    const nextMuted = !state.micMuted;
-    for (const track of localStreamRef.current.getAudioTracks()) {
-      track.enabled = !nextMuted;
-    }
+    const nextMuted = !micMutedRef.current;
+    micMutedRef.current = nextMuted;
+    applyMicEnabled();
     setState((s) => ({ ...s, micMuted: nextMuted }));
-  }, [state.micMuted]);
+  }, [applyMicEnabled]);
+
+  const toggleDeafen = useCallback(() => {
+    const next = !deafenedRef.current;
+    deafenedRef.current = next;
+    applyDeafened();
+    applyMicEnabled();
+    setState((s) => ({ ...s, deafened: next }));
+  }, [applyDeafened, applyMicEnabled]);
+
+  const togglePushToTalk = useCallback(() => {
+    const next = !pttEnabledRef.current;
+    pttEnabledRef.current = next;
+    pttKeyHeldRef.current = false;
+    applyMicEnabled();
+    setState((s) => ({ ...s, pushToTalk: next }));
+  }, [applyMicEnabled]);
+
+  const setPeerVolume = useCallback(
+    (actorId: string, volume: number) => {
+      const clamped = Math.max(0, Math.min(1, volume));
+      const entry = peersRef.current.get(actorId);
+      if (!entry) return;
+      entry.audio.volume = clamped;
+      entry.volume = clamped;
+      syncPeersToState();
+    },
+    [syncPeersToState],
+  );
+
+  // Speaking-indicator rAF loop. Runs whenever we're in a voice channel.
+  // Reads the frequency data from the local and peer analysers and flips
+  // `speaking` state when a participant crosses the threshold. State is
+  // only setState'd when at least one speaking boolean actually changed,
+  // so the render churn is limited to speech onsets/offsets.
+  useEffect(() => {
+    if (state.status !== 'connected' && state.status !== 'connecting') return;
+
+    const tick = () => {
+      let changed = false;
+
+      // Local (me)
+      let nextLocalSpeaking = false;
+      const la = localAnalyserRef.current;
+      if (la) {
+        la.analyser.getByteFrequencyData(la.buf);
+        let peak = 0;
+        for (const v of la.buf) if (v > peak) peak = v;
+        // Only count as speaking if the mic is actually hot (not muted/deafened/PTT-off)
+        const micHot =
+          !micMutedRef.current &&
+          !deafenedRef.current &&
+          (!pttEnabledRef.current || pttKeyHeldRef.current);
+        nextLocalSpeaking = micHot && peak > SPEAKING_THRESHOLD;
+      }
+
+      // Each peer
+      for (const entry of peersRef.current.values()) {
+        if (!entry.analyser || !entry.analyserBuf) continue;
+        entry.analyser.getByteFrequencyData(entry.analyserBuf);
+        let peak = 0;
+        for (const v of entry.analyserBuf) if (v > peak) peak = v;
+        const nextSpeaking = peak > SPEAKING_THRESHOLD;
+        if (nextSpeaking !== entry.speaking) {
+          entry.speaking = nextSpeaking;
+          changed = true;
+        }
+      }
+
+      setState((s) => {
+        const localChanged = nextLocalSpeaking !== s.localSpeaking;
+        if (!changed && !localChanged) return s;
+        return {
+          ...s,
+          localSpeaking: nextLocalSpeaking,
+          peers: Array.from(peersRef.current.values()).map((e) => ({
+            actorId: e.actor.id,
+            actor: e.actor,
+            connected: e.connected,
+            speaking: e.speaking,
+            volume: e.volume,
+          })),
+        };
+      });
+
+      speakingRafRef.current = requestAnimationFrame(tick);
+    };
+
+    speakingRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (speakingRafRef.current) {
+        cancelAnimationFrame(speakingRafRef.current);
+        speakingRafRef.current = null;
+      }
+    };
+  }, [state.status]);
+
+  // Push-to-talk global key listener. Active whenever PTT mode is on.
+  // Ignores keydown/keyup while the user is typing into an input or
+  // contenteditable element so the key doesn't eat intended input.
+  useEffect(() => {
+    if (!state.pushToTalk) return;
+
+    const isEditable = (el: EventTarget | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== PTT_KEY) return;
+      if (isEditable(e.target)) return;
+      if (pttKeyHeldRef.current) return;
+      pttKeyHeldRef.current = true;
+      applyMicEnabled();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== PTT_KEY) return;
+      if (!pttKeyHeldRef.current) return;
+      pttKeyHeldRef.current = false;
+      applyMicEnabled();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [state.pushToTalk, applyMicEnabled]);
 
   // Tear down on unmount
   useEffect(() => {
@@ -535,6 +772,7 @@ export function useVoice() {
       for (const actorId of Array.from(peersRef.current.keys())) {
         closePeer(actorId);
       }
+      teardownAudioRuntime();
       if (localStreamRef.current) {
         for (const track of localStreamRef.current.getTracks()) track.stop();
       }
@@ -543,5 +781,13 @@ export function useVoice() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { state, join, leave, toggleMute };
+  return {
+    state,
+    join,
+    leave,
+    toggleMute,
+    toggleDeafen,
+    togglePushToTalk,
+    setPeerVolume,
+  };
 }

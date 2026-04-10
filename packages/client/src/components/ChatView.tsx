@@ -393,6 +393,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             voice={voice.state}
             onLeave={voice.leave}
             onToggleMute={voice.toggleMute}
+            onToggleDeafen={voice.toggleDeafen}
+            onTogglePushToTalk={voice.togglePushToTalk}
+            onPeerVolume={voice.setPeerVolume}
           />
         );
       })()}

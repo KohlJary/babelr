@@ -330,6 +330,12 @@ export const UI_STRINGS = {
   'voice.micPermissionDenied': 'Microphone permission denied. Enable it in your browser settings.',
   'voice.connected': 'Connected',
   'voice.youAreMuted': 'You are muted',
+  'voice.deafen': 'Deafen (mute all incoming audio)',
+  'voice.undeafen': 'Undeafen',
+  'voice.pttOnTitle': 'Enable push-to-talk (hold ` to speak)',
+  'voice.pttOff': 'Disable push-to-talk',
+  'voice.pttHint': 'Push-to-talk: hold ` to transmit',
+  'voice.peerVolume': 'Volume',
 
   // Languages
   'language.en': 'English',
