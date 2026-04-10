@@ -27,6 +27,7 @@ import { ThreadPanel } from './ThreadPanel';
 import { ServerSettingsPanel } from './ServerSettingsPanel';
 import { MentionsPanel } from './MentionsPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
+import { FriendsPanel } from './FriendsPanel';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -48,6 +49,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [showServerSettings, setShowServerSettings] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
@@ -209,6 +211,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         onToggleMute={handleToggleMute}
         selectedChannelIsPrivate={!dmMode && selectedChannel?.isPrivate}
         onInviteToChannel={!dmMode && selectedChannel?.isPrivate ? () => setShowChannelInvite(true) : undefined}
+        onShowFriends={dmMode ? () => setShowFriends(true) : undefined}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -338,6 +341,15 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         <ChannelInviteModal
           channelId={activeChannelId}
           onClose={() => setShowChannelInvite(false)}
+        />
+      )}
+      {showFriends && (
+        <FriendsPanel
+          onStartDM={async (actorId) => {
+            setDmMode(true);
+            await startDM(actorId);
+          }}
+          onClose={() => setShowFriends(false)}
         />
       )}
     </div>

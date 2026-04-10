@@ -6,6 +6,8 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { friendships } from '../db/schema/friendships.ts';
+import { toAuthorView } from '../routes/channels.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
 import { resolveActorByKeyId, resolveObject } from './resolve.ts';
 import { enqueueDelivery } from './delivery.ts';
@@ -140,6 +142,9 @@ async function routeActivity(
     case 'Follow':
       if (localActor) await handleFollow(fastify, localActor, remoteActor, body, protocol, domain);
       break;
+    case 'Accept':
+      await handleAccept(fastify, remoteActor, body);
+      break;
     case 'Undo':
       if (localActor) await handleUndo(fastify, localActor, remoteActor, body);
       break;
@@ -169,6 +174,58 @@ async function handleFollow(
   domain: string,
 ) {
   const db = fastify.db;
+
+  // Person→Person Follow is a friend request — do NOT auto-accept.
+  // Create a pending_in friendship row and notify the local user.
+  if (localActor.type === 'Person') {
+    const [existing] = await db
+      .select()
+      .from(friendships)
+      .where(and(eq(friendships.ownerActorId, localActor.id), eq(friendships.otherActorId, remoteActor.id)))
+      .limit(1);
+
+    if (existing) {
+      // If we already have a pending_out row (we sent them a request first),
+      // treat the incoming Follow as reciprocation → immediate accepted on both sides.
+      if (existing.state === 'pending_out') {
+        await db
+          .update(friendships)
+          .set({ state: 'accepted', updatedAt: new Date() })
+          .where(eq(friendships.id, existing.id));
+      }
+      return;
+    }
+
+    const [created] = await db
+      .insert(friendships)
+      .values({
+        ownerActorId: localActor.id,
+        otherActorId: remoteActor.id,
+        state: 'pending_in',
+      })
+      .returning();
+
+    fastify.broadcastToActor(localActor.id, {
+      type: 'friend:request',
+      payload: {
+        friendship: {
+          id: created.id,
+          state: 'pending_in',
+          other: toAuthorView(remoteActor),
+          createdAt: created.createdAt.toISOString(),
+          updatedAt: created.updatedAt.toISOString(),
+        },
+      },
+    });
+
+    fastify.log.info(
+      { requester: remoteActor.uri, target: localActor.uri },
+      'Friend request received',
+    );
+    return;
+  }
+
+  // Group follow (server join) — preserve existing auto-accept behavior.
   if (!localActor.followersUri) return;
 
   await db
@@ -190,7 +247,6 @@ async function handleFollow(
     })
     .onConflictDoNothing({ target: activities.uri });
 
-  // Auto-Accept
   const actorWithKeys = await ensureActorKeys(db, localActor);
   if (!actorWithKeys.privateKeyPem) return;
 
@@ -202,6 +258,66 @@ async function handleFollow(
   fastify.log.info({ follower: remoteActor.uri, followed: localActor.uri }, 'Follow accepted');
 }
 
+async function handleAccept(
+  fastify: FastifyInstance,
+  remoteActor: typeof actors.$inferSelect,
+  activity: APActivity,
+) {
+  // Expect the inner object to be the Follow activity we previously sent.
+  // Identify our local pending_out friendship row by (ownerActorId, otherActorId).
+  const inner = activity.object;
+  const innerType = typeof inner === 'string' ? null : inner?.type;
+  if (innerType !== 'Follow') return;
+
+  // The Follow's `actor` is us (local), `object` is the remote.
+  const innerActor = typeof inner === 'string' ? null : (inner as { actor?: string }).actor;
+  if (!innerActor) return;
+
+  const [localSender] = await fastify.db
+    .select()
+    .from(actors)
+    .where(and(eq(actors.uri, innerActor), eq(actors.local, true)))
+    .limit(1);
+  if (!localSender) return;
+
+  const [row] = await fastify.db
+    .select()
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.ownerActorId, localSender.id),
+        eq(friendships.otherActorId, remoteActor.id),
+      ),
+    )
+    .limit(1);
+  if (!row || row.state !== 'pending_out') return;
+
+  const now = new Date();
+  const [updated] = await fastify.db
+    .update(friendships)
+    .set({ state: 'accepted', updatedAt: now })
+    .where(eq(friendships.id, row.id))
+    .returning();
+
+  fastify.broadcastToActor(localSender.id, {
+    type: 'friend:accepted',
+    payload: {
+      friendship: {
+        id: updated.id,
+        state: 'accepted',
+        other: toAuthorView(remoteActor),
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    },
+  });
+
+  fastify.log.info(
+    { sender: localSender.uri, target: remoteActor.uri },
+    'Friend request accepted (remote)',
+  );
+}
+
 async function handleUndo(
   fastify: FastifyInstance,
   localActor: typeof actors.$inferSelect,
@@ -211,16 +327,47 @@ async function handleUndo(
   const innerObject = activity.object;
   const innerType = typeof innerObject === 'string' ? null : innerObject?.type;
 
-  if (innerType === 'Follow' && localActor.followersUri) {
-    await fastify.db
-      .delete(collectionItems)
-      .where(
-        and(
-          eq(collectionItems.collectionUri, localActor.followersUri),
-          eq(collectionItems.itemUri, remoteActor.uri),
-        ),
-      );
-    fastify.log.info({ follower: remoteActor.uri, unfollowed: localActor.uri }, 'Undo Follow');
+  if (innerType === 'Follow') {
+    // Person → Person Undo: remove any friendship row owned by the local user
+    // with the remote as other.
+    if (localActor.type === 'Person') {
+      const [row] = await fastify.db
+        .select()
+        .from(friendships)
+        .where(
+          and(
+            eq(friendships.ownerActorId, localActor.id),
+            eq(friendships.otherActorId, remoteActor.id),
+          ),
+        )
+        .limit(1);
+
+      if (row) {
+        await fastify.db.delete(friendships).where(eq(friendships.id, row.id));
+        fastify.broadcastToActor(localActor.id, {
+          type: 'friend:removed',
+          payload: { friendshipId: row.id },
+        });
+        fastify.log.info(
+          { unfriended: remoteActor.uri, from: localActor.uri },
+          'Friend Undo processed',
+        );
+      }
+      return;
+    }
+
+    // Group Undo (server leave) — remove from followers collection.
+    if (localActor.followersUri) {
+      await fastify.db
+        .delete(collectionItems)
+        .where(
+          and(
+            eq(collectionItems.collectionUri, localActor.followersUri),
+            eq(collectionItems.itemUri, remoteActor.uri),
+          ),
+        );
+      fastify.log.info({ follower: remoteActor.uri, unfollowed: localActor.uri }, 'Undo Follow');
+    }
   }
 }
 

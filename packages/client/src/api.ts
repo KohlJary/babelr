@@ -276,6 +276,25 @@ export async function lookupUser(handle: string): Promise<{
   return apiFetch('/users/lookup', { method: 'POST', body: JSON.stringify({ handle }) });
 }
 
+// Friends
+export async function getFriends(): Promise<import('@babelr/shared').FriendshipView[]> {
+  return apiFetch('/friends');
+}
+
+export async function addFriend(handle: string): Promise<import('@babelr/shared').FriendshipView> {
+  return apiFetch('/friends', { method: 'POST', body: JSON.stringify({ handle }) });
+}
+
+export async function acceptFriend(
+  friendshipId: string,
+): Promise<import('@babelr/shared').FriendshipView> {
+  return apiFetch(`/friends/${friendshipId}/accept`, { method: 'POST' });
+}
+
+export async function removeFriend(friendshipId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/friends/${friendshipId}`, { method: 'DELETE' });
+}
+
 // E2E encryption
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch('/auth/password', {

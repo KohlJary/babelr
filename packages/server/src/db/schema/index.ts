@@ -9,3 +9,4 @@ export { readPositions } from './read-positions.ts';
 export { reactions } from './reactions.ts';
 export { notificationPreferences } from './notification-preferences.ts';
 export { invites } from './invites.ts';
+export { friendships } from './friendships.ts';

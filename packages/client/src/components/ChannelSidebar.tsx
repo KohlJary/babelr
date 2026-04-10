@@ -22,6 +22,7 @@ interface ChannelSidebarProps {
   onToggleMute?: (channelId: string, muted: boolean) => void;
   selectedChannelIsPrivate?: boolean;
   onInviteToChannel?: () => void;
+  onShowFriends?: () => void;
 }
 
 export function ChannelSidebar({
@@ -44,6 +45,7 @@ export function ChannelSidebar({
   onToggleMute,
   selectedChannelIsPrivate,
   onInviteToChannel,
+  onShowFriends,
 }: ChannelSidebarProps) {
   if (mode === 'dms') {
     return (
@@ -53,6 +55,11 @@ export function ChannelSidebar({
           <button className="sidebar-item add-channel" onClick={onNewDM}>
             + New message
           </button>
+          {onShowFriends && (
+            <button className="sidebar-item add-channel" onClick={onShowFriends}>
+              Friends
+            </button>
+          )}
           {conversations.length === 0 && (
             <div className="sidebar-empty">No conversations yet</div>
           )}

@@ -10,6 +10,7 @@ import authRoutes from '../routes/auth.ts';
 import channelRoutes from '../routes/channels.ts';
 import serverRoutes from '../routes/servers.ts';
 import dmRoutes from '../routes/dms.ts';
+import friendsRoutes from '../routes/friends.ts';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
 
@@ -49,6 +50,7 @@ export async function createTestApp() {
     fp(
       async (fastify) => {
         fastify.decorate('broadcastToChannel', () => {});
+        fastify.decorate('broadcastToActor', () => {});
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});
@@ -66,6 +68,7 @@ export async function createTestApp() {
   await app.register(channelRoutes);
   await app.register(serverRoutes);
   await app.register(dmRoutes);
+  await app.register(friendsRoutes);
 
   await app.ready();
   return { app, db };
