@@ -125,10 +125,10 @@
     {
       "id": "voice-channels-mvp",
       "title": "Voice channels — P2P WebRTC, same-instance, ≤8 participants",
-      "description": "Voice channels MVP. P2P WebRTC mesh architecture (no media server). Bandwidth scales O(n²) per peer so capped at ~8 participants — adequate for a first cut, scales to dozens later via SFU.\n\nDesign:\n- New channel type 'voice' (vs current 'text' OrderedCollection). Voice channels show up in the channel sidebar with a speaker icon.\n- WebSocket signaling channel for SDP offer/answer + ICE candidates. New WS message types: voice:join, voice:leave, voice:offer, voice:answer, voice:ice.\n- Server tracks per-channel voice room state (active participant list) in memory. Participants get push notifications when others join/leave.\n- Client uses RTCPeerConnection per peer (mesh topology). One <audio> element per remote participant.\n- Mic mute/unmute, deafen, push-to-talk, basic volume control per peer.\n- TURN server config required for NAT traversal — can use a public TURN initially, or document running coturn.\n- Same-instance only in v1. Federated voice (cross-instance signaling) is a separate v2 problem — WebRTC needs SDP exchange and ICE candidates, ActivityPub has neither, no federation primitive exists. Same-instance limitation is not a regression vs Mastodon (which has zero voice).\n- UI: voice channel row in sidebar shows participant avatars when active. Click to join → opens a voice panel showing connected peers, with mute/deafen/leave controls.\n\nDeferred to follow-up roadmap items: SFU architecture (>8 person rooms), federated voice signaling, real-time speech translation.",
+      "description": "Shipped in 428ea6a (core) and 8f78c24 (polish pass: deafen, push-to-talk, per-peer volume, speaking indicator). P2P WebRTC mesh, same-instance, 8-participant cap. Mute / deafen / PTT / per-peer volume / speaking indicator all working. Follow-ups tracked as separate items: voice-channels-video (webcam), screen-sharing, voice-channels-sfu (>8 peers), voice-channels-federation, voice-realtime-translation. Linux desktop caveat captured in desktop-voice-linux-webkit-gap.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready"
+      "status": "done"
     },
     {
       "id": "voice-channels-sfu",
@@ -171,9 +171,17 @@
       "status": "backlog"
     },
     {
+      "id": "voice-channels-video",
+      "title": "Webcam video in voice channels",
+      "description": "Add optional per-participant camera streams to voice channels. Discord-style model: a voice channel is the 'room' and each participant has three independent streams — audio (on when joined), webcam video (optional toggle), screen share (optional toggle). Not a separate 'video call' feature.\n\nScope:\n- 'Turn on camera' button in VoicePanel that calls getUserMedia({ video: true, audio: false }) and addTrack()s the video track to every existing RTCPeerConnection\n- Per-peer RTCRtpSender.replaceTrack when toggling, NOT renegotiation — avoids an offer/answer round trip for a local state change\n- Client renders remote video tracks in a grid layout (replacing or augmenting the current avatar-only tiles) with each peer's tile showing their video when active, fallback to avatar when off\n- Local self-view preview\n- Handle track ended events (user disabled via OS/browser controls)\n- Bandwidth considerations: at 8 peers × 720p each, mesh topology gets heavy fast; document practical limit of ~4 peers with video, gate the rest behind the SFU roadmap item\n- Mobile-friendly fallback: on narrow viewports, grid collapses to a single large tile with swipeable peer selection\n\n## Shared infrastructure with screen-sharing\n\nThis feature and `screen-sharing` share about 60% of implementation:\n- Both add a video track to existing peer connections via addTrack/replaceTrack\n- Both need an ontrack handler extension for kind='video'\n- Both need receiving-side <video> element rendering\n- Both need cleanup on track.ended and peer-left\n\nThe differences are:\n- Acquisition: getUserMedia({ video }) vs getDisplayMedia()\n- UX: grid of equal video tiles (webcam) vs one focused big view + small peer strip (screen share)\n- Toggle UI: camera-on/off button vs share-screen button\n\nRecommended implementation order: ship whichever is needed first, then the second gets ~40% additional work. Building them in the same sitting is ideal — the shared video-track machinery only needs to be written once.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
       "id": "screen-sharing",
       "title": "Screen sharing in voice channels",
-      "description": "Standard for any business meeting tool. WebRTC's `getDisplayMedia` is one extra track on the existing peer connection — simple to implement once voice-channels-mvp ships.\n\nScope:\n- 'Share screen' button in the voice panel UI, prompts native browser screen picker\n- New media track added to existing RTCPeerConnections (no new signaling shape needed beyond existing voice signaling)\n- Receiver renders the screen track in a larger video element distinct from the voice avatars\n- Only one participant sharing at a time in the MVP (lock + handoff)\n- Audio capture from the shared tab/window optional via getDisplayMedia constraints\n- Works on Chrome, Firefox, Edge, Safari (with Safari quirks for window-only sharing)\n\nBundle with voice-channels-mvp delivery — adds maybe a sitting of work on top of voice.",
+      "description": "Standard for any business meeting tool. WebRTC's `getDisplayMedia` is one extra track on the existing peer connection — simple to implement once voice-channels-mvp ships.\n\nScope:\n- 'Share screen' button in the voice panel UI, prompts native browser screen picker\n- New media track added to existing RTCPeerConnections (no new signaling shape needed beyond existing voice signaling)\n- Receiver renders the screen track in a larger video element distinct from the voice avatars\n- Only one participant sharing at a time in the MVP (lock + handoff)\n- Audio capture from the shared tab/window optional via getDisplayMedia constraints\n- Works on Chrome, Firefox, Edge, Safari (with Safari quirks for window-only sharing)\n\n## Shared infrastructure with voice-channels-video\n\nThis feature and `voice-channels-video` share about 60% of implementation — see the webcam item's description for the split. Building them in the same sitting is ideal; the shared video-track machinery only needs to be written once. If shipping them separately, do webcam first since it's the higher-visibility feature (enterprise video call parity), then screen share becomes a ~1-sitting add-on.",
       "type": "feature",
       "priority": "P2",
       "status": "backlog"
@@ -227,5 +235,5 @@
       "status": "backlog"
     }
   ],
-  "version": 10
+  "version": 11
 }
