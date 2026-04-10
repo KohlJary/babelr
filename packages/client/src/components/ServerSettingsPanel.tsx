@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import type React from 'react';
 import type { ServerView } from '@babelr/shared';
 import * as api from '../api';
+import { useT } from '../i18n/I18nProvider';
 
 type Tab = 'info' | 'invites';
 
@@ -13,13 +14,14 @@ interface ServerSettingsPanelProps {
 }
 
 export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettingsPanelProps) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>('info');
 
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel settings-panel-wide" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Server Settings</h2>
+          <h2>{t('serverSettings.title')}</h2>
           <button className="settings-close" onClick={onClose}>&times;</button>
         </div>
 
@@ -28,13 +30,13 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
             className={`settings-tab ${tab === 'info' ? 'active' : ''}`}
             onClick={() => setTab('info')}
           >
-            Info
+            {t('serverSettings.tabInfo')}
           </button>
           <button
             className={`settings-tab ${tab === 'invites' ? 'active' : ''}`}
             onClick={() => setTab('invites')}
           >
-            Invites
+            {t('serverSettings.tabInvites')}
           </button>
         </div>
 
@@ -52,6 +54,7 @@ function InfoTab({
   server: ServerView;
   onUpdated?: (server: ServerView) => void;
 }) {
+  const t = useT();
   const [name, setName] = useState(server.name);
   const [tagline, setTagline] = useState(server.tagline ?? '');
   const [longDescription, setLongDescription] = useState(server.longDescription ?? '');
@@ -63,27 +66,27 @@ function InfoTab({
   const [status, setStatus] = useState<string | null>(null);
 
   const addTag = () => {
-    const t = tagInput.trim().toLowerCase();
-    if (!t) return;
-    if (t.length > 32) {
-      setStatus('Tags must be 32 characters or fewer');
+    const tag = tagInput.trim().toLowerCase();
+    if (!tag) return;
+    if (tag.length > 32) {
+      setStatus(t('serverSettings.tagsTooLong'));
       return;
     }
-    if (tags.includes(t)) {
+    if (tags.includes(tag)) {
       setTagInput('');
       return;
     }
     if (tags.length >= 10) {
-      setStatus('Maximum 10 tags');
+      setStatus(t('serverSettings.tagsTooMany'));
       return;
     }
-    setTags((prev) => [...prev, t]);
+    setTags((prev) => [...prev, tag]);
     setTagInput('');
     setStatus(null);
   };
 
-  const removeTag = (t: string) => {
-    setTags((prev) => prev.filter((x) => x !== t));
+  const removeTag = (tag: string) => {
+    setTags((prev) => prev.filter((x) => x !== tag));
   };
 
   const handleTagKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -106,11 +109,11 @@ function InfoTab({
         credentials: 'include',
         body: formData,
       });
-      if (!res.ok) throw new Error('Upload failed');
+      if (!res.ok) throw new Error(t('serverSettings.uploadFailed'));
       const data = await res.json();
       setLogoUrl(data.url);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Upload failed');
+      setStatus(err instanceof Error ? err.message : t('serverSettings.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -127,10 +130,10 @@ function InfoTab({
         logoUrl: logoUrl || null,
         tags,
       });
-      setStatus('Saved');
+      setStatus(t('common.saved'));
       onUpdated?.(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Save failed');
+      setStatus(err instanceof Error ? err.message : t('channelSettings.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -139,16 +142,16 @@ function InfoTab({
   return (
     <div className="settings-tab-content">
       <div className="settings-field">
-        <label>Logo</label>
+        <label>{t('serverSettings.logo')}</label>
         <div className="server-logo-row">
           {logoUrl ? (
-            <img src={logoUrl} alt="Server logo" className="server-logo-preview" />
+            <img src={logoUrl} alt={t('serverSettings.logo')} className="server-logo-preview" />
           ) : (
-            <div className="server-logo-placeholder">No logo</div>
+            <div className="server-logo-placeholder">{t('serverSettings.noLogo')}</div>
           )}
           <div className="server-logo-actions">
             <label className="auth-submit server-logo-upload-btn">
-              {uploading ? 'Uploading...' : 'Upload image'}
+              {uploading ? t('common.uploading') : t('serverSettings.uploadImage')}
               <input
                 type="file"
                 accept="image/*"
@@ -159,7 +162,7 @@ function InfoTab({
             </label>
             {logoUrl && (
               <button className="friends-btn decline" onClick={() => setLogoUrl('')}>
-                Remove
+                {t('serverSettings.removeLogo')}
               </button>
             )}
           </div>
@@ -167,7 +170,7 @@ function InfoTab({
       </div>
 
       <div className="settings-field">
-        <label htmlFor="server-name">Name</label>
+        <label htmlFor="server-name">{t('serverSettings.name')}</label>
         <input
           id="server-name"
           className="modal-input"
@@ -178,37 +181,41 @@ function InfoTab({
       </div>
 
       <div className="settings-field">
-        <label htmlFor="server-tagline">Tagline</label>
+        <label htmlFor="server-tagline">{t('serverSettings.tagline')}</label>
         <input
           id="server-tagline"
           className="modal-input"
           value={tagline}
           onChange={(e) => setTagline(e.target.value)}
-          placeholder="A short one-liner about your server"
+          placeholder={t('serverSettings.taglinePlaceholder')}
           maxLength={140}
         />
-        <p className="settings-hint">Shown on discovery cards and invite landing pages.</p>
+        <p className="settings-hint">{t('serverSettings.taglineHint')}</p>
       </div>
 
       <div className="settings-field">
-        <label htmlFor="server-long-description">About</label>
+        <label htmlFor="server-long-description">{t('serverSettings.about')}</label>
         <textarea
           id="server-long-description"
           className="modal-input"
           value={longDescription}
           onChange={(e) => setLongDescription(e.target.value)}
-          placeholder="Longer description — what's this server about? Who's it for?"
+          placeholder={t('serverSettings.aboutPlaceholder')}
           rows={6}
         />
       </div>
 
       <div className="settings-field">
-        <label>Tags</label>
+        <label>{t('serverSettings.tags')}</label>
         <div className="server-tags-row">
-          {tags.map((t) => (
-            <span key={t} className="server-tag">
-              {t}
-              <button className="server-tag-remove" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}>
+          {tags.map((tag) => (
+            <span key={tag} className="server-tag">
+              {tag}
+              <button
+                className="server-tag-remove"
+                onClick={() => removeTag(tag)}
+                aria-label={`${t('common.remove')} ${tag}`}
+              >
                 ×
               </button>
             </span>
@@ -220,21 +227,21 @@ function InfoTab({
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={handleTagKey}
-            placeholder="Add tag (press Enter)"
+            placeholder={t('serverSettings.tagPlaceholder')}
             maxLength={32}
             style={{ flex: 1 }}
           />
           <button className="friends-btn" onClick={addTag} disabled={!tagInput.trim()}>
-            Add
+            {t('common.add')}
           </button>
         </div>
-        <p className="settings-hint">Up to 10 tags. Used for discoverability.</p>
+        <p className="settings-hint">{t('serverSettings.tagsHint')}</p>
       </div>
 
       <div className="settings-divider" />
 
       <button className="auth-submit" onClick={handleSave} disabled={saving}>
-        {saving ? 'Saving...' : 'Save changes'}
+        {saving ? t('common.saving') : t('common.saveChanges')}
       </button>
       {status && <p className="settings-hint">{status}</p>}
     </div>
@@ -242,6 +249,7 @@ function InfoTab({
 }
 
 function InvitesTab({ serverId }: { serverId: string }) {
+  const t = useT();
   const [invites, setInvites] = useState<api.InviteView[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -286,15 +294,15 @@ function InvitesTab({ serverId }: { serverId: string }) {
   return (
     <div className="settings-tab-content">
       <div className="settings-field">
-        <label>Invite Links</label>
+        <label>{t('serverSettings.inviteLinks')}</label>
       </div>
 
       {loading ? (
-        <div className="sidebar-empty">Loading...</div>
+        <div className="sidebar-empty">{t('common.loading')}</div>
       ) : (
         <>
           <div className="discover-list" style={{ maxHeight: '200px' }}>
-            {invites.length === 0 && <div className="sidebar-empty">No invite links yet</div>}
+            {invites.length === 0 && <div className="sidebar-empty">{t('serverSettings.noInvites')}</div>}
             {invites.map((inv) => (
               <div key={inv.code} className="discover-item">
                 <div className="discover-info">
@@ -308,7 +316,7 @@ function InvitesTab({ serverId }: { serverId: string }) {
                   </span>
                 </div>
                 <button className="discover-join-btn" onClick={() => copyLink(inv.url)}>
-                  Copy
+                  {t('common.copy')}
                 </button>
               </div>
             ))}
@@ -317,11 +325,11 @@ function InvitesTab({ serverId }: { serverId: string }) {
           <div className="settings-divider" />
 
           <div className="settings-field" style={{ gap: '0.5rem' }}>
-            <label>Create Invite</label>
+            <label>{t('serverSettings.createInvite')}</label>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               <input
                 className="modal-input"
-                placeholder="Max uses (optional)"
+                placeholder={t('serverSettings.maxUses')}
                 type="number"
                 value={maxUses}
                 onChange={(e) => setMaxUses(e.target.value)}
@@ -329,7 +337,7 @@ function InvitesTab({ serverId }: { serverId: string }) {
               />
               <input
                 className="modal-input"
-                placeholder="Expires in hours"
+                placeholder={t('serverSettings.expiresHours')}
                 type="number"
                 value={expiresHours}
                 onChange={(e) => setExpiresHours(e.target.value)}
@@ -337,7 +345,7 @@ function InvitesTab({ serverId }: { serverId: string }) {
               />
             </div>
             <button className="auth-submit" onClick={createInvite} disabled={creating}>
-              {creating ? '...' : 'Create Invite Link'}
+              {creating ? '...' : t('serverSettings.createInviteBtn')}
             </button>
           </div>
         </>

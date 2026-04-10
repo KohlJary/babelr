@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState } from 'react';
 import type { ChannelView, DMConversation, ActorProfile } from '@babelr/shared';
+import { useT } from '../i18n/I18nProvider';
 
 interface ChannelSidebarProps {
   mode: 'channels' | 'dms';
@@ -53,21 +54,22 @@ export function ChannelSidebar({
   canManageChannels,
   onEditChannel,
 }: ChannelSidebarProps) {
+  const t = useT();
   if (mode === 'dms') {
     return (
       <div className="channel-sidebar">
-        <div className="sidebar-header">Direct Messages</div>
+        <div className="sidebar-header">{t('channelSidebar.directMessages')}</div>
         <div className="sidebar-list">
           <button className="sidebar-item add-channel" onClick={onNewDM}>
-            + New message
+            {t('channelSidebar.newMessage')}
           </button>
           {onShowFriends && (
             <button className="sidebar-item add-channel" onClick={onShowFriends}>
-              Friends
+              {t('channelSidebar.friends')}
             </button>
           )}
           {conversations.length === 0 && (
-            <div className="sidebar-empty">No conversations yet</div>
+            <div className="sidebar-empty">{t('channelSidebar.noConversations')}</div>
           )}
           {conversations.map((dm) => {
             const otherParticipants = dm.participants.filter((p) => p.id !== actor.id);
@@ -134,7 +136,7 @@ export function ChannelSidebar({
           <button
             className="channel-mute-btn"
             onClick={() => onToggleMute(ch.id, !isMuted)}
-            title={isMuted ? 'Unmute' : 'Mute'}
+            title={isMuted ? t('channelSidebar.unmuteChannel') : t('channelSidebar.muteChannel')}
           >
             {isMuted ? '\uD83D\uDD15' : '\uD83D\uDD14'}
           </button>
@@ -143,7 +145,7 @@ export function ChannelSidebar({
           <button
             className="channel-settings-btn"
             onClick={() => onEditChannel(ch.id)}
-            title="Channel settings"
+            title={t('channelSidebar.channelSettingsTitle')}
           >
             {'\u2699\uFE0F'}
           </button>
@@ -170,22 +172,22 @@ export function ChannelSidebar({
         ))}
         {uncategorized.map(renderChannel)}
         <button className="sidebar-item add-channel" onClick={onCreateChannel}>
-          + Create channel
+          {t('channelSidebar.createChannel')}
         </button>
         <button className="sidebar-item add-channel" onClick={onShowMembers}>
-          Members
+          {t('channelSidebar.members')}
         </button>
         <button className="sidebar-item add-channel" onClick={onShowGlossary}>
-          Glossary
+          {t('channelSidebar.glossary')}
         </button>
         {selectedChannelIsPrivate && onInviteToChannel && (
           <button className="sidebar-item add-channel" onClick={onInviteToChannel}>
-            Invite to Channel
+            {t('channelSidebar.inviteToChannel')}
           </button>
         )}
         {onShowServerSettings && (
           <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
-            Server Settings
+            {t('channelSidebar.serverSettings')}
           </button>
         )}
       </div>

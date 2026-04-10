@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useRef } from 'react';
+import { useT } from '../i18n/I18nProvider';
 
 interface Attachment {
   url: string;
@@ -14,6 +15,7 @@ interface MessageInputProps {
 }
 
 export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) {
+  const t = useT();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -132,7 +134,7 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
             if (e.target.value.length > 0) onTyping?.();
           }}
           onKeyDown={handleKeyDown}
-          placeholder={dragOver ? 'Drop files here...' : 'Send a message...'}
+          placeholder={dragOver ? 'Drop files here...' : t('messages.placeholder')}
           disabled={disabled || sending}
           rows={1}
         />

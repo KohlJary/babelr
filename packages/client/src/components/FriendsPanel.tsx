@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type React from 'react';
 import { useFriends } from '../hooks/useFriends';
+import { useT } from '../i18n/I18nProvider';
 
 interface FriendsPanelProps {
   onStartDM: (actorId: string) => Promise<void>;
@@ -9,6 +10,7 @@ interface FriendsPanelProps {
 }
 
 export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
+  const t = useT();
   const { friendships, loading, error, addFriend, acceptFriend, removeFriend } = useFriends();
   const [handle, setHandle] = useState('');
   const [adding, setAdding] = useState(false);
@@ -28,7 +30,7 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
       await addFriend(handle.trim());
       setHandle('');
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Failed to add friend');
+      setAddError(err instanceof Error ? err.message : t('friends.failedToAdd'));
     } finally {
       setAdding(false);
     }
@@ -47,30 +49,30 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Friends</h2>
+          <h2>{t('friends.title')}</h2>
           <button className="settings-close" onClick={onClose}>&times;</button>
         </div>
 
         <form onSubmit={handleAdd} className="dm-remote-lookup">
           <input
             type="text"
-            placeholder="Add friend by handle: user@domain"
+            placeholder={t('friends.addByHandle')}
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
             disabled={adding}
           />
           <button type="submit" disabled={adding || !handle.trim()}>
-            {adding ? '...' : 'Add'}
+            {adding ? '...' : t('friends.add')}
           </button>
         </form>
         {addError && <div className="dm-lookup-error">{addError}</div>}
 
-        {loading && <div className="sidebar-empty">Loading...</div>}
+        {loading && <div className="sidebar-empty">{t('common.loading')}</div>}
         {error && <div className="dm-lookup-error">{error}</div>}
 
         {!loading && incoming.length > 0 && (
           <div className="friends-section">
-            <h3 className="friends-section-header">Incoming requests</h3>
+            <h3 className="friends-section-header">{t('friends.incomingRequests')}</h3>
             {incoming.map((f) => (
               <div key={f.id} className="friends-row">
                 <div className="friends-identity">
@@ -83,14 +85,14 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
                     onClick={() => doAction(f.id, () => acceptFriend(f.id))}
                     disabled={pendingAction === f.id}
                   >
-                    Accept
+                    {t('friends.accept')}
                   </button>
                   <button
                     className="friends-btn decline"
                     onClick={() => doAction(f.id, () => removeFriend(f.id))}
                     disabled={pendingAction === f.id}
                   >
-                    Decline
+                    {t('friends.decline')}
                   </button>
                 </div>
               </div>
@@ -100,7 +102,7 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
 
         {!loading && outgoing.length > 0 && (
           <div className="friends-section">
-            <h3 className="friends-section-header">Sent requests</h3>
+            <h3 className="friends-section-header">{t('friends.sentRequests')}</h3>
             {outgoing.map((f) => (
               <div key={f.id} className="friends-row">
                 <div className="friends-identity">
@@ -108,13 +110,13 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
                   <span className="friends-handle">@{f.other.preferredUsername}</span>
                 </div>
                 <div className="friends-actions">
-                  <span className="friends-pending">Pending</span>
+                  <span className="friends-pending">{t('friends.pending')}</span>
                   <button
                     className="friends-btn decline"
                     onClick={() => doAction(f.id, () => removeFriend(f.id))}
                     disabled={pendingAction === f.id}
                   >
-                    Cancel
+                    {t('friends.cancel')}
                   </button>
                 </div>
               </div>
@@ -123,9 +125,9 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
         )}
 
         <div className="friends-section">
-          <h3 className="friends-section-header">Friends ({accepted.length})</h3>
+          <h3 className="friends-section-header">{t('friends.friendsCount')} ({accepted.length})</h3>
           {!loading && accepted.length === 0 && (
-            <div className="sidebar-empty">No friends yet — add one above.</div>
+            <div className="sidebar-empty">{t('friends.empty')}</div>
           )}
           {accepted.map((f) => (
             <div key={f.id} className="friends-row">
@@ -144,14 +146,14 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
                   }
                   disabled={pendingAction === f.id}
                 >
-                  Message
+                  {t('friends.message')}
                 </button>
                 <button
                   className="friends-btn decline"
                   onClick={() => doAction(f.id, () => removeFriend(f.id))}
                   disabled={pendingAction === f.id}
                 >
-                  Remove
+                  {t('friends.remove')}
                 </button>
               </div>
             </div>

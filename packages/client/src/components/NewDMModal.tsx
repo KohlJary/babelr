@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import type React from 'react';
 import * as api from '../api';
+import { useT } from '../i18n/I18nProvider';
 
 interface NewDMModalProps {
   onStartDM: (participantId: string) => Promise<void>;
@@ -9,6 +10,7 @@ interface NewDMModalProps {
 }
 
 export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
+  const t = useT();
   const [users, setUsers] = useState<{ id: string; preferredUsername: string; displayName: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
       await onStartDM(user.id);
       onClose();
     } catch {
-      setLookupError('User not found');
+      setLookupError(t('friends.userNotFound'));
     } finally {
       setLookingUp(false);
     }
@@ -55,7 +57,7 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>New Message</h2>
+          <h2>{t('newDM.title')}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
@@ -63,20 +65,20 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
         <form onSubmit={handleRemoteLookup} className="dm-remote-lookup">
           <input
             type="text"
-            placeholder="Find by handle: user@domain"
+            placeholder={t('newDM.lookupPlaceholder')}
             value={handle}
             onChange={(e) => setHandle(e.target.value)}
             disabled={lookingUp}
           />
           <button type="submit" disabled={lookingUp || !handle.trim()}>
-            {lookingUp ? '...' : 'Find'}
+            {lookingUp ? '...' : t('common.find')}
           </button>
         </form>
         {lookupError && <div className="dm-lookup-error">{lookupError}</div>}
         <div className="discover-list">
-          {loading && <div className="sidebar-empty">Loading users...</div>}
+          {loading && <div className="sidebar-empty">{t('newDM.loading')}</div>}
           {!loading && users.length === 0 && (
-            <div className="sidebar-empty">No other users yet</div>
+            <div className="sidebar-empty">{t('newDM.empty')}</div>
           )}
           {users.map((user) => (
             <div key={user.id} className="discover-item">
@@ -91,7 +93,7 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
                 onClick={() => handleSelect(user.id)}
                 disabled={submitting === user.id}
               >
-                {submitting === user.id ? '...' : 'Message'}
+                {submitting === user.id ? '...' : t('newDM.send')}
               </button>
             </div>
           ))}

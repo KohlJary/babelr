@@ -23,6 +23,7 @@ import translateRoutes from './routes/translate.ts';
 import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
 import friendsRoutes from './routes/friends.ts';
+import i18nRoutes from './routes/i18n.ts';
 import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
 import uploadRoutes from './routes/uploads.ts';
@@ -124,6 +125,7 @@ export async function buildApp() {
   await app.register(serverRoutes);
   await app.register(dmRoutes);
   await app.register(friendsRoutes);
+  await app.register(i18nRoutes);
   await app.register(searchRoutes);
   await app.register(federationPlugin);
   await app.register(uploadRoutes);

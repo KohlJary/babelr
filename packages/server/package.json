@@ -10,7 +10,8 @@
     "start": "node --env-file=../../.env dist/server.js",
     "db:generate": "drizzle-kit --env-file=../../.env generate",
     "db:migrate": "drizzle-kit --env-file=../../.env migrate",
-    "benchmark": "tsx --env-file=../../.env src/benchmark/cli.ts"
+    "benchmark": "tsx --env-file=../../.env src/benchmark/cli.ts",
+    "seed:i18n": "tsx --env-file=../../.env src/scripts/seed-ui-translations.ts"
   },
   "dependencies": {
     "@babelr/shared": "*",

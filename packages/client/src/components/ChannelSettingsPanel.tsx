@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { ChannelView } from '@babelr/shared';
 import * as api from '../api';
+import { useT } from '../i18n/I18nProvider';
 
 interface ChannelSettingsPanelProps {
   channel: ChannelView;
@@ -10,6 +11,7 @@ interface ChannelSettingsPanelProps {
 }
 
 export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSettingsPanelProps) {
+  const t = useT();
   const [name, setName] = useState(channel.name);
   const [category, setCategory] = useState(channel.category ?? '');
   const [topic, setTopic] = useState(channel.topic ?? '');
@@ -30,10 +32,10 @@ export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSet
         description: description.trim() || null,
         slowMode: parsedSlow,
       });
-      setStatus('Saved');
+      setStatus(t('common.saved'));
       onUpdated?.(updated);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Save failed');
+      setStatus(err instanceof Error ? err.message : t('channelSettings.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -43,7 +45,7 @@ export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSet
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel settings-panel-wide" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Channel Settings</h2>
+          <h2>{t('channelSettings.title')}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
@@ -51,7 +53,7 @@ export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSet
 
         <div className="settings-tab-content">
           <div className="settings-field">
-            <label htmlFor="channel-name">Name</label>
+            <label htmlFor="channel-name">{t('channelSettings.name')}</label>
             <input
               id="channel-name"
               className="modal-input"
@@ -62,43 +64,43 @@ export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSet
           </div>
 
           <div className="settings-field">
-            <label htmlFor="channel-category">Category</label>
+            <label htmlFor="channel-category">{t('channelSettings.category')}</label>
             <input
               id="channel-category"
               className="modal-input"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="Leave blank for no category"
+              placeholder={t('channelSettings.categoryHint')}
               maxLength={64}
             />
           </div>
 
           <div className="settings-field">
-            <label htmlFor="channel-topic">Topic</label>
+            <label htmlFor="channel-topic">{t('channelSettings.topic')}</label>
             <input
               id="channel-topic"
               className="modal-input"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="One-line topic shown in the channel header"
+              placeholder={t('channelSettings.topicHint')}
               maxLength={256}
             />
           </div>
 
           <div className="settings-field">
-            <label htmlFor="channel-description">Description</label>
+            <label htmlFor="channel-description">{t('channelSettings.description')}</label>
             <textarea
               id="channel-description"
               className="modal-input"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Longer description — what's this channel about?"
+              placeholder={t('channelSettings.descriptionHint')}
               rows={5}
             />
           </div>
 
           <div className="settings-field">
-            <label htmlFor="channel-slowmode">Slow mode (seconds)</label>
+            <label htmlFor="channel-slowmode">{t('channelSettings.slowMode')}</label>
             <input
               id="channel-slowmode"
               type="number"
@@ -108,15 +110,13 @@ export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSet
               value={slowMode}
               onChange={(e) => setSlowMode(e.target.value)}
             />
-            <p className="settings-hint">
-              Minimum seconds between messages per user. 0 disables. Mods and admins bypass.
-            </p>
+            <p className="settings-hint">{t('channelSettings.slowModeHint')}</p>
           </div>
 
           <div className="settings-divider" />
 
           <button className="auth-submit" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save changes'}
+            {saving ? t('common.saving') : t('common.saveChanges')}
           </button>
           {status && <p className="settings-hint">{status}</p>}
         </div>

@@ -43,6 +43,13 @@
       "when": 1775831371414,
       "tag": "0005_eminent_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775917771414,
+      "tag": "0006_ui_translations",
+      "breakpoints": true
     }
   ]
 }

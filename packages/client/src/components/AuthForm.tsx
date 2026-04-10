@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState } from 'react';
 import type { RegisterInput, LoginInput } from '@babelr/shared';
+import { useT } from '../i18n/I18nProvider';
 
 interface AuthFormProps {
   onLogin: (input: LoginInput) => Promise<void>;
@@ -9,6 +10,7 @@ interface AuthFormProps {
 }
 
 export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
+  const t = useT();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -33,8 +35,8 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
 
   return (
     <div className="auth-container">
-      <h1>Babelr</h1>
-      <p className="auth-subtitle">Keep your language. The routing layer handles the rest.</p>
+      <h1>{t('app.name')}</h1>
+      <p className="auth-subtitle">{t('app.tagline')}</p>
 
       <form className="auth-form" onSubmit={handleSubmit}>
         <div className="auth-tabs">
@@ -43,21 +45,21 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
             className={`auth-tab ${mode === 'login' ? 'active' : ''}`}
             onClick={() => setMode('login')}
           >
-            Log in
+            {t('auth.login')}
           </button>
           <button
             type="button"
             className={`auth-tab ${mode === 'register' ? 'active' : ''}`}
             onClick={() => setMode('register')}
           >
-            Register
+            {t('auth.register')}
           </button>
         </div>
 
         {mode === 'register' && (
           <input
             type="text"
-            placeholder="Username"
+            placeholder={t('auth.username')}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -68,14 +70,14 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
         )}
         <input
           type="email"
-          placeholder="Email"
+          placeholder={t('auth.email')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
         <input
           type="password"
-          placeholder="Password"
+          placeholder={t('auth.password')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -85,7 +87,7 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
         {error && <div className="auth-error">{error}</div>}
 
         <button type="submit" className="auth-submit" disabled={submitting}>
-          {submitting ? '...' : mode === 'login' ? 'Log in' : 'Create account'}
+          {submitting ? '...' : mode === 'login' ? t('auth.login') : t('auth.createAccount')}
         </button>
       </form>
     </div>

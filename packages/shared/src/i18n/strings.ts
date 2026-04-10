@@ -1,0 +1,240 @@
+// SPDX-License-Identifier: Hippocratic-3.0
+/**
+ * Master UI strings file. Single source of truth for every visible string in
+ * the client. English values are the canonical defaults and are used as the
+ * fallback when a translation is missing in the database.
+ *
+ * Adding a new string:
+ *   1. Add a key here with its English value
+ *   2. Use it in the client via `t('your.key')`
+ *   3. Re-run `npm run seed:i18n -w packages/server` to populate translations
+ *      for all supported languages.
+ */
+
+export const UI_STRINGS = {
+  // App
+  'app.name': 'Babelr',
+  'app.tagline': 'Keep your language. The routing layer handles the rest.',
+
+  // Common
+  'common.save': 'Save',
+  'common.saveChanges': 'Save changes',
+  'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.delete': 'Delete',
+  'common.remove': 'Remove',
+  'common.add': 'Add',
+  'common.loading': 'Loading...',
+  'common.saving': 'Saving...',
+  'common.saved': 'Saved',
+  'common.uploading': 'Uploading...',
+  'common.copy': 'Copy',
+  'common.search': 'Search',
+  'common.find': 'Find',
+  'common.error': 'Error',
+
+  // Auth
+  'auth.login': 'Log in',
+  'auth.register': 'Register',
+  'auth.username': 'Username',
+  'auth.email': 'Email',
+  'auth.password': 'Password',
+  'auth.createAccount': 'Create account',
+
+  // Server sidebar
+  'serverSidebar.directMessages': 'Direct Messages',
+  'serverSidebar.createServer': 'Create server',
+
+  // Channel sidebar
+  'channelSidebar.directMessages': 'Direct Messages',
+  'channelSidebar.newMessage': '+ New message',
+  'channelSidebar.friends': 'Friends',
+  'channelSidebar.noConversations': 'No conversations yet',
+  'channelSidebar.createChannel': '+ Create channel',
+  'channelSidebar.members': 'Members',
+  'channelSidebar.glossary': 'Glossary',
+  'channelSidebar.serverSettings': 'Server Settings',
+  'channelSidebar.inviteToChannel': 'Invite to Channel',
+  'channelSidebar.muteChannel': 'Mute',
+  'channelSidebar.unmuteChannel': 'Unmute',
+  'channelSidebar.channelSettingsTitle': 'Channel settings',
+
+  // Channel header
+  'channelHeader.connected': 'connected',
+  'channelHeader.reconnecting': 'reconnecting...',
+  'channelHeader.logout': 'Log out',
+  'channelHeader.mentions': 'Mentions',
+  'channelHeader.settings': 'Settings',
+  'channelHeader.editProfile': 'Edit profile',
+  'channelHeader.encrypted': 'End-to-end encrypted',
+
+  // Messages
+  'messages.placeholder': 'Send a message...',
+  'messages.empty': 'No messages yet',
+  'messages.loadMore': 'Load more',
+  'messages.edit': 'Edit',
+  'messages.delete': 'Delete',
+  'messages.reply': 'Reply',
+  'messages.addReaction': 'Add reaction',
+  'messages.openThread': 'Open thread',
+  'messages.edited': '(edited)',
+  'messages.editing': 'Editing',
+  'messages.translating': 'Translating...',
+  'messages.attach': 'Attach file',
+
+  // Settings panel
+  'settings.title': 'Settings',
+  'settings.translationEngine': 'Translation engine',
+  'settings.cloudClaude': 'Cloud (Claude)',
+  'settings.localBrowser': 'Local (Browser)',
+  'settings.anthropicApiKey': 'Anthropic API Key',
+  'settings.apiKeyHint': 'Your key is stored locally in your browser. It is never saved on the server.',
+  'settings.localModelHint':
+    'Translations run entirely in your browser. First use downloads a ~50MB model per language pair. Tone, intent, and idiom annotations are not available with local translation.',
+  'settings.readMessagesIn': 'Read messages in',
+  'settings.enableTranslation': 'Enable translation',
+  'settings.changePassword': 'Change password',
+  'settings.currentPassword': 'Current password',
+  'settings.newPassword': 'New password (min 12 chars)',
+  'settings.updatePassword': 'Update password',
+  'settings.passwordChanged': 'Password changed successfully',
+  'settings.passwordTooShort': 'New password must be at least 12 characters',
+  'settings.passwordChangeFailed': 'Failed to change password',
+
+  // Friends panel
+  'friends.title': 'Friends',
+  'friends.addByHandle': 'Add friend by handle: user@domain',
+  'friends.add': 'Add',
+  'friends.incomingRequests': 'Incoming requests',
+  'friends.sentRequests': 'Sent requests',
+  'friends.accept': 'Accept',
+  'friends.decline': 'Decline',
+  'friends.cancel': 'Cancel',
+  'friends.message': 'Message',
+  'friends.remove': 'Remove',
+  'friends.pending': 'Pending',
+  'friends.empty': 'No friends yet — add one above.',
+  'friends.userNotFound': 'User not found',
+  'friends.failedToLoad': 'Failed to load friends',
+  'friends.failedToAdd': 'Failed to add friend',
+  'friends.friendsCount': 'Friends',
+
+  // Channel settings
+  'channelSettings.title': 'Channel Settings',
+  'channelSettings.name': 'Name',
+  'channelSettings.category': 'Category',
+  'channelSettings.categoryHint': 'Leave blank for no category',
+  'channelSettings.topic': 'Topic',
+  'channelSettings.topicHint': 'One-line topic shown in the channel header',
+  'channelSettings.description': 'Description',
+  'channelSettings.descriptionHint': "Longer description — what's this channel about?",
+  'channelSettings.slowMode': 'Slow mode (seconds)',
+  'channelSettings.slowModeHint':
+    'Minimum seconds between messages per user. 0 disables. Mods and admins bypass.',
+  'channelSettings.saveFailed': 'Save failed',
+
+  // Server settings
+  'serverSettings.title': 'Server Settings',
+  'serverSettings.tabInfo': 'Info',
+  'serverSettings.tabInvites': 'Invites',
+  'serverSettings.logo': 'Logo',
+  'serverSettings.uploadImage': 'Upload image',
+  'serverSettings.removeLogo': 'Remove',
+  'serverSettings.noLogo': 'No logo',
+  'serverSettings.name': 'Name',
+  'serverSettings.tagline': 'Tagline',
+  'serverSettings.taglineHint': 'Shown on discovery cards and invite landing pages.',
+  'serverSettings.taglinePlaceholder': 'A short one-liner about your server',
+  'serverSettings.about': 'About',
+  'serverSettings.aboutPlaceholder':
+    "Longer description — what's this server about? Who's it for?",
+  'serverSettings.tags': 'Tags',
+  'serverSettings.tagsHint': 'Up to 10 tags. Used for discoverability.',
+  'serverSettings.tagPlaceholder': 'Add tag (press Enter)',
+  'serverSettings.tagsTooLong': 'Tags must be 32 characters or fewer',
+  'serverSettings.tagsTooMany': 'Maximum 10 tags',
+  'serverSettings.inviteLinks': 'Invite Links',
+  'serverSettings.noInvites': 'No invite links yet',
+  'serverSettings.createInvite': 'Create Invite',
+  'serverSettings.maxUses': 'Max uses (optional)',
+  'serverSettings.expiresHours': 'Expires in hours',
+  'serverSettings.createInviteBtn': 'Create Invite Link',
+  'serverSettings.uploadFailed': 'Upload failed',
+
+  // Profile panel
+  'profile.title': 'Profile',
+  'profile.displayName': 'Display name',
+  'profile.bio': 'Bio',
+  'profile.bioPlaceholder': 'Tell people about yourself',
+  'profile.avatar': 'Avatar',
+  'profile.uploadAvatar': 'Upload avatar',
+  'profile.preferredLanguage': 'Preferred language',
+  'profile.saved': 'Profile saved',
+
+  // Create server modal
+  'createServer.title': 'Create or Join Server',
+  'createServer.create': 'Create',
+  'createServer.join': 'Join',
+  'createServer.serverName': 'Server name',
+  'createServer.description': 'Description',
+  'createServer.discover': 'Discover',
+  'createServer.joined': 'Joined',
+  'createServer.noServers': 'No public servers found',
+
+  // Create channel modal
+  'createChannel.title': 'Create channel',
+  'createChannel.namePlaceholder': 'channel-name',
+  'createChannel.categoryPlaceholder': 'Category (optional)',
+  'createChannel.privateLabel': 'Private channel (invite-only)',
+  'createChannel.create': 'Create',
+
+  // New DM modal
+  'newDM.title': 'New Message',
+  'newDM.lookupPlaceholder': 'Find by handle: user@domain',
+  'newDM.loading': 'Loading users...',
+  'newDM.empty': 'No other users yet',
+  'newDM.send': 'Message',
+
+  // Languages
+  'language.en': 'English',
+  'language.es': 'Spanish',
+  'language.fr': 'French',
+  'language.de': 'German',
+  'language.pt': 'Portuguese',
+  'language.it': 'Italian',
+  'language.nl': 'Dutch',
+  'language.pl': 'Polish',
+  'language.ru': 'Russian',
+  'language.uk': 'Ukrainian',
+  'language.ja': 'Japanese',
+  'language.ko': 'Korean',
+  'language.zh': 'Chinese',
+  'language.ar': 'Arabic',
+  'language.hi': 'Hindi',
+  'language.tr': 'Turkish',
+  'language.vi': 'Vietnamese',
+} as const;
+
+export type UIStringKey = keyof typeof UI_STRINGS;
+
+export const SUPPORTED_LANGUAGES = [
+  'en',
+  'es',
+  'fr',
+  'de',
+  'pt',
+  'it',
+  'nl',
+  'pl',
+  'ru',
+  'uk',
+  'ja',
+  'ko',
+  'zh',
+  'ar',
+  'hi',
+  'tr',
+  'vi',
+] as const;
+
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];

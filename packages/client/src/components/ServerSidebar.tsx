@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { ServerView } from '@babelr/shared';
+import { useT } from '../i18n/I18nProvider';
 
 interface ServerSidebarProps {
   servers: ServerView[];
@@ -18,12 +19,13 @@ export function ServerSidebar({
   onSelectDMs,
   onCreateServer,
 }: ServerSidebarProps) {
+  const t = useT();
   return (
     <div className="server-sidebar">
       <button
         className={`server-icon dm-icon ${dmMode ? 'active' : ''}`}
         onClick={onSelectDMs}
-        title="Direct Messages"
+        title={t('serverSidebar.directMessages')}
       >
         DM
       </button>
@@ -42,7 +44,7 @@ export function ServerSidebar({
           )}
         </button>
       ))}
-      <button className="server-icon add-server" onClick={onCreateServer} title="Create server">
+      <button className="server-icon add-server" onClick={onCreateServer} title={t('serverSidebar.createServer')}>
         +
       </button>
     </div>
