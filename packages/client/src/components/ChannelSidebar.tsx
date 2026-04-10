@@ -5,6 +5,7 @@ import type { ChannelView, DMConversation, ActorProfile } from '@babelr/shared';
 interface ChannelSidebarProps {
   mode: 'channels' | 'dms';
   serverName?: string;
+  serverTagline?: string | null;
   channels: ChannelView[];
   selectedChannelId: string | null;
   conversations: DMConversation[];
@@ -28,6 +29,7 @@ interface ChannelSidebarProps {
 export function ChannelSidebar({
   mode,
   serverName,
+  serverTagline,
   channels,
   selectedChannelId,
   conversations,
@@ -139,7 +141,10 @@ export function ChannelSidebar({
 
   return (
     <div className="channel-sidebar">
-      <div className="sidebar-header">{serverName ?? 'Server'}</div>
+      <div className="sidebar-header">
+        <span className="sidebar-header-name">{serverName ?? 'Server'}</span>
+        {serverTagline && <span className="sidebar-header-tagline">{serverTagline}</span>}
+      </div>
       <div className="sidebar-list">
         {Array.from(categorized.entries()).map(([cat, chs]) => (
           <div key={cat} className="channel-category">

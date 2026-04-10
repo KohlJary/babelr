@@ -31,11 +31,15 @@ export function ServerSidebar({
       {servers.map((server) => (
         <button
           key={server.id}
-          className={`server-icon ${selectedServerId === server.id && !dmMode ? 'active' : ''}`}
+          className={`server-icon ${server.logoUrl ? 'has-logo' : ''} ${selectedServerId === server.id && !dmMode ? 'active' : ''}`}
           onClick={() => onSelectServer(server.id)}
           title={server.name}
         >
-          {server.name.charAt(0).toUpperCase()}
+          {server.logoUrl ? (
+            <img src={server.logoUrl} alt={server.name} className="server-icon-img" />
+          ) : (
+            server.name.charAt(0).toUpperCase()
+          )}
         </button>
       ))}
       <button className="server-icon add-server" onClick={onCreateServer} title="Create server">

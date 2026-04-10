@@ -192,6 +192,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
       <ChannelSidebar
         mode={dmMode ? 'dms' : 'channels'}
         serverName={selectedServer?.name}
+        serverTagline={selectedServer?.tagline}
         channels={channels}
         selectedChannelId={selectedChannel?.id ?? null}
         conversations={conversations}
