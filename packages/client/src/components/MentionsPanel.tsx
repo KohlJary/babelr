@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import type { MessageWithAuthor } from '@babelr/shared';
 import * as api from '../api';
 import { renderMarkdown } from '../utils/markdown';
+import { useT } from '../i18n/I18nProvider';
 
 interface MentionsPanelProps {
   onClose: () => void;
@@ -15,6 +16,7 @@ function formatDate(iso: string): string {
 }
 
 export function MentionsPanel({ onClose }: MentionsPanelProps) {
+  const t = useT();
   const [mentions, setMentions] = useState<MessageWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,12 +28,12 @@ export function MentionsPanel({ onClose }: MentionsPanelProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '70vh', overflow: 'auto' }}>
         <div className="settings-header">
-          <h2>Mentions</h2>
+          <h2>{t('mentions.title')}</h2>
           <button className="settings-close" onClick={onClose}>&times;</button>
         </div>
 
-        {loading && <div className="sidebar-empty">Loading...</div>}
-        {!loading && mentions.length === 0 && <div className="sidebar-empty">No mentions yet</div>}
+        {loading && <div className="sidebar-empty">{t('common.loading')}</div>}
+        {!loading && mentions.length === 0 && <div className="sidebar-empty">{t('mentions.empty')}</div>}
 
         {mentions.map((item) => (
           <div key={item.message.id} className="mention-item">

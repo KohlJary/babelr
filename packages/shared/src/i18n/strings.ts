@@ -195,6 +195,84 @@ export const UI_STRINGS = {
   'newDM.empty': 'No other users yet',
   'newDM.send': 'Message',
 
+  // Mentions panel
+  'mentions.title': 'Mentions',
+  'mentions.empty': 'No mentions yet',
+
+  // Members
+  'members.title': 'Members',
+  'members.kick': 'Kick',
+  'members.role.member': 'member',
+  'members.role.moderator': 'moderator',
+  'members.role.admin': 'admin',
+  'members.role.owner': 'owner',
+  'members.presenceOnline': 'online',
+  'members.presenceAway': 'away',
+  'members.presenceOffline': 'offline',
+
+  // Glossary
+  'glossary.title': 'Channel Glossary',
+  'glossary.hint':
+    'Define terms specific to this channel. These are sent to the translation engine as context for more accurate translations.',
+  'glossary.term': 'Term',
+  'glossary.translation': 'Translation/meaning',
+  'glossary.empty': 'No glossary entries yet',
+  'glossary.save': 'Save Glossary',
+
+  // Profile (additions)
+  'profile.username': 'Username',
+  'profile.displayNamePlaceholder': 'How others see you',
+  'profile.uploadFailed': 'Upload failed',
+  'profile.failedToSave': 'Failed to save',
+  'profile.saveProfile': 'Save profile',
+
+  // Create server (additions)
+  'createServer.createTitle': 'Create Server',
+  'createServer.joinTitle': 'Join Server',
+  'createServer.serverNamePlaceholder': 'Server name',
+  'createServer.descriptionPlaceholder': 'Description (optional)',
+  'createServer.loadingServers': 'Loading servers...',
+  'createServer.noServersAvailable': 'No servers available',
+  'createServer.memberOne': 'member',
+  'createServer.memberMany': 'members',
+
+  // Create channel (additions)
+  'createChannel.titleHeading': 'Create Channel',
+  'createChannel.channelNamePlaceholder': 'Channel name',
+  'createChannel.privateChannelInviteOnly': 'Private channel (invite only)',
+
+  // Channel invite modal
+  'channelInvite.title': 'Invite to Channel',
+  'channelInvite.invited': 'Invited',
+  'channelInvite.invite': 'Invite',
+
+  // Thread panel
+  'thread.title': 'Thread',
+  'thread.loadingReplies': 'Loading replies...',
+  'thread.empty': 'No replies yet',
+
+  // Typing indicator (uses placeholders)
+  'typing.userIsTyping': '{user} is typing',
+  'typing.twoTyping': '{user1} and {user2} are typing',
+  'typing.manyTyping': '{user} and {count} others are typing',
+
+  // Message item (additions, uses placeholders)
+  'messages.todayAt': 'Today at {time}',
+  'messages.yesterdayAt': 'Yesterday at {time}',
+  'messages.replyOne': '{count} reply',
+  'messages.replyMany': '{count} replies',
+  'messages.showOriginal': 'Show original',
+  'messages.showTranslation': 'Show translation',
+  'messages.translatedFromLang': 'translated from {lang}',
+  'messages.originalLang': 'original: {lang}',
+  'messages.confidenceHigh': 'high',
+  'messages.confidenceMedium': 'medium',
+  'messages.confidenceLow': 'low',
+  'messages.translationConfidence': 'Translation confidence: {label} ({percent}%)',
+  'messages.reactionCountOne': '{count} reaction',
+  'messages.reactionCountMany': '{count} reactions',
+  'messages.dropFiles': 'Drop files here...',
+
   // Languages
   'language.en': 'English',
   'language.es': 'Spanish',

@@ -1,22 +1,24 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { AuthorView } from '@babelr/shared';
+import { useT } from '../i18n/I18nProvider';
 
 interface TypingIndicatorProps {
   users: AuthorView[];
 }
 
 export function TypingIndicator({ users }: TypingIndicatorProps) {
+  const t = useT();
   if (users.length === 0) return null;
 
   const names = users.map((u) => u.displayName ?? u.preferredUsername);
   let text: string;
 
   if (names.length === 1) {
-    text = `${names[0]} is typing`;
+    text = t('typing.userIsTyping', { user: names[0] });
   } else if (names.length === 2) {
-    text = `${names[0]} and ${names[1]} are typing`;
+    text = t('typing.twoTyping', { user1: names[0], user2: names[1] });
   } else {
-    text = `${names[0]} and ${names.length - 1} others are typing`;
+    text = t('typing.manyTyping', { user: names[0], count: names.length - 1 });
   }
 
   return (

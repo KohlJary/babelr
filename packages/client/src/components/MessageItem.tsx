@@ -4,6 +4,8 @@ import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/s
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
 import { renderMarkdown } from '../utils/markdown';
+import { useT } from '../i18n/I18nProvider';
+import type { UIStringKey } from '@babelr/shared';
 
 interface MessageItemProps {
   data: MessageWithAuthor;
@@ -20,7 +22,9 @@ interface MessageItemProps {
   canDelete?: boolean;
 }
 
-function formatTime(iso: string): string {
+type TFn = (key: UIStringKey, values?: Record<string, string | number>) => string;
+
+function formatTime(iso: string, t: TFn): string {
   const date = new Date(iso);
   const now = new Date();
   const isToday = date.toDateString() === now.toDateString();
@@ -30,19 +34,24 @@ function formatTime(iso: string): string {
 
   const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
-  if (isToday) return `Today at ${time}`;
-  if (isYesterday) return `Yesterday at ${time}`;
+  if (isToday) return t('messages.todayAt', { time });
+  if (isYesterday) return t('messages.yesterdayAt', { time });
   return `${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${time}`;
 }
 
-function ConfidenceDot({ confidence }: { confidence: number }) {
+function ConfidenceDot({ confidence, t }: { confidence: number; t: TFn }) {
   const color = confidence > 0.8 ? '#22c55e' : confidence > 0.5 ? '#eab308' : '#ef4444';
-  const label = confidence > 0.8 ? 'high' : confidence > 0.5 ? 'medium' : 'low';
+  const label =
+    confidence > 0.8
+      ? t('messages.confidenceHigh')
+      : confidence > 0.5
+        ? t('messages.confidenceMedium')
+        : t('messages.confidenceLow');
   return (
     <span
       className="confidence-dot"
       style={{ backgroundColor: color }}
-      title={`Translation confidence: ${label} (${Math.round(confidence * 100)}%)`}
+      title={t('messages.translationConfidence', { label, percent: Math.round(confidence * 100) })}
     />
   );
 }
@@ -78,6 +87,7 @@ export function MessageItem({
   onDelete,
   canDelete,
 }: MessageItemProps) {
+  const t = useT();
   const { message, author } = data;
   const [showOriginal, setShowOriginal] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -122,17 +132,17 @@ export function MessageItem({
     <button
       className="translation-indicator"
       onClick={() => setShowOriginal(!showOriginal)}
-      title={showOriginal ? 'Show translation' : 'Show original'}
+      title={showOriginal ? t('messages.showTranslation') : t('messages.showOriginal')}
     >
       {showOriginal
-        ? `translated from ${translation.detectedLanguage}`
-        : `original: ${translation.detectedLanguage}`}
+        ? t('messages.translatedFromLang', { lang: translation.detectedLanguage })
+        : t('messages.originalLang', { lang: translation.detectedLanguage })}
     </button>
   ) : null;
 
   const metadataBadge = metadata ? (
     <span className="translation-metadata">
-      <ConfidenceDot confidence={metadata.confidence} />
+      <ConfidenceDot confidence={metadata.confidence} t={t} />
       <span className="register-intent">
         {metadata.register} {metadata.intent}
       </span>
@@ -154,22 +164,26 @@ export function MessageItem({
         style={{ resize: 'vertical', fontFamily: 'inherit' }}
       />
       <div className="message-edit-actions">
-        <button className="message-action-btn" onClick={() => { onEdit?.(editContent); setEditing(false); }}>Save</button>
-        <button className="message-action-btn" onClick={() => { setEditing(false); setEditContent(message.content); }}>Cancel</button>
+        <button className="message-action-btn" onClick={() => { onEdit?.(editContent); setEditing(false); }}>{t('common.save')}</button>
+        <button className="message-action-btn" onClick={() => { setEditing(false); setEditContent(message.content); }}>{t('common.cancel')}</button>
       </div>
     </div>
   ) : (
     <div className="message-actions">
       {onReply && (
         <button className="message-action-btn" onClick={onReply}>
-          {replyCount ? `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}` : 'Reply'}
+          {replyCount
+            ? replyCount === 1
+              ? t('messages.replyOne', { count: replyCount })
+              : t('messages.replyMany', { count: replyCount })
+            : t('messages.reply')}
         </button>
       )}
       {onEdit && actor?.id === author.id && (
-        <button className="message-action-btn" onClick={() => setEditing(true)}>Edit</button>
+        <button className="message-action-btn" onClick={() => setEditing(true)}>{t('messages.edit')}</button>
       )}
       {canDelete && (
-        <button className="message-action-btn message-action-danger" onClick={onDelete}>Delete</button>
+        <button className="message-action-btn message-action-danger" onClick={onDelete}>{t('messages.delete')}</button>
       )}
     </div>
   );
@@ -183,13 +197,17 @@ export function MessageItem({
               key={emoji}
               className={`reaction-btn ${actor && reactorIds.includes(actor.id) ? 'reacted' : ''}`}
               onClick={() => onToggleReaction?.(emoji)}
-              title={`${reactorIds.length} ${reactorIds.length === 1 ? 'reaction' : 'reactions'}`}
+              title={
+                reactorIds.length === 1
+                  ? t('messages.reactionCountOne', { count: reactorIds.length })
+                  : t('messages.reactionCountMany', { count: reactorIds.length })
+              }
             >
               <span className="reaction-emoji">{emoji}</span>
               <span className="reaction-count">{reactorIds.length}</span>
             </button>
           ))}
-          <button className="reaction-add-btn" onClick={openPicker} title="Add reaction">+</button>
+          <button className="reaction-add-btn" onClick={openPicker} title={t('messages.addReaction')}>+</button>
           {showEmojiPicker && (
             <EmojiPicker onSelect={(emoji) => onToggleReaction?.(emoji)} onClose={() => setShowEmojiPicker(false)} anchorRect={pickerAnchor} />
           )}
@@ -197,7 +215,7 @@ export function MessageItem({
       )}
       {!messageReactions && onToggleReaction && (
         <div className="message-reactions">
-          <button className="reaction-add-btn" onClick={openPicker} title="Add reaction">+</button>
+          <button className="reaction-add-btn" onClick={openPicker} title={t('messages.addReaction')}>+</button>
           {showEmojiPicker && (
             <EmojiPicker onSelect={(emoji) => onToggleReaction(emoji)} onClose={() => setShowEmojiPicker(false)} anchorRect={pickerAnchor} />
           )}
@@ -209,7 +227,7 @@ export function MessageItem({
   if (compact) {
     return (
       <div className="message compact">
-        <span className="message-time-hover">{formatTime(message.published)}</span>
+        <span className="message-time-hover">{formatTime(message.published, t)}</span>
         <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
         {attachmentsBlock}
         {(indicator || metadataBadge) && (
@@ -242,8 +260,8 @@ export function MessageItem({
         {avatarEl}
         <span className="message-author">{author.displayName ?? author.preferredUsername}</span>
         <span className="message-time">
-          {formatTime(message.published)}
-          {message.updated && <span className="edited-badge"> (edited)</span>}
+          {formatTime(message.published, t)}
+          {message.updated && <span className="edited-badge"> {t('messages.edited')}</span>}
         </span>
       </div>
       <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>

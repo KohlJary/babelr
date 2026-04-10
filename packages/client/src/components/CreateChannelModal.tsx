@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState } from 'react';
+import { useT } from '../i18n/I18nProvider';
 
 interface CreateChannelModalProps {
   onCreateChannel: (name: string, category?: string, isPrivate?: boolean) => Promise<void>;
@@ -7,6 +8,7 @@ interface CreateChannelModalProps {
 }
 
 export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelModalProps) {
+  const t = useT();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -30,7 +32,7 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Create Channel</h2>
+          <h2>{t('createChannel.titleHeading')}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
@@ -38,7 +40,7 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
         <form onSubmit={handleSubmit} className="settings-field" style={{ gap: '0.75rem' }}>
           <input
             type="text"
-            placeholder="Channel name"
+            placeholder={t('createChannel.channelNamePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -46,7 +48,7 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
           />
           <input
             type="text"
-            placeholder="Category (optional)"
+            placeholder={t('createChannel.categoryPlaceholder')}
             value={category}
             onChange={(e) => setCategory(e.target.value)}
             className="modal-input"
@@ -57,10 +59,10 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
               checked={isPrivate}
               onChange={(e) => setIsPrivate(e.target.checked)}
             />
-            <span>Private channel (invite only)</span>
+            <span>{t('createChannel.privateChannelInviteOnly')}</span>
           </label>
           <button type="submit" className="auth-submit" disabled={submitting}>
-            {submitting ? '...' : 'Create'}
+            {submitting ? '...' : t('createChannel.create')}
           </button>
         </form>
       </div>

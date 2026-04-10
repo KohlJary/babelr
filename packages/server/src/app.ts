@@ -15,6 +15,7 @@ import { loadConfig } from './config.ts';
 import authPlugin from './plugins/auth.ts';
 import wsPlugin from './plugins/ws.ts';
 import seedPlugin from './plugins/seed.ts';
+import i18nSeedPlugin from './plugins/i18n-seed.ts';
 import healthRoutes from './routes/health.ts';
 import authRoutes from './routes/auth.ts';
 import channelRoutes from './routes/channels.ts';
@@ -115,6 +116,7 @@ export async function buildApp() {
   await app.register(authPlugin);
   await app.register(wsPlugin);
   await app.register(seedPlugin);
+  await app.register(i18nSeedPlugin);
 
   // Routes
   await app.register(healthRoutes);

@@ -2,6 +2,7 @@
 import type { MessageWithAuthor } from '@babelr/shared';
 import { MessageItem } from './MessageItem';
 import { MessageInput } from './MessageInput';
+import { useT } from '../i18n/I18nProvider';
 
 interface ThreadPanelProps {
   parentMessage: MessageWithAuthor;
@@ -18,11 +19,12 @@ export function ThreadPanel({
   onSendReply,
   onClose,
 }: ThreadPanelProps) {
+  const t = useT();
   return (
     <div className="thread-panel-overlay" onClick={onClose}>
       <div className="thread-panel" onClick={(e) => e.stopPropagation()}>
         <div className="thread-header">
-          <h3>Thread</h3>
+          <h3>{t('thread.title')}</h3>
           <button className="thread-close" onClick={onClose}>
             &times;
           </button>
@@ -38,10 +40,10 @@ export function ThreadPanel({
 
           <div className="thread-divider" />
 
-          {loading && <div className="thread-loading">Loading replies...</div>}
+          {loading && <div className="thread-loading">{t('thread.loadingReplies')}</div>}
 
           {!loading && replies.length === 0 && (
-            <div className="thread-empty">No replies yet</div>
+            <div className="thread-empty">{t('thread.empty')}</div>
           )}
 
           <div className="thread-replies">

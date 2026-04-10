@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { ActorProfile } from '@babelr/shared';
 import * as api from '../api';
+import { useT } from '../i18n/I18nProvider';
 
 interface ProfilePanelProps {
   actor: ActorProfile;
@@ -24,6 +25,7 @@ function AvatarDisplay({ actor }: { actor: ActorProfile }) {
 }
 
 export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
+  const t = useT();
   const [displayName, setDisplayName] = useState(actor.displayName ?? '');
   const [bio, setBio] = useState(actor.summary ?? '');
   const [avatarUrl, setAvatarUrl] = useState(actor.avatarUrl ?? '');
@@ -41,9 +43,9 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
         avatarUrl: avatarUrl || undefined,
       });
       onUpdate(updated);
-      setStatus('Profile saved');
+      setStatus(t('profile.saved'));
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Failed to save');
+      setStatus(err instanceof Error ? err.message : t('profile.failedToSave'));
     } finally {
       setSaving(false);
     }
@@ -64,11 +66,11 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Upload failed');
+      if (!res.ok) throw new Error(t('profile.uploadFailed'));
       const data = await res.json();
       setAvatarUrl(data.url);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'Upload failed');
+      setStatus(err instanceof Error ? err.message : t('profile.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -78,7 +80,7 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Profile</h2>
+          <h2>{t('profile.title')}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
@@ -88,7 +90,7 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
           <AvatarDisplay actor={{ ...actor, avatarUrl: avatarUrl || null }} />
           <div className="profile-avatar-actions">
             <label className="discover-join-btn" style={{ cursor: 'pointer' }}>
-              {uploading ? '...' : 'Upload avatar'}
+              {uploading ? '...' : t('profile.uploadAvatar')}
               <input
                 type="file"
                 accept="image/*"
@@ -98,22 +100,22 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
             </label>
             {avatarUrl && (
               <button className="logout-btn" onClick={() => setAvatarUrl('')}>
-                Remove
+                {t('common.remove')}
               </button>
             )}
           </div>
         </div>
 
         <div className="settings-field">
-          <label>Username</label>
+          <label>{t('profile.username')}</label>
           <p className="settings-hint">@{actor.preferredUsername}</p>
         </div>
 
         <div className="settings-field">
-          <label>Display name</label>
+          <label>{t('profile.displayName')}</label>
           <input
             type="text"
-            placeholder="How others see you"
+            placeholder={t('profile.displayNamePlaceholder')}
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             className="modal-input"
@@ -121,9 +123,9 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
         </div>
 
         <div className="settings-field">
-          <label>Bio</label>
+          <label>{t('profile.bio')}</label>
           <textarea
-            placeholder="Tell people about yourself"
+            placeholder={t('profile.bioPlaceholder')}
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             className="modal-input"
@@ -133,13 +135,13 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
         </div>
 
         {status && (
-          <p className={`settings-hint ${status.includes('saved') ? 'success' : 'error'}`}>
+          <p className={`settings-hint ${status.includes('saved') || status === t('profile.saved') ? 'success' : 'error'}`}>
             {status}
           </p>
         )}
 
         <button className="auth-submit" onClick={handleSave} disabled={saving}>
-          {saving ? '...' : 'Save profile'}
+          {saving ? '...' : t('profile.saveProfile')}
         </button>
       </div>
     </div>

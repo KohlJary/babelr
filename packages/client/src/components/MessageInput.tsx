@@ -134,7 +134,7 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
             if (e.target.value.length > 0) onTyping?.();
           }}
           onKeyDown={handleKeyDown}
-          placeholder={dragOver ? 'Drop files here...' : t('messages.placeholder')}
+          placeholder={dragOver ? t('messages.dropFiles') : t('messages.placeholder')}
           disabled={disabled || sending}
           rows={1}
         />

@@ -4,18 +4,28 @@ import type { ReactNode } from 'react';
 import { UI_STRINGS } from '@babelr/shared';
 import type { UIStringKey } from '@babelr/shared';
 
+type Interpolations = Record<string, string | number>;
+
 interface I18nContextValue {
   lang: string;
   dict: Record<string, string>;
   loading: boolean;
-  t: (key: UIStringKey) => string;
+  t: (key: UIStringKey, values?: Interpolations) => string;
+}
+
+function interpolate(template: string, values?: Interpolations): string {
+  if (!values) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+    if (name in values) return String(values[name]);
+    return match;
+  });
 }
 
 const I18nContext = createContext<I18nContextValue>({
   lang: 'en',
   dict: UI_STRINGS as Record<string, string>,
   loading: false,
-  t: (key: UIStringKey) => UI_STRINGS[key],
+  t: (key: UIStringKey, values?: Interpolations) => interpolate(UI_STRINGS[key], values),
 });
 
 interface I18nProviderProps {
@@ -53,7 +63,10 @@ export function I18nProvider({ lang, children }: I18nProviderProps) {
       lang,
       dict,
       loading,
-      t: (key: UIStringKey) => dict[key] ?? UI_STRINGS[key] ?? key,
+      t: (key: UIStringKey, values?: Interpolations) => {
+        const template = dict[key] ?? UI_STRINGS[key] ?? key;
+        return interpolate(template, values);
+      },
     };
   }, [lang, dict, loading]);
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect } from 'react';
 import * as api from '../api';
+import { useT } from '../i18n/I18nProvider';
 
 interface GlossaryEditorProps {
   channelId: string;
@@ -8,6 +9,7 @@ interface GlossaryEditorProps {
 }
 
 export function GlossaryEditor({ channelId, onClose }: GlossaryEditorProps) {
+  const t = useT();
   const [glossary, setGlossary] = useState<Record<string, string>>({});
   const [newTerm, setNewTerm] = useState('');
   const [newMeaning, setNewMeaning] = useState('');
@@ -49,19 +51,16 @@ export function GlossaryEditor({ channelId, onClose }: GlossaryEditorProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>Channel Glossary</h2>
+          <h2>{t('glossary.title')}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
         </div>
 
-        <p className="settings-hint">
-          Define terms specific to this channel. These are sent to the translation engine as context
-          for more accurate translations.
-        </p>
+        <p className="settings-hint">{t('glossary.hint')}</p>
 
         {loading ? (
-          <div className="sidebar-empty">Loading...</div>
+          <div className="sidebar-empty">{t('common.loading')}</div>
         ) : (
           <>
             <div className="glossary-entries">
@@ -76,30 +75,30 @@ export function GlossaryEditor({ channelId, onClose }: GlossaryEditorProps) {
                 </div>
               ))}
               {Object.keys(glossary).length === 0 && (
-                <div className="sidebar-empty">No glossary entries yet</div>
+                <div className="sidebar-empty">{t('glossary.empty')}</div>
               )}
             </div>
 
             <div className="glossary-add">
               <input
                 className="modal-input"
-                placeholder="Term"
+                placeholder={t('glossary.term')}
                 value={newTerm}
                 onChange={(e) => setNewTerm(e.target.value)}
               />
               <input
                 className="modal-input"
-                placeholder="Translation/meaning"
+                placeholder={t('glossary.translation')}
                 value={newMeaning}
                 onChange={(e) => setNewMeaning(e.target.value)}
               />
               <button className="discover-join-btn" onClick={addEntry}>
-                Add
+                {t('common.add')}
               </button>
             </div>
 
             <button className="auth-submit" onClick={save} disabled={saving}>
-              {saving ? '...' : 'Save Glossary'}
+              {saving ? '...' : t('glossary.save')}
             </button>
           </>
         )}
