@@ -324,7 +324,12 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function updateProfile(
-  profile: { displayName?: string; summary?: string; avatarUrl?: string },
+  profile: {
+    displayName?: string;
+    summary?: string;
+    avatarUrl?: string;
+    preferredLanguage?: string;
+  },
 ): Promise<ActorProfile> {
   return apiFetch('/auth/profile', {
     method: 'PUT',

@@ -5,7 +5,7 @@ import { ChatView } from './components/ChatView';
 import { I18nProvider } from './i18n/I18nProvider';
 
 export function App() {
-  const { actor, loading, error, login, register, logout } = useAuth();
+  const { actor, loading, error, login, register, logout, updateActor } = useAuth();
 
   if (loading) {
     return (
@@ -24,7 +24,7 @@ export function App() {
       {!actor ? (
         <AuthForm onLogin={login} onRegister={register} error={error} />
       ) : (
-        <ChatView actor={actor} onLogout={logout} />
+        <ChatView actor={actor} onLogout={logout} onActorUpdate={updateActor} />
       )}
     </I18nProvider>
   );

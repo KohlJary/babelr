@@ -264,19 +264,27 @@ export default async function authRoutes(fastify: FastifyInstance) {
     };
   });
 
-  // Update profile (displayName, summary/bio, avatarUrl)
-  fastify.put<{ Body: { displayName?: string; summary?: string; avatarUrl?: string } }>(
+  // Update profile (displayName, summary/bio, avatarUrl, preferredLanguage)
+  fastify.put<{
+    Body: {
+      displayName?: string;
+      summary?: string;
+      avatarUrl?: string;
+      preferredLanguage?: string;
+    };
+  }>(
     '/auth/profile',
     async (request, reply) => {
       if (!request.actor) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { displayName, summary, avatarUrl } = request.body;
+      const { displayName, summary, avatarUrl, preferredLanguage } = request.body;
       const updates: Record<string, unknown> = {};
 
       if (displayName !== undefined) updates.displayName = displayName || null;
       if (summary !== undefined) updates.summary = summary || null;
+      if (preferredLanguage !== undefined) updates.preferredLanguage = preferredLanguage;
 
       if (avatarUrl !== undefined) {
         const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};

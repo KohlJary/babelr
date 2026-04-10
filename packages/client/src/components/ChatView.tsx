@@ -36,9 +36,10 @@ import { useReactions } from '../hooks/useReactions';
 interface ChatViewProps {
   actor: ActorProfile;
   onLogout: () => void;
+  onActorUpdate?: (actor: ActorProfile) => void;
 }
 
-export function ChatView({ actor, onLogout }: ChatViewProps) {
+export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [dmMode, setDmMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
@@ -264,6 +265,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           settings={settings}
           onUpdate={updateSettings}
           onClose={() => setShowSettings(false)}
+          onActorUpdate={onActorUpdate}
         />
       )}
       {showCreateServer && (

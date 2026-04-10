@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState } from 'react';
 import type { TranslationSettings } from '../translation';
+import type { ActorProfile } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';
@@ -9,9 +10,10 @@ interface SettingsPanelProps {
   settings: TranslationSettings;
   onUpdate: (partial: Partial<TranslationSettings>) => void;
   onClose: () => void;
+  onActorUpdate?: (actor: ActorProfile) => void;
 }
 
-export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProps) {
+export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: SettingsPanelProps) {
   const t = useT();
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
@@ -92,7 +94,18 @@ export function SettingsPanel({ settings, onUpdate, onClose }: SettingsPanelProp
           <label>{t('settings.readMessagesIn')}</label>
           <select
             value={settings.preferredLanguage}
-            onChange={(e) => onUpdate({ preferredLanguage: e.target.value })}
+            onChange={(e) => {
+              const lang = e.target.value;
+              // Update local message-translation setting
+              onUpdate({ preferredLanguage: lang });
+              // Persist to actor profile so the UI also re-localizes
+              api
+                .updateProfile({ preferredLanguage: lang })
+                .then((updated) => onActorUpdate?.(updated))
+                .catch(() => {
+                  /* non-fatal — message translation still works */
+                });
+            }}
           >
             {SUPPORTED_LANGUAGES.map((code) => (
               <option key={code} value={code}>

@@ -48,6 +48,10 @@ export function useAuth() {
     setActor(null);
   }, []);
 
+  const updateActor = useCallback((updated: ActorProfile) => {
+    setActor(updated);
+  }, []);
+
   return {
     actor,
     loading,
@@ -55,5 +59,6 @@ export function useAuth() {
     login: handleLogin,
     register: handleRegister,
     logout: handleLogout,
+    updateActor,
   };
 }
