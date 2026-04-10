@@ -338,6 +338,8 @@ export const UI_STRINGS = {
   'voice.peerVolume': 'Volume',
   'voice.enableVideo': 'Turn on camera',
   'voice.disableVideo': 'Turn off camera',
+  'voice.enableScreenShare': 'Share your screen',
+  'voice.disableScreenShare': 'Stop sharing screen',
 
   // Languages
   'language.en': 'English',

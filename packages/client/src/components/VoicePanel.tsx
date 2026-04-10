@@ -14,9 +14,12 @@ interface VoicePanelProps {
   onToggleDeafen: () => void;
   onTogglePushToTalk: () => void;
   onToggleVideo: () => void | Promise<void>;
+  onToggleScreenShare: () => void | Promise<void>;
   onPeerVolume: (actorId: string, volume: number) => void;
   getLocalVideoStream: () => MediaStream | null;
   getPeerVideoStream: (actorId: string) => MediaStream | null;
+  getLocalScreenStream: () => MediaStream | null;
+  getPeerScreenStream: (actorId: string) => MediaStream | null;
 }
 
 export function VoicePanel({
@@ -28,18 +31,25 @@ export function VoicePanel({
   onToggleDeafen,
   onTogglePushToTalk,
   onToggleVideo,
+  onToggleScreenShare,
   onPeerVolume,
   getLocalVideoStream,
   getPeerVideoStream,
+  getLocalScreenStream,
+  getPeerScreenStream,
 }: VoicePanelProps) {
   const t = useT();
 
   // We poll the imperative stream getters into a state snapshot so React
-  // re-renders VoiceTile when streams change. useVoice's state has a
-  // `hasVideo` boolean per peer and a `videoEnabled` flag for self, which
-  // is what we watch for the refresh trigger.
+  // re-renders VoiceTile when streams change. useVoice's state has
+  // `hasVideo`/`hasScreen` booleans per peer and `videoEnabled`/
+  // `screenShareEnabled` flags for self, which are the refresh triggers.
   const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
   const [peerVideoStreams, setPeerVideoStreams] = useState<Map<string, MediaStream | null>>(
+    new Map(),
+  );
+  const [peerScreenStreams, setPeerScreenStreams] = useState<Map<string, MediaStream | null>>(
     new Map(),
   );
 
@@ -48,12 +58,19 @@ export function VoicePanel({
   }, [voice.videoEnabled, getLocalVideoStream]);
 
   useEffect(() => {
-    const next = new Map<string, MediaStream | null>();
+    setLocalScreenStream(getLocalScreenStream());
+  }, [voice.screenShareEnabled, getLocalScreenStream]);
+
+  useEffect(() => {
+    const vNext = new Map<string, MediaStream | null>();
+    const sNext = new Map<string, MediaStream | null>();
     for (const peer of voice.peers) {
-      next.set(peer.actorId, peer.hasVideo ? getPeerVideoStream(peer.actorId) : null);
+      vNext.set(peer.actorId, peer.hasVideo ? getPeerVideoStream(peer.actorId) : null);
+      sNext.set(peer.actorId, peer.hasScreen ? getPeerScreenStream(peer.actorId) : null);
     }
-    setPeerVideoStreams(next);
-  }, [voice.peers, getPeerVideoStream]);
+    setPeerVideoStreams(vNext);
+    setPeerScreenStreams(sNext);
+  }, [voice.peers, getPeerVideoStream, getPeerScreenStream]);
 
   const selfActor = {
     id: actor.id,
@@ -84,6 +101,15 @@ export function VoicePanel({
           muted={voice.micMuted}
           isSelf
         />
+        {localScreenStream && (
+          <VoiceTile
+            actor={selfActor}
+            stream={localScreenStream}
+            speaking={false}
+            isSelf
+            isScreen
+          />
+        )}
         {voice.peers.map((peer) => (
           <VoiceTile
             key={peer.actorId}
@@ -95,6 +121,18 @@ export function VoicePanel({
             onVolumeChange={(v) => onPeerVolume(peer.actorId, v)}
           />
         ))}
+        {voice.peers.map((peer) =>
+          peer.hasScreen ? (
+            <VoiceTile
+              key={`${peer.actorId}-screen`}
+              actor={peer.actor}
+              stream={peerScreenStreams.get(peer.actorId) ?? null}
+              speaking={false}
+              connected={peer.connected}
+              isScreen
+            />
+          ) : null,
+        )}
         {voice.peers.length === 0 && voice.status === 'connected' && (
           <div className="voice-empty">{t('voice.noParticipants')}</div>
         )}
@@ -114,6 +152,17 @@ export function VoicePanel({
           title={voice.videoEnabled ? t('voice.disableVideo') : t('voice.enableVideo')}
         >
           {voice.videoEnabled ? '📹' : '📷'}
+        </button>
+        <button
+          className={`voice-control-btn ${voice.screenShareEnabled ? 'active-on' : ''}`}
+          onClick={() => void onToggleScreenShare()}
+          title={
+            voice.screenShareEnabled
+              ? t('voice.disableScreenShare')
+              : t('voice.enableScreenShare')
+          }
+        >
+          🖥️
         </button>
         <button
           className={`voice-control-btn ${voice.deafened ? 'active' : ''}`}

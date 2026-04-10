@@ -396,9 +396,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             onToggleDeafen={voice.toggleDeafen}
             onTogglePushToTalk={voice.togglePushToTalk}
             onToggleVideo={voice.toggleVideo}
+            onToggleScreenShare={voice.toggleScreenShare}
             onPeerVolume={voice.setPeerVolume}
             getLocalVideoStream={voice.getLocalVideoStream}
             getPeerVideoStream={voice.getPeerVideoStream}
+            getLocalScreenStream={voice.getLocalScreenStream}
+            getPeerScreenStream={voice.getPeerScreenStream}
           />
         );
       })()}

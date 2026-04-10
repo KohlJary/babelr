@@ -9,6 +9,8 @@ interface VoiceTileProps {
   speaking: boolean;
   muted?: boolean;
   isSelf?: boolean;
+  /** Tile is a screen share, not a webcam — shows a screen badge and uses 16:9 aspect. */
+  isScreen?: boolean;
   // Remote-only: volume slider
   volume?: number;
   onVolumeChange?: (volume: number) => void;
@@ -24,6 +26,7 @@ export function VoiceTile({
   speaking,
   muted,
   isSelf,
+  isScreen,
   volume,
   onVolumeChange,
   connected,
@@ -52,7 +55,7 @@ export function VoiceTile({
 
   return (
     <div
-      className={`voice-tile ${speaking ? 'speaking' : ''} ${connected === false ? 'pending' : ''}`}
+      className={`voice-tile ${isScreen ? 'screen' : ''} ${speaking ? 'speaking' : ''} ${connected === false ? 'pending' : ''}`}
     >
       {hasVideo && (
         <video
@@ -76,7 +79,9 @@ export function VoiceTile({
       )}
 
       <div className="voice-tile-overlay">
-        <span className="voice-tile-name">{label}</span>
+        <span className="voice-tile-name">
+          {isScreen ? `🖥️ ${label}` : label}
+        </span>
         {muted && <span className="voice-tile-badge" title={t('voice.youAreMuted')}>🔇</span>}
       </div>
 

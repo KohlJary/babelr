@@ -2361,3 +2361,14 @@ textarea.modal-input {
   border-color: #166534;
   color: #a7f3d0;
 }
+
+/* Screen share tiles: wider aspect, distinct border */
+.voice-tile.screen {
+  aspect-ratio: 16 / 9;
+  grid-column: span 2;
+  border-color: #334155;
+}
+.voice-tile.screen.speaking {
+  border-color: #334155;
+  box-shadow: none;
+}

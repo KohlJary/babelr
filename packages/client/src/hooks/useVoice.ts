@@ -14,6 +14,7 @@ export interface VoicePeerState {
   speaking: boolean;
   volume: number;
   hasVideo: boolean;
+  hasScreen: boolean;
 }
 
 export interface UseVoiceState {
@@ -26,14 +27,21 @@ export interface UseVoiceState {
   pushToTalk: boolean;
   localSpeaking: boolean;
   videoEnabled: boolean;
+  screenShareEnabled: boolean;
 }
 
 interface PeerEntry {
   actor: AuthorView;
   pc: RTCPeerConnection;
   audio: HTMLAudioElement;
+  // Webcam: first video transceiver added to the PC
   videoSender: RTCRtpSender | null;
+  videoTransceiver: RTCRtpTransceiver | null;
   videoStream: MediaStream | null;
+  // Screen share: second video transceiver added to the PC
+  screenSender: RTCRtpSender | null;
+  screenTransceiver: RTCRtpTransceiver | null;
+  screenStream: MediaStream | null;
   connected: boolean;
   analyser: AnalyserNode | null;
   analyserBuf: Uint8Array<ArrayBuffer> | null;
@@ -56,6 +64,7 @@ const IDLE_STATE: UseVoiceState = {
   pushToTalk: false,
   localSpeaking: false,
   videoEnabled: false,
+  screenShareEnabled: false,
 };
 
 /**
@@ -82,6 +91,9 @@ export function useVoice() {
   // time they turn video on, released when they turn it off. Kept distinct
   // from the mic stream so stopping one doesn't affect the other.
   const localVideoStreamRef = useRef<MediaStream | null>(null);
+  // Separate MediaStream for screen share (getDisplayMedia). Completely
+  // independent of the webcam — a user can have both active at once.
+  const localScreenStreamRef = useRef<MediaStream | null>(null);
   // Shared AudioContext for all analyser nodes (local mic + each peer).
   // Created lazily on join() so we don't spin up audio machinery for
   // users who never enter a voice channel.
@@ -120,6 +132,7 @@ export function useVoice() {
         speaking: entry.speaking,
         volume: entry.volume,
         hasVideo: entry.videoStream !== null,
+        hasScreen: entry.screenStream !== null,
       });
     }
     setState((s) => ({ ...s, peers: arr }));
@@ -162,16 +175,19 @@ export function useVoice() {
         }
       }
 
-      // Pre-add a sendrecv video transceiver so video can be toggled later
-      // via replaceTrack WITHOUT SDP renegotiation. This makes the initial
-      // offer include an inactive video m-line; turning on the camera just
-      // swaps a real track into the existing sender.
+      // Pre-add TWO sendrecv video transceivers so both webcam and screen
+      // share can be toggled later via replaceTrack WITHOUT SDP
+      // renegotiation. Order is significant — the receiver uses the
+      // transceiver's position in the SDP (via getTransceivers() order) to
+      // route incoming tracks to the correct slot. Webcam is always added
+      // FIRST, screen share SECOND.
       let videoSender: RTCRtpSender | null = null;
+      let videoTransceiver: RTCRtpTransceiver | null = null;
+      let screenSender: RTCRtpSender | null = null;
+      let screenTransceiver: RTCRtpTransceiver | null = null;
       try {
-        const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+        videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
         videoSender = videoTransceiver.sender;
-        // If local video is already active (user enabled camera before this
-        // peer joined), attach the existing track immediately.
         if (localVideoStreamRef.current) {
           const videoTrack = localVideoStreamRef.current.getVideoTracks()[0];
           if (videoTrack) {
@@ -180,6 +196,18 @@ export function useVoice() {
         }
       } catch (err) {
         console.warn('voice: failed to add video transceiver', err);
+      }
+      try {
+        screenTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+        screenSender = screenTransceiver.sender;
+        if (localScreenStreamRef.current) {
+          const screenTrack = localScreenStreamRef.current.getVideoTracks()[0];
+          if (screenTrack) {
+            void screenSender.replaceTrack(screenTrack);
+          }
+        }
+      } catch (err) {
+        console.warn('voice: failed to add screen share transceiver', err);
       }
 
       // Remote audio sink. The element MUST be attached to the DOM for
@@ -195,41 +223,65 @@ export function useVoice() {
       document.body.appendChild(audio);
 
       pc.ontrack = (ev) => {
-        // Video track handling: store on the peer entry so the VoicePanel
-        // can attach it to a <video> element. No audio plumbing for video.
+        // Video track handling: determine which slot (webcam vs screen)
+        // by matching the event's transceiver against the transceivers we
+        // stored on the peer entry at construction time. Order is stable:
+        // webcam = first video transceiver, screen share = second.
         if (ev.track.kind === 'video') {
           const stream =
             ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
-          const peerEntry = peersRef.current.get(actor.id);
-          if (peerEntry) {
-            peerEntry.videoStream = stream;
-            syncPeersToState();
+          const pe = peersRef.current.get(actor.id);
+          if (!pe) return;
+
+          // Routing: match ev.transceiver to the stored webcam/screen
+          // transceiver references. If the match is ambiguous (e.g. very
+          // early WebRTC builds), fall back to filling whichever slot is
+          // empty — webcam first.
+          let slot: 'video' | 'screen';
+          if (ev.transceiver === pe.videoTransceiver) {
+            slot = 'video';
+          } else if (ev.transceiver === pe.screenTransceiver) {
+            slot = 'screen';
+          } else if (pe.videoStream === null) {
+            slot = 'video';
+          } else {
+            slot = 'screen';
           }
-          // A video track ending (remote user turned off their camera) is
-          // signaled via the track's `ended` / `mute` events.
-          ev.track.onended = () => {
-            const pe = peersRef.current.get(actor.id);
-            if (pe) {
-              pe.videoStream = null;
-              syncPeersToState();
-            }
+
+          if (slot === 'video') {
+            pe.videoStream = stream;
+          } else {
+            pe.screenStream = stream;
+          }
+          syncPeersToState();
+
+          // Remote end turning off their stream: the track transitions
+          // through mute → ended. Clear the right slot when that happens
+          // and restore it on unmute.
+          const clearSlot = () => {
+            const p = peersRef.current.get(actor.id);
+            if (!p) return;
+            if (slot === 'video') p.videoStream = null;
+            else p.screenStream = null;
+            syncPeersToState();
           };
-          ev.track.onmute = () => {
-            const pe = peersRef.current.get(actor.id);
-            if (pe) {
-              pe.videoStream = null;
-              syncPeersToState();
-            }
+          const restoreSlot = () => {
+            const p = peersRef.current.get(actor.id);
+            if (!p) return;
+            const rebuilt = new MediaStream([ev.track]);
+            if (slot === 'video') p.videoStream = rebuilt;
+            else p.screenStream = rebuilt;
+            syncPeersToState();
           };
-          ev.track.onunmute = () => {
-            const pe = peersRef.current.get(actor.id);
-            if (pe) {
-              // Rebuild the stream from the now-live track
-              pe.videoStream = new MediaStream([ev.track]);
-              syncPeersToState();
-            }
-          };
-          console.log('voice: ontrack video', { from: actor.id, muted: ev.track.muted });
+          ev.track.onended = clearSlot;
+          ev.track.onmute = clearSlot;
+          ev.track.onunmute = restoreSlot;
+
+          console.log('voice: ontrack video', {
+            from: actor.id,
+            slot,
+            muted: ev.track.muted,
+          });
           return;
         }
         // Prefer the provided stream, but fall back to wrapping the track
@@ -347,7 +399,11 @@ export function useVoice() {
         pc,
         audio,
         videoSender,
+        videoTransceiver,
         videoStream: null,
+        screenSender,
+        screenTransceiver,
+        screenStream: null,
         connected: false,
         analyser: null,
         analyserBuf: null,
@@ -688,6 +744,10 @@ export function useVoice() {
       for (const track of localVideoStreamRef.current.getTracks()) track.stop();
       localVideoStreamRef.current = null;
     }
+    if (localScreenStreamRef.current) {
+      for (const track of localScreenStreamRef.current.getTracks()) track.stop();
+      localScreenStreamRef.current = null;
+    }
     wsRef.current?.close();
     wsRef.current = null;
     channelIdRef.current = null;
@@ -816,6 +876,96 @@ export function useVoice() {
     return peersRef.current.get(actorId)?.videoStream ?? null;
   }, []);
 
+  /**
+   * Toggle screen sharing. Completely independent of webcam — the user
+   * can have both active simultaneously. Uses the second video transceiver
+   * pre-allocated in createPeerConnection, so no SDP renegotiation.
+   */
+  const toggleScreenShare = useCallback(async () => {
+    // Currently off → start sharing
+    if (!localScreenStreamRef.current) {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        setState((s) => ({
+          ...s,
+          error: 'Screen sharing is not available in this browser.',
+        }));
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+        localScreenStreamRef.current = stream;
+        const track = stream.getVideoTracks()[0];
+        if (!track) throw new Error('No video track in display media stream');
+
+        // Attach the screen track to every peer's screen sender
+        for (const entry of peersRef.current.values()) {
+          if (entry.screenSender) {
+            try {
+              await entry.screenSender.replaceTrack(track);
+            } catch (err) {
+              console.warn(
+                'voice: failed to replaceTrack(screen) on peer',
+                entry.actor.id,
+                err,
+              );
+            }
+          }
+        }
+
+        // The browser's native "Stop sharing" bar fires track.onended
+        // when the user clicks it. Mirror that into state.
+        track.onended = () => {
+          if (localScreenStreamRef.current) {
+            for (const t of localScreenStreamRef.current.getTracks()) t.stop();
+            localScreenStreamRef.current = null;
+          }
+          for (const entry of peersRef.current.values()) {
+            if (entry.screenSender) {
+              void entry.screenSender.replaceTrack(null).catch(() => {});
+            }
+          }
+          setState((s) => ({ ...s, screenShareEnabled: false }));
+        };
+        setState((s) => ({ ...s, screenShareEnabled: true }));
+      } catch (err) {
+        // User cancelling the screen picker throws NotAllowedError; don't
+        // treat that as an error the user needs to see.
+        if (err instanceof Error && err.name !== 'NotAllowedError') {
+          console.warn('voice: getDisplayMedia failed', err);
+          setState((s) => ({
+            ...s,
+            error: `Screen share error: ${err.message}`,
+          }));
+        }
+      }
+      return;
+    }
+    // Currently on → stop sharing
+    for (const entry of peersRef.current.values()) {
+      if (entry.screenSender) {
+        try {
+          await entry.screenSender.replaceTrack(null);
+        } catch (err) {
+          console.warn('voice: failed to clear screen track on peer', entry.actor.id, err);
+        }
+      }
+    }
+    for (const track of localScreenStreamRef.current.getTracks()) track.stop();
+    localScreenStreamRef.current = null;
+    setState((s) => ({ ...s, screenShareEnabled: false }));
+  }, []);
+
+  const getLocalScreenStream = useCallback((): MediaStream | null => {
+    return localScreenStreamRef.current;
+  }, []);
+
+  const getPeerScreenStream = useCallback((actorId: string): MediaStream | null => {
+    return peersRef.current.get(actorId)?.screenStream ?? null;
+  }, []);
+
   // Speaking-indicator rAF loop. Runs whenever we're in a voice channel.
   // Reads the frequency data from the local and peer analysers and flips
   // `speaking` state when a participant crosses the threshold. State is
@@ -868,6 +1018,7 @@ export function useVoice() {
             speaking: e.speaking,
             volume: e.volume,
             hasVideo: e.videoStream !== null,
+            hasScreen: e.screenStream !== null,
           })),
         };
       });
@@ -935,6 +1086,9 @@ export function useVoice() {
       if (localVideoStreamRef.current) {
         for (const track of localVideoStreamRef.current.getTracks()) track.stop();
       }
+      if (localScreenStreamRef.current) {
+        for (const track of localScreenStreamRef.current.getTracks()) track.stop();
+      }
       wsRef.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -951,5 +1105,8 @@ export function useVoice() {
     toggleVideo,
     getLocalVideoStream,
     getPeerVideoStream,
+    toggleScreenShare,
+    getLocalScreenStream,
+    getPeerScreenStream,
   };
 }
