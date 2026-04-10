@@ -106,12 +106,58 @@ export function useVoice() {
         const stream =
           ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
         audio.srcObject = stream;
-        console.log('voice: ontrack', { from: actor.id, kind: ev.track.kind });
+        audio.volume = 1.0;
+        audio.muted = false;
+        console.log('voice: ontrack', {
+          from: actor.id,
+          kind: ev.track.kind,
+          enabled: ev.track.enabled,
+          muted: ev.track.muted,
+          readyState: ev.track.readyState,
+          label: ev.track.label,
+          streamTracks: stream.getTracks().map((t) => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            muted: t.muted,
+          })),
+        });
         void audio.play().catch((err) => {
-          // Autoplay policy — shouldn't happen after a user-gesture-driven
-          // join(), but log so we can tell it apart from "no track arrived"
           console.warn('voice: audio.play() rejected', err);
         });
+        // Sanity-check the element state a moment later — if volume is
+        // right, paused is false, and currentTime is advancing but we
+        // still hear nothing, the issue is routing/OS/AEC rather than
+        // the element itself.
+        setTimeout(() => {
+          console.log('voice: audio element state', {
+            from: actor.id,
+            volume: audio.volume,
+            muted: audio.muted,
+            paused: audio.paused,
+            currentTime: audio.currentTime,
+            readyState: audio.readyState,
+            ended: audio.ended,
+          });
+        }, 1500);
+        // And log WebRTC inbound stats — bytesReceived > 0 means media is
+        // flowing at the protocol level.
+        setTimeout(async () => {
+          try {
+            const stats = await pc.getStats();
+            stats.forEach((report) => {
+              if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+                console.log('voice: inbound-rtp audio', {
+                  from: actor.id,
+                  bytesReceived: report.bytesReceived,
+                  packetsReceived: report.packetsReceived,
+                  audioLevel: report.audioLevel,
+                });
+              }
+            });
+          } catch (err) {
+            console.warn('voice: getStats failed', err);
+          }
+        }, 2500);
       };
 
       pc.onicecandidate = (ev) => {
@@ -324,9 +370,21 @@ export function useVoice() {
       }
       try {
         localStreamRef.current = await navigator.mediaDevices.getUserMedia({
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
           video: false,
         });
+        console.log(
+          'voice: local mic acquired',
+          localStreamRef.current.getAudioTracks().map((t) => ({
+            label: t.label,
+            enabled: t.enabled,
+            readyState: t.readyState,
+          })),
+        );
       } catch (err) {
         const message =
           err instanceof Error && err.name === 'NotAllowedError'
