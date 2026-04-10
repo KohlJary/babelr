@@ -264,12 +264,23 @@ export function useVoice() {
       setState({ status: 'connecting', error: null, channelId, peers: [], micMuted: false });
       channelIdRef.current = channelId;
 
-      // Request microphone
-      if (!navigator.mediaDevices?.getUserMedia) {
+      // Environment capability checks before attempting anything
+      if (typeof RTCPeerConnection === 'undefined') {
         setState({
           status: 'error',
           error:
-            'Media capture is not available in this webview. On Linux desktop builds, restart the app — voice support requires a recent build.',
+            'Voice channels require WebRTC, which is not available in this webview. On Linux, Arch and some other distributions ship webkit2gtk without WebRTC — open Babelr in Firefox or Chromium to join voice.',
+          channelId: null,
+          peers: [],
+          micMuted: false,
+        });
+        channelIdRef.current = null;
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setState({
+          status: 'error',
+          error: 'Media capture is not available in this webview. Open Babelr in a browser to join voice.',
           channelId: null,
           peers: [],
           micMuted: false,

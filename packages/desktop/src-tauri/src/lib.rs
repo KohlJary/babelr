@@ -24,9 +24,14 @@ pub fn run() {
             });
 
             // Linux: enable MediaStream + WebRTC in the embedded webview
-            // and auto-grant microphone permission requests. Without this,
-            // webkit2gtk denies getUserMedia and voice channels silently
-            // fail to connect.
+            // and auto-grant microphone permission requests. These settings
+            // work on distributions that build webkit2gtk with WebRTC
+            // enabled (Fedora, Debian, Ubuntu, and similar). On Arch and a
+            // handful of other distros, webkit2gtk is compiled WITHOUT
+            // WebRTC entirely — the settings flip is a no-op there because
+            // the underlying RTCPeerConnection implementation is absent.
+            // Users on those distros should open Babelr in a real browser
+            // to join voice channels; the client surfaces a clear error.
             #[cfg(target_os = "linux")]
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.with_webview(|webview| {

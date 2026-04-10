@@ -107,6 +107,14 @@
       "status": "backlog"
     },
     {
+      "id": "desktop-voice-linux-webkit-gap",
+      "title": "Desktop voice on Linux — webkit2gtk WebRTC availability",
+      "description": "Tauri on Linux uses wry → webkit2gtk as the embedded webview, and several major distributions (Arch, and historically others) ship webkit2gtk compiled WITHOUT WebRTC support. This is verifiable by grepping the library for RTCPeerConnection implementation symbols: `createOffer`, `createAnswer`, `setLocalDescription`, and `addIceCandidate` are absent even though `webkit_settings_set_enable_webrtc` exists (it's just a property setter on a stubbed-out feature). Voice channels fail to join in the desktop app on these distros with 'Can't find variable RTCPeerConnection'.\n\nThe client (`useVoice.join`) now detects this case and surfaces a clear error directing users to open Babelr in Firefox or Chromium to join voice channels from the same machine. Text, DMs, events, friends, translation, and everything else continues to work in the desktop app.\n\nMitigation options to revisit:\n- Monitor Arch's webkit2gtk package for a WebRTC-enabled build (community pressure exists)\n- Build a distribution-specific AppImage bundling a webkit2gtk with WebRTC enabled\n- Switch to Chromium Embedded Framework (CEF) or a custom Electron-style embed for Linux — large undertaking, breaks consistency with Tauri's story\n- Implement WebRTC natively in Rust (via webrtc-rs) and expose it to the webview via a JS bridge — complex but gives us full control and works around the webkit gap\n\nThe Rust-side settings flip (set_enable_webrtc, set_enable_media_stream, set_enable_mediasource, auto-allow permission requests) is still in place because it's the correct configuration for distros that DO have WebRTC (Fedora, Debian, Ubuntu). This item tracks the Arch-specific gap as a known limitation, not a bug in Babelr.",
+      "type": "chore",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
       "id": "calendar-event-content-translation",
       "title": "Translation of event titles and descriptions",
       "description": "Run event titles and descriptions through the same tone-preserving translation pipeline we use for messages, so a reader sees the event details in their preferredLanguage while the original is preserved.\n\nScope:\n- useTranslation hook already translates messages; extend it (or create a parallel useEventTranslation) to accept EventView objects and translate title + description fields\n- Display the translated title in EventsPanel row and EventDetailPanel header, with a 'show original' toggle next to it matching the message UX pattern\n- Cache translations in localStorage keyed by (eventId, targetLang) so re-opening the panel doesn't re-translate\n- Federation concern: when we receive a remote event, we only translate if the local user's preferredLanguage differs from the remote event's detected language (same logic as messages)\n- This is where Babelr's translation differentiation really shows: a multilingual team scheduling meetings across offices sees their agendas natively without anyone having to pre-translate\n\nSmall effort relative to impact. Probably the first follow-up to ship.",
@@ -219,5 +227,5 @@
       "status": "backlog"
     }
   ],
-  "version": 9
+  "version": 10
 }
