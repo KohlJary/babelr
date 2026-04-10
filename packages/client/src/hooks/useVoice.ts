@@ -88,14 +88,29 @@ export function useVoice() {
         }
       }
 
-      // Remote audio sink
-      const audio = new Audio();
+      // Remote audio sink. The element MUST be attached to the DOM for
+      // reliable playback — detached HTMLAudioElement instances will set
+      // srcObject without error but produce no audible output in Safari
+      // and some Chrome versions. We mount invisibly and remove on
+      // closePeer to keep the DOM clean.
+      const audio = document.createElement('audio');
       audio.autoplay = true;
+      audio.setAttribute('playsinline', 'true');
+      audio.style.display = 'none';
+      audio.dataset.voicePeerId = actor.id;
+      document.body.appendChild(audio);
 
       pc.ontrack = (ev) => {
-        audio.srcObject = ev.streams[0];
-        void audio.play().catch(() => {
-          /* autoplay policy — user gesture required */
+        // Prefer the provided stream, but fall back to wrapping the track
+        // if the negotiated SDP didn't include a stream id on the remote side.
+        const stream =
+          ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
+        audio.srcObject = stream;
+        console.log('voice: ontrack', { from: actor.id, kind: ev.track.kind });
+        void audio.play().catch((err) => {
+          // Autoplay policy — shouldn't happen after a user-gesture-driven
+          // join(), but log so we can tell it apart from "no track arrived"
+          console.warn('voice: audio.play() rejected', err);
         });
       };
 
@@ -138,6 +153,9 @@ export function useVoice() {
       }
       entry.audio.pause();
       entry.audio.srcObject = null;
+      if (entry.audio.parentNode) {
+        entry.audio.parentNode.removeChild(entry.audio);
+      }
       peersRef.current.delete(actorId);
       syncPeersToState();
     },
