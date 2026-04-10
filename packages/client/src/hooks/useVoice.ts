@@ -54,6 +54,12 @@ export function useVoice() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const localMeterRef = useRef<{
+    ctx: AudioContext;
+    analyser: AnalyserNode;
+    source: MediaStreamAudioSourceNode;
+    interval: ReturnType<typeof setInterval>;
+  } | null>(null);
   const peersRef = useRef<Map<string, PeerEntry>>(new Map());
   // Actor metadata for participants we know about — populated from
   // voice:room-state (existing participants at join time) and
@@ -151,6 +157,19 @@ export function useVoice() {
                   bytesReceived: report.bytesReceived,
                   packetsReceived: report.packetsReceived,
                   audioLevel: report.audioLevel,
+                });
+              }
+              if (report.type === 'outbound-rtp' && report.kind === 'audio') {
+                console.log('voice: outbound-rtp audio', {
+                  to: actor.id,
+                  bytesSent: report.bytesSent,
+                  packetsSent: report.packetsSent,
+                });
+              }
+              if (report.type === 'media-source' && report.kind === 'audio') {
+                console.log('voice: media-source audio (our mic)', {
+                  audioLevel: report.audioLevel,
+                  totalAudioEnergy: report.totalAudioEnergy,
                 });
               }
             });
@@ -385,6 +404,34 @@ export function useVoice() {
             readyState: t.readyState,
           })),
         );
+
+        // Local mic level meter — logs the average signal strength every
+        // 2 seconds. If this stays at 0 while you speak into the mic, the
+        // microphone isn't actually capturing audio (wrong input device,
+        // muted at OS level, or Chrome's AEC is muzzling everything).
+        try {
+          const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          const ctx = new AudioCtx();
+          const source = ctx.createMediaStreamSource(localStreamRef.current);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 512;
+          source.connect(analyser);
+          const buf = new Uint8Array(analyser.frequencyBinCount);
+          const interval = setInterval(() => {
+            analyser.getByteFrequencyData(buf);
+            let sum = 0;
+            let peak = 0;
+            for (const v of buf) {
+              sum += v;
+              if (v > peak) peak = v;
+            }
+            const avg = sum / buf.length;
+            console.log(`voice: local mic level avg=${avg.toFixed(1)} peak=${peak}`);
+          }, 2000);
+          localMeterRef.current = { ctx, analyser, source, interval };
+        } catch (err) {
+          console.warn('voice: failed to start local mic meter', err);
+        }
       } catch (err) {
         const message =
           err instanceof Error && err.name === 'NotAllowedError'
@@ -450,6 +497,16 @@ export function useVoice() {
       closePeer(actorId);
     }
     knownActorsRef.current.clear();
+    if (localMeterRef.current) {
+      clearInterval(localMeterRef.current.interval);
+      try {
+        localMeterRef.current.source.disconnect();
+        void localMeterRef.current.ctx.close();
+      } catch {
+        /* ignore */
+      }
+      localMeterRef.current = null;
+    }
     if (localStreamRef.current) {
       for (const track of localStreamRef.current.getTracks()) track.stop();
       localStreamRef.current = null;
