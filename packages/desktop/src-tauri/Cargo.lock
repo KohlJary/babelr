@@ -224,6 +224,7 @@ dependencies = [
  "tauri-plugin-deep-link",
  "tauri-plugin-notification",
  "tauri-plugin-shell",
+ "webkit2gtk",
 ]
 
 [[package]]

@@ -265,15 +265,33 @@ export function useVoice() {
       channelIdRef.current = channelId;
 
       // Request microphone
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setState({
+          status: 'error',
+          error:
+            'Media capture is not available in this webview. On Linux desktop builds, restart the app — voice support requires a recent build.',
+          channelId: null,
+          peers: [],
+          micMuted: false,
+        });
+        channelIdRef.current = null;
+        return;
+      }
       try {
         localStreamRef.current = await navigator.mediaDevices.getUserMedia({
           audio: true,
           video: false,
         });
-      } catch {
+      } catch (err) {
+        const message =
+          err instanceof Error && err.name === 'NotAllowedError'
+            ? 'Microphone permission denied. Enable it in your system settings.'
+            : err instanceof Error
+              ? `Microphone error: ${err.message}`
+              : 'Microphone access failed.';
         setState({
           status: 'error',
-          error: 'Microphone permission denied. Enable it in your browser settings.',
+          error: message,
           channelId: null,
           peers: [],
           micMuted: false,

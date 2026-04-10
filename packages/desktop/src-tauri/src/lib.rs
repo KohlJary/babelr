@@ -23,6 +23,28 @@ pub fn run() {
                 }
             });
 
+            // Linux: enable MediaStream + WebRTC in the embedded webview
+            // and auto-grant microphone permission requests. Without this,
+            // webkit2gtk denies getUserMedia and voice channels silently
+            // fail to connect.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.with_webview(|webview| {
+                    use webkit2gtk::{PermissionRequestExt, SettingsExt, WebViewExt};
+                    let wv = webview.inner();
+                    if let Some(settings) = wv.settings() {
+                        settings.set_enable_media_stream(true);
+                        settings.set_enable_webrtc(true);
+                        settings.set_media_playback_requires_user_gesture(false);
+                        settings.set_enable_mediasource(true);
+                    }
+                    wv.connect_permission_request(|_, request| {
+                        request.allow();
+                        true
+                    });
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
