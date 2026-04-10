@@ -80,6 +80,16 @@ export async function createServer(input: CreateServerInput): Promise<ServerView
   return apiFetch('/servers', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export async function updateServer(
+  serverId: string,
+  input: import('@babelr/shared').UpdateServerInput,
+): Promise<ServerView> {
+  return apiFetch(`/servers/${serverId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
 export async function joinServer(serverId: string): Promise<void> {
   await apiFetch(`/servers/${serverId}/join`, { method: 'POST' });
 }

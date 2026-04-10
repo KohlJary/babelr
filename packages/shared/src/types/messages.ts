@@ -45,6 +45,23 @@ export interface ServerView {
   name: string;
   description: string | null;
   memberCount: number;
+  /** Short one-liner shown on discovery cards */
+  tagline?: string | null;
+  /** Long-form description / welcome text (markdown permitted) */
+  longDescription?: string | null;
+  /** Server logo/icon URL */
+  logoUrl?: string | null;
+  /** Freeform tags for discoverability */
+  tags?: string[];
+}
+
+export interface UpdateServerInput {
+  name?: string;
+  description?: string | null;
+  tagline?: string | null;
+  longDescription?: string | null;
+  logoUrl?: string | null;
+  tags?: string[];
 }
 
 export interface DMConversation {

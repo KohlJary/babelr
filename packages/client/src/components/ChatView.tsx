@@ -55,7 +55,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
 
-  const { servers, selectedServer, selectServer, createServer, joinServer } = useServers();
+  const { servers, selectedServer, selectServer, createServer, joinServer, updateServer } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
     dmMode ? null : selectedServer?.id ?? null,
   );
@@ -322,6 +322,7 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
         <ServerSettingsPanel
           server={selectedServer}
           onClose={() => setShowServerSettings(false)}
+          onUpdated={updateServer}
         />
       )}
       {showProfile && (

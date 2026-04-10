@@ -7,7 +7,7 @@ import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { invites } from '../db/schema/invites.ts';
-import type { CreateServerInput, ServerView } from '@babelr/shared';
+import type { CreateServerInput, ServerView, UpdateServerInput } from '@babelr/shared';
 
 function slugify(name: string): string {
   return name
@@ -15,6 +15,48 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 32);
+}
+
+function toServerView(
+  server: typeof actors.$inferSelect,
+  memberCount: number,
+): ServerView {
+  const props = (server.properties as Record<string, unknown> | null) ?? {};
+  return {
+    id: server.id,
+    name: server.displayName ?? server.preferredUsername,
+    description: server.summary,
+    memberCount,
+    tagline: (props.tagline as string | undefined) ?? null,
+    longDescription: (props.longDescription as string | undefined) ?? null,
+    logoUrl: (props.logoUrl as string | undefined) ?? null,
+    tags: Array.isArray(props.tags) ? (props.tags as string[]) : [],
+  };
+}
+
+// Check if the calling actor has admin-or-owner role on a server
+async function requireServerAdmin(
+  db: ReturnType<typeof import('../db/index.ts').createDb>,
+  server: typeof actors.$inferSelect,
+  actorUri: string,
+): Promise<boolean> {
+  if (!server.followersUri) return false;
+  const serverProps = server.properties as Record<string, unknown> | null;
+  const [membership] = await db
+    .select()
+    .from(collectionItems)
+    .where(
+      and(
+        eq(collectionItems.collectionUri, server.followersUri),
+        eq(collectionItems.itemUri, actorUri),
+      ),
+    )
+    .limit(1);
+  if (!membership) return false;
+  const itemProps = membership.properties as Record<string, unknown> | null;
+  const role = (itemProps?.role as string) ?? 'member';
+  // Owner property wins over role
+  return ['owner', 'admin'].includes(role) || serverProps?.ownerId === membership.itemId;
 }
 
 export default async function serverRoutes(fastify: FastifyInstance) {
@@ -80,13 +122,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       properties: { name: 'general' },
     });
 
-    const result: ServerView = {
-      id: server.id,
-      name: server.displayName ?? server.preferredUsername,
-      description: server.summary,
-      memberCount: 1,
-    };
-    return reply.status(201).send(result);
+    return reply.status(201).send(toServerView(server, 1));
   });
 
   // List servers the user is a member of
@@ -125,12 +161,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .from(collectionItems)
         .where(eq(collectionItems.collectionUri, server.followersUri));
 
-      results.push({
-        id: server.id,
-        name: server.displayName ?? server.preferredUsername,
-        description: server.summary,
-        memberCount: count?.count ?? 0,
-      });
+      results.push(toServerView(server, count?.count ?? 0));
     }
 
     return results;
@@ -168,10 +199,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .where(eq(collectionItems.collectionUri, server.followersUri));
 
       results.push({
-        id: server.id,
-        name: server.displayName ?? server.preferredUsername,
-        description: server.summary,
-        memberCount: count?.count ?? 0,
+        ...toServerView(server, count?.count ?? 0),
         joined: memberUris.has(server.followersUri),
       });
     }
@@ -200,14 +228,75 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       .from(collectionItems)
       .where(eq(collectionItems.collectionUri, server.followersUri!));
 
-    const result: ServerView = {
-      id: server.id,
-      name: server.displayName ?? server.preferredUsername,
-      description: server.summary,
-      memberCount: count?.count ?? 0,
-    };
-    return result;
+    return toServerView(server, count?.count ?? 0);
   });
+
+  // Update server info (admin+ only)
+  fastify.put<{ Params: { serverId: string }; Body: UpdateServerInput }>(
+    '/servers/:serverId',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.id, request.params.serverId), eq(actors.type, 'Group')))
+        .limit(1);
+
+      if (!server) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      const allowed = await requireServerAdmin(db, server, request.actor.uri);
+      if (!allowed) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const { name, description, tagline, longDescription, logoUrl, tags } = request.body ?? {};
+      const updates: Record<string, unknown> = {};
+
+      if (name !== undefined) {
+        const trimmed = name.trim();
+        if (trimmed.length === 0) {
+          return reply.status(400).send({ error: 'Server name cannot be empty' });
+        }
+        updates.displayName = trimmed;
+      }
+
+      if (description !== undefined) {
+        updates.summary = description?.trim() || null;
+      }
+
+      // Custom properties
+      const currentProps = (server.properties as Record<string, unknown> | null) ?? {};
+      const nextProps = { ...currentProps };
+      if (tagline !== undefined) nextProps.tagline = tagline?.trim() || null;
+      if (longDescription !== undefined) nextProps.longDescription = longDescription?.trim() || null;
+      if (logoUrl !== undefined) nextProps.logoUrl = logoUrl || null;
+      if (tags !== undefined) {
+        const cleaned = Array.from(
+          new Set(tags.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0 && t.length <= 32)),
+        ).slice(0, 10);
+        nextProps.tags = cleaned;
+      }
+      updates.properties = nextProps;
+
+      const [updated] = await db
+        .update(actors)
+        .set(updates)
+        .where(eq(actors.id, server.id))
+        .returning();
+
+      const [count] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(collectionItems)
+        .where(eq(collectionItems.collectionUri, updated.followersUri!));
+
+      return toServerView(updated, count?.count ?? 0);
+    },
+  );
 
   // Join a server
   fastify.post<{ Params: { serverId: string } }>(

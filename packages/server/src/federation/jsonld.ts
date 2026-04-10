@@ -17,17 +17,17 @@ export const AP_CONTEXT = [
 export function serializeActor(actor: typeof actors.$inferSelect) {
   const props = actor.properties as Record<string, unknown> | null;
 
-  // Resolve relative avatar path to absolute URL using the actor's own origin
+  // Resolve relative icon path to absolute URL using the actor's own origin.
+  // Person actors use `avatarUrl`; Group (server) actors use `logoUrl`.
+  const rawIcon = (props?.logoUrl as string | undefined) ?? (props?.avatarUrl as string | undefined);
   let iconUrl: string | null = null;
-  const avatarUrl = props?.avatarUrl as string | undefined;
-  if (avatarUrl) {
-    if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
-      iconUrl = avatarUrl;
+  if (rawIcon) {
+    if (rawIcon.startsWith('http://') || rawIcon.startsWith('https://')) {
+      iconUrl = rawIcon;
     } else {
-      // actor.uri is e.g. https://babelr.chat/users/alice — derive origin from it
       try {
         const origin = new URL(actor.uri).origin;
-        iconUrl = `${origin}${avatarUrl.startsWith('/') ? '' : '/'}${avatarUrl}`;
+        iconUrl = `${origin}${rawIcon.startsWith('/') ? '' : '/'}${rawIcon}`;
       } catch {
         iconUrl = null;
       }

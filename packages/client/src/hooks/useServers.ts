@@ -41,6 +41,11 @@ export function useServers() {
     if (joined) setSelectedServer(joined);
   }, []);
 
+  const updateServer = useCallback((updated: ServerView) => {
+    setServers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setSelectedServer((prev) => (prev?.id === updated.id ? updated : prev));
+  }, []);
+
   const handleLeaveServer = useCallback(
     async (serverId: string) => {
       await api.leaveServer(serverId);
@@ -60,5 +65,6 @@ export function useServers() {
     createServer: handleCreateServer,
     joinServer: handleJoinServer,
     leaveServer: handleLeaveServer,
+    updateServer,
   };
 }
