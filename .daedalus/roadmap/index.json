@@ -60,11 +60,59 @@
     },
     {
       "id": "calendars-events",
-      "title": "Calendars and events (user + server, federated)",
-      "description": "First-class events system. Differentiator vs. Discord/Slack — none of them treat events as a first-class chat primitive. Lucky alignment with ActivityPub: AS2 has a native `Event` object type with Join/Leave/Invite/Accept verbs, so events federate over the existing delivery queue + WebFinger pipeline with no new protocol.\n\nDesign:\n- `events` table: id, ownerType (user|server|channel), ownerId, title, description, startAt, endAt, location, rrule (RFC 5545 recurrence via rrule.js), attendeesUri, properties\n- `event_attendees` table: eventId, actorId, rsvpStatus (going|interested|declined), updatedAt\n- Server endpoints: GET/POST /events, PUT/DELETE /events/:id, POST /events/:id/rsvp, GET /events.ics (iCal feed per user/server)\n- AP serialization: type=Event, with Join/Leave activities for federation\n- Translation tie-in: event titles + descriptions go through the same tone-preserving pipeline so a meeting agenda renders in the reader's language with the original preserved\n- UI: calendar tab in the server sidebar, personal events view in the DM sidebar, Create Event modal, RSVP buttons, in-channel embed when an event is posted as a message, monthly + upcoming views\n- iCal export endpoint (.ics) — high-leverage, lets people subscribe from Google Calendar / Apple / Outlook\n\nScope: both user calendars AND server calendars, federated from day one.",
+      "title": "Calendars and events (user + server) — core",
+      "description": "Shipped in commit 173c041. Core system: events + event_attendees tables, full CRUD + RSVP API, rrule.js recurrence expansion, per-event chat via auto-created OrderedCollection reusing the channel message pipeline, CreateEventModal / EventDetailPanel / EventsPanel UI, sidebar Calendar button, linked-channel deep-linking from server events. Both user and server scopes working. See follow-up items for federation, iCal export, monthly view, push notifications, per-instance RSVPs, and event-content translation.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready"
+      "status": "done"
+    },
+    {
+      "id": "calendar-federation",
+      "title": "Calendar event federation via AS2 Event + Join/Leave",
+      "description": "Federate events across Babelr instances using the native ActivityPub mechanisms. AS2 has a native Event object type in the core spec, so this piggybacks on the existing delivery queue + WebFinger + signature pipeline without inventing a new protocol.\n\nScope:\n- serializeEvent() helper emitting AS2 Event JSON: type=Event, name, content, startTime, endTime, location, attributedTo, published, and babelr-ns custom fields for rrule (since AS2 doesn't standardize recurrence)\n- On event create: broadcast a Create activity wrapping the Event, same pattern as broadcastCreate for Notes. For server events, deliver to all server followers (federation-aware). For user events, deliver to all attendees who are remote.\n- On RSVP: send a Join activity with object=eventUri, actor=callerUri. The Undo(Join) pattern handles un-RSVP.\n- Inbound handleCreate: when activity.object.type === 'Event', store it as a remote event row (ownerType=user|server based on attributedTo), attendees collection tracked as RSVPs from remote actors\n- Inbound Join handler: record a remote RSVP against the local event if we're authoritative, or update the cached remote event's attendee list otherwise\n- Remote-event visibility: remote events show up in local calendar views for users who follow the remote server or attend directly\n- WebSocket push: events:new, events:updated, events:rsvp for the actor's subscribed calendars so the UI updates live\n\nDepends on: federation-interop-test (to validate the federation paths end-to-end before trusting this new path).",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "calendar-ical-export",
+      "title": "iCal export feed per user and per server",
+      "description": "GET /events.ics endpoints that return a standards-compliant iCalendar feed of the caller's events (or a server's public events). Lets people subscribe from Google Calendar, Apple Calendar, Outlook, Thunderbird, etc. — their client polls the feed on its own schedule, no push needed.\n\nScope:\n- GET /users/:username/events.ics — authenticated-token-based or public-feed-token feed of user events\n- GET /servers/:serverId/events.ics — same for server events\n- Use the `ics` npm package to generate the feed, or hand-roll (the format is not complex)\n- Expand recurrences into VEVENT blocks OR emit a single VEVENT with RRULE (most clients handle RRULE natively — preferred)\n- Include UID, DTSTART, DTEND, SUMMARY, DESCRIPTION, LOCATION, ORGANIZER, ATTENDEE entries\n- Token-based auth for feed URLs so people can paste the URL into their calendar client without a login flow: generate a per-user feed token, stored in actors.properties, regenerable\n- Server event feeds respect server visibility (public servers emit a public feed, private servers require the token)\n\nHigh-leverage, low cost — once events federate, the iCal feed lets Babelr events show up next to work meetings in whatever calendar the user already lives in.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "calendar-monthly-view",
+      "title": "Monthly calendar view for EventsPanel",
+      "description": "Add a month-grid view alongside the current Today/Tomorrow/This week/Later bucket list. Toggle between 'upcoming' and 'month' modes.\n\nScope:\n- Standard 6-row month grid component (no library needed, ~150 lines of React)\n- Each day cell shows up to 3 event titles with overflow indicator ('+N more')\n- Click a day → show that day's events in a popover or drawer\n- Click an event → open EventDetailPanel\n- Month navigation (prev/next/today buttons)\n- Recurring events expand correctly across the month window\n- Visual distinction for today, past days, and days with events\n- Respects the user's week start preference (Sunday vs Monday) — store on actor.properties\n- Mobile-friendly layout: collapse to week view on narrow widths\n\nPairs naturally with the mobile-apps work since compact calendar views are one of the trickier pieces of responsive UI.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "calendar-push-notifications",
+      "title": "Push notifications for upcoming events",
+      "description": "Notify attendees before an event starts. Depends on the mobile-apps push notification infrastructure (user_devices table + APNs/FCM fan-out), but also shows up as browser notifications on web.\n\nScope:\n- Background job (cron or interval-based) that scans events with startAt in the next N minutes and dispatches notifications to RSVP'd-as-going attendees\n- Configurable per-user notification lead time: 5 min / 15 min / 1 hour / day before — stored on actor.properties or a new notification_preferences entry\n- Deduplication: don't send multiple notifications for the same event instance\n- For recurring events, notify once per instance, not once for the parent\n- Linked channel: if the event has a channelId, the notification payload includes deep-link data so tapping jumps straight to that channel (desktop: focus the channel; mobile: open the app and navigate)\n- Event chat notifications: new messages in the event chat notify the RSVP'd-as-going participants (just like DM notifications)\n- Respects notification_preferences (muted events, quiet hours)\n\nDepends on: calendar-monthly-view (nice-to-have for context when the notification arrives), user_devices infrastructure from mobile-apps.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "calendar-per-instance-rsvps",
+      "title": "Per-instance RSVPs for recurring events",
+      "description": "Currently attendance lives on the parent event row, so RSVPing to a weekly meeting RSVPs to all of them (matching Google Calendar's default 'accept all' behavior). Users often want to accept the series but skip specific weeks.\n\nScope:\n- New event_attendee_overrides table: (eventId, actorId, instanceDate, status) with a unique (eventId, actorId, instanceDate) index\n- Override rows take precedence over the base RSVP when querying a specific instance\n- API: POST /events/:eventId/rsvp now accepts an optional instanceDate param; omitting it updates the base, passing it creates/updates the override\n- UI: EventDetailPanel shows 'This event' vs 'All events in series' toggle when opened on an instance of a recurring event\n- Pair with calendar-federation: overrides federate via Join activities with a specific object URI that encodes the instance date\n- Migration: existing base RSVPs remain unchanged; overrides are purely additive\n\nLow priority until users ask for it — the current 'accept all' semantics are defensible.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "calendar-event-content-translation",
+      "title": "Translation of event titles and descriptions",
+      "description": "Run event titles and descriptions through the same tone-preserving translation pipeline we use for messages, so a reader sees the event details in their preferredLanguage while the original is preserved.\n\nScope:\n- useTranslation hook already translates messages; extend it (or create a parallel useEventTranslation) to accept EventView objects and translate title + description fields\n- Display the translated title in EventsPanel row and EventDetailPanel header, with a 'show original' toggle next to it matching the message UX pattern\n- Cache translations in localStorage keyed by (eventId, targetLang) so re-opening the panel doesn't re-translate\n- Federation concern: when we receive a remote event, we only translate if the local user's preferredLanguage differs from the remote event's detected language (same logic as messages)\n- This is where Babelr's translation differentiation really shows: a multilingual team scheduling meetings across offices sees their agendas natively without anyone having to pre-translate\n\nSmall effort relative to impact. Probably the first follow-up to ship.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
     },
     {
       "id": "voice-channels-mvp",
@@ -171,5 +219,5 @@
       "status": "backlog"
     }
   ],
-  "version": 8
+  "version": 9
 }
