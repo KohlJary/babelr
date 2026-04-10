@@ -2258,3 +2258,106 @@ textarea.modal-input {
 .voice-control-btn {
   min-width: 2.5rem;
 }
+
+/* Voice tiles — grid layout for webcam-enabled rooms */
+.voice-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.voice-tile {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  background: #0f0f0f;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: border-color 0.1s;
+}
+.voice-tile.speaking {
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+.voice-tile.pending {
+  opacity: 0.55;
+}
+.voice-tile-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: #000;
+  /* Mirror self-view horizontally so it feels like a mirror, not a camera */
+}
+.voice-tile.self .voice-tile-video,
+.voice-tile:has(.voice-tile-badge) .voice-tile-video {
+  /* noop — self-view already identified by parent wrapper in VoicePanel */
+}
+.voice-tile-avatar-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.voice-tile-avatar-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.voice-tile-avatar-default {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+.voice-tile-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.35rem 0.5rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.75), transparent);
+  color: #fff;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+.voice-tile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-tile-badge {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+.voice-tile-volume {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 60px;
+  accent-color: #4b6cb7;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.voice-tile:hover .voice-tile-volume {
+  opacity: 0.9;
+}
+.voice-control-btn.active-on {
+  background: #14532d;
+  border-color: #166534;
+  color: #a7f3d0;
+}

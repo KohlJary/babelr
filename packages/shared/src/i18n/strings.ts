@@ -336,6 +336,8 @@ export const UI_STRINGS = {
   'voice.pttOff': 'Disable push-to-talk',
   'voice.pttHint': 'Push-to-talk: hold ` to transmit',
   'voice.peerVolume': 'Volume',
+  'voice.enableVideo': 'Turn on camera',
+  'voice.disableVideo': 'Turn off camera',
 
   // Languages
   'language.en': 'English',

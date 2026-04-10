@@ -13,6 +13,7 @@ export interface VoicePeerState {
   connected: boolean;
   speaking: boolean;
   volume: number;
+  hasVideo: boolean;
 }
 
 export interface UseVoiceState {
@@ -24,12 +25,15 @@ export interface UseVoiceState {
   deafened: boolean;
   pushToTalk: boolean;
   localSpeaking: boolean;
+  videoEnabled: boolean;
 }
 
 interface PeerEntry {
   actor: AuthorView;
   pc: RTCPeerConnection;
   audio: HTMLAudioElement;
+  videoSender: RTCRtpSender | null;
+  videoStream: MediaStream | null;
   connected: boolean;
   analyser: AnalyserNode | null;
   analyserBuf: Uint8Array<ArrayBuffer> | null;
@@ -51,6 +55,7 @@ const IDLE_STATE: UseVoiceState = {
   deafened: false,
   pushToTalk: false,
   localSpeaking: false,
+  videoEnabled: false,
 };
 
 /**
@@ -73,6 +78,10 @@ export function useVoice() {
 
   const wsRef = useRef<WebSocket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  // Separate MediaStream for the user's webcam — acquired lazily the first
+  // time they turn video on, released when they turn it off. Kept distinct
+  // from the mic stream so stopping one doesn't affect the other.
+  const localVideoStreamRef = useRef<MediaStream | null>(null);
   // Shared AudioContext for all analyser nodes (local mic + each peer).
   // Created lazily on join() so we don't spin up audio machinery for
   // users who never enter a voice channel.
@@ -110,6 +119,7 @@ export function useVoice() {
         connected: entry.connected,
         speaking: entry.speaking,
         volume: entry.volume,
+        hasVideo: entry.videoStream !== null,
       });
     }
     setState((s) => ({ ...s, peers: arr }));
@@ -152,6 +162,26 @@ export function useVoice() {
         }
       }
 
+      // Pre-add a sendrecv video transceiver so video can be toggled later
+      // via replaceTrack WITHOUT SDP renegotiation. This makes the initial
+      // offer include an inactive video m-line; turning on the camera just
+      // swaps a real track into the existing sender.
+      let videoSender: RTCRtpSender | null = null;
+      try {
+        const videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
+        videoSender = videoTransceiver.sender;
+        // If local video is already active (user enabled camera before this
+        // peer joined), attach the existing track immediately.
+        if (localVideoStreamRef.current) {
+          const videoTrack = localVideoStreamRef.current.getVideoTracks()[0];
+          if (videoTrack) {
+            void videoSender.replaceTrack(videoTrack);
+          }
+        }
+      } catch (err) {
+        console.warn('voice: failed to add video transceiver', err);
+      }
+
       // Remote audio sink. The element MUST be attached to the DOM for
       // reliable playback — detached HTMLAudioElement instances will set
       // srcObject without error but produce no audible output in Safari
@@ -165,6 +195,43 @@ export function useVoice() {
       document.body.appendChild(audio);
 
       pc.ontrack = (ev) => {
+        // Video track handling: store on the peer entry so the VoicePanel
+        // can attach it to a <video> element. No audio plumbing for video.
+        if (ev.track.kind === 'video') {
+          const stream =
+            ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
+          const peerEntry = peersRef.current.get(actor.id);
+          if (peerEntry) {
+            peerEntry.videoStream = stream;
+            syncPeersToState();
+          }
+          // A video track ending (remote user turned off their camera) is
+          // signaled via the track's `ended` / `mute` events.
+          ev.track.onended = () => {
+            const pe = peersRef.current.get(actor.id);
+            if (pe) {
+              pe.videoStream = null;
+              syncPeersToState();
+            }
+          };
+          ev.track.onmute = () => {
+            const pe = peersRef.current.get(actor.id);
+            if (pe) {
+              pe.videoStream = null;
+              syncPeersToState();
+            }
+          };
+          ev.track.onunmute = () => {
+            const pe = peersRef.current.get(actor.id);
+            if (pe) {
+              // Rebuild the stream from the now-live track
+              pe.videoStream = new MediaStream([ev.track]);
+              syncPeersToState();
+            }
+          };
+          console.log('voice: ontrack video', { from: actor.id, muted: ev.track.muted });
+          return;
+        }
         // Prefer the provided stream, but fall back to wrapping the track
         // if the negotiated SDP didn't include a stream id on the remote side.
         const stream =
@@ -279,6 +346,8 @@ export function useVoice() {
         actor,
         pc,
         audio,
+        videoSender,
+        videoStream: null,
         connected: false,
         analyser: null,
         analyserBuf: null,
@@ -615,6 +684,10 @@ export function useVoice() {
       for (const track of localStreamRef.current.getTracks()) track.stop();
       localStreamRef.current = null;
     }
+    if (localVideoStreamRef.current) {
+      for (const track of localVideoStreamRef.current.getTracks()) track.stop();
+      localVideoStreamRef.current = null;
+    }
     wsRef.current?.close();
     wsRef.current = null;
     channelIdRef.current = null;
@@ -660,6 +733,88 @@ export function useVoice() {
     },
     [syncPeersToState],
   );
+
+  /**
+   * Toggle the local webcam. Acquires a separate video MediaStream via
+   * getUserMedia on first enable, swaps the track into every peer's
+   * pre-allocated video sender, and releases the stream on disable. No
+   * SDP renegotiation happens — the transceivers were set up for video
+   * at peer-connection creation time.
+   */
+  const toggleVideo = useCallback(async () => {
+    // Currently off → turn on
+    if (!localVideoStreamRef.current) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        localVideoStreamRef.current = stream;
+        const track = stream.getVideoTracks()[0];
+        if (!track) throw new Error('No video track in acquired stream');
+        // Attach to every peer's video sender
+        for (const entry of peersRef.current.values()) {
+          if (entry.videoSender) {
+            try {
+              await entry.videoSender.replaceTrack(track);
+            } catch (err) {
+              console.warn('voice: failed to replaceTrack(video) on peer', entry.actor.id, err);
+            }
+          }
+        }
+        // If the track ends unexpectedly (user revoked permission, camera
+        // unplugged), mirror that into state and release the stream.
+        track.onended = () => {
+          if (localVideoStreamRef.current) {
+            for (const t of localVideoStreamRef.current.getTracks()) t.stop();
+            localVideoStreamRef.current = null;
+          }
+          for (const entry of peersRef.current.values()) {
+            if (entry.videoSender) {
+              void entry.videoSender.replaceTrack(null).catch(() => {});
+            }
+          }
+          setState((s) => ({ ...s, videoEnabled: false }));
+        };
+        setState((s) => ({ ...s, videoEnabled: true }));
+      } catch (err) {
+        console.warn('voice: getUserMedia video failed', err);
+        setState((s) => ({
+          ...s,
+          error:
+            err instanceof Error && err.name === 'NotAllowedError'
+              ? 'Camera permission denied.'
+              : err instanceof Error
+                ? `Camera error: ${err.message}`
+                : 'Failed to start camera.',
+        }));
+      }
+      return;
+    }
+    // Currently on → turn off
+    for (const entry of peersRef.current.values()) {
+      if (entry.videoSender) {
+        try {
+          await entry.videoSender.replaceTrack(null);
+        } catch (err) {
+          console.warn('voice: failed to clear video track on peer', entry.actor.id, err);
+        }
+      }
+    }
+    for (const track of localVideoStreamRef.current.getTracks()) track.stop();
+    localVideoStreamRef.current = null;
+    setState((s) => ({ ...s, videoEnabled: false }));
+  }, []);
+
+  /** Imperative accessor so VoicePanel can attach the local stream to a <video>. */
+  const getLocalVideoStream = useCallback((): MediaStream | null => {
+    return localVideoStreamRef.current;
+  }, []);
+
+  /** Imperative accessor for a peer's current video stream. */
+  const getPeerVideoStream = useCallback((actorId: string): MediaStream | null => {
+    return peersRef.current.get(actorId)?.videoStream ?? null;
+  }, []);
 
   // Speaking-indicator rAF loop. Runs whenever we're in a voice channel.
   // Reads the frequency data from the local and peer analysers and flips
@@ -712,6 +867,7 @@ export function useVoice() {
             connected: e.connected,
             speaking: e.speaking,
             volume: e.volume,
+            hasVideo: e.videoStream !== null,
           })),
         };
       });
@@ -776,6 +932,9 @@ export function useVoice() {
       if (localStreamRef.current) {
         for (const track of localStreamRef.current.getTracks()) track.stop();
       }
+      if (localVideoStreamRef.current) {
+        for (const track of localVideoStreamRef.current.getTracks()) track.stop();
+      }
       wsRef.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -789,5 +948,8 @@ export function useVoice() {
     toggleDeafen,
     togglePushToTalk,
     setPeerVolume,
+    toggleVideo,
+    getLocalVideoStream,
+    getPeerVideoStream,
   };
 }

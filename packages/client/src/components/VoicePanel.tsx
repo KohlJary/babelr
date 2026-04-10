@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Hippocratic-3.0
+import { useEffect, useState } from 'react';
 import type { UseVoiceState } from '../hooks/useVoice';
 import type { ActorProfile } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
+import { VoiceTile } from './VoiceTile';
 
 interface VoicePanelProps {
   channelName: string;
@@ -11,7 +13,10 @@ interface VoicePanelProps {
   onToggleMute: () => void;
   onToggleDeafen: () => void;
   onTogglePushToTalk: () => void;
+  onToggleVideo: () => void | Promise<void>;
   onPeerVolume: (actorId: string, volume: number) => void;
+  getLocalVideoStream: () => MediaStream | null;
+  getPeerVideoStream: (actorId: string) => MediaStream | null;
 }
 
 export function VoicePanel({
@@ -22,13 +27,40 @@ export function VoicePanel({
   onToggleMute,
   onToggleDeafen,
   onTogglePushToTalk,
+  onToggleVideo,
   onPeerVolume,
+  getLocalVideoStream,
+  getPeerVideoStream,
 }: VoicePanelProps) {
   const t = useT();
 
-  const selfColor = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'][
-    actor.preferredUsername.charCodeAt(0) % 6
-  ];
+  // We poll the imperative stream getters into a state snapshot so React
+  // re-renders VoiceTile when streams change. useVoice's state has a
+  // `hasVideo` boolean per peer and a `videoEnabled` flag for self, which
+  // is what we watch for the refresh trigger.
+  const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
+  const [peerVideoStreams, setPeerVideoStreams] = useState<Map<string, MediaStream | null>>(
+    new Map(),
+  );
+
+  useEffect(() => {
+    setLocalVideoStream(getLocalVideoStream());
+  }, [voice.videoEnabled, getLocalVideoStream]);
+
+  useEffect(() => {
+    const next = new Map<string, MediaStream | null>();
+    for (const peer of voice.peers) {
+      next.set(peer.actorId, peer.hasVideo ? getPeerVideoStream(peer.actorId) : null);
+    }
+    setPeerVideoStreams(next);
+  }, [voice.peers, getPeerVideoStream]);
+
+  const selfActor = {
+    id: actor.id,
+    preferredUsername: actor.preferredUsername,
+    displayName: actor.displayName,
+    avatarUrl: actor.avatarUrl ?? null,
+  };
 
   return (
     <div className="voice-panel">
@@ -44,52 +76,24 @@ export function VoicePanel({
         </span>
       </div>
 
-      <div className="voice-participants">
-        <div className={`voice-participant self ${voice.localSpeaking ? 'speaking' : ''}`}>
-          <span className="voice-avatar" style={{ backgroundColor: selfColor }}>
-            {actor.preferredUsername.charAt(0).toUpperCase()}
-          </span>
-          <span className="voice-participant-name">
-            {actor.displayName ?? actor.preferredUsername}
-          </span>
-          {voice.micMuted && <span className="voice-mic-muted" title={t('voice.youAreMuted')}>🔇</span>}
-          {voice.deafened && <span className="voice-mic-muted">🙉</span>}
-        </div>
-
+      <div className="voice-tiles">
+        <VoiceTile
+          actor={selfActor}
+          stream={localVideoStream}
+          speaking={voice.localSpeaking}
+          muted={voice.micMuted}
+          isSelf
+        />
         {voice.peers.map((peer) => (
-          <div
+          <VoiceTile
             key={peer.actorId}
-            className={`voice-participant ${peer.connected ? 'connected' : 'pending'} ${peer.speaking ? 'speaking' : ''}`}
-          >
-            {peer.actor.avatarUrl ? (
-              <img className="voice-avatar" src={peer.actor.avatarUrl} alt="" />
-            ) : (
-              <span
-                className="voice-avatar"
-                style={{
-                  backgroundColor: ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'][
-                    peer.actor.preferredUsername.charCodeAt(0) % 6
-                  ],
-                }}
-              >
-                {peer.actor.preferredUsername.charAt(0).toUpperCase()}
-              </span>
-            )}
-            <span className="voice-participant-name">
-              {peer.actor.displayName ?? peer.actor.preferredUsername}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={peer.volume}
-              onChange={(e) => onPeerVolume(peer.actorId, Number(e.target.value))}
-              className="voice-peer-volume"
-              title={t('voice.peerVolume')}
-              aria-label={t('voice.peerVolume')}
-            />
-          </div>
+            actor={peer.actor}
+            stream={peerVideoStreams.get(peer.actorId) ?? null}
+            speaking={peer.speaking}
+            connected={peer.connected}
+            volume={peer.volume}
+            onVolumeChange={(v) => onPeerVolume(peer.actorId, v)}
+          />
         ))}
         {voice.peers.length === 0 && voice.status === 'connected' && (
           <div className="voice-empty">{t('voice.noParticipants')}</div>
@@ -105,6 +109,13 @@ export function VoicePanel({
           {voice.micMuted ? '🔇' : '🎤'}
         </button>
         <button
+          className={`voice-control-btn ${voice.videoEnabled ? 'active-on' : ''}`}
+          onClick={() => void onToggleVideo()}
+          title={voice.videoEnabled ? t('voice.disableVideo') : t('voice.enableVideo')}
+        >
+          {voice.videoEnabled ? '📹' : '📷'}
+        </button>
+        <button
           className={`voice-control-btn ${voice.deafened ? 'active' : ''}`}
           onClick={onToggleDeafen}
           title={voice.deafened ? t('voice.undeafen') : t('voice.deafen')}
@@ -114,11 +125,7 @@ export function VoicePanel({
         <button
           className={`voice-control-btn ${voice.pushToTalk ? 'active' : ''}`}
           onClick={onTogglePushToTalk}
-          title={
-            voice.pushToTalk
-              ? t('voice.pttOff')
-              : t('voice.pttOnTitle')
-          }
+          title={voice.pushToTalk ? t('voice.pttOff') : t('voice.pttOnTitle')}
         >
           PTT
         </button>
@@ -126,9 +133,7 @@ export function VoicePanel({
           {t('voice.leave')}
         </button>
       </div>
-      {voice.pushToTalk && (
-        <div className="voice-ptt-hint">{t('voice.pttHint')}</div>
-      )}
+      {voice.pushToTalk && <div className="voice-ptt-hint">{t('voice.pttHint')}</div>}
     </div>
   );
 }
