@@ -38,11 +38,138 @@
       "priority": "P2",
       "status": "backlog"
     },
-    { "id": "phase3-mobile", "title": "Mobile responsive / native apps", "type": "feature", "priority": "P3", "status": "backlog" },
-    { "id": "phase3-voice", "title": "Voice/video translation", "type": "feature", "priority": "P3", "status": "backlog" },
-    { "id": "dm-federation", "title": "DM federation", "type": "feature", "priority": "P3", "status": "backlog" },
+    {
+      "id": "mobile-apps",
+      "title": "Mobile apps via Capacitor (iOS + Android)",
+      "description": "Native iOS and Android apps via Capacitor — the same webview-wrapper model we already adopted with Tauri on desktop. The entire React codebase ships as-is; no rewrite, no dual UI maintenance.\n\nWhy Capacitor over React Native: RN would require rewriting every component (different primitives, layout engine, navigation), replacing Web Crypto (we need this for E2E — no native RN equivalent, needs react-native-quick-crypto), migrating IndexedDB key storage, and using react-native-webrtc for voice. Business logic shares at best ~30-50%, UI is from scratch, and we'd maintain two codebases forever. Capacitor gives us 100% code reuse and keeps the architectural story consistent with desktop.\n\nWhy not pure PWA: iOS PWAs work but there's no App Store presence (organic discovery, trust signal for enterprise), push notifications are second-class on iOS, and the 'is this a real app' perception problem is real for business users.\n\n## Phase 1: Responsive redesign (~60% of the effort)\n\nHas to happen regardless of packaging. Babelr is currently desktop-first with assumptions that break below ~768px.\n\n- Server sidebar + channel sidebar collapse to slide-out drawers on narrow viewports\n- Bottom nav bar (DMs / Channels / Friends / Notifications) for iOS-native feel\n- Tap targets sized ≥44×44px per Apple/Google guidelines\n- Remove hover-only affordances — already started prepping with the always-visible channel settings gear\n- Message input handles on-screen keyboard gracefully (viewport resize aware, input stays above keyboard)\n- Font sizes and spacing bumped for touch readability\n- Swipe-to-reply, long-press-for-context-menu patterns replacing right-click\n- Channel header compacts gracefully on narrow widths (breadcrumb collapses, topic truncates earlier)\n- Settings panels become full-screen sheets instead of floating modals on mobile\n- Test on real phone browsers throughout — the iOS webview has subtle layout quirks\n\n## Phase 2: Capacitor wrap (~1 sitting)\n\n- `npx cap init` in the monorepo, add iOS and Android platforms\n- Point Capacitor at the existing Vite build output\n- Update CORS + CSP for the `capacitor://` and `ionic://` schemes\n- Test in iOS Simulator and Android Emulator\n- Backend: detect Capacitor user agent so the client can pass through a native-origin header for any auth quirks\n\n## Phase 3: Native plugin integration (~2-3 sittings)\n\n- `@capacitor/push-notifications` — register device token on login, POST to a new `/devices` endpoint server-side, receive APNs/FCM payloads, show local notifications, deep-link to the relevant channel/DM on tap\n- New server table `user_devices(id, actorId, platform, token, createdAt, lastSeenAt)` + routes to register/unregister\n- Server-side push dispatcher: on new message matching a mention or DM, fan out to registered devices via APNs/FCM. Rate-limit per device.\n- `@capacitor/preferences` or `@capacitor-community/sqlite` for E2E key storage — migrate away from IndexedDB which behaves differently in native webviews across uninstall/reinstall cycles\n- `@capacitor/filesystem` + `@capacitor/camera` — attachment picker uses native file chooser and camera access, not web `<input type=file>`\n- `@capacitor/haptics` — subtle haptic feedback on message send, long-press, errors\n- `@capacitor/status-bar` + `@capacitor/splash-screen` — polish the native shell\n- Biometric auth via `@capgo/capacitor-native-biometric` for quick unlock (optional, gated on settings)\n\n## Phase 4: WebRTC on mobile\n\nThe web WebRTC APIs work in Capacitor's webview, but voice channels will need testing against the mobile permission model:\n- iOS is strict about audio capture in background — need `UIBackgroundModes: audio` in Info.plist and CallKit integration for backgrounding\n- Android needs `RECORD_AUDIO` permission + foreground service for ongoing calls\n- Test against voice-channels-mvp end-to-end on both platforms before shipping\n\nBundle this phase with the voice-channels-mvp rollout.\n\n## Phase 5: App store submission (~1 sitting each platform)\n\n- Icons at every required size (Android adaptive icons, iOS full set)\n- Screenshots at every required device class (iPhone 15, iPad, Android phone, tablet) — automate via Fastlane if possible\n- App Store Connect listing: title, subtitle, description, keywords, privacy policy URL, support URL. Localize the listing using the i18n strings infrastructure — store listings in 16 languages is a real SEO advantage.\n- Google Play listing: same deal\n- Privacy manifest (iOS) — required since iOS 17, declare all tracking domains and APIs used. Babelr is actually well-positioned here because we don't track.\n- Apple App Review: usually wants a demo account and a description of federation. Expect one round of back-and-forth clarifying the federated chat model.\n- Google Play review: generally faster, less friction\n- Set up CI for store builds (GitHub Actions + Fastlane) so we can ship updates without local Xcode setup\n\n## Estimate\n\nProbably 5-7 sittings total, weighted heavily toward the responsive redesign. The Capacitor wrap itself is nearly trivial. Push notification infra is the next-biggest chunk after responsive. Voice-on-mobile integration folds into the voice channels work.\n\n## Open questions\n\n- Paid developer accounts: Apple $99/year, Google $25 one-time. Budget item.\n- Review risk: federated chat is unusual for mobile stores; Apple occasionally rejects things that look like 'social' without a moderation story. Our admin/moderation tooling should cover this but expect clarifying questions.\n- Push translation: notifications shown on the lock screen — do we translate the message preview or show the original? Probably should honor the user's preferredLanguage setting and translate, matching the in-app behavior. Adds a server-side pre-translate step on fan-out.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    { "id": "voice-realtime-translation", "title": "Real-time speech translation in voice channels", "description": "Whisper STT + tone-preserving rewrite + TTS in the listener's language. Major bet — requires latency budget, model orchestration, GPU costs. Phase after voice-channels-mvp ships.", "type": "feature", "priority": "P3", "status": "backlog" },
+    { "id": "dm-federation", "title": "DM federation", "type": "feature", "priority": "P3", "status": "done" },
     { "id": "bots-webhooks", "title": "Bot API and webhooks", "type": "feature", "priority": "P3", "status": "backlog" },
-    { "id": "2fa", "title": "Two-factor authentication", "type": "feature", "priority": "P3", "status": "backlog" }
+    { "id": "2fa", "title": "Two-factor authentication", "type": "feature", "priority": "P3", "status": "backlog" },
+    {
+      "id": "federation-interop-test",
+      "title": "Federation interop validation against a second instance",
+      "description": "Stand up a second Babelr deployment (and where applicable test against a Mastodon-compatible instance) and validate every federation path end-to-end: WebFinger lookup, Person actor resolution + ECDH key fetch, Group actor + Follow/Accept for server joins, Note delivery for public channel messages, targeted DM Create activities with E2E payloads, Read receipts, friend-request Follow/Accept/Undo, Delete tombstones, avatar icon round-trip, Group server logo icon round-trip. Currently every federated feature has only been tested against itself; the wire format may pass our own validation and still get rejected by stricter implementations. Highest-leverage launch blocker.",
+      "type": "chore",
+      "priority": "P0",
+      "status": "ready"
+    },
+    {
+      "id": "calendars-events",
+      "title": "Calendars and events (user + server, federated)",
+      "description": "First-class events system. Differentiator vs. Discord/Slack — none of them treat events as a first-class chat primitive. Lucky alignment with ActivityPub: AS2 has a native `Event` object type with Join/Leave/Invite/Accept verbs, so events federate over the existing delivery queue + WebFinger pipeline with no new protocol.\n\nDesign:\n- `events` table: id, ownerType (user|server|channel), ownerId, title, description, startAt, endAt, location, rrule (RFC 5545 recurrence via rrule.js), attendeesUri, properties\n- `event_attendees` table: eventId, actorId, rsvpStatus (going|interested|declined), updatedAt\n- Server endpoints: GET/POST /events, PUT/DELETE /events/:id, POST /events/:id/rsvp, GET /events.ics (iCal feed per user/server)\n- AP serialization: type=Event, with Join/Leave activities for federation\n- Translation tie-in: event titles + descriptions go through the same tone-preserving pipeline so a meeting agenda renders in the reader's language with the original preserved\n- UI: calendar tab in the server sidebar, personal events view in the DM sidebar, Create Event modal, RSVP buttons, in-channel embed when an event is posted as a message, monthly + upcoming views\n- iCal export endpoint (.ics) — high-leverage, lets people subscribe from Google Calendar / Apple / Outlook\n\nScope: both user calendars AND server calendars, federated from day one.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready"
+    },
+    {
+      "id": "voice-channels-mvp",
+      "title": "Voice channels — P2P WebRTC, same-instance, ≤8 participants",
+      "description": "Voice channels MVP. P2P WebRTC mesh architecture (no media server). Bandwidth scales O(n²) per peer so capped at ~8 participants — adequate for a first cut, scales to dozens later via SFU.\n\nDesign:\n- New channel type 'voice' (vs current 'text' OrderedCollection). Voice channels show up in the channel sidebar with a speaker icon.\n- WebSocket signaling channel for SDP offer/answer + ICE candidates. New WS message types: voice:join, voice:leave, voice:offer, voice:answer, voice:ice.\n- Server tracks per-channel voice room state (active participant list) in memory. Participants get push notifications when others join/leave.\n- Client uses RTCPeerConnection per peer (mesh topology). One <audio> element per remote participant.\n- Mic mute/unmute, deafen, push-to-talk, basic volume control per peer.\n- TURN server config required for NAT traversal — can use a public TURN initially, or document running coturn.\n- Same-instance only in v1. Federated voice (cross-instance signaling) is a separate v2 problem — WebRTC needs SDP exchange and ICE candidates, ActivityPub has neither, no federation primitive exists. Same-instance limitation is not a regression vs Mastodon (which has zero voice).\n- UI: voice channel row in sidebar shows participant avatars when active. Click to join → opens a voice panel showing connected peers, with mute/deafen/leave controls.\n\nDeferred to follow-up roadmap items: SFU architecture (>8 person rooms), federated voice signaling, real-time speech translation.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "ready"
+    },
+    {
+      "id": "voice-channels-sfu",
+      "title": "Voice channels SFU — scale beyond 8 participants",
+      "description": "After voice-channels-mvp ships, add an SFU (Selective Forwarding Unit) so voice channels can scale to dozens of participants. Options: mediasoup (Node, embedded), LiveKit (separate Go service), or roll our own. Adds operational burden — media ports, TURN servers, observability stack.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "voice-channels-federation",
+      "title": "Federated voice channels",
+      "description": "Cross-instance voice. Requires inventing a signaling protocol on top of ActivityPub (or a sidecar) since AP carries no SDP/ICE. No federated chat app currently does this. Research project, not a near-term ship.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "enterprise-sso",
+      "title": "Enterprise SSO — SAML + OIDC",
+      "description": "Single most important enterprise gate. No business will roll out a chat app where employees create individual `babelr` passwords; they need to integrate with Okta, Azure AD, Google Workspace, or any standards-compliant IdP.\n\nScope:\n- SAML 2.0 service provider implementation (assertion verification, signing, encryption support, metadata exchange)\n- OIDC client implementation (authorization code flow, JWT validation, refresh tokens)\n- Per-server SSO config: each server admin can wire their own IdP, so a federated/multi-tenant deploy can have multiple orgs with different IdPs against one Babelr instance\n- Just-in-time user provisioning on first login (create the actor row from SAML/OIDC claims)\n- Admin UI: SP metadata download, IdP metadata upload/URL, attribute mapping for displayName/email/groups\n- Group claim → server role mapping (so IdP groups can drive admin/mod assignment)\n- Fallback to password auth controlled per-server (force-SSO-only mode for regulated tenants)\n- Session management: SSO logout (SLO) propagation\n\nProcurement teams will literally not approve a chat tool without this. P0 enterprise blocker.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "audit-logs",
+      "title": "Admin audit logs + queryable history",
+      "description": "Every admin action, every login, every channel deletion, every role change, every message edit/delete with timestamps and actor IDs, queryable and exportable. SOC2 audits will literally ask for this.\n\nScope:\n- New `audit_log` table: id, timestamp, actorId, actorType (user|system|federation), action, targetType, targetId, beforeJson, afterJson, ipAddress, userAgent, properties\n- Hooked into every mutation path: auth (login/logout/registration/password change), channel CRUD, server CRUD, role assignments, kicks, message edit/delete, file uploads, federation deliveries, friend actions, calendar/event CRUD\n- Admin UI: filterable log viewer (by actor, action type, date range, target), CSV export\n- Retention: indefinite by default; tied into the data-retention-policies feature once that lands\n- Tamper-evidence: append-only design, periodic hash chain over rows for SOC2-friendly integrity proof\n- Federation: outbound deliveries logged; inbound activities logged with verification status\n\nPairs naturally with eDiscovery export — both read from the same log tables.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "data-retention-policies",
+      "title": "Configurable data retention + legal hold + eDiscovery export",
+      "description": "Admin-configurable message retention. Often regulated: FINRA wants 7 years, HIPAA wants 6, GDPR wants the opposite (delete on request). Companies will not deploy without the ability to comply with whichever regime applies to them.\n\nScope:\n- Per-server retention policy: 'delete messages older than N days' OR 'keep everything forever'. Configurable in Server Settings.\n- Per-channel override: a #compliance channel can have a longer retention window than #random.\n- Background job: periodically scans messages older than the policy and tombstones them (preserving the existing federation Delete activity path).\n- Legal hold: admin can flag a user, channel, or date range as exempt from retention deletion. Hold rows are append-only and can only be released by an audit-logged action.\n- eDiscovery export: admin can export all messages from a user / channel / date range as a structured archive (JSON + attachments) for legal review. Export should be tamper-evident (hash manifest, signed metadata).\n- Per-user GDPR export: a user can request all their data, get a downloadable archive, exercise right-to-erasure (where not blocked by legal hold).\n- All retention/hold/export actions write to audit-logs.\n\nDepends on `audit-logs` for the hooks.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "screen-sharing",
+      "title": "Screen sharing in voice channels",
+      "description": "Standard for any business meeting tool. WebRTC's `getDisplayMedia` is one extra track on the existing peer connection — simple to implement once voice-channels-mvp ships.\n\nScope:\n- 'Share screen' button in the voice panel UI, prompts native browser screen picker\n- New media track added to existing RTCPeerConnections (no new signaling shape needed beyond existing voice signaling)\n- Receiver renders the screen track in a larger video element distinct from the voice avatars\n- Only one participant sharing at a time in the MVP (lock + handoff)\n- Audio capture from the shared tab/window optional via getDisplayMedia constraints\n- Works on Chrome, Firefox, Edge, Safari (with Safari quirks for window-only sharing)\n\nBundle with voice-channels-mvp delivery — adds maybe a sitting of work on top of voice.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "scim-provisioning",
+      "title": "SCIM 2.0 user lifecycle provisioning",
+      "description": "Auto-create users when HR adds them, deactivate when HR removes them. Pairs with enterprise-sso — both are part of the standard enterprise identity stack.\n\nScope:\n- SCIM 2.0 service provider endpoints (RFC 7644): /Users, /Groups, /ServiceProviderConfig, /ResourceTypes, /Schemas\n- Bearer token auth for SCIM, configured per-server alongside SSO\n- Filter / pagination support per the spec (Okta and Azure AD are picky about this)\n- Group sync: SCIM groups map to server roles\n- Soft-delete on deprovisioning (preserve message attribution; mark account inactive)\n- Idempotent — provisioning agents will retry; design for it\n\nEntries in audit-logs for every provisioning action.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "guest-access",
+      "title": "Guest accounts with scoped channel access",
+      "description": "Invite a contractor or external client into one channel without giving them the rest of the server. Currently private channels exist but there's no proper 'external user' concept with limited scope — joining a server still grants visibility into the server's existence and any other channels they get added to.\n\nScope:\n- New actor type or role: 'guest', flagged on the actor row\n- Guests can only see channels they're explicitly added to — server discovery, member list, other channels are hidden\n- Server admin invites a guest by email or handle; guest accepts via invite link, no full registration required for cross-instance guests\n- Guest sessions can be time-limited (auto-expire after N days)\n- Visual badge in member list and message author display so internal users can tell who's external\n- Audit-logged guest actions distinct from member actions",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "slack-teams-import",
+      "title": "Slack/Teams workspace import tool",
+      "description": "Migration tooling. Companies switching chat platforms will not manually rebuild years of channels, members, and message history. Even a basic workspace import gets us in the door for bake-off evaluations.\n\nScope:\n- Slack export ZIP parser: channels, channel members, messages, threads, attachments, custom emoji\n- Microsoft Teams export parser (via MS Graph or Teams Export API)\n- Map Slack/Teams users to Babelr accounts (by email if SSO, otherwise admin-driven mapping)\n- Preserve threading, reactions, attachments, timestamps\n- Run as a background job with progress reporting in admin UI\n- Idempotent: re-importing the same export updates rather than duplicates\n- Federation-aware: imported messages get local URIs and don't get re-broadcast as new\n\nHigh-leverage for sales but heavy implementation. Probably P2 backlog unless a specific deal requires it.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "group-e2e-mls",
+      "title": "Group end-to-end encryption via MLS",
+      "description": "Currently only DMs are E2E (pairwise ECDH + AES-GCM). Channels are server-readable. Enterprise wants the option to flip channels into encrypted mode for sensitive discussions where the home server is not trusted with plaintext.\n\nThe existing pairwise ECDH doesn't generalize to groups — you'd need O(n²) sessions and rekey on every membership change. The right answer is MLS (Messaging Layer Security, RFC 9420), which is the IETF standard for group E2E and is what Signal, WhatsApp, Wire, and Element are converging on.\n\nScope:\n- MLS implementation: tree-based key agreement, group state, welcome messages, commit/proposal flow, forward secrecy, post-compromise security\n- Library option: openmls (Rust, has WASM bindings), or eventlymls\n- Per-channel opt-in: server admin enables encryption on a channel; existing messages stay plaintext, new messages are MLS-encrypted\n- Group state synced via existing federation delivery for cross-instance encrypted channels\n- Mobile/desktop UI for verifying safety numbers and managing trust\n- Key backup / recovery for users who lose devices (escrow with passphrase, or device sync)\n- Significant testing burden — encryption bugs are silent and catastrophic\n\nMulti-week project. The kind of feature that alone would justify a security audit before launch.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "self-hosted-onprem-package",
+      "title": "Self-hosted on-prem package + license model",
+      "description": "Many regulated industries (healthcare, finance, defense, government) will not put chat in any vendor's SaaS at any price. They need to deploy inside their own firewall.\n\nScope:\n- Single-binary or single-container deployment with PostgreSQL bundled or pluggable\n- Air-gap support: nothing phones home, no telemetry, optional Anthropic translation but works without any external API calls if local translation is configured\n- License key system if commercial — gate enterprise features (SSO, audit logs, retention) behind a license check\n- Documented installation guide for common platforms (Docker Compose, Kubernetes Helm chart, bare-metal systemd)\n- Update mechanism that doesn't require internet access\n- Backup/restore CLI for snapshotting database + uploads\n- Hardening guide: TLS termination, reverse proxy, firewall rules, log aggregation hooks\n\nThis is also where the federation story becomes a real selling point — 'self-host inside your firewall and still federate with partner companies who have their own deployment' is something Slack and Teams literally cannot offer.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "trust-signals-soc2",
+      "title": "Trust signal layer — SOC2, status page, security policy, DPA",
+      "description": "Not engineering work per se, but real launch tasks that gate enterprise adoption. Procurement teams and security reviewers ask for these by name.\n\nChecklist:\n- Public security disclosures policy + responsible reporting address (security@)\n- SOC2 Type 1 audit (months of process work — policies, controls, evidence collection — typically via Vanta or Drata)\n- SOC2 Type 2 follow-up (6+ months of operating evidence after Type 1)\n- Public status page (statuspage.io, BetterStack, or self-hosted) with incident history\n- Documented uptime SLA for hosted offering\n- DPA (Data Processing Agreement) template for GDPR / CCPA customers\n- Sub-processor list (Anthropic, hosting provider, etc.) published\n- Incident response plan documented\n- Penetration test from a reputable firm before broad enterprise rollout\n- Dependency vulnerability scanning in CI (Snyk, Dependabot, etc.)\n\nMostly process and paperwork, but a hard gate at procurement. Track separately from feature work.",
+      "type": "chore",
+      "priority": "P2",
+      "status": "backlog"
+    }
   ],
-  "version": 5
+  "version": 8
 }
