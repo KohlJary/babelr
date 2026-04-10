@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
 import { eq, and, asc } from 'drizzle-orm';
-import { rrulestr } from 'rrule';
+import rrule from 'rrule';
+const { rrulestr } = rrule;
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
