@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect } from 'react';
+import type React from 'react';
 import * as api from '../api';
 
 interface NewDMModalProps {
@@ -11,6 +12,9 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
   const [users, setUsers] = useState<{ id: string; preferredUsername: string; displayName: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
+  const [handle, setHandle] = useState('');
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [lookingUp, setLookingUp] = useState(false);
 
   useEffect(() => {
     api
@@ -31,6 +35,22 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
     }
   };
 
+  const handleRemoteLookup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!handle.trim()) return;
+    setLookupError(null);
+    setLookingUp(true);
+    try {
+      const user = await api.lookupUser(handle.trim());
+      await onStartDM(user.id);
+      onClose();
+    } catch {
+      setLookupError('User not found');
+    } finally {
+      setLookingUp(false);
+    }
+  };
+
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
@@ -40,6 +60,19 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
             &times;
           </button>
         </div>
+        <form onSubmit={handleRemoteLookup} className="dm-remote-lookup">
+          <input
+            type="text"
+            placeholder="Find by handle: user@domain"
+            value={handle}
+            onChange={(e) => setHandle(e.target.value)}
+            disabled={lookingUp}
+          />
+          <button type="submit" disabled={lookingUp || !handle.trim()}>
+            {lookingUp ? '...' : 'Find'}
+          </button>
+        </form>
+        {lookupError && <div className="dm-lookup-error">{lookupError}</div>}
         <div className="discover-list">
           {loading && <div className="sidebar-empty">Loading users...</div>}
           {!loading && users.length === 0 && (

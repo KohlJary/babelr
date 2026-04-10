@@ -133,6 +133,18 @@ async function wsPlugin(fastify: FastifyInstance) {
     }
   });
 
+  fastify.decorate('broadcastToActor', (actorId: string, message: WsServerMessage) => {
+    const connections = actorConnections.get(actorId);
+    if (!connections) return;
+
+    const data = JSON.stringify(message);
+    for (const ws of connections) {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(data);
+      }
+    }
+  });
+
   fastify.decorate('wsGetChannelSubs', (channelId: string): Set<WebSocket> => {
     return channelSubscriptions.get(channelId) ?? new Set();
   });

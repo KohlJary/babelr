@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useCallback } from 'react';
-import type { DMConversation } from '@babelr/shared';
+import type { DMConversation, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
+import { useWebSocket } from './useWebSocket';
 
 export function useDMs() {
   const [conversations, setConversations] = useState<DMConversation[]>([]);
@@ -14,6 +15,32 @@ export function useDMs() {
       .then(setConversations)
       .finally(() => setLoading(false));
   }, []);
+
+  const handleWsMessage = useCallback((msg: WsServerMessage) => {
+    if (msg.type === 'conversation:new') {
+      const conv = msg.payload.conversation;
+      setConversations((prev) => {
+        if (prev.find((c) => c.id === conv.id)) return prev;
+        return [conv, ...prev];
+      });
+    } else if (msg.type === 'dm:read') {
+      const { dmId, actorUri, lastReadAt } = msg.payload;
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === dmId
+            ? { ...c, readBy: { ...(c.readBy ?? {}), [actorUri]: lastReadAt } }
+            : c,
+        ),
+      );
+      setSelectedDM((prev) =>
+        prev && prev.id === dmId
+          ? { ...prev, readBy: { ...(prev.readBy ?? {}), [actorUri]: lastReadAt } }
+          : prev,
+      );
+    }
+  }, []);
+
+  useWebSocket(true, handleWsMessage);
 
   const selectDM = useCallback(
     (id: string) => {

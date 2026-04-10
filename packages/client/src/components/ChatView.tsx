@@ -237,6 +237,16 @@ export function ChatView({ actor, onLogout }: ChatViewProps) {
           callerRole={callerRole}
         />
         <TypingIndicator users={typingUsers} />
+        {dmMode && selectedDM && (() => {
+          const other = selectedDM.participants.find((p) => p.id !== actor.id);
+          const lastReadAt = other?.uri ? selectedDM.readBy?.[other.uri] : undefined;
+          if (!lastReadAt || !messages.length) return null;
+          const latestOwn = [...messages].reverse().find((m) => m.author.id === actor.id);
+          if (!latestOwn) return null;
+          if (new Date(latestOwn.message.published) > new Date(lastReadAt)) return null;
+          const name = other?.displayName ?? other?.preferredUsername ?? 'them';
+          return <div className="dm-seen-indicator">Seen by {name}</div>;
+        })()}
         <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
       </div>
 

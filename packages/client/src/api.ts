@@ -267,6 +267,15 @@ export async function getUsers(): Promise<{ id: string; preferredUsername: strin
   return apiFetch('/users');
 }
 
+export async function lookupUser(handle: string): Promise<{
+  id: string;
+  preferredUsername: string;
+  displayName: string | null;
+  uri: string;
+}> {
+  return apiFetch('/users/lookup', { method: 'POST', body: JSON.stringify({ handle }) });
+}
+
 // E2E encryption
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch('/auth/password', {

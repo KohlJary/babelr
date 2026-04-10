@@ -15,6 +15,7 @@ declare module 'fastify' {
       reply: import('fastify').FastifyReply,
     ) => Promise<void>;
     broadcastToChannel: (channelId: string, message: WsServerMessage) => void;
+    broadcastToActor: (actorId: string, message: WsServerMessage) => void;
     wsSubscribe: (ws: WebSocket, channelId: string) => void;
     wsUnsubscribe: (ws: WebSocket, channelId: string) => void;
     wsRemoveClient: (ws: WebSocket) => void;

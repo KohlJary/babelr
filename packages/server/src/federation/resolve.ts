@@ -8,6 +8,17 @@ const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FETCH_TIMEOUT = 10_000;
 const USER_AGENT = 'Babelr/0.1.0';
 
+function extractIconUrl(icon: unknown): string | null {
+  if (!icon) return null;
+  if (typeof icon === 'string') return icon;
+  if (typeof icon === 'object') {
+    const i = icon as { url?: unknown; href?: unknown };
+    if (typeof i.url === 'string') return i.url;
+    if (typeof i.href === 'string') return i.href;
+  }
+  return null;
+}
+
 async function fetchAP(uri: string): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(uri, {
@@ -58,6 +69,8 @@ export async function resolveActor(
     local: false,
     properties: {
       ...(data.publicKey ? { apPublicKey: data.publicKey } : {}),
+      ...(data.babelrEcdhKey ? { publicKey: data.babelrEcdhKey } : {}),
+      ...(extractIconUrl(data.icon) ? { avatarUrl: extractIconUrl(data.icon) } : {}),
     },
     updatedAt: new Date(),
   };
@@ -76,6 +89,37 @@ export async function resolveActor(
     .values(values)
     .returning();
   return created;
+}
+
+/**
+ * Look up a remote actor by `user@domain` handle via WebFinger.
+ * Returns the cached local actor row (creating or refreshing as needed).
+ */
+export async function lookupActorByHandle(
+  db: Database,
+  handle: string,
+): Promise<typeof actors.$inferSelect | null> {
+  const match = handle.match(/^@?([^@\s]+)@([^@\s]+)$/);
+  if (!match) return null;
+  const [, username, domain] = match;
+
+  const webfingerUri = `https://${domain}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${username}@${domain}`)}`;
+
+  try {
+    const res = await fetch(webfingerUri, {
+      headers: { Accept: 'application/jrd+json, application/json', 'User-Agent': USER_AGENT },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    const jrd = (await res.json()) as { links?: Array<{ rel?: string; type?: string; href?: string }> };
+    const self = jrd.links?.find(
+      (l) => l.rel === 'self' && (l.type === 'application/activity+json' || l.type === 'application/ld+json'),
+    );
+    if (!self?.href) return null;
+    return resolveActor(db, self.href);
+  } catch {
+    return null;
+  }
 }
 
 export async function resolveActorByKeyId(

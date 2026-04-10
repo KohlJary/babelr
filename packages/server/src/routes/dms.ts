@@ -108,10 +108,14 @@ export default async function dmRoutes(fastify: FastifyInstance) {
           if (props?.isDM) {
             const participants = await getDMParticipants(db, channel.uri);
             const lastMessage = await getLastMessage(db, channel.id);
+            const readBy = (props as Record<string, unknown>)?.readBy as
+              | Record<string, string>
+              | undefined;
             const conversation: DMConversation = {
               id: channel.id,
               participants,
               lastMessage,
+              ...(readBy ? { readBy } : {}),
             };
             return conversation;
           }
@@ -188,7 +192,15 @@ export default async function dmRoutes(fastify: FastifyInstance) {
 
       const participants = await getDMParticipants(db, channel.uri);
       const lastMessage = await getLastMessage(db, channel.id);
-      conversations.push({ id: channel.id, participants, lastMessage });
+      const readBy = (props as Record<string, unknown>)?.readBy as
+        | Record<string, string>
+        | undefined;
+      conversations.push({
+        id: channel.id,
+        participants,
+        lastMessage,
+        ...(readBy ? { readBy } : {}),
+      });
     }
 
     // Sort by last message time (most recent first)

@@ -19,7 +19,7 @@ import type {
   CreateChannelInput,
   WsServerMessage,
 } from '@babelr/shared';
-import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers } from '../federation/delivery.ts';
+import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, deliverDMCreate, deliverDMRead } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 
@@ -73,6 +73,7 @@ export function toAuthorView(actor: typeof actors.$inferSelect): AuthorView {
     preferredUsername: actor.preferredUsername,
     displayName: actor.displayName,
     avatarUrl: (props?.avatarUrl as string) ?? null,
+    uri: actor.uri,
   };
 }
 
@@ -190,15 +191,40 @@ export async function createMessageInChannel(
     payload: { message: messageView, author: authorView },
   });
 
-  // Federation: enqueue delivery to remote followers (public channels only)
-  if (!messageProperties?.encrypted && actor.local) {
-    ensureActorKeys(db, actor)
-      .then((actorWithKeys) => broadcastCreate(fastify, note, actorWithKeys))
-      .catch((err) => fastify.log.error(err, 'Federation enqueue failed'));
+  // Federation: enqueue delivery based on channel type
+  if (actor.local) {
+    const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+    const channelProps = (channel?.properties as Record<string, unknown> | null) ?? null;
+    const isDM = channel && !channel.belongsTo && channelProps?.isDM === true;
 
-    // Also deliver to Group followers if channel belongs to a server
-    if (note.context) {
-      const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+    if (isDM) {
+      // DM: target only remote participant(s) directly
+      const participants = await db
+        .select({ actor: actors })
+        .from(collectionItems)
+        .innerJoin(actors, eq(collectionItems.itemId, actors.id))
+        .where(eq(collectionItems.collectionUri, channel.uri));
+
+      const remoteRecipients = participants
+        .map((p) => p.actor)
+        .filter((a) => !a.local && a.inboxUri);
+
+      if (remoteRecipients.length > 0) {
+        ensureActorKeys(db, actor)
+          .then(async (actorWithKeys) => {
+            for (const recipient of remoteRecipients) {
+              await deliverDMCreate(fastify, note, actorWithKeys, recipient);
+            }
+          })
+          .catch((err) => fastify.log.error(err, 'DM federation enqueue failed'));
+      }
+    } else if (!messageProperties?.encrypted) {
+      // Public channel: broadcast to followers
+      ensureActorKeys(db, actor)
+        .then((actorWithKeys) => broadcastCreate(fastify, note, actorWithKeys))
+        .catch((err) => fastify.log.error(err, 'Federation enqueue failed'));
+
+      // Also deliver to Group followers if channel belongs to a server
       if (channel?.belongsTo) {
         const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
         if (group) {
@@ -639,6 +665,37 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           channelId,
           lastReadAt: now,
         });
+      }
+
+      // Federate read receipts for DMs with remote participants
+      const channelProps = channel.properties as Record<string, unknown> | null;
+      if (!channel.belongsTo && channelProps?.isDM && request.actor.local) {
+        const sender = request.actor;
+        (async () => {
+          try {
+            // Find the most recent remote-authored message in this DM to use as the Read target
+            const [latestRemote] = await db
+              .select({ object: objects, actor: actors })
+              .from(objects)
+              .innerJoin(actors, eq(objects.attributedTo, actors.id))
+              .where(and(eq(objects.context, channelId), eq(objects.type, 'Note'), eq(actors.local, false)))
+              .orderBy(desc(objects.published))
+              .limit(1);
+
+            if (!latestRemote) return;
+
+            const senderWithKeys = await ensureActorKeys(db, sender);
+            await deliverDMRead(
+              fastify,
+              senderWithKeys,
+              latestRemote.actor,
+              latestRemote.object.uri,
+              now.toISOString(),
+            );
+          } catch (err) {
+            fastify.log.error(err, 'DM read receipt federation failed');
+          }
+        })();
       }
 
       return { ok: true };

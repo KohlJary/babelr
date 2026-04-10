@@ -6,6 +6,7 @@ import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
+import { lookupActorByHandle } from '../federation/resolve.ts';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 
@@ -221,6 +222,46 @@ export default async function authRoutes(fastify: FastifyInstance) {
       preferredUsername: u.preferredUsername,
       displayName: u.displayName,
     }));
+  });
+
+  // Look up a user by handle (supports remote via WebFinger)
+  fastify.post<{ Body: { handle: string } }>('/users/lookup', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    const raw = (request.body?.handle ?? '').trim().replace(/^@/, '');
+    if (!raw) return reply.status(400).send({ error: 'handle is required' });
+
+    // Local username (no @domain) or @user@domain matching this instance
+    const atIndex = raw.indexOf('@');
+    if (atIndex === -1 || raw.slice(atIndex + 1) === domain) {
+      const username = atIndex === -1 ? raw : raw.slice(0, atIndex);
+      const [local] = await db
+        .select()
+        .from(actors)
+        .where(
+          and(eq(actors.preferredUsername, username), eq(actors.local, true), eq(actors.type, 'Person')),
+        )
+        .limit(1);
+      if (!local) return reply.status(404).send({ error: 'User not found' });
+      return {
+        id: local.id,
+        preferredUsername: local.preferredUsername,
+        displayName: local.displayName,
+        uri: local.uri,
+      };
+    }
+
+    // Remote lookup via WebFinger
+    const remote = await lookupActorByHandle(db, raw);
+    if (!remote) return reply.status(404).send({ error: 'Remote user not found' });
+    return {
+      id: remote.id,
+      preferredUsername: remote.preferredUsername,
+      displayName: remote.displayName,
+      uri: remote.uri,
+    };
   });
 
   // Update profile (displayName, summary/bio, avatarUrl)

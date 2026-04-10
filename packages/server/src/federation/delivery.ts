@@ -195,6 +195,59 @@ export async function broadcastCreate(
   await enqueueToFollowers(fastify, senderActor, activity);
 }
 
+// Send a Read activity to a remote actor marking an object as read at a given timestamp
+export async function deliverDMRead(
+  fastify: FastifyInstance,
+  senderActor: typeof actors.$inferSelect,
+  recipientActor: typeof actors.$inferSelect,
+  objectUri: string,
+  publishedIso: string,
+) {
+  if (recipientActor.local || !recipientActor.inboxUri) return;
+
+  const config = fastify.config;
+  const protocol = config.secureCookies ? 'https' : 'http';
+  const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+
+  const activity = {
+    ...serializeActivity(activityUri, 'Read', senderActor.uri, objectUri, [recipientActor.uri], []),
+    published: publishedIso,
+  };
+
+  await enqueueDelivery(fastify.db, activity, recipientActor.inboxUri, senderActor.id);
+}
+
+// Targeted delivery for DMs — send a Create activity to a single remote recipient
+export async function deliverDMCreate(
+  fastify: FastifyInstance,
+  note: typeof objects.$inferSelect,
+  senderActor: typeof actors.$inferSelect,
+  recipientActor: typeof actors.$inferSelect,
+) {
+  if (recipientActor.local || !recipientActor.inboxUri) return;
+
+  const config = fastify.config;
+  const protocol = config.secureCookies ? 'https' : 'http';
+
+  const noteJson = {
+    ...serializeNote(note, senderActor.uri),
+    to: [recipientActor.uri],
+    cc: [],
+  };
+  const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+
+  const activity = serializeActivity(
+    activityUri,
+    'Create',
+    senderActor.uri,
+    noteJson,
+    [recipientActor.uri],
+    [],
+  );
+
+  await enqueueDelivery(fastify.db, activity, recipientActor.inboxUri, senderActor.id);
+}
+
 // Also enqueue to Group followers when posting in a server channel
 export async function broadcastToGroupFollowers(
   fastify: FastifyInstance,

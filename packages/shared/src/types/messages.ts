@@ -28,6 +28,8 @@ export interface AuthorView {
   displayName: string | null;
   avatarUrl?: string | null;
   presence?: PresenceStatus;
+  /** ActivityPub actor URI — used for federated identity matching */
+  uri?: string;
 }
 
 export interface ChannelView {
@@ -49,6 +51,8 @@ export interface DMConversation {
   id: string;
   participants: AuthorView[];
   lastMessage?: MessageView;
+  /** Map of actorUri → ISO timestamp of last read position (federated read receipts) */
+  readBy?: Record<string, string>;
 }
 
 export interface MessageWithAuthor {

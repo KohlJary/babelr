@@ -152,6 +152,9 @@ async function routeActivity(
     case 'Update':
       await handleUpdate(fastify, remoteActor, body);
       break;
+    case 'Read':
+      await handleRead(fastify, remoteActor, body);
+      break;
     default:
       fastify.log.info({ type: body.type }, 'Unhandled activity type');
   }
@@ -221,6 +224,81 @@ async function handleUndo(
   }
 }
 
+/**
+ * Look up (or create) a local DM collection between a local Person and a remote actor.
+ * Returns the local DM object id.
+ */
+async function findOrCreateDM(
+  fastify: FastifyInstance,
+  localActor: typeof actors.$inferSelect,
+  remoteActor: typeof actors.$inferSelect,
+): Promise<{ dmId: string; isNew: boolean }> {
+  const db = fastify.db;
+
+  // Search for an existing DM containing both actors
+  const localMemberships = await db
+    .select({ collectionUri: collectionItems.collectionUri })
+    .from(collectionItems)
+    .where(eq(collectionItems.itemUri, localActor.uri));
+
+  for (const m of localMemberships) {
+    const [otherEntry] = await db
+      .select({ id: collectionItems.id })
+      .from(collectionItems)
+      .where(
+        and(
+          eq(collectionItems.collectionUri, m.collectionUri),
+          eq(collectionItems.itemUri, remoteActor.uri),
+        ),
+      )
+      .limit(1);
+    if (!otherEntry) continue;
+
+    const [channel] = await db
+      .select()
+      .from(objects)
+      .where(eq(objects.uri, m.collectionUri))
+      .limit(1);
+    if (!channel) continue;
+    const props = channel.properties as Record<string, unknown> | null;
+    if (channel.belongsTo === null && props?.isDM) {
+      return { dmId: channel.id, isNew: false };
+    }
+  }
+
+  // Create a new local DM collection
+  const config = fastify.config;
+  const protocol = config.secureCookies ? 'https' : 'http';
+  const dmUri = `${protocol}://${config.domain}/dms/${crypto.randomUUID()}`;
+
+  const [channel] = await db
+    .insert(objects)
+    .values({
+      uri: dmUri,
+      type: 'OrderedCollection',
+      belongsTo: null,
+      properties: { name: null, isDM: true },
+    })
+    .returning();
+
+  await db.insert(collectionItems).values([
+    {
+      collectionUri: channel.uri,
+      collectionId: channel.id,
+      itemUri: localActor.uri,
+      itemId: localActor.id,
+    },
+    {
+      collectionUri: channel.uri,
+      collectionId: channel.id,
+      itemUri: remoteActor.uri,
+      itemId: remoteActor.id,
+    },
+  ]);
+
+  return { dmId: channel.id, isNew: true };
+}
+
 async function handleCreate(
   fastify: FastifyInstance,
   remoteActor: typeof actors.$inferSelect,
@@ -231,19 +309,100 @@ async function handleCreate(
     // Object is a URI reference — resolve it
     await resolveObject(fastify.db, obj);
   } else if (obj?.type === 'Note' && obj.id) {
-    // Inline Note — store directly
-    await fastify.db
+    const toList = (obj.to as string[]) ?? [];
+    const isPublic = toList.includes('https://www.w3.org/ns/activitystreams#Public');
+
+    // Detect DM: non-public, addressed to a local Person
+    let localDMId: string | null = null;
+    let dmIsNew = false;
+    let dmLocalRecipient: typeof actors.$inferSelect | null = null;
+    if (!isPublic) {
+      for (const uri of toList) {
+        const [target] = await fastify.db
+          .select()
+          .from(actors)
+          .where(and(eq(actors.uri, uri), eq(actors.local, true), eq(actors.type, 'Person')))
+          .limit(1);
+        if (target) {
+          const result = await findOrCreateDM(fastify, target, remoteActor);
+          localDMId = result.dmId;
+          dmIsNew = result.isNew;
+          dmLocalRecipient = target;
+          break;
+        }
+      }
+    }
+
+    // Extract Babelr-custom encryption fields
+    const noteProps: Record<string, unknown> = {};
+    if ((obj as Record<string, unknown>).babelrEncrypted) noteProps.encrypted = true;
+    if ((obj as Record<string, unknown>).babelrIv) {
+      noteProps.iv = (obj as Record<string, unknown>).babelrIv;
+    }
+    if ((obj as Record<string, unknown>).babelrAttachments) {
+      noteProps.attachments = (obj as Record<string, unknown>).babelrAttachments;
+    }
+
+    const [stored] = await fastify.db
       .insert(objects)
       .values({
         uri: obj.id,
         type: 'Note',
         attributedTo: remoteActor.id,
         content: obj.content ?? null,
-        to: (obj.to as string[]) ?? [],
+        context: localDMId,
+        to: toList,
         cc: (obj.cc as string[]) ?? [],
         published: obj.published ? new Date(obj.published as string) : new Date(),
+        ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
       })
-      .onConflictDoNothing({ target: objects.uri });
+      .onConflictDoNothing({ target: objects.uri })
+      .returning();
+
+    // Broadcast to locally-connected DM participants
+    if (localDMId && stored) {
+      const messageView = {
+        id: stored.id,
+        content: stored.content ?? '',
+        channelId: localDMId,
+        authorId: remoteActor.id,
+        published: stored.published.toISOString(),
+        ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
+      };
+      const authorView = {
+        id: remoteActor.id,
+        preferredUsername: remoteActor.preferredUsername,
+        displayName: remoteActor.displayName,
+        avatarUrl: ((remoteActor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
+      };
+      fastify.broadcastToChannel(localDMId, {
+        type: 'message:new',
+        payload: { message: messageView, author: authorView },
+      });
+
+      // If this is a brand-new DM, push conversation:new to the recipient
+      // so their sidebar updates without a reload
+      if (dmIsNew && dmLocalRecipient) {
+        const localAuthorView = {
+          id: dmLocalRecipient.id,
+          preferredUsername: dmLocalRecipient.preferredUsername,
+          displayName: dmLocalRecipient.displayName,
+          avatarUrl:
+            ((dmLocalRecipient.properties as Record<string, unknown> | null)?.avatarUrl as string) ??
+            null,
+        };
+        fastify.broadcastToActor(dmLocalRecipient.id, {
+          type: 'conversation:new',
+          payload: {
+            conversation: {
+              id: localDMId,
+              participants: [localAuthorView, authorView],
+              lastMessage: messageView,
+            },
+          },
+        });
+      }
+    }
   }
 
   // Log the activity
@@ -260,6 +419,48 @@ async function handleCreate(
   }
 
   fastify.log.info({ actor: remoteActor.uri, type: 'Create' }, 'Remote Create processed');
+}
+
+async function handleRead(
+  fastify: FastifyInstance,
+  remoteActor: typeof actors.$inferSelect,
+  activity: APActivity & { published?: string },
+) {
+  const objectUri = typeof activity.object === 'string' ? activity.object : activity.object?.id;
+  if (!objectUri) return;
+
+  // Look up the referenced Note — it should be one we sent (and therefore stored locally)
+  const [note] = await fastify.db.select().from(objects).where(eq(objects.uri, objectUri)).limit(1);
+  if (!note?.context) return;
+
+  // Find the DM collection this Note belongs to
+  const [dm] = await fastify.db
+    .select()
+    .from(objects)
+    .where(eq(objects.id, note.context))
+    .limit(1);
+  if (!dm) return;
+  const dmProps = (dm.properties as Record<string, unknown> | null) ?? {};
+  if (!dmProps.isDM) return;
+
+  const lastReadAt = activity.published ?? new Date().toISOString();
+  const readBy = { ...((dmProps.readBy as Record<string, string> | undefined) ?? {}) };
+  readBy[remoteActor.uri] = lastReadAt;
+
+  await fastify.db
+    .update(objects)
+    .set({ properties: { ...dmProps, readBy } })
+    .where(eq(objects.id, dm.id));
+
+  // Notify the local author of the note so their UI updates
+  if (note.attributedTo) {
+    fastify.broadcastToActor(note.attributedTo, {
+      type: 'dm:read',
+      payload: { dmId: dm.id, actorUri: remoteActor.uri, lastReadAt },
+    });
+  }
+
+  fastify.log.info({ reader: remoteActor.uri, dmId: dm.id }, 'Remote DM Read processed');
 }
 
 async function handleDelete(
