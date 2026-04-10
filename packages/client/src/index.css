@@ -1973,3 +1973,16 @@ textarea.modal-input {
   font-style: italic;
   margin-left: 0.5rem;
 }
+
+.channel-settings-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.3rem;
+  opacity: 0.5;
+  transition: opacity 0.1s;
+}
+.channel-settings-btn:hover {
+  opacity: 1;
+}

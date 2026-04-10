@@ -141,11 +141,11 @@ export function ChannelSidebar({
         )}
         {canManageChannels && onEditChannel && (
           <button
-            className="channel-mute-btn"
+            className="channel-settings-btn"
             onClick={() => onEditChannel(ch.id)}
             title="Channel settings"
           >
-            {'\u2699'}
+            {'\u2699\uFE0F'}
           </button>
         )}
       </div>
