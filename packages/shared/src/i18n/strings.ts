@@ -317,6 +317,20 @@ export const UI_STRINGS = {
   'events.failedToCreate': 'Failed to create event',
   'events.failedToSave': 'Failed to save event',
 
+  // Voice channels
+  'createChannel.voiceChannel': 'Voice channel',
+  'voice.join': 'Join voice',
+  'voice.leave': 'Leave voice',
+  'voice.connecting': 'Connecting...',
+  'voice.muteMic': 'Mute microphone',
+  'voice.unmuteMic': 'Unmute microphone',
+  'voice.noParticipants': 'No one else is here yet.',
+  'voice.participants': 'Participants',
+  'voice.roomFull': 'Voice channel is full (max {max}).',
+  'voice.micPermissionDenied': 'Microphone permission denied. Enable it in your browser settings.',
+  'voice.connected': 'Connected',
+  'voice.youAreMuted': 'You are muted',
+
   // Languages
   'language.en': 'English',
   'language.es': 'Spanish',

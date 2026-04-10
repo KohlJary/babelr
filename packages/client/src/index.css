@@ -2102,3 +2102,134 @@ textarea.modal-input {
   flex: 1;
   min-height: 0;
 }
+
+/* Voice channels */
+.sidebar-item.voice-active {
+  color: #10b981;
+}
+
+.voice-panel {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  width: 300px;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.voice-panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.voice-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: #ddd;
+  font-size: 0.9rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.voice-panel-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.voice-panel-status {
+  font-size: 0.75rem;
+  color: #888;
+}
+.voice-panel-status.online {
+  color: #10b981;
+}
+.voice-participants {
+  padding: 0.5rem 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.voice-participant {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1rem;
+  color: #ddd;
+  font-size: 0.9rem;
+}
+.voice-participant.pending {
+  opacity: 0.6;
+}
+.voice-participant.self {
+  border-bottom: 1px solid #2a2a2a;
+}
+.voice-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.voice-participant-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-mic-muted {
+  color: #ef4444;
+  font-size: 0.8rem;
+}
+.voice-empty {
+  padding: 0.75rem 1rem;
+  color: #777;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+.voice-controls {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #2a2a2a;
+}
+.voice-control-btn {
+  flex: 1;
+  background: #2a2a2a;
+  color: #ddd;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.voice-control-btn:hover {
+  background: #3a3a3a;
+}
+.voice-control-btn.active {
+  background: #7f1d1d;
+  border-color: #991b1b;
+}
+.voice-control-btn.leave {
+  background: #7f1d1d;
+  border-color: #991b1b;
+  color: white;
+}
+.voice-control-btn.leave:hover {
+  background: #991b1b;
+}

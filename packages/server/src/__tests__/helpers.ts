@@ -55,6 +55,11 @@ export async function createTestApp() {
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});
+        fastify.decorate('voiceJoin', () => null);
+        fastify.decorate('voiceLeave', () => false);
+        fastify.decorate('voiceGetRoom', () => []);
+        fastify.decorate('voiceBroadcastToRoom', () => {});
+        fastify.decorate('voiceRelayToActor', () => false);
       },
       { name: 'ws', dependencies: ['db', 'config-plugin'] },
     ),

@@ -3,7 +3,12 @@ import { useState } from 'react';
 import { useT } from '../i18n/I18nProvider';
 
 interface CreateChannelModalProps {
-  onCreateChannel: (name: string, category?: string, isPrivate?: boolean) => Promise<void>;
+  onCreateChannel: (
+    name: string,
+    category?: string,
+    isPrivate?: boolean,
+    channelType?: 'text' | 'voice',
+  ) => Promise<void>;
   onClose: () => void;
 }
 
@@ -12,6 +17,7 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [isVoice, setIsVoice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,7 +25,12 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await onCreateChannel(name.trim(), category.trim() || undefined, isPrivate || undefined);
+      await onCreateChannel(
+        name.trim(),
+        category.trim() || undefined,
+        isPrivate || undefined,
+        isVoice ? 'voice' : 'text',
+      );
       onClose();
     } catch {
       // Error handling could be added
@@ -53,6 +64,14 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
             onChange={(e) => setCategory(e.target.value)}
             className="modal-input"
           />
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={isVoice}
+              onChange={(e) => setIsVoice(e.target.checked)}
+            />
+            <span>{t('createChannel.voiceChannel')}</span>
+          </label>
           <label className="settings-toggle">
             <input
               type="checkbox"

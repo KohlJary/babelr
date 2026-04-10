@@ -66,6 +66,108 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             fastify.wsRegisterActorConnection(socket, actor.id);
             break;
           }
+          case 'voice:join': {
+            const channelId = msg.payload.channelId;
+            const actorProps = (actor.properties as Record<string, unknown> | null) ?? null;
+            const participant = {
+              actorId: actor.id,
+              preferredUsername: actor.preferredUsername,
+              displayName: actor.displayName,
+              avatarUrl: (actorProps?.avatarUrl as string | null) ?? null,
+              uri: actor.uri,
+              ws: socket,
+            };
+            const existing = fastify.voiceJoin(channelId, participant);
+            if (existing === null) {
+              const fullMsg: WsServerMessage = {
+                type: 'voice:full',
+                payload: { channelId, max: 8 },
+              };
+              socket.send(JSON.stringify(fullMsg));
+              break;
+            }
+            // Send current room state to the new joiner
+            const stateMsg: WsServerMessage = {
+              type: 'voice:room-state',
+              payload: {
+                channelId,
+                participants: existing.map((p) => ({
+                  id: p.actorId,
+                  preferredUsername: p.preferredUsername,
+                  displayName: p.displayName,
+                  avatarUrl: p.avatarUrl,
+                  uri: p.uri,
+                })),
+              },
+            };
+            socket.send(JSON.stringify(stateMsg));
+            // Broadcast participant-joined to existing peers
+            const joinedMsg: WsServerMessage = {
+              type: 'voice:participant-joined',
+              payload: {
+                channelId,
+                participant: {
+                  id: actor.id,
+                  preferredUsername: actor.preferredUsername,
+                  displayName: actor.displayName,
+                  avatarUrl: participant.avatarUrl,
+                  uri: actor.uri,
+                },
+              },
+            };
+            fastify.voiceBroadcastToRoom(channelId, joinedMsg, actor.id);
+            break;
+          }
+          case 'voice:leave': {
+            const channelId = msg.payload.channelId;
+            if (fastify.voiceLeave(channelId, actor.id)) {
+              const leftMsg: WsServerMessage = {
+                type: 'voice:participant-left',
+                payload: { channelId, actorId: actor.id },
+              };
+              fastify.voiceBroadcastToRoom(channelId, leftMsg);
+            }
+            break;
+          }
+          case 'voice:offer': {
+            const relay: WsServerMessage = {
+              type: 'voice:offer',
+              payload: {
+                channelId: msg.payload.channelId,
+                fromActorId: actor.id,
+                toActorId: msg.payload.toActorId,
+                sdp: msg.payload.sdp,
+              },
+            };
+            fastify.voiceRelayToActor(msg.payload.channelId, msg.payload.toActorId, relay);
+            break;
+          }
+          case 'voice:answer': {
+            const relay: WsServerMessage = {
+              type: 'voice:answer',
+              payload: {
+                channelId: msg.payload.channelId,
+                fromActorId: actor.id,
+                toActorId: msg.payload.toActorId,
+                sdp: msg.payload.sdp,
+              },
+            };
+            fastify.voiceRelayToActor(msg.payload.channelId, msg.payload.toActorId, relay);
+            break;
+          }
+          case 'voice:ice': {
+            const relay: WsServerMessage = {
+              type: 'voice:ice',
+              payload: {
+                channelId: msg.payload.channelId,
+                fromActorId: actor.id,
+                toActorId: msg.payload.toActorId,
+                candidate: msg.payload.candidate,
+              },
+            };
+            fastify.voiceRelayToActor(msg.payload.channelId, msg.payload.toActorId, relay);
+            break;
+          }
         }
       } catch {
         // Ignore malformed messages

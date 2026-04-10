@@ -39,10 +39,12 @@ function parseMentions(content: string): string[] {
 
 export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
   const props = obj.properties as Record<string, unknown> | null;
+  const channelType = (props?.channelType as 'text' | 'voice' | undefined) ?? 'text';
   return {
     id: obj.id,
     name: (props?.name as string) ?? 'unnamed',
     serverId: obj.belongsTo,
+    channelType,
     ...(props?.category ? { category: props.category as string } : {}),
     ...(props?.isPrivate ? { isPrivate: true } : {}),
     ...(props?.topic ? { topic: props.topic as string } : {}),
@@ -373,10 +375,11 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
-      const { name, category, isPrivate } = request.body;
+      const { name, category, isPrivate, channelType } = request.body;
       if (!name || name.trim().length === 0) {
         return reply.status(400).send({ error: 'Channel name is required' });
       }
+      const kind = channelType === 'voice' ? 'voice' : 'text';
 
       // Verify server exists and user is owner
       const [server] = await db
@@ -400,6 +403,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           belongsTo: server.id,
           properties: {
             name: name.trim(),
+            channelType: kind,
             ...(category ? { category: category.trim() } : {}),
             ...(isPrivate ? { isPrivate: true } : {}),
           },

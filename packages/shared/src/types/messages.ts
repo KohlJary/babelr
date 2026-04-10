@@ -32,12 +32,16 @@ export interface AuthorView {
   uri?: string;
 }
 
+export type ChannelType = 'text' | 'voice';
+
 export interface ChannelView {
   id: string;
   name: string;
   serverId: string | null;
   category?: string;
   isPrivate?: boolean;
+  /** 'text' (default) or 'voice' */
+  channelType?: ChannelType;
   /** One-line topic shown in the channel header */
   topic?: string | null;
   /** Longer description (markdown permitted) */
@@ -111,4 +115,5 @@ export interface CreateChannelInput {
   name: string;
   category?: string;
   isPrivate?: boolean;
+  channelType?: ChannelType;
 }

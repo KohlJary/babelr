@@ -30,6 +30,8 @@ import { ChannelInviteModal } from './ChannelInviteModal';
 import { FriendsPanel } from './FriendsPanel';
 import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { EventsPanel } from './EventsPanel';
+import { VoicePanel } from './VoicePanel';
+import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -55,6 +57,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showFriends, setShowFriends] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+  const voice = useVoice();
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
@@ -221,6 +224,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
         onEditChannel={(channelId) => setEditingChannelId(channelId)}
         onShowCalendar={() => setShowCalendar(true)}
+        onJoinVoice={(channelId) => {
+          if (voice.state.channelId === channelId) return;
+          if (voice.state.channelId) voice.leave();
+          void voice.join(channelId);
+        }}
+        activeVoiceChannelId={voice.state.channelId}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -286,8 +295,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       )}
       {showCreateChannel && selectedServer && (
         <CreateChannelModal
-          onCreateChannel={async (name, category, isPrivate) => {
-            await createChannel({ name, category, isPrivate });
+          onCreateChannel={async (name, category, isPrivate, channelType) => {
+            await createChannel({ name, category, isPrivate, channelType });
           }}
           onClose={() => setShowCreateChannel(false)}
         />
@@ -372,6 +381,18 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             channel={ch}
             onClose={() => setEditingChannelId(null)}
             onUpdated={updateChannel}
+          />
+        );
+      })()}
+      {voice.state.channelId && (() => {
+        const vCh = channels.find((c) => c.id === voice.state.channelId);
+        return (
+          <VoicePanel
+            channelName={vCh?.name ?? 'voice'}
+            actor={actor}
+            voice={voice.state}
+            onLeave={voice.leave}
+            onToggleMute={voice.toggleMute}
           />
         );
       })()}

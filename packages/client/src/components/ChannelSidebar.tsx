@@ -28,6 +28,8 @@ interface ChannelSidebarProps {
   canManageChannels?: boolean;
   onEditChannel?: (channelId: string) => void;
   onShowCalendar?: () => void;
+  onJoinVoice?: (channelId: string) => void;
+  activeVoiceChannelId?: string | null;
 }
 
 export function ChannelSidebar({
@@ -55,6 +57,8 @@ export function ChannelSidebar({
   canManageChannels,
   onEditChannel,
   onShowCalendar,
+  onJoinVoice,
+  activeVoiceChannelId,
 }: ChannelSidebarProps) {
   const t = useT();
   if (mode === 'dms') {
@@ -130,14 +134,20 @@ export function ChannelSidebar({
   const renderChannel = (ch: ChannelView) => {
     const unreadCount = unreadCounts?.get(ch.id) ?? 0;
     const isMuted = mutedChannels?.has(ch.id) ?? false;
+    const isVoice = ch.channelType === 'voice';
+    const isActiveVoice = isVoice && activeVoiceChannelId === ch.id;
+    const icon = isVoice ? '\uD83D\uDD0A ' : ch.isPrivate ? '\uD83D\uDD12 ' : '# ';
     return (
       <div key={ch.id} className={`sidebar-channel-row ${isMuted ? 'muted' : ''}`}>
         <button
-          className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''}`}
-          onClick={() => onSelectChannel(ch.id)}
+          className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''} ${isActiveVoice ? 'voice-active' : ''}`}
+          onClick={() => {
+            if (isVoice && onJoinVoice) onJoinVoice(ch.id);
+            else onSelectChannel(ch.id);
+          }}
         >
-          <span className="sidebar-item-name">{ch.isPrivate ? '\uD83D\uDD12 ' : '# '}{ch.name}</span>
-          {unreadCount > 0 && !isMuted && <span className="unread-badge">{unreadCount}</span>}
+          <span className="sidebar-item-name">{icon}{ch.name}</span>
+          {unreadCount > 0 && !isMuted && !isVoice && <span className="unread-badge">{unreadCount}</span>}
         </button>
         {onToggleMute && (
           <button
