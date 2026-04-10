@@ -27,14 +27,16 @@ export function ChannelHeader({
   return (
     <header className="channel-header">
       <div className="channel-info">
-        <span className="channel-name">
-          {encrypted && <span className="e2e-lock" title="End-to-end encrypted">&#128274; </span>}
-          {channelName}
-        </span>
+        <div className="channel-info-top">
+          <span className="channel-name">
+            {encrypted && <span className="e2e-lock" title="End-to-end encrypted">&#128274; </span>}
+            {channelName}
+          </span>
+          <span className={`connection-status ${connected ? 'online' : 'offline'}`}>
+            {connected ? 'connected' : 'reconnecting...'}
+          </span>
+        </div>
         {channelTopic && <span className="channel-topic">{channelTopic}</span>}
-        <span className={`connection-status ${connected ? 'online' : 'offline'}`}>
-          {connected ? 'connected' : 'reconnecting...'}
-        </span>
       </div>
       <div className="user-info">
         <button className="username-btn" onClick={onOpenProfile} title="Edit profile">
