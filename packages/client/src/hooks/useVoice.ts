@@ -55,6 +55,12 @@ export function useVoice() {
   const wsRef = useRef<WebSocket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, PeerEntry>>(new Map());
+  // Actor metadata for participants we know about — populated from
+  // voice:room-state (existing participants at join time) and
+  // voice:participant-joined (peers joining after us). Consulted when a
+  // voice:offer arrives so we can attach the correct display name to
+  // the peer connection instead of falling back to "unknown".
+  const knownActorsRef = useRef<Map<string, AuthorView>>(new Map());
   const channelIdRef = useRef<string | null>(null);
 
   const syncPeersToState = useCallback(() => {
@@ -146,6 +152,11 @@ export function useVoice() {
       switch (msg.type) {
         case 'voice:room-state': {
           if (msg.payload.channelId !== currentChannel) return;
+          // Record the existing participants so their metadata is available
+          // if anything in this handler (or a later voice:offer) looks them up.
+          for (const participant of msg.payload.participants) {
+            knownActorsRef.current.set(participant.id, participant);
+          }
           // Create an RTCPeerConnection and offer for each existing peer
           for (const participant of msg.payload.participants) {
             if (peersRef.current.has(participant.id)) continue;
@@ -170,14 +181,18 @@ export function useVoice() {
         }
 
         case 'voice:participant-joined': {
-          // Do nothing — the new peer will initiate offers to us.
-          // We just note their presence for display purposes.
+          // We don't create the peer connection yet — the new joiner will
+          // send us an offer. But we DO record their actor metadata so
+          // that when their offer arrives, we can attach the right name
+          // to the peer entry instead of the "unknown" fallback.
           if (msg.payload.channelId !== currentChannel) return;
+          knownActorsRef.current.set(msg.payload.participant.id, msg.payload.participant);
           break;
         }
 
         case 'voice:participant-left': {
           if (msg.payload.channelId !== currentChannel) return;
+          knownActorsRef.current.delete(msg.payload.actorId);
           closePeer(msg.payload.actorId);
           break;
         }
@@ -185,19 +200,20 @@ export function useVoice() {
         case 'voice:offer': {
           if (msg.payload.channelId !== currentChannel) return;
           const fromId = msg.payload.fromActorId;
-          // Ensure we have a peer entry (create if new)
+          // Ensure we have a peer entry (create if new). Prefer the actor
+          // metadata we cached from voice:participant-joined or
+          // voice:room-state; fall back to a minimal placeholder only if
+          // the offer somehow arrives before either of those.
           let entry = peersRef.current.get(fromId);
           if (!entry) {
-            // We don't have the full actor here; construct a minimal AuthorView
-            entry = createPeerConnection(
-              {
-                id: fromId,
-                preferredUsername: 'unknown',
-                displayName: null,
-                avatarUrl: null,
-              },
-              currentChannel,
-            );
+            const known = knownActorsRef.current.get(fromId);
+            const actor: AuthorView = known ?? {
+              id: fromId,
+              preferredUsername: 'unknown',
+              displayName: null,
+              avatarUrl: null,
+            };
+            entry = createPeerConnection(actor, currentChannel);
           }
           try {
             await entry.pc.setRemoteDescription({ type: 'offer', sdp: msg.payload.sdp });
@@ -336,6 +352,7 @@ export function useVoice() {
           for (const actorId of Array.from(peersRef.current.keys())) {
             closePeer(actorId);
           }
+          knownActorsRef.current.clear();
           if (localStreamRef.current) {
             for (const track of localStreamRef.current.getTracks()) track.stop();
             localStreamRef.current = null;
@@ -356,6 +373,7 @@ export function useVoice() {
     for (const actorId of Array.from(peersRef.current.keys())) {
       closePeer(actorId);
     }
+    knownActorsRef.current.clear();
     if (localStreamRef.current) {
       for (const track of localStreamRef.current.getTracks()) track.stop();
       localStreamRef.current = null;
