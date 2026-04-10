@@ -315,6 +315,55 @@ export async function removeFriend(friendshipId: string): Promise<{ ok: boolean 
   return apiFetch(`/friends/${friendshipId}`, { method: 'DELETE' });
 }
 
+// Events
+export async function listEvents(params: {
+  scope?: 'user' | 'server';
+  ownerId?: string;
+  rangeStart?: string;
+  rangeEnd?: string;
+}): Promise<{ events: import('@babelr/shared').EventView[] }> {
+  const qs = new URLSearchParams();
+  if (params.scope) qs.set('scope', params.scope);
+  if (params.ownerId) qs.set('ownerId', params.ownerId);
+  if (params.rangeStart) qs.set('rangeStart', params.rangeStart);
+  if (params.rangeEnd) qs.set('rangeEnd', params.rangeEnd);
+  return apiFetch(`/events?${qs.toString()}`);
+}
+
+export async function getEvent(eventId: string): Promise<import('@babelr/shared').EventView> {
+  return apiFetch(`/events/${eventId}`);
+}
+
+export async function createEvent(
+  input: import('@babelr/shared').CreateEventInput,
+): Promise<import('@babelr/shared').EventView> {
+  return apiFetch('/events', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function updateEvent(
+  eventId: string,
+  input: import('@babelr/shared').UpdateEventInput,
+): Promise<import('@babelr/shared').EventView> {
+  return apiFetch(`/events/${eventId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteEvent(eventId: string): Promise<{ ok: boolean }> {
+  return apiFetch(`/events/${eventId}`, { method: 'DELETE' });
+}
+
+export async function rsvpEvent(
+  eventId: string,
+  status: import('@babelr/shared').EventRsvpStatus,
+): Promise<import('@babelr/shared').EventView> {
+  return apiFetch(`/events/${eventId}/rsvp`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
 // E2E encryption
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch('/auth/password', {

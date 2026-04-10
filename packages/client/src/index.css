@@ -1996,3 +1996,109 @@ textarea.modal-input {
 .channel-settings-btn:hover {
   opacity: 1;
 }
+
+/* Events / calendar */
+.event-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.65rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #2a2a2a;
+  text-align: left;
+  color: #ddd;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.1s;
+}
+.event-row:hover {
+  background: #1f1f1f;
+}
+.event-row-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.event-row-title {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+.event-row-meta {
+  color: #888;
+  font-size: 0.8rem;
+}
+.event-recurrence-badge {
+  background: #2a2a2a;
+  color: #aaa;
+  padding: 0.1rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.event-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0;
+}
+.event-meta-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: #ccc;
+  font-size: 0.9rem;
+}
+.event-meta-label {
+  color: #888;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.event-description {
+  padding: 0.5rem 0;
+  color: #ccc;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.event-rsvp-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  align-items: center;
+}
+.event-attendees-section {
+  padding: 0.5rem 0;
+}
+.event-attendee-group {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  color: #ccc;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+.event-attendee-label {
+  color: #888;
+  font-weight: 500;
+  min-width: 6rem;
+}
+.event-attendee-declined {
+  opacity: 0.6;
+}
+.event-detail-panel {
+  max-height: 90vh;
+}
+.event-chat-embed {
+  display: flex;
+  flex-direction: column;
+  height: 350px;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.event-chat-embed .message-list {
+  flex: 1;
+  min-height: 0;
+}

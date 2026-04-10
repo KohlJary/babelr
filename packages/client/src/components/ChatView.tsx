@@ -29,6 +29,7 @@ import { MentionsPanel } from './MentionsPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
 import { FriendsPanel } from './FriendsPanel';
 import { ChannelSettingsPanel } from './ChannelSettingsPanel';
+import { EventsPanel } from './EventsPanel';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -53,6 +54,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
@@ -218,6 +220,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         onShowFriends={dmMode ? () => setShowFriends(true) : undefined}
         canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
         onEditChannel={(channelId) => setEditingChannelId(channelId)}
+        onShowCalendar={() => setShowCalendar(true)}
       />
       <div className="chat-panel">
         <ChannelHeader
@@ -372,6 +375,25 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           />
         );
       })()}
+      {showCalendar && (
+        <EventsPanel
+          scope={dmMode || !selectedServer ? 'user' : 'server'}
+          ownerId={dmMode || !selectedServer ? actor.id : selectedServer.id}
+          ownerName={dmMode || !selectedServer ? undefined : selectedServer.name}
+          actor={actor}
+          channels={!dmMode ? channels : undefined}
+          canCreate={
+            dmMode || !selectedServer
+              ? true
+              : ['owner', 'admin', 'moderator'].includes(callerRole)
+          }
+          onClose={() => setShowCalendar(false)}
+          onGoToChannel={(channelId) => {
+            setDmMode(false);
+            selectChannel(channelId);
+          }}
+        />
+      )}
     </div>
   );
 }

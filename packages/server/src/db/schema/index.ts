@@ -11,3 +11,4 @@ export { notificationPreferences } from './notification-preferences.ts';
 export { invites } from './invites.ts';
 export { friendships } from './friendships.ts';
 export { uiTranslations } from './ui-translations.ts';
+export { events, eventAttendees } from './events.ts';

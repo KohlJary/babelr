@@ -27,6 +27,7 @@ interface ChannelSidebarProps {
   onShowFriends?: () => void;
   canManageChannels?: boolean;
   onEditChannel?: (channelId: string) => void;
+  onShowCalendar?: () => void;
 }
 
 export function ChannelSidebar({
@@ -53,6 +54,7 @@ export function ChannelSidebar({
   onShowFriends,
   canManageChannels,
   onEditChannel,
+  onShowCalendar,
 }: ChannelSidebarProps) {
   const t = useT();
   if (mode === 'dms') {
@@ -66,6 +68,11 @@ export function ChannelSidebar({
           {onShowFriends && (
             <button className="sidebar-item add-channel" onClick={onShowFriends}>
               {t('channelSidebar.friends')}
+            </button>
+          )}
+          {onShowCalendar && (
+            <button className="sidebar-item add-channel" onClick={onShowCalendar}>
+              {t('events.title')}
             </button>
           )}
           {conversations.length === 0 && (
@@ -183,6 +190,11 @@ export function ChannelSidebar({
         {selectedChannelIsPrivate && onInviteToChannel && (
           <button className="sidebar-item add-channel" onClick={onInviteToChannel}>
             {t('channelSidebar.inviteToChannel')}
+          </button>
+        )}
+        {onShowCalendar && (
+          <button className="sidebar-item add-channel" onClick={onShowCalendar}>
+            {t('events.title')}
           </button>
         )}
         {onShowServerSettings && (
