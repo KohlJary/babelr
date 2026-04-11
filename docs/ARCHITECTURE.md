@@ -56,25 +56,43 @@ User types message
 
 ## Translation Pipeline
 
-Two providers, user-selectable:
+Four providers, grouped into two quality tiers.
 
-### Cloud (Anthropic Claude)
+### Tone-preserving tier
 
-Three-stage prompt executed in a single API call:
+All three backends in this tier share the canonical three-stage prompt (`packages/shared/src/translation-prompt.ts`):
 
 1. **Classify** -- Register (casual/formal/sarcastic/technical/affectionate/neutral) and intent (statement/question/joke/correction/greeting/reference)
 2. **Translate** -- With register and intent as explicit constraints
 3. **Idiom check** -- Flag untranslatable expressions with glosses
 
-Returns structured metadata envelope alongside the translated text.
+They return the same structured `TranslationResult[]` shape, so switching providers changes quality and cost but not feature surface.
 
-The server provides a thin CORS proxy (`POST /translate`) that forwards the user's API key and messages to Anthropic. The proxy does not log or store content.
+**Anthropic Claude** -- Default cloud backend. `packages/server/src/routes/translate.ts` has a `callAnthropic` adapter that hits `api.anthropic.com/v1/messages` with the user-supplied key. `claude-haiku-4-5-20251001` is the default model.
 
-### Local (Transformers.js)
+**OpenAI GPT** -- Same proxy route, different adapter (`callOpenAI`). Hits `api.openai.com/v1/chat/completions` with `gpt-4o-mini` and `response_format: json_object` to enforce structured output. The shared `parseResponse` helper extracts the inner array from the JSON wrapper OpenAI emits.
 
-Browser-local inference using Helsinki-NLP OPUS models (~50MB per language pair). No API key needed. Produces basic translations without the metadata envelope (no register/intent/idiom analysis).
+**Ollama (self-hosted)** -- The only backend where the Babelr server is **not** in the translation path. The browser calls the user's Ollama instance directly (`OllamaProvider` in `packages/client/src/translation/ollama-provider.ts`). This is deliberate: the enterprise on-prem story requires the Babelr server to never see plaintext translations, which is only possible if it's not the one making the calls. User configures `ollamaBaseUrl` in settings (default `http://localhost:11434`) and optional `ollamaModel` (default `llama3.1:8b`). Ollama must be started with `OLLAMA_ORIGINS=*` (or a more restrictive allow-list) for the browser fetch to succeed.
+
+The `/translate` proxy route only handles Anthropic and OpenAI. Requests with `provider: 'ollama'` are rejected with a 400 — a belt-and-suspenders check that prevents accidentally routing Ollama traffic through the server.
+
+### Translation-only tier
+
+**Transformers.js (local)** -- Browser-local inference using Helsinki-NLP OPUS models (~50MB per language pair). No API key needed, no server round-trip. Uses purpose-built neural translation models, not an instruction-following LLM, so the output is direct translation without register/intent/idiom metadata. The UI degrades cleanly — confidence dots and idiom panels simply don't render when the metadata isn't populated.
 
 Models are cached in the browser's Cache Storage after first download.
+
+### Response parser
+
+`parseResponse` in `packages/shared/src/translation-prompt.ts` is the shared entry point for turning raw LLM output into `TranslationResult[]`. It handles:
+
+- Leading/trailing whitespace and markdown code fences
+- Leading or trailing prose ("Here's the translation: ..." / "Hope that helps!")
+- Nested JSON objects that wrap the array (OpenAI's `json_object` mode emits `{"results": [...]}`)
+- Trailing commas (common with local models)
+- Bracket characters inside string values (tracks string state when scanning)
+
+Invalid per-entry metadata fields are coerced to safe defaults rather than thrown — register → `neutral`, intent → `statement`, confidence clamped to 0.5, idioms fallback to `[]`. This keeps the downstream UI from ever seeing garbage, at the cost of a silent degradation for malformed outputs. If the entire response can't be parsed as an array, `parseResponse` throws a `SyntaxError` that the caller surfaces as a 502.
 
 ## Wikis
 

@@ -88,9 +88,30 @@ export const UI_STRINGS = {
   'settings.cloudClaude': 'Cloud (Claude)',
   'settings.localBrowser': 'Local (Browser)',
   'settings.anthropicApiKey': 'Anthropic API Key',
+  'settings.openaiApiKey': 'OpenAI API Key',
   'settings.apiKeyHint': 'Your key is stored locally in your browser. It is never saved on the server.',
   'settings.localModelHint':
     'Translations run entirely in your browser. First use downloads a ~50MB model per language pair. Tone, intent, and idiom annotations are not available with local translation.',
+  'settings.tierTonePreserving': 'Tone-preserving (register, intent, idiom analysis)',
+  'settings.tierTranslationOnly': 'Translation-only (no tone analysis)',
+  'settings.providerAnthropic': 'Anthropic Claude',
+  'settings.providerAnthropicCaption':
+    'Highest quality. Requires your own API key. Runs through the Babelr server as a CORS proxy — your key is never logged.',
+  'settings.providerOpenAI': 'OpenAI GPT',
+  'settings.providerOpenAICaption':
+    'Comparable quality to Claude. Reuse an existing GPT subscription. Also proxied server-side for key safety.',
+  'settings.providerOllama': 'Ollama (self-hosted)',
+  'settings.providerOllamaCaption':
+    'Runs on your own infrastructure. Browser talks to Ollama directly — the Babelr server is not in the translation path. Ideal for air-gapped deployments.',
+  'settings.providerLocal': 'Local (Transformers.js)',
+  'settings.providerLocalCaption':
+    'Fastest, works offline, no API key needed. Translates only — no register, intent, or idiom analysis. Good fallback when none of the above are available.',
+  'settings.ollamaBaseUrl': 'Ollama base URL',
+  'settings.ollamaBaseUrlHint':
+    'Points at your Ollama instance. Defaults to http://localhost:11434 for local dev. Your Ollama server must allow this origin — run with OLLAMA_ORIGINS=* for quick testing.',
+  'settings.ollamaModel': 'Model name',
+  'settings.ollamaModelHint':
+    'Ollama model tag. Leave blank to use llama3.1:8b. Any instruction-following model that can return JSON will work.',
   'settings.readMessagesIn': 'Read messages in',
   'settings.enableTranslation': 'Enable translation',
   'settings.changePassword': 'Change password',

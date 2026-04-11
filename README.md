@@ -16,7 +16,7 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 
 **End-to-end encrypted DMs** -- Client-side ECDH P-256 key exchange with AES-256-GCM encryption. The server never sees DM plaintext. Translation runs after local decryption.
 
-**Browser-local inference** -- No API key? No problem. Translations run entirely in the browser via Transformers.js with Helsinki-NLP OPUS models. Reduced quality compared to cloud translation, but works offline after first model download.
+**Choice of translation backend** -- Four options, grouped into two tiers. **Tone-preserving**: Anthropic Claude, OpenAI GPT, or self-hosted Ollama, each running the same three-stage classify/translate/idiom-check pipeline. **Translation-only**: browser-local Transformers.js with Helsinki-NLP OPUS models for users who want zero external dependencies and will trade tone analysis for full offline operation. See [Translation Pipeline](#translation-pipeline) for details.
 
 **ActivityPub-shaped from day one** -- The data model uses ActivityPub primitives (Actors, Objects, Activities, Collections) even though federation is not yet active. When it activates, it is a flip, not a rewrite.
 
@@ -101,6 +101,21 @@ The three-stage pipeline runs as a single LLM call:
 
 Every message displays a metadata badge showing what the system understood.
 
+### Backend options
+
+| Backend | Tier | Where it runs | Setup |
+|---------|------|---------------|-------|
+| **Anthropic Claude** | Tone-preserving | Server proxy → `api.anthropic.com` | Paste your API key once |
+| **OpenAI GPT** | Tone-preserving | Server proxy → `api.openai.com` | Paste your API key once |
+| **Ollama** (self-hosted) | Tone-preserving | Browser → your Ollama instance directly | Point at `http://localhost:11434` or your internal host |
+| **Transformers.js** (local) | Translation-only | Browser-local (WASM) | Nothing — runs out of the box |
+
+The three LLM backends share the same classify-translate-idiom prompt and produce the same structured response shape, so switching providers changes quality and cost but not feature surface. Register, intent, confidence, and idiom glosses all flow through identically.
+
+Ollama is notably the only backend where the Babelr server is **not** in the translation path at all — the browser calls your Ollama instance directly. That's deliberate: the whole point of Ollama support is the enterprise air-gap story where the Babelr server should not be able to see plaintext translations at any point in the pipeline. Cloud providers (Anthropic, OpenAI) route through the server purely so the API key stays out of browser-accessible JavaScript.
+
+Transformers.js is the "no setup, no API key, works offline" option. It uses purpose-built neural translation models (Helsinki-NLP OPUS) rather than an instruction-following LLM, so the output is direct translation without the register/intent/idiom metadata. The UI degrades cleanly — confidence dots and idiom panels simply don't render when the metadata isn't there.
+
 ## Wikis
 
 Chat platforms are structurally hostile to knowledge. Threads scroll away. Pins get buried. Search finds fragments without context. Every team eventually ends up with "the one person who remembers how X works" and a dread of what happens when they leave. Slack, Discord, and Teams have all had a decade to solve this and none of them have.
@@ -125,8 +140,8 @@ No other chat platform does this. It is not even on their roadmaps.
 | Database | PostgreSQL |
 | Frontend | React 19, Vite |
 | Real-time | WebSocket (@fastify/websocket) |
-| Translation (cloud) | Anthropic Claude API (user's own key) |
-| Translation (local) | Transformers.js, Helsinki-NLP OPUS models |
+| Translation (tone-preserving) | Anthropic Claude, OpenAI GPT, or self-hosted Ollama (user's own key / instance) |
+| Translation (translation-only) | Transformers.js, Helsinki-NLP OPUS models (browser-local) |
 | Encryption | Web Crypto API (ECDH P-256 + AES-256-GCM) |
 | Monorepo | npm workspaces |
 

@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { MessageWithAuthor } from '@babelr/shared';
 import {
   AnthropicProvider,
+  OpenAIProvider,
+  OllamaProvider,
   TransformersJsProvider,
   getCached,
   setCached,
@@ -19,14 +21,30 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
 
   // Create/update provider based on settings
   useEffect(() => {
-    if (settings.provider === 'local') {
-      providerRef.current = new TransformersJsProvider();
-    } else if (settings.provider === 'anthropic' && settings.apiKey) {
-      providerRef.current = new AnthropicProvider(settings.apiKey);
-    } else {
-      providerRef.current = null;
+    switch (settings.provider) {
+      case 'local':
+        providerRef.current = new TransformersJsProvider();
+        break;
+      case 'anthropic':
+        providerRef.current = settings.apiKey ? new AnthropicProvider(settings.apiKey) : null;
+        break;
+      case 'openai':
+        providerRef.current = settings.apiKey ? new OpenAIProvider(settings.apiKey) : null;
+        break;
+      case 'ollama':
+        providerRef.current = settings.ollamaBaseUrl
+          ? new OllamaProvider(settings.ollamaBaseUrl, settings.ollamaModel || undefined)
+          : null;
+        break;
+      default:
+        providerRef.current = null;
     }
-  }, [settings.apiKey, settings.provider]);
+  }, [
+    settings.apiKey,
+    settings.provider,
+    settings.ollamaBaseUrl,
+    settings.ollamaModel,
+  ]);
 
   // Translate uncached messages
   useEffect(() => {

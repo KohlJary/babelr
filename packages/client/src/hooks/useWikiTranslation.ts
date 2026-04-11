@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { chunkWikiContent, reassembleWikiChunks, type WikiChunk } from '@babelr/shared';
 import {
   AnthropicProvider,
+  OpenAIProvider,
+  OllamaProvider,
   TransformersJsProvider,
   getCachedByHash,
   setCachedByHash,
@@ -67,14 +69,30 @@ export function useWikiTranslation(
 
   // Provider reconstruction on settings change — mirrors useTranslation.
   useEffect(() => {
-    if (settings.provider === 'local') {
-      providerRef.current = new TransformersJsProvider();
-    } else if (settings.provider === 'anthropic' && settings.apiKey) {
-      providerRef.current = new AnthropicProvider(settings.apiKey);
-    } else {
-      providerRef.current = null;
+    switch (settings.provider) {
+      case 'local':
+        providerRef.current = new TransformersJsProvider();
+        break;
+      case 'anthropic':
+        providerRef.current = settings.apiKey ? new AnthropicProvider(settings.apiKey) : null;
+        break;
+      case 'openai':
+        providerRef.current = settings.apiKey ? new OpenAIProvider(settings.apiKey) : null;
+        break;
+      case 'ollama':
+        providerRef.current = settings.ollamaBaseUrl
+          ? new OllamaProvider(settings.ollamaBaseUrl, settings.ollamaModel || undefined)
+          : null;
+        break;
+      default:
+        providerRef.current = null;
     }
-  }, [settings.apiKey, settings.provider]);
+  }, [
+    settings.apiKey,
+    settings.provider,
+    settings.ollamaBaseUrl,
+    settings.ollamaModel,
+  ]);
 
   const chunks = useMemo<WikiChunk[]>(() => chunkWikiContent(content), [content]);
 
@@ -148,6 +166,8 @@ export function useWikiTranslation(
     settings.preferredLanguage,
     settings.apiKey,
     settings.provider,
+    settings.ollamaBaseUrl,
+    settings.ollamaModel,
   ]);
 
   // Pull the current translation state (memory + localStorage) for

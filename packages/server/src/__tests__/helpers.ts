@@ -13,6 +13,7 @@ import dmRoutes from '../routes/dms.ts';
 import friendsRoutes from '../routes/friends.ts';
 import eventRoutes from '../routes/events.ts';
 import wikiRoutes from '../routes/wiki.ts';
+import translateRoutes from '../routes/translate.ts';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
 
@@ -78,6 +79,7 @@ export async function createTestApp() {
   await app.register(friendsRoutes);
   await app.register(eventRoutes);
   await app.register(wikiRoutes);
+  await app.register(translateRoutes);
 
   await app.ready();
   return { app, db };

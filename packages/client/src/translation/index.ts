@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 export { AnthropicProvider } from './anthropic-provider';
+export { OpenAIProvider } from './openai-provider';
+export { OllamaProvider } from './ollama-provider';
 export { TransformersJsProvider } from './transformers-provider';
 export {
   getCached,

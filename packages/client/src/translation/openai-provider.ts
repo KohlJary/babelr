@@ -2,8 +2,15 @@
 import type { TranslateProxyResponse, TranslationResult } from '@babelr/shared';
 import type { TranslationProvider } from './types';
 
-export class AnthropicProvider implements TranslationProvider {
-  name = 'anthropic';
+/**
+ * OpenAI-backed translation provider. Goes through the server's
+ * `/translate` proxy (same as Anthropic) so the API key never sits
+ * in browser code that a page script could read. The server
+ * dispatches to its OpenAI adapter when `provider: 'openai'` is set
+ * on the request body.
+ */
+export class OpenAIProvider implements TranslationProvider {
+  name = 'openai';
 
   constructor(private apiKey: string) {}
 
@@ -25,7 +32,7 @@ export class AnthropicProvider implements TranslationProvider {
         messages,
         targetLanguage,
         sourceLanguage,
-        provider: 'anthropic',
+        provider: 'openai',
       }),
     });
 

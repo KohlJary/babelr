@@ -53,35 +53,105 @@ export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: Se
 
         <div className="settings-field">
           <label>{t('settings.translationEngine')}</label>
-          <div className="auth-tabs">
-            <button
-              type="button"
-              className={`auth-tab ${settings.provider === 'anthropic' ? 'active' : ''}`}
-              onClick={() => onUpdate({ provider: 'anthropic' })}
-            >
-              {t('settings.cloudClaude')}
-            </button>
-            <button
-              type="button"
-              className={`auth-tab ${settings.provider === 'local' ? 'active' : ''}`}
-              onClick={() => onUpdate({ provider: 'local' })}
-            >
-              {t('settings.localBrowser')}
-            </button>
+          <div className="provider-group">
+            <div className="provider-tier-label">{t('settings.tierTonePreserving')}</div>
+
+            <label className="provider-option">
+              <input
+                type="radio"
+                name="translation-provider"
+                checked={settings.provider === 'anthropic'}
+                onChange={() => onUpdate({ provider: 'anthropic' })}
+              />
+              <div className="provider-option-body">
+                <div className="provider-option-title">{t('settings.providerAnthropic')}</div>
+                <div className="provider-option-caption">{t('settings.providerAnthropicCaption')}</div>
+              </div>
+            </label>
+
+            <label className="provider-option">
+              <input
+                type="radio"
+                name="translation-provider"
+                checked={settings.provider === 'openai'}
+                onChange={() => onUpdate({ provider: 'openai' })}
+              />
+              <div className="provider-option-body">
+                <div className="provider-option-title">{t('settings.providerOpenAI')}</div>
+                <div className="provider-option-caption">{t('settings.providerOpenAICaption')}</div>
+              </div>
+            </label>
+
+            <label className="provider-option">
+              <input
+                type="radio"
+                name="translation-provider"
+                checked={settings.provider === 'ollama'}
+                onChange={() => onUpdate({ provider: 'ollama' })}
+              />
+              <div className="provider-option-body">
+                <div className="provider-option-title">{t('settings.providerOllama')}</div>
+                <div className="provider-option-caption">{t('settings.providerOllamaCaption')}</div>
+              </div>
+            </label>
+
+            <div className="provider-tier-label">{t('settings.tierTranslationOnly')}</div>
+
+            <label className="provider-option">
+              <input
+                type="radio"
+                name="translation-provider"
+                checked={settings.provider === 'local'}
+                onChange={() => onUpdate({ provider: 'local' })}
+              />
+              <div className="provider-option-body">
+                <div className="provider-option-title">{t('settings.providerLocal')}</div>
+                <div className="provider-option-caption">{t('settings.providerLocalCaption')}</div>
+              </div>
+            </label>
           </div>
         </div>
 
-        {settings.provider === 'anthropic' && (
+        {(settings.provider === 'anthropic' || settings.provider === 'openai') && (
           <div className="settings-field">
-            <label>{t('settings.anthropicApiKey')}</label>
+            <label>
+              {settings.provider === 'anthropic'
+                ? t('settings.anthropicApiKey')
+                : t('settings.openaiApiKey')}
+            </label>
             <input
               type="password"
-              placeholder="sk-ant-..."
+              placeholder={settings.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
               value={settings.apiKey}
               onChange={(e) => onUpdate({ apiKey: e.target.value })}
             />
             <p className="settings-hint">{t('settings.apiKeyHint')}</p>
           </div>
+        )}
+
+        {settings.provider === 'ollama' && (
+          <>
+            <div className="settings-field">
+              <label>{t('settings.ollamaBaseUrl')}</label>
+              <input
+                type="url"
+                placeholder="http://localhost:11434"
+                value={settings.ollamaBaseUrl}
+                onChange={(e) => onUpdate({ ollamaBaseUrl: e.target.value })}
+              />
+              <p className="settings-hint">{t('settings.ollamaBaseUrlHint')}</p>
+            </div>
+            <div className="settings-field">
+              <label>{t('settings.ollamaModel')}</label>
+              <input
+                type="text"
+                placeholder="llama3.1:8b"
+                value={settings.ollamaModel}
+                onChange={(e) => onUpdate({ ollamaModel: e.target.value })}
+              />
+              <p className="settings-hint">{t('settings.ollamaModelHint')}</p>
+            </div>
+          </>
         )}
 
         {settings.provider === 'local' && (

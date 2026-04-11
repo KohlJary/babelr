@@ -2401,6 +2401,64 @@ textarea.modal-input {
   box-shadow: none;
 }
 
+/* Translation provider picker in SettingsPanel ------------------------ */
+.provider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.provider-tier-label {
+  color: #888;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0.4rem 0 0.1rem;
+}
+.provider-tier-label:first-child {
+  margin-top: 0;
+}
+.provider-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  background: #141414;
+  border: 1px solid #242424;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.provider-option:hover {
+  background: #1a1a1a;
+  border-color: #2f2f2f;
+}
+.provider-option input[type='radio'] {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+.provider-option input[type='radio']:checked + .provider-option-body .provider-option-title {
+  color: #fff;
+}
+.provider-option:has(input[type='radio']:checked) {
+  border-color: #4b6cb7;
+  background: #16203a;
+}
+.provider-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.provider-option-title {
+  color: #ddd;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.provider-option-caption {
+  color: #888;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 /* Wiki panel ---------------------------------------------------------- */
 .wiki-panel {
   max-width: 960px;
