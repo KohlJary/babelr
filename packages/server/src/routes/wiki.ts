@@ -3,11 +3,11 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
-import { collectionItems } from '../db/schema/collections.ts';
 import { objects } from '../db/schema/objects.ts';
 import { wikiPages, wikiPageRevisions, wikiPageLinks } from '../db/schema/wiki.ts';
 import { toAuthorView } from './channels.ts';
-import { extractWikiSlugs } from '@babelr/shared';
+import { extractWikiSlugs, PERMISSIONS } from '@babelr/shared';
+import { hasPermission } from '../permissions.ts';
 import type {
   WikiPageView,
   WikiPageSummary,
@@ -74,36 +74,6 @@ async function ensureUniqueSlug(db: Db, serverId: string, base: string): Promise
   }
 }
 
-/**
- * Membership + role lookup for a caller on a given server. Returns null
- * if the caller is not a member. Mirrors the events.ts permission logic.
- */
-async function getServerRole(
-  db: Db,
-  serverId: string,
-  actorId: string,
-  actorUri: string,
-): Promise<{ role: string; isMod: boolean } | null> {
-  const [server] = await db.select().from(actors).where(eq(actors.id, serverId)).limit(1);
-  if (!server || server.type !== 'Group' || !server.followersUri) return null;
-  const [member] = await db
-    .select()
-    .from(collectionItems)
-    .where(
-      and(
-        eq(collectionItems.collectionUri, server.followersUri),
-        eq(collectionItems.itemUri, actorUri),
-      ),
-    )
-    .limit(1);
-  if (!member) return null;
-  const props = member.properties as Record<string, unknown> | null;
-  const role = (props?.role as string) ?? 'member';
-  const serverProps = server.properties as Record<string, unknown> | null;
-  const isMod =
-    serverProps?.ownerId === actorId || ['owner', 'admin', 'moderator'].includes(role);
-  return { role, isMod };
-}
 
 async function toWikiPageView(
   db: Db,
@@ -203,8 +173,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_WIKI,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Not a member of this server' });
+      }
 
       const rows = await db
         .select()
@@ -229,8 +207,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_WIKI,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Not a member of this server' });
+      }
 
       const [page] = await db
         .select()
@@ -253,8 +239,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.CREATE_WIKI_PAGES,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
 
       const body = request.body;
       if (!body?.title?.trim()) return reply.status(400).send({ error: 'title is required' });
@@ -297,8 +291,6 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
 
       const [page] = await db
         .select()
@@ -311,6 +303,22 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         )
         .limit(1);
       if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      // AUDIT BUG FIX: editing previously had no role check at all —
+      // any server member could overwrite any page. Now gated on
+      // creator-override OR MANAGE_WIKI (consistent with delete).
+      const isCreator = page.createdById === request.actor.id;
+      const canEdit =
+        isCreator ||
+        (await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.MANAGE_WIKI,
+        ));
+      if (!canEdit) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
 
       const body = request.body ?? {};
       const nextTitle = body.title !== undefined ? body.title.trim() : page.title;
@@ -357,8 +365,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug/backlinks',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_WIKI,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Not a member of this server' });
+      }
 
       const [page] = await db
         .select()
@@ -458,13 +474,12 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // Delete a page — only mods can delete
+  // Delete a page — creator can always delete own; MANAGE_WIKI
+  // required to delete anyone else's.
   fastify.delete<{ Params: { serverId: string; slug: string } }>(
     '/servers/:serverId/wiki/pages/:slug',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
 
       const [page] = await db
         .select()
@@ -478,8 +493,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .limit(1);
       if (!page) return reply.status(404).send({ error: 'Page not found' });
 
-      // Creators can delete their own; mods can delete any
-      if (page.createdById !== request.actor.id && !role.isMod) {
+      const isCreator = page.createdById === request.actor.id;
+      const canDelete =
+        isCreator ||
+        (await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.MANAGE_WIKI,
+        ));
+      if (!canDelete) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -489,13 +512,21 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
   );
 
   // Get per-server wiki settings (currently just the home slug).
-  // Member-level read access; write requires mod+.
+  // Any VIEW_WIKI holder can read; MANAGE_WIKI required to write.
   fastify.get<{ Params: { serverId: string } }>(
     '/servers/:serverId/wiki/settings',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_WIKI,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Not a member of this server' });
+      }
 
       const [server] = await db
         .select()
@@ -526,9 +557,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/settings',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
-      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
-      if (!role.isMod) return reply.status(403).send({ error: 'Insufficient permissions' });
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.MANAGE_WIKI,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
 
       const body = request.body ?? {};
 

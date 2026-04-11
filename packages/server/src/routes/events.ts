@@ -16,13 +16,15 @@ import type {
   CreateEventInput,
   UpdateEventInput,
 } from '@babelr/shared';
+import { PERMISSIONS } from '@babelr/shared';
+import { hasPermission } from '../permissions.ts';
 
 const VALID_RSVP: EventRsvpStatus[] = ['going', 'interested', 'declined'];
 const DEFAULT_LOOKAHEAD_DAYS = 60;
 
 type Db = ReturnType<typeof import('../db/index.ts').createDb>;
 
-async function getOwnerName(db: Db, ownerType: string, ownerId: string): Promise<string> {
+async function getOwnerName(db: Db, _ownerType: string, ownerId: string): Promise<string> {
   const [a] = await db.select().from(actors).where(eq(actors.id, ownerId)).limit(1);
   if (!a) return 'Unknown';
   return a.displayName ?? a.preferredUsername;
@@ -111,33 +113,18 @@ async function canAccessEvent(
 }
 
 /**
- * Can the actor manage (edit/delete) the event? Creator always can;
- * for server events, owners/admins/moderators can as well.
+ * Can the actor manage (edit/delete) the event? Creator override
+ * always wins; for server events, users with MANAGE_EVENTS on the
+ * owning server can manage any event on that server.
  */
 async function canManageEvent(
   db: Db,
   event: typeof events.$inferSelect,
   actorId: string,
-  actorUri: string,
 ): Promise<boolean> {
   if (event.createdById === actorId) return true;
   if (event.ownerType !== 'server') return false;
-  const [server] = await db.select().from(actors).where(eq(actors.id, event.ownerId)).limit(1);
-  if (!server?.followersUri) return false;
-  const [member] = await db
-    .select()
-    .from(collectionItems)
-    .where(
-      and(
-        eq(collectionItems.collectionUri, server.followersUri),
-        eq(collectionItems.itemUri, actorUri),
-      ),
-    )
-    .limit(1);
-  const props = member?.properties as Record<string, unknown> | null;
-  const role = (props?.role as string) ?? 'member';
-  const serverProps = server.properties as Record<string, unknown> | null;
-  return serverProps?.ownerId === actorId || ['owner', 'admin', 'moderator'].includes(role);
+  return hasPermission(db, event.ownerId, actorId, PERMISSIONS.MANAGE_EVENTS);
 }
 
 /**
@@ -211,29 +198,14 @@ export default async function eventRoutes(fastify: FastifyInstance) {
     } else {
       if (!body.ownerId) return reply.status(400).send({ error: 'ownerId is required for server events' });
       ownerId = body.ownerId;
-      // Verify caller has mod+ role on the server
       const [server] = await db.select().from(actors).where(eq(actors.id, ownerId)).limit(1);
       if (!server || server.type !== 'Group')
         return reply.status(404).send({ error: 'Server not found' });
-      if (!server.followersUri)
-        return reply.status(400).send({ error: 'Server has no followers collection' });
-      const [member] = await db
-        .select()
-        .from(collectionItems)
-        .where(
-          and(
-            eq(collectionItems.collectionUri, server.followersUri),
-            eq(collectionItems.itemUri, request.actor.uri),
-          ),
-        )
-        .limit(1);
-      const props = member?.properties as Record<string, unknown> | null;
-      const role = (props?.role as string) ?? 'member';
-      const serverProps = server.properties as Record<string, unknown> | null;
-      const isMod =
-        serverProps?.ownerId === request.actor.id ||
-        ['owner', 'admin', 'moderator'].includes(role);
-      if (!isMod) return reply.status(403).send({ error: 'Insufficient permissions' });
+      if (
+        !(await hasPermission(db, ownerId, request.actor.id, PERMISSIONS.CREATE_EVENTS))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
     }
 
     // Validate channelId if provided (server events only)
@@ -374,7 +346,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         .limit(1);
       if (!event) return reply.status(404).send({ error: 'Event not found' });
 
-      const manageable = await canManageEvent(db, event, request.actor.id, request.actor.uri);
+      const manageable = await canManageEvent(db, event, request.actor.id);
       if (!manageable) return reply.status(403).send({ error: 'Insufficient permissions' });
 
       const body = request.body ?? {};
@@ -435,7 +407,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         .limit(1);
       if (!event) return reply.status(404).send({ error: 'Event not found' });
 
-      const manageable = await canManageEvent(db, event, request.actor.id, request.actor.uri);
+      const manageable = await canManageEvent(db, event, request.actor.id);
       if (!manageable) return reply.status(403).send({ error: 'Insufficient permissions' });
 
       await db.delete(events).where(eq(events.id, event.id));

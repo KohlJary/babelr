@@ -24,6 +24,8 @@ import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, deliver
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
+import { PERMISSIONS } from '@babelr/shared';
+import { hasPermission } from '../permissions.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -309,27 +311,6 @@ export async function checkChannelAccess(
   return { allowed: true, channel };
 }
 
-async function getMemberRole(
-  db: ReturnType<typeof import('../db/index.ts').createDb>,
-  serverFollowersUri: string,
-  actorUri: string,
-): Promise<string | null> {
-  const [membership] = await db
-    .select()
-    .from(collectionItems)
-    .where(
-      and(
-        eq(collectionItems.collectionUri, serverFollowersUri),
-        eq(collectionItems.itemUri, actorUri),
-      ),
-    )
-    .limit(1);
-
-  if (!membership) return null;
-  const props = membership.properties as Record<string, unknown> | null;
-  return (props?.role as string) ?? 'member';
-}
-
 export default async function channelRoutes(fastify: FastifyInstance) {
   const db = fastify.db;
 
@@ -385,7 +366,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       }
       const kind = channelType === 'voice' ? 'voice' : 'text';
 
-      // Verify server exists and user is owner
+      // Verify server exists
       const [server] = await db
         .select()
         .from(actors)
@@ -394,6 +375,15 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
       if (!server) {
         return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      // AUDIT BUG FIX: channel creation previously had no permission
+      // check at all — any member could create a channel. Now gated
+      // on MANAGE_CHANNELS.
+      if (
+        !(await hasPermission(db, server.id, request.actor.id, PERMISSIONS.MANAGE_CHANNELS))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
       const config = fastify.config;
@@ -446,29 +436,14 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       if (!channel) return reply.status(404).send({ error: 'Channel not found' });
       if (!channel.belongsTo) return reply.status(400).send({ error: 'Not a server channel' });
 
-      // Verify caller has mod+ role on the owning server
-      const [server] = await db
-        .select()
-        .from(actors)
-        .where(eq(actors.id, channel.belongsTo))
-        .limit(1);
-      if (!server?.followersUri) return reply.status(404).send({ error: 'Server not found' });
-
-      const [membership] = await db
-        .select()
-        .from(collectionItems)
-        .where(
-          and(
-            eq(collectionItems.collectionUri, server.followersUri),
-            eq(collectionItems.itemUri, request.actor.uri),
-          ),
-        )
-        .limit(1);
-      const memberProps = membership?.properties as Record<string, unknown> | null;
-      const role = (memberProps?.role as string) ?? 'member';
-      const serverProps = server.properties as Record<string, unknown> | null;
-      const isOwner = serverProps?.ownerId === request.actor.id;
-      if (!isOwner && !['owner', 'admin', 'moderator'].includes(role)) {
+      if (
+        !(await hasPermission(
+          db,
+          channel.belongsTo,
+          request.actor.id,
+          PERMISSIONS.MANAGE_CHANNELS,
+        ))
+      ) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -554,35 +529,22 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     if (!channel) return reply.status(404).send({ error: 'Channel not found' });
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
 
-    // Slow mode enforcement — bypassed for mod+ roles
+    // Slow mode enforcement — bypassed for users with MANAGE_CHANNELS.
+    // We reuse MANAGE_CHANNELS rather than adding a dedicated
+    // BYPASS_SLOWMODE permission — anyone who can edit channel
+    // settings can also bypass the rate limit, and that's a
+    // reasonable intuition for server operators.
     const channelProps = channel.properties as Record<string, unknown> | null;
     const slowMode = typeof channelProps?.slowMode === 'number' ? (channelProps.slowMode as number) : 0;
     if (slowMode > 0 && channel.belongsTo) {
-      const [server] = await db
-        .select()
-        .from(actors)
-        .where(eq(actors.id, channel.belongsTo))
-        .limit(1);
-      const [membership] = server?.followersUri
-        ? await db
-            .select()
-            .from(collectionItems)
-            .where(
-              and(
-                eq(collectionItems.collectionUri, server.followersUri),
-                eq(collectionItems.itemUri, request.actor.uri),
-              ),
-            )
-            .limit(1)
-        : [null];
-      const memberProps = (membership?.properties as Record<string, unknown> | null) ?? null;
-      const role = (memberProps?.role as string) ?? 'member';
-      const serverProps = server?.properties as Record<string, unknown> | null;
-      const isMod =
-        serverProps?.ownerId === request.actor.id ||
-        ['owner', 'admin', 'moderator'].includes(role);
+      const bypassSlowMode = await hasPermission(
+        db,
+        channel.belongsTo,
+        request.actor.id,
+        PERMISSIONS.MANAGE_CHANNELS,
+      );
 
-      if (!isMod) {
+      if (!bypassSlowMode) {
         const [lastOwn] = await db
           .select()
           .from(objects)
@@ -696,16 +658,18 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
     if (!message) return reply.status(404).send({ error: 'Message not found' });
 
-    // Allow delete if: author OR server admin/moderator/owner
+    // Allow delete if: author (creator-override, always) OR has
+    // MANAGE_MESSAGES permission on the owning server (non-author case).
     let canDelete = message.attributedTo === request.actor.id;
     if (!canDelete) {
       const { channel: ch } = await checkChannelAccess(db, channelId, request.actor.uri);
       if (ch?.belongsTo) {
-        const [server] = await db.select().from(actors).where(eq(actors.id, ch.belongsTo)).limit(1);
-        if (server?.followersUri) {
-          const role = await getMemberRole(db, server.followersUri, request.actor.uri);
-          canDelete = ['owner', 'admin', 'moderator'].includes(role ?? '');
-        }
+        canDelete = await hasPermission(
+          db,
+          ch.belongsTo,
+          request.actor.id,
+          PERMISSIONS.MANAGE_MESSAGES,
+        );
       }
     }
     if (!canDelete) {

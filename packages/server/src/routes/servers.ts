@@ -8,8 +8,9 @@ import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { invites } from '../db/schema/invites.ts';
 import { serverRoles, serverRoleAssignments } from '../db/schema/roles.ts';
-import { DEFAULT_ROLE_DEFINITIONS } from '@babelr/shared';
+import { DEFAULT_ROLE_DEFINITIONS, PERMISSIONS } from '@babelr/shared';
 import type { CreateServerInput, ServerView, UpdateServerInput } from '@babelr/shared';
+import { hasPermission, ensureManageRolesSurvives, LockoutError } from '../permissions.ts';
 
 function slugify(name: string): string {
   return name
@@ -34,31 +35,6 @@ function toServerView(
     logoUrl: (props.logoUrl as string | undefined) ?? null,
     tags: Array.isArray(props.tags) ? (props.tags as string[]) : [],
   };
-}
-
-// Check if the calling actor has admin-or-owner role on a server
-async function requireServerAdmin(
-  db: ReturnType<typeof import('../db/index.ts').createDb>,
-  server: typeof actors.$inferSelect,
-  actorUri: string,
-): Promise<boolean> {
-  if (!server.followersUri) return false;
-  const serverProps = server.properties as Record<string, unknown> | null;
-  const [membership] = await db
-    .select()
-    .from(collectionItems)
-    .where(
-      and(
-        eq(collectionItems.collectionUri, server.followersUri),
-        eq(collectionItems.itemUri, actorUri),
-      ),
-    )
-    .limit(1);
-  if (!membership) return false;
-  const itemProps = membership.properties as Record<string, unknown> | null;
-  const role = (itemProps?.role as string) ?? 'member';
-  // Owner property wins over role
-  return ['owner', 'admin'].includes(role) || serverProps?.ownerId === membership.itemId;
 }
 
 export default async function serverRoutes(fastify: FastifyInstance) {
@@ -280,8 +256,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Server not found' });
       }
 
-      const allowed = await requireServerAdmin(db, server, request.actor.uri);
-      if (!allowed) {
+      if (!(await hasPermission(db, server.id, request.actor.id, PERMISSIONS.MANAGE_SERVER))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -481,18 +456,18 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Server not found' });
       }
 
-      // Only owner can set roles
-      const serverProps = server.properties as Record<string, unknown> | null;
-      if (serverProps?.ownerId !== request.actor.id) {
-        return reply.status(403).send({ error: 'Only the server owner can manage roles' });
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
-      // Can't change owner's role
+      // Cannot change your own role via this endpoint — prevents
+      // accidentally demoting yourself out of MANAGE_ROLES. The lockout
+      // invariant would catch it anyway, but failing fast with a
+      // clearer error is nicer UX.
       if (userId === request.actor.id) {
-        return reply.status(400).send({ error: "Cannot change owner's role" });
+        return reply.status(400).send({ error: "Cannot change your own role" });
       }
 
-      // Find the member's collection_items entry
       const [target] = await db
         .select()
         .from(actors)
@@ -503,15 +478,73 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      await db
-        .update(collectionItems)
-        .set({ properties: { role } })
-        .where(
-          and(
-            eq(collectionItems.collectionUri, server.followersUri),
-            eq(collectionItems.itemUri, target.uri),
-          ),
-        );
+      // Resolve the target role from the requested string. 'member'
+      // means "clear all Admin/Moderator assignments, fall back to
+      // @everyone implicitly" — no row inserted.
+      const [adminRole] = await db
+        .select()
+        .from(serverRoles)
+        .where(and(eq(serverRoles.serverId, serverId), eq(serverRoles.name, 'Admin')))
+        .limit(1);
+      const [moderatorRole] = await db
+        .select()
+        .from(serverRoles)
+        .where(and(eq(serverRoles.serverId, serverId), eq(serverRoles.name, 'Moderator')))
+        .limit(1);
+
+      try {
+        await db.transaction(async (tx) => {
+          // Update the legacy role string for back-compat (display
+          // code still reads it; PR3 migrates the reader to the new
+          // role-assignment tables).
+          await tx
+            .update(collectionItems)
+            .set({ properties: { role } })
+            .where(
+              and(
+                eq(collectionItems.collectionUri, server.followersUri!),
+                eq(collectionItems.itemUri, target.uri),
+              ),
+            );
+
+          // Clear existing Admin/Moderator assignments for this user.
+          const roleIdsToClear = [adminRole?.id, moderatorRole?.id].filter(
+            (x): x is string => !!x,
+          );
+          if (roleIdsToClear.length > 0) {
+            for (const roleId of roleIdsToClear) {
+              await tx
+                .delete(serverRoleAssignments)
+                .where(
+                  and(
+                    eq(serverRoleAssignments.serverId, serverId),
+                    eq(serverRoleAssignments.actorId, userId),
+                    eq(serverRoleAssignments.roleId, roleId),
+                  ),
+                );
+            }
+          }
+
+          // Insert the new assignment if applicable.
+          const newRoleId =
+            role === 'admin' ? adminRole?.id : role === 'moderator' ? moderatorRole?.id : null;
+          if (newRoleId) {
+            await tx.insert(serverRoleAssignments).values({
+              serverId,
+              actorId: userId,
+              roleId: newRoleId,
+            });
+          }
+
+          // Verify the lockout invariant still holds after the change.
+          await ensureManageRolesSurvives(tx, serverId);
+        });
+      } catch (err) {
+        if (err instanceof LockoutError) {
+          return reply.status(400).send({ error: err.message });
+        }
+        throw err;
+      }
 
       return { ok: true };
     },
@@ -537,32 +570,25 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Server not found' });
       }
 
-      // Check caller has admin+ role
-      const [callerMembership] = await db
-        .select()
-        .from(collectionItems)
-        .where(
-          and(
-            eq(collectionItems.collectionUri, server.followersUri),
-            eq(collectionItems.itemUri, request.actor.uri),
-          ),
-        )
-        .limit(1);
-
-      const callerProps = callerMembership?.properties as Record<string, unknown> | null;
-      const callerRole = (callerProps?.role as string) ?? 'member';
-
-      if (!['owner', 'admin'].includes(callerRole)) {
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.KICK_MEMBERS))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
-      // Can't kick the owner
+      // Cannot kick yourself via this endpoint — use /servers/:id/leave
+      // instead. The lockout invariant would catch the last-admin
+      // self-kick anyway, but failing fast is clearer.
+      if (userId === request.actor.id) {
+        return reply.status(400).send({ error: 'Use /leave to remove yourself' });
+      }
+
+      // Cannot kick the server owner. Owner transfer is a deferred
+      // feature; for now the ownerId property is the identity of
+      // whoever created the server, and they're protected.
       const serverProps = server.properties as Record<string, unknown> | null;
       if (serverProps?.ownerId === userId) {
         return reply.status(400).send({ error: 'Cannot kick the server owner' });
       }
 
-      // Find target user
       const [target] = await db
         .select()
         .from(actors)
@@ -573,14 +599,40 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
-      await db
-        .delete(collectionItems)
-        .where(
-          and(
-            eq(collectionItems.collectionUri, server.followersUri),
-            eq(collectionItems.itemUri, target.uri),
-          ),
-        );
+      try {
+        await db.transaction(async (tx) => {
+          // Remove membership from the server's followers collection.
+          await tx
+            .delete(collectionItems)
+            .where(
+              and(
+                eq(collectionItems.collectionUri, server.followersUri!),
+                eq(collectionItems.itemUri, target.uri),
+              ),
+            );
+
+          // Remove any role assignments for this member on this server.
+          // The FK from server_role_assignments.actorId → actors.id has
+          // ON DELETE CASCADE but that fires on actor deletion, not
+          // kick — so we clean up explicitly here.
+          await tx
+            .delete(serverRoleAssignments)
+            .where(
+              and(
+                eq(serverRoleAssignments.serverId, serverId),
+                eq(serverRoleAssignments.actorId, userId),
+              ),
+            );
+
+          // Verify the lockout invariant still holds.
+          await ensureManageRolesSurvives(tx, serverId);
+        });
+      } catch (err) {
+        if (err instanceof LockoutError) {
+          return reply.status(400).send({ error: err.message });
+        }
+        throw err;
+      }
 
       return { ok: true };
     },
@@ -602,6 +654,10 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .limit(1);
 
       if (!server) return reply.status(404).send({ error: 'Server not found' });
+
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.CREATE_INVITES))) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
 
       const code = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
       const expiresAt = expiresInHours
@@ -687,11 +743,23 @@ export default async function serverRoutes(fastify: FastifyInstance) {
     },
   );
 
-  // List invites for a server
+  // List invites for a server (MANAGE_INVITES — previously ungated,
+  // any member could enumerate every invite code)
   fastify.get<{ Params: { serverId: string } }>(
     '/servers/:serverId/invites',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.MANAGE_INVITES,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
 
       const serverInvites = await db
         .select()

@@ -7,7 +7,16 @@ import { collectionItems } from './db/schema/collections.ts';
 import { actors } from './db/schema/actors.ts';
 import type { createDb } from './db/index.ts';
 
-type Db = ReturnType<typeof createDb>;
+/**
+ * Accepts both the top-level database handle and a Drizzle
+ * transaction object so these helpers can be called inside a
+ * `db.transaction(async tx => { ... })` block as well as directly.
+ * Drizzle's transaction type carries the same query methods as the
+ * base database — we just need a slightly-wider type to cover both.
+ */
+type BaseDb = ReturnType<typeof createDb>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = BaseDb | any;
 
 /**
  * Compute the full set of permissions an actor has on a given server.
@@ -149,14 +158,16 @@ export async function countManageRolesHolders(
   // Case 2: Count distinct actors assigned to any role that grants
   // MANAGE_ROLES. Fetch all roles on this server, filter in JS (cheap:
   // ~3-10 roles per server), then count distinct assignees across them.
-  const allRoles = await db
+  const allRoles: Array<{ id: string; permissions: string[] | null }> = await db
     .select({ id: serverRoles.id, permissions: serverRoles.permissions })
     .from(serverRoles)
     .where(eq(serverRoles.serverId, serverId));
 
   const managingRoleIds = allRoles
-    .filter((r) => (r.permissions ?? []).includes(PERMISSIONS.MANAGE_ROLES))
-    .map((r) => r.id);
+    .filter((r: { permissions: string[] | null }) =>
+      (r.permissions ?? []).includes(PERMISSIONS.MANAGE_ROLES),
+    )
+    .map((r: { id: string }) => r.id);
 
   if (managingRoleIds.length === 0) return 0;
 
