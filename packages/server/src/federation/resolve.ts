@@ -8,6 +8,16 @@ const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FETCH_TIMEOUT = 10_000;
 const USER_AGENT = 'Babelr/0.1.0';
 
+/**
+ * WebFinger is nominally https-only, but dev and federation-testing
+ * deployments run on plain http. In non-production mode, use http for
+ * outbound WebFinger lookups so `./scripts/dev-two-instance.sh` can
+ * resolve `alice@babelr-a.local:3000` → `http://.../.well-known/webfinger`
+ * without needing a local TLS terminator. Production stays strict-https.
+ */
+const WEBFINGER_PROTOCOL =
+  process.env.NODE_ENV === 'production' ? 'https' : 'http';
+
 function extractIconUrl(icon: unknown): string | null {
   if (!icon) return null;
   if (typeof icon === 'string') return icon;
@@ -103,7 +113,7 @@ export async function lookupActorByHandle(
   if (!match) return null;
   const [, username, domain] = match;
 
-  const webfingerUri = `https://${domain}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${username}@${domain}`)}`;
+  const webfingerUri = `${WEBFINGER_PROTOCOL}://${domain}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${username}@${domain}`)}`;
 
   try {
     const res = await fetch(webfingerUri, {

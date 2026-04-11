@@ -82,6 +82,16 @@ export async function buildApp() {
     credentials: true,
   });
 
+  // ActivityPub servers POST to inboxes with `application/activity+json`
+  // (or `application/ld+json`). Fastify's built-in JSON parser only
+  // claims `application/json`, so without this every inbox delivery
+  // would 415 before reaching the handler. Reuse Fastify's own JSON
+  // parser implementation so the parsed body shape is identical to
+  // what `application/json` routes receive.
+  const jsonParser = app.getDefaultJsonParser('ignore', 'ignore');
+  app.addContentTypeParser('application/activity+json', { parseAs: 'string' }, jsonParser);
+  app.addContentTypeParser('application/ld+json', { parseAs: 'string' }, jsonParser);
+
   // Security headers
   await app.register(helmet, {
     contentSecurityPolicy: false, // CSP handled by Tauri for desktop; web uses default

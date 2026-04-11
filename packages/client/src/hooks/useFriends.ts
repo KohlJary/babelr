@@ -29,6 +29,13 @@ export function useFriends() {
       );
     } else if (msg.type === 'friend:removed') {
       setFriendships((prev) => prev.filter((f) => f.id !== msg.payload.friendshipId));
+    } else if (msg.type === 'friend:updated') {
+      // Remote friend changed their profile (display name, avatar,
+      // bio) — the server has already refreshed the cached actor row
+      // and is pushing us the updated FriendshipView. Replace in place.
+      setFriendships((prev) =>
+        prev.map((f) => (f.id === msg.payload.friendship.id ? msg.payload.friendship : f)),
+      );
     }
   }, []);
 

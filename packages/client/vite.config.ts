@@ -11,6 +11,19 @@ const devPort = Number(process.env.VITE_DEV_PORT) || 1111;
 const proxyHttpTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:3000';
 const proxyWsTarget = proxyHttpTarget.replace(/^http/, 'ws');
 
+// Vite 5.1+ rejects requests whose Host header isn't on an allow list.
+// The federation-testing rig loads the client from babelr-a.local and
+// babelr-b.local (via /etc/hosts aliases), so those hostnames must be
+// whitelisted or vite returns a 403 before the page can even render.
+// Safe to hardcode — these names are reserved for local federation
+// testing and never collide with real traffic.
+const allowedHosts = [
+  'localhost',
+  '127.0.0.1',
+  'babelr-a.local',
+  'babelr-b.local',
+];
+
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
@@ -18,6 +31,13 @@ export default defineConfig({
   },
   server: {
     port: devPort,
+    // Bind to all interfaces so the federation-testing hostname
+    // aliases (babelr-a.local, babelr-b.local) can reach vite. The
+    // default `localhost` binding on some Linux configs only covers
+    // ::1 and not 127.0.0.1, which produces a TCP refusal for any
+    // client connecting via an alias IPv4 address.
+    host: true,
+    allowedHosts,
     proxy: {
       '/api': {
         target: proxyHttpTarget,

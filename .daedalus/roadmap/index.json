@@ -606,6 +606,14 @@
       "type": "chore",
       "priority": "P3",
       "status": "backlog"
+    },
+    {
+      "id": "federate-profile-updates",
+      "title": "Federate actor profile updates (display name, avatar, bio)",
+      "description": "When a user changes their display name, avatar, or bio on one instance, remote instances that have them as a friend (or have otherwise cached them) continue to show the stale values until the 24-hour resolver cache expires. This is one of the first things any real user will notice — federating a friend request but not the display name makes the whole federation story look broken.\n\nFix:\n- On POST /auth/profile (and any other route that mutates actor.displayName, summary, or properties.avatarUrl), enqueue an Update(Actor) activity via the delivery queue to every remote inbox that has a relationship with this actor. Start with the friends set (accepted friendships row with a remote otherActorId) — that's the smallest-possible audience that covers the visible-papercut case.\n- Extend federation/inbox.ts handleUpdate to detect when the inner object's `type` is `Person` or `Group` and write the new fields back to the cached `actors` row (displayName, summary, properties.avatarUrl), instead of only handling Note updates.\n- Consider tightening the 24-hour STALE_THRESHOLD_MS in resolve.ts for actors we have an active relationship with. For friends, 24h is too long; for one-off message-chain actors it's fine.\n\nScope-adjacent follow-ups to consider as separate items:\n- Group actor metadata updates (server name/icon/description changing on origin → remote followers see the change). Same Update(Actor) shape, different audience (group followers instead of friends).\n- Actor deletion — when someone deletes their account, deliver Delete(Actor) to remote peers and have them remove or tombstone the cached row.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
     }
   ],
   "version": 27

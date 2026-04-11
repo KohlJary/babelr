@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { eq, and, lte } from 'drizzle-orm';
+import { eq, and, lte, inArray } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { deliveryQueue } from '../db/schema/delivery-queue.ts';
+import { friendships } from '../db/schema/friendships.ts';
 import { signRequest } from './signatures.ts';
-import { serializeNote, serializeActivity } from './jsonld.ts';
+import { serializeNote, serializeActivity, serializeActor } from './jsonld.ts';
 import { objects } from '../db/schema/objects.ts';
+import { ensureActorKeys } from './keys.ts';
 import type { Database } from '../db/index.ts';
 
 const DELIVERY_TIMEOUT = 10_000;
@@ -246,6 +248,86 @@ export async function deliverDMCreate(
   );
 
   await enqueueDelivery(fastify.db, activity, recipientActor.inboxUri, senderActor.id);
+}
+
+/**
+ * Deliver an Update(Actor) activity to every remote actor with an
+ * accepted friendship row pointing at `updatedActor`. Used when a
+ * user changes their display name, avatar, or bio — the friends-of-
+ * friend set is the smallest audience that covers the visible-
+ * papercut case where a friend on another instance would otherwise
+ * keep showing the old profile until the resolver cache expires.
+ *
+ * The activity body inlines the full serialized actor (not just the
+ * diff) so receiving instances can overwrite their cached row in one
+ * shot without needing a follow-up fetch.
+ */
+export async function broadcastActorUpdate(
+  fastify: FastifyInstance,
+  updatedActor: typeof actors.$inferSelect,
+) {
+  if (!updatedActor.local) return;
+
+  const db = fastify.db;
+  const config = fastify.config;
+  const protocol = config.secureCookies ? 'https' : 'http';
+
+  // Find every remote actor that's in an accepted friendship with
+  // the updater. We look at both directions (owner → other and
+  // other → owner) because friendship rows are stored per-owner.
+  const outgoing = await db
+    .select({ otherId: friendships.otherActorId })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.ownerActorId, updatedActor.id),
+        eq(friendships.state, 'accepted'),
+      ),
+    );
+  const incoming = await db
+    .select({ ownerId: friendships.ownerActorId })
+    .from(friendships)
+    .where(
+      and(
+        eq(friendships.otherActorId, updatedActor.id),
+        eq(friendships.state, 'accepted'),
+      ),
+    );
+
+  const friendIds = new Set<string>();
+  for (const row of outgoing) friendIds.add(row.otherId);
+  for (const row of incoming) friendIds.add(row.ownerId);
+  if (friendIds.size === 0) return;
+
+  const friendRows = await db
+    .select()
+    .from(actors)
+    .where(inArray(actors.id, Array.from(friendIds)));
+
+  const remoteInboxes = new Set<string>();
+  for (const f of friendRows) {
+    if (!f.local && f.inboxUri) remoteInboxes.add(f.inboxUri);
+  }
+  if (remoteInboxes.size === 0) return;
+
+  // Serialize the actor freshly so the remote sees the new state,
+  // including any key material that may have been injected by
+  // ensureActorKeys.
+  const actorWithKeys = await ensureActorKeys(db, updatedActor);
+  const actorJson = serializeActor(actorWithKeys);
+  const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+  const activity = serializeActivity(
+    activityUri,
+    'Update',
+    updatedActor.uri,
+    actorJson,
+    [updatedActor.followersUri ?? 'https://www.w3.org/ns/activitystreams#Public'],
+    [],
+  );
+
+  for (const inboxUri of remoteInboxes) {
+    await enqueueDelivery(db, activity, inboxUri, updatedActor.id);
+  }
 }
 
 // Also enqueue to Group followers when posting in a server channel

@@ -7,6 +7,7 @@ import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
 import { lookupActorByHandle } from '../federation/resolve.ts';
+import { broadcastActorUpdate } from '../federation/delivery.ts';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 
@@ -291,6 +292,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
         updates.properties = { ...currentProps, avatarUrl: avatarUrl || null };
       }
 
+      const federatableFieldsTouched =
+        displayName !== undefined || summary !== undefined || avatarUrl !== undefined;
+
       if (Object.keys(updates).length > 0) {
         await db.update(actors).set(updates).where(eq(actors.id, request.actor.id));
       }
@@ -301,6 +305,16 @@ export default async function authRoutes(fastify: FastifyInstance) {
         .from(actors)
         .where(eq(actors.id, request.actor.id))
         .limit(1);
+
+      // Fan out Update(Actor) to every remote friend's inbox so
+      // cross-instance friend lists reflect the new profile. Fire and
+      // forget — federation failure shouldn't block the HTTP
+      // response, and the delivery queue handles retries.
+      if (federatableFieldsTouched) {
+        broadcastActorUpdate(fastify, updated).catch((err) =>
+          fastify.log.error({ err }, 'Actor update federation enqueue failed'),
+        );
+      }
 
       return toProfile(updated);
     },

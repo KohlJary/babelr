@@ -643,6 +643,98 @@ async function handleUpdate(
   const obj = activity.object;
   if (typeof obj === 'string' || !obj?.id) return;
 
+  // Actor update: the remote side's display name / avatar / bio
+  // changed and they're telling us so we can overwrite the cached
+  // row. The object id must match the sender's actor URI — we're
+  // not letting a remote actor update anyone's profile but their
+  // own.
+  const innerType = (obj as { type?: string }).type;
+  if (innerType === 'Person' || innerType === 'Group') {
+    if (obj.id !== remoteActor.uri) {
+      fastify.log.warn(
+        { sender: remoteActor.uri, claimed: obj.id },
+        'Rejected Update(Actor): sender does not own the actor being updated',
+      );
+      return;
+    }
+
+    const actorData = obj as Record<string, unknown>;
+    const newProperties: Record<string, unknown> = {
+      ...((remoteActor.properties as Record<string, unknown> | null) ?? {}),
+    };
+
+    // Key material if the remote re-served it.
+    if (actorData.publicKey) newProperties.apPublicKey = actorData.publicKey;
+    if (actorData.babelrEcdhKey) newProperties.publicKey = actorData.babelrEcdhKey;
+
+    // Avatar — drizzle stores this under properties.avatarUrl.
+    const icon = actorData.icon as unknown;
+    if (icon) {
+      if (typeof icon === 'string') {
+        newProperties.avatarUrl = icon;
+      } else if (typeof icon === 'object') {
+        const i = icon as { url?: unknown; href?: unknown };
+        if (typeof i.url === 'string') newProperties.avatarUrl = i.url;
+        else if (typeof i.href === 'string') newProperties.avatarUrl = i.href;
+      }
+    }
+
+    await fastify.db
+      .update(actors)
+      .set({
+        displayName: (actorData.name as string | null) ?? null,
+        summary: (actorData.summary as string | null) ?? null,
+        properties: newProperties,
+        updatedAt: new Date(),
+      })
+      .where(eq(actors.id, remoteActor.id));
+
+    // Reload the updated row so we can push a fresh FriendshipView
+    // to every local user who has this remote actor as a friend.
+    // Without this WS push, currently-connected friends would see
+    // stale data until they reload the page.
+    const [refreshed] = await fastify.db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, remoteActor.id))
+      .limit(1);
+
+    if (refreshed) {
+      const localFriends = await fastify.db
+        .select()
+        .from(friendships)
+        .where(
+          and(
+            eq(friendships.otherActorId, refreshed.id),
+            eq(friendships.state, 'accepted'),
+          ),
+        );
+
+      const otherView = toAuthorView(refreshed);
+      for (const f of localFriends) {
+        fastify.broadcastToActor(f.ownerActorId, {
+          type: 'friend:updated',
+          payload: {
+            friendship: {
+              id: f.id,
+              state: 'accepted',
+              other: otherView,
+              createdAt: f.createdAt.toISOString(),
+              updatedAt: f.updatedAt.toISOString(),
+            },
+          },
+        });
+      }
+    }
+
+    fastify.log.info(
+      { actor: remoteActor.uri, type: innerType },
+      'Remote Update(Actor) processed',
+    );
+    return;
+  }
+
+  // Object update (e.g. Note edited) — the pre-existing behavior.
   const [existing] = await fastify.db
     .select()
     .from(objects)
