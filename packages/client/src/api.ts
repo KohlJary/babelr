@@ -364,6 +364,57 @@ export async function rsvpEvent(
   });
 }
 
+// Wiki
+export async function listWikiPages(
+  serverId: string,
+): Promise<import('@babelr/shared').WikiPageListResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/pages`);
+}
+
+export async function getWikiPage(
+  serverId: string,
+  slug: string,
+): Promise<import('@babelr/shared').WikiPageResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}`);
+}
+
+export async function createWikiPage(
+  serverId: string,
+  input: import('@babelr/shared').CreateWikiPageInput,
+): Promise<import('@babelr/shared').WikiPageResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/pages`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateWikiPage(
+  serverId: string,
+  slug: string,
+  input: import('@babelr/shared').UpdateWikiPageInput,
+): Promise<import('@babelr/shared').WikiPageResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteWikiPage(
+  serverId: string,
+  slug: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getWikiBacklinks(
+  serverId: string,
+  slug: string,
+): Promise<import('@babelr/shared').WikiBacklinksResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/backlinks`);
+}
+
 // E2E encryption
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch('/auth/password', {

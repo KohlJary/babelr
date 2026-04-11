@@ -1,0 +1,461 @@
+// SPDX-License-Identifier: Hippocratic-3.0
+import type { FastifyInstance } from 'fastify';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import '../types.ts';
+import { actors } from '../db/schema/actors.ts';
+import { collectionItems } from '../db/schema/collections.ts';
+import { objects } from '../db/schema/objects.ts';
+import { wikiPages, wikiPageRevisions, wikiPageLinks } from '../db/schema/wiki.ts';
+import { toAuthorView } from './channels.ts';
+import { extractWikiSlugs } from '@babelr/shared';
+import type {
+  WikiPageView,
+  WikiPageSummary,
+  WikiBacklinkView,
+  CreateWikiPageInput,
+  UpdateWikiPageInput,
+} from '@babelr/shared';
+
+type Db = ReturnType<typeof import('../db/index.ts').createDb>;
+
+/**
+ * Turn a user-supplied title into a URL-safe slug. Lowercased, ASCII
+ * letters/digits/hyphens only, collapsed runs of non-alphanumerics to a
+ * single hyphen, trimmed. Not unique on its own — the caller is
+ * responsible for disambiguating collisions.
+ */
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 128);
+}
+
+async function ensureUniqueSlug(db: Db, serverId: string, base: string): Promise<string> {
+  const seed = base || 'page';
+  let candidate = seed;
+  let n = 2;
+  for (;;) {
+    const [row] = await db
+      .select({ id: wikiPages.id })
+      .from(wikiPages)
+      .where(and(eq(wikiPages.serverId, serverId), eq(wikiPages.slug, candidate)))
+      .limit(1);
+    if (!row) return candidate;
+    candidate = `${seed}-${n}`.slice(0, 128);
+    n += 1;
+  }
+}
+
+/**
+ * Membership + role lookup for a caller on a given server. Returns null
+ * if the caller is not a member. Mirrors the events.ts permission logic.
+ */
+async function getServerRole(
+  db: Db,
+  serverId: string,
+  actorId: string,
+  actorUri: string,
+): Promise<{ role: string; isMod: boolean } | null> {
+  const [server] = await db.select().from(actors).where(eq(actors.id, serverId)).limit(1);
+  if (!server || server.type !== 'Group' || !server.followersUri) return null;
+  const [member] = await db
+    .select()
+    .from(collectionItems)
+    .where(
+      and(
+        eq(collectionItems.collectionUri, server.followersUri),
+        eq(collectionItems.itemUri, actorUri),
+      ),
+    )
+    .limit(1);
+  if (!member) return null;
+  const props = member.properties as Record<string, unknown> | null;
+  const role = (props?.role as string) ?? 'member';
+  const serverProps = server.properties as Record<string, unknown> | null;
+  const isMod =
+    serverProps?.ownerId === actorId || ['owner', 'admin', 'moderator'].includes(role);
+  return { role, isMod };
+}
+
+async function toWikiPageView(
+  db: Db,
+  page: typeof wikiPages.$inferSelect,
+): Promise<WikiPageView> {
+  const [creator] = await db.select().from(actors).where(eq(actors.id, page.createdById)).limit(1);
+  const [editor] = await db.select().from(actors).where(eq(actors.id, page.lastEditedById)).limit(1);
+  const fallback = { id: page.createdById, preferredUsername: 'unknown', displayName: null, avatarUrl: null };
+  return {
+    id: page.id,
+    serverId: page.serverId,
+    slug: page.slug,
+    title: page.title,
+    content: page.content,
+    createdBy: creator ? toAuthorView(creator) : fallback,
+    lastEditedBy: editor ? toAuthorView(editor) : fallback,
+    createdAt: page.createdAt.toISOString(),
+    updatedAt: page.updatedAt.toISOString(),
+  };
+}
+
+function toWikiPageSummary(
+  page: typeof wikiPages.$inferSelect,
+  editor: typeof actors.$inferSelect | undefined,
+): WikiPageSummary {
+  const fallback = { id: page.lastEditedById, preferredUsername: 'unknown', displayName: null, avatarUrl: null };
+  return {
+    id: page.id,
+    serverId: page.serverId,
+    slug: page.slug,
+    title: page.title,
+    lastEditedBy: editor ? toAuthorView(editor) : fallback,
+    updatedAt: page.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Resolve a list of slugs to the wiki page rows they refer to within a
+ * given server. Returns only pages that exist; unresolved slugs are
+ * silently dropped — the link is re-synced whenever the source content
+ * changes so a later-created target will pick up the reference on its
+ * next edit.
+ */
+async function resolveWikiSlugs(
+  db: Db,
+  serverId: string,
+  slugs: string[],
+): Promise<typeof wikiPages.$inferSelect[]> {
+  if (slugs.length === 0) return [];
+  return db
+    .select()
+    .from(wikiPages)
+    .where(and(eq(wikiPages.serverId, serverId), inArray(wikiPages.slug, slugs)));
+}
+
+/**
+ * Rewrite the outgoing link rows for a wiki page. Called after a page
+ * is created or updated. Deletes the page's existing outgoing rows and
+ * inserts new ones based on the current parse of `[[slug]]` refs.
+ * Message-sourced links are untouched — this only owns `sourcePageId`
+ * rows.
+ */
+async function syncPageOutboundLinks(
+  db: Db,
+  serverId: string,
+  pageId: string,
+  content: string,
+): Promise<void> {
+  await db.delete(wikiPageLinks).where(eq(wikiPageLinks.sourcePageId, pageId));
+  const slugs = extractWikiSlugs(content);
+  if (slugs.length === 0) return;
+  const targets = await resolveWikiSlugs(db, serverId, slugs);
+  // Avoid self-loops — a page referencing its own slug is a no-op link.
+  const rows = targets
+    .filter((t) => t.id !== pageId)
+    .map((t) => ({
+      serverId,
+      sourceType: 'page' as const,
+      sourcePageId: pageId,
+      sourceMessageId: null,
+      targetType: 'page' as const,
+      targetPageId: t.id,
+      targetMessageId: null,
+    }));
+  if (rows.length > 0) {
+    await db.insert(wikiPageLinks).values(rows);
+  }
+}
+
+export default async function wikiRoutes(fastify: FastifyInstance) {
+  const db = fastify.db;
+
+  // List pages for a server
+  fastify.get<{ Params: { serverId: string } }>(
+    '/servers/:serverId/wiki/pages',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const rows = await db
+        .select()
+        .from(wikiPages)
+        .where(eq(wikiPages.serverId, request.params.serverId))
+        .orderBy(desc(wikiPages.updatedAt));
+
+      // Batch-load editors to avoid N+1
+      const editorIds = Array.from(new Set(rows.map((r) => r.lastEditedById)));
+      const editors = editorIds.length
+        ? await db.select().from(actors).where(inArray(actors.id, editorIds))
+        : [];
+      const editorMap = new Map(editors.map((e) => [e.id, e]));
+
+      const pages: WikiPageSummary[] = rows.map((p) => toWikiPageSummary(p, editorMap.get(p.lastEditedById)));
+      return { pages };
+    },
+  );
+
+  // Get a single page by slug
+  fastify.get<{ Params: { serverId: string; slug: string } }>(
+    '/servers/:serverId/wiki/pages/:slug',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      return { page: await toWikiPageView(db, page) };
+    },
+  );
+
+  // Create a page
+  fastify.post<{ Params: { serverId: string }; Body: CreateWikiPageInput }>(
+    '/servers/:serverId/wiki/pages',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const body = request.body;
+      if (!body?.title?.trim()) return reply.status(400).send({ error: 'title is required' });
+
+      const baseSlug = slugify(body.slug?.trim() || body.title);
+      if (!baseSlug) return reply.status(400).send({ error: 'title must produce a non-empty slug' });
+      const slug = await ensureUniqueSlug(db, request.params.serverId, baseSlug);
+      const content = body.content ?? '';
+
+      const [created] = await db
+        .insert(wikiPages)
+        .values({
+          serverId: request.params.serverId,
+          slug,
+          title: body.title.trim(),
+          content,
+          createdById: request.actor.id,
+          lastEditedById: request.actor.id,
+        })
+        .returning();
+
+      await db.insert(wikiPageRevisions).values({
+        pageId: created.id,
+        revisionNumber: 1,
+        title: created.title,
+        content: created.content,
+        editedById: request.actor.id,
+        summary: null,
+      });
+
+      await syncPageOutboundLinks(db, created.serverId, created.id, created.content);
+
+      return reply.status(201).send({ page: await toWikiPageView(db, created) });
+    },
+  );
+
+  // Update a page
+  fastify.put<{ Params: { serverId: string; slug: string }; Body: UpdateWikiPageInput }>(
+    '/servers/:serverId/wiki/pages/:slug',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      const body = request.body ?? {};
+      const nextTitle = body.title !== undefined ? body.title.trim() : page.title;
+      const nextContent = body.content !== undefined ? body.content : page.content;
+      if (!nextTitle) return reply.status(400).send({ error: 'title cannot be empty' });
+
+      // Determine next revision number
+      const [{ max }] = await db
+        .select({ max: sql<number>`COALESCE(MAX(${wikiPageRevisions.revisionNumber}), 0)` })
+        .from(wikiPageRevisions)
+        .where(eq(wikiPageRevisions.pageId, page.id));
+      const nextRevision = Number(max) + 1;
+
+      const [updated] = await db
+        .update(wikiPages)
+        .set({
+          title: nextTitle,
+          content: nextContent,
+          lastEditedById: request.actor.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(wikiPages.id, page.id))
+        .returning();
+
+      await db.insert(wikiPageRevisions).values({
+        pageId: page.id,
+        revisionNumber: nextRevision,
+        title: nextTitle,
+        content: nextContent,
+        editedById: request.actor.id,
+        summary: body.summary?.trim() || null,
+      });
+
+      await syncPageOutboundLinks(db, updated.serverId, updated.id, updated.content);
+
+      return { page: await toWikiPageView(db, updated) };
+    },
+  );
+
+  // Backlinks for a page — pages and messages that reference it
+  fastify.get<{ Params: { serverId: string; slug: string } }>(
+    '/servers/:serverId/wiki/pages/:slug/backlinks',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      const linkRows = await db
+        .select()
+        .from(wikiPageLinks)
+        .where(eq(wikiPageLinks.targetPageId, page.id))
+        .orderBy(desc(wikiPageLinks.createdAt));
+
+      // Separate page and message sources; batch-load both.
+      const sourcePageIds = Array.from(
+        new Set(linkRows.filter((l) => l.sourcePageId).map((l) => l.sourcePageId!)),
+      );
+      const sourceMessageIds = Array.from(
+        new Set(linkRows.filter((l) => l.sourceMessageId).map((l) => l.sourceMessageId!)),
+      );
+
+      const sourcePageRows = sourcePageIds.length
+        ? await db.select().from(wikiPages).where(inArray(wikiPages.id, sourcePageIds))
+        : [];
+      const sourceMessageRows = sourceMessageIds.length
+        ? await db.select().from(objects).where(inArray(objects.id, sourceMessageIds))
+        : [];
+
+      // Page editors for source summaries
+      const editorIds = Array.from(new Set(sourcePageRows.map((p) => p.lastEditedById)));
+      const editors = editorIds.length
+        ? await db.select().from(actors).where(inArray(actors.id, editorIds))
+        : [];
+      const editorMap = new Map(editors.map((e) => [e.id, e]));
+
+      // Message authors + channels for message summaries
+      const authorIds = Array.from(
+        new Set(sourceMessageRows.map((m) => m.attributedTo).filter((x): x is string => !!x)),
+      );
+      const authors = authorIds.length
+        ? await db.select().from(actors).where(inArray(actors.id, authorIds))
+        : [];
+      const authorMap = new Map(authors.map((a) => [a.id, a]));
+
+      const channelIds = Array.from(
+        new Set(sourceMessageRows.map((m) => m.context).filter((x): x is string => !!x)),
+      );
+      const channelRows = channelIds.length
+        ? await db.select().from(objects).where(inArray(objects.id, channelIds))
+        : [];
+      const channelMap = new Map(channelRows.map((c) => [c.id, c]));
+
+      const pageMap = new Map(sourcePageRows.map((p) => [p.id, p]));
+      const messageMap = new Map(sourceMessageRows.map((m) => [m.id, m]));
+
+      const backlinks: WikiBacklinkView[] = [];
+      for (const row of linkRows) {
+        if (row.sourcePageId) {
+          const src = pageMap.get(row.sourcePageId);
+          if (!src) continue;
+          backlinks.push({
+            sourceType: 'page',
+            page: toWikiPageSummary(src, editorMap.get(src.lastEditedById)),
+            createdAt: row.createdAt.toISOString(),
+          });
+        } else if (row.sourceMessageId) {
+          const msg = messageMap.get(row.sourceMessageId);
+          if (!msg || msg.type !== 'Note') continue;
+          const author = msg.attributedTo ? authorMap.get(msg.attributedTo) : null;
+          const channel = msg.context ? channelMap.get(msg.context) : null;
+          const channelProps = channel?.properties as Record<string, unknown> | null;
+          const channelName = (channelProps?.name as string | undefined) ?? null;
+          backlinks.push({
+            sourceType: 'message',
+            message: {
+              id: msg.id,
+              channelId: msg.context ?? '',
+              channelName,
+              author: author
+                ? toAuthorView(author)
+                : { id: msg.attributedTo ?? '', preferredUsername: 'unknown', displayName: null, avatarUrl: null },
+              content: msg.content ?? '',
+              createdAt: msg.published.toISOString(),
+            },
+            createdAt: row.createdAt.toISOString(),
+          });
+        }
+      }
+
+      return { backlinks };
+    },
+  );
+
+  // Delete a page — only mods can delete
+  fastify.delete<{ Params: { serverId: string; slug: string } }>(
+    '/servers/:serverId/wiki/pages/:slug',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      // Creators can delete their own; mods can delete any
+      if (page.createdById !== request.actor.id && !role.isMod) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      await db.delete(wikiPages).where(eq(wikiPages.id, page.id));
+      return { ok: true };
+    },
+  );
+}

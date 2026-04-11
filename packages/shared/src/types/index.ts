@@ -6,3 +6,4 @@ export * from './ws.js';
 export * from './translation.js';
 export * from './friends.js';
 export * from './events.js';
+export * from './wiki.js';

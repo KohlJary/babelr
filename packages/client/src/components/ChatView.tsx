@@ -30,6 +30,7 @@ import { ChannelInviteModal } from './ChannelInviteModal';
 import { FriendsPanel } from './FriendsPanel';
 import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { EventsPanel } from './EventsPanel';
+import { WikiPanel } from './WikiPanel';
 import { VoicePanel } from './VoicePanel';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
@@ -57,6 +58,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showFriends, setShowFriends] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showWiki, setShowWiki] = useState(false);
+  const [wikiInitialSlug, setWikiInitialSlug] = useState<string | null>(null);
+  const [wikiInitialDraft, setWikiInitialDraft] = useState<{ title?: string; content?: string } | null>(null);
   const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
@@ -184,6 +188,26 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       ? `${selectedServer?.name ?? ''} > #${selectedChannel.name}`
       : selectedServer?.name ?? '';
 
+  // Intercept clicks on in-app wiki refs rendered as `<a href="#wiki/slug">`
+  // so the browser doesn't try to navigate to a fragment, and instead
+  // opens the WikiPanel at the referenced page. Only active when a
+  // server is selected — wiki pages are server-scoped.
+  useEffect(() => {
+    if (!selectedServer || dmMode) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest?.('a[href^="#wiki/"]') as HTMLAnchorElement | null;
+      if (!anchor) return;
+      e.preventDefault();
+      const slug = decodeURIComponent(anchor.getAttribute('href')!.slice('#wiki/'.length));
+      setWikiInitialDraft(null);
+      setWikiInitialSlug(slug);
+      setShowWiki(true);
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [selectedServer, dmMode]);
+
   return (
     <div className="app-layout">
       <ServerSidebar
@@ -224,6 +248,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
         onEditChannel={(channelId) => setEditingChannelId(channelId)}
         onShowCalendar={() => setShowCalendar(true)}
+        onShowWiki={!dmMode && selectedServer ? () => setShowWiki(true) : undefined}
         onJoinVoice={(channelId) => {
           if (voice.state.channelId === channelId) return;
           if (voice.state.channelId) voice.leave();
@@ -256,6 +281,20 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onOpenThread={openThread}
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
+          onConvertToWikiPage={
+            !dmMode && selectedServer
+              ? (item) => {
+                  // Use the first line as the proposed title, rest as content
+                  const content = item.message.content;
+                  const firstBreak = content.indexOf('\n');
+                  const title =
+                    firstBreak === -1 ? content.slice(0, 120) : content.slice(0, firstBreak).slice(0, 120);
+                  setWikiInitialSlug(null);
+                  setWikiInitialDraft({ title, content });
+                  setShowWiki(true);
+                }
+              : undefined
+          }
           callerRole={callerRole}
         />
         <TypingIndicator users={typingUsers} />
@@ -421,6 +460,19 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onGoToChannel={(channelId) => {
             setDmMode(false);
             selectChannel(channelId);
+          }}
+        />
+      )}
+      {showWiki && selectedServer && (
+        <WikiPanel
+          serverId={selectedServer.id}
+          serverName={selectedServer.name}
+          initialSlug={wikiInitialSlug}
+          initialDraft={wikiInitialDraft}
+          onClose={() => {
+            setShowWiki(false);
+            setWikiInitialSlug(null);
+            setWikiInitialDraft(null);
           }}
         />
       )}

@@ -17,6 +17,7 @@ interface MessageListProps {
   onOpenThread?: (messageId: string) => void;
   onEditMessage?: (messageId: string, content: string) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onConvertToWikiPage?: (message: MessageWithAuthor) => void;
   callerRole?: string;
 }
 
@@ -33,6 +34,7 @@ export function MessageList({
   onOpenThread,
   onEditMessage,
   onDeleteMessage,
+  onConvertToWikiPage,
   callerRole,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -90,6 +92,9 @@ export function MessageList({
             canDelete={
               actor?.id === item.message.authorId ||
               ['owner', 'admin', 'moderator'].includes(callerRole ?? '')
+            }
+            onConvertToWikiPage={
+              onConvertToWikiPage ? () => onConvertToWikiPage(item) : undefined
             }
           />
         );

@@ -23,6 +23,7 @@ import type {
 import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, deliverDMCreate, deliverDMRead } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
+import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -190,6 +191,9 @@ export async function createMessageInChannel(
     to: [],
     cc: [],
   });
+
+  // Sync [[slug]] wiki refs — no-op for DMs, only runs for server channels
+  await syncMessageOutboundLinks(db, note.id, channelId, note.content ?? '');
 
   const messageView = toMessageView(note);
   const authorView = toAuthorView(actor);
@@ -644,6 +648,9 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       .set({ content: content.trim(), updated: new Date() })
       .where(eq(objects.id, messageId))
       .returning();
+
+    // Re-sync [[slug]] wiki refs after edit
+    await syncMessageOutboundLinks(db, updated.id, channelId, updated.content ?? '');
 
     // Create Update activity and enqueue federation delivery
     const config = fastify.config;

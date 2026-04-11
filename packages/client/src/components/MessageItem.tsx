@@ -20,6 +20,8 @@ interface MessageItemProps {
   onEdit?: (content: string) => void;
   onDelete?: () => void;
   canDelete?: boolean;
+  /** Seed a new wiki page from this message's content */
+  onConvertToWikiPage?: () => void;
 }
 
 type TFn = (key: UIStringKey, values?: Record<string, string | number>) => string;
@@ -86,6 +88,7 @@ export function MessageItem({
   onEdit,
   onDelete,
   canDelete,
+  onConvertToWikiPage,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -184,6 +187,15 @@ export function MessageItem({
       )}
       {canDelete && (
         <button className="message-action-btn message-action-danger" onClick={onDelete}>{t('messages.delete')}</button>
+      )}
+      {onConvertToWikiPage && (
+        <button
+          className="message-action-btn"
+          onClick={onConvertToWikiPage}
+          title={t('wiki.convertMessage')}
+        >
+          {t('wiki.convertMessage')}
+        </button>
       )}
     </div>
   );

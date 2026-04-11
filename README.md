@@ -12,6 +12,8 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 
 **Tone-preserving translation** -- Not "translate X to French" but "translate X to French preserving the casual-affectionate register and the self-deprecating joke structure." Every translation carries a metadata envelope: detected register, intent classification, confidence score, and flagged idioms with hover-gloss explanations.
 
+**Server wikis with mixed-language translation** -- Long-form knowledge that persists outside the chat stream, and the first wiki system in any chat platform where a single page can be authored in five languages and read natively in any sixth. Bidirectional links between wiki pages and chat messages, click-to-navigate `[[slug]]` refs, and a backlinks panel showing every page and message that references the current page. See [Wikis](#wikis) below for why this matters.
+
 **End-to-end encrypted DMs** -- Client-side ECDH P-256 key exchange with AES-256-GCM encryption. The server never sees DM plaintext. Translation runs after local decryption.
 
 **Browser-local inference** -- No API key? No problem. Translations run entirely in the browser via Transformers.js with Helsinki-NLP OPUS models. Reduced quality compared to cloud translation, but works offline after first model download.
@@ -98,6 +100,22 @@ The three-stage pipeline runs as a single LLM call:
 3. **Idiom check** -- Flag untranslatable expressions with explanation and target-language equivalent
 
 Every message displays a metadata badge showing what the system understood.
+
+## Wikis
+
+Chat platforms are structurally hostile to knowledge. Threads scroll away. Pins get buried. Search finds fragments without context. Every team eventually ends up with "the one person who remembers how X works" and a dread of what happens when they leave. Slack, Discord, and Teams have all had a decade to solve this and none of them have.
+
+Babelr ships a first-class per-server wiki with three properties that make it more than a Notion bolt-on:
+
+**1. Bidirectional links between wiki and chat.** Type `[[page-slug]]` in any message and it renders as a clickable link that opens the wiki panel at that page. Type `[[page-slug]]` inside a wiki page and the same thing happens, navigating in place. Every page has a "Linked from" panel listing every other page and every chat message that references it. Right-click any message and "New wiki page from message" seeds a draft with the message content — you can promote a useful explanation into durable knowledge in two clicks, and the new page will show the source message in its backlinks.
+
+**2. Mixed-language content as a first-class case.** Pages are chunked by paragraph and translated chunk-by-chunk through the same tone-preserving pipeline used for chat. A single page can have a Spanish onboarding note, a French code-style guide, a German review-etiquette section, and a Japanese break-time reminder — each in its author's native language — and every reader sees the whole page in their own. Each paragraph's source language is detected independently, so the author never has to declare anything. Headings translate. Code blocks pass through byte-identical. Idioms from the source language come through with their target-language equivalents attached.
+
+**3. Edit-aware, session-persistent translation cache.** Translations are keyed by content hash, not page id. Edit one paragraph and only that paragraph re-translates on the next open — the rest pull instantly from localStorage. Close the panel, reload the tab, come back tomorrow: the translated page shows up with zero network calls until something actually changes. This is the same cache that messages will migrate onto in a follow-up PR.
+
+Try it yourself: `docs/testing/wiki-mixed-language-fixture.md` contains a drop-in test page covering five languages and a fenced code block. Paste it into a fresh wiki page, open it with `preferredLanguage` set to English, and watch a coherent multilingual team document render in a single language while staying faithful to each section's original voice.
+
+No other chat platform does this. It is not even on their roadmaps.
 
 ## Tech Stack
 

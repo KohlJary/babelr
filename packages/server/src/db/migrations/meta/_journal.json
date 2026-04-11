@@ -57,6 +57,20 @@
       "when": 1775960000000,
       "tag": "0007_events",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775897227021,
+      "tag": "0008_last_leech",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775898605288,
+      "tag": "0009_warm_gorilla_man",
+      "breakpoints": true
     }
   ]
 }
