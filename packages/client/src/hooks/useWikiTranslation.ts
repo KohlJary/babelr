@@ -12,8 +12,24 @@ import {
   type TranslationSettings,
 } from '../translation';
 
+/**
+ * A single reassembly-ready chunk returned to the caller. `original`
+ * is the source content verbatim; `translated` is the translator's
+ * output (only for prose chunks that actually ran through the API
+ * and resolved). Non-prose chunks have no metadata and are passed
+ * through as-is.
+ */
+export interface TranslatedChunk {
+  kind: 'prose' | 'code' | 'blank';
+  original: string;
+  translated: string | null;
+  cached: CachedTranslation | null;
+}
+
 interface UseWikiTranslationResult {
-  /** Fully reassembled translated markdown, or null while still loading */
+  /** Per-chunk stream for rendering the page with in-line metadata indicators */
+  chunks: TranslatedChunk[];
+  /** Convenience: reassembled translated markdown, or null while still loading */
   translatedContent: string | null;
   /** True if at least one chunk is currently being translated */
   isTranslating: boolean;
@@ -136,37 +152,66 @@ export function useWikiTranslation(
 
   // Pull the current translation state (memory + localStorage) for
   // every prose chunk, falling back to the original content for chunks
-  // that aren't translated yet.
-  const { translatedContent, detectedLanguages, anyTranslated } = useMemo(() => {
+  // that aren't translated yet. Emits both the per-chunk stream (for
+  // UI indicators) and the reassembled translatedContent string (for
+  // callers that just want the blob).
+  const { chunks: translatedChunks, translatedContent, detectedLanguages, anyTranslated } = useMemo(() => {
     if (!enabled || !settings.preferredLanguage) {
-      return { translatedContent: null, detectedLanguages: [], anyTranslated: false };
+      return {
+        chunks: chunks.map<TranslatedChunk>((c) => ({
+          kind: c.kind,
+          original: c.content,
+          translated: null,
+          cached: null,
+        })),
+        translatedContent: null,
+        detectedLanguages: [],
+        anyTranslated: false,
+      };
     }
     const targetLang = settings.preferredLanguage;
     const langs: string[] = [];
     let anyDifferent = false;
     let allProseResolved = true;
 
-    const rebuilt = chunks.map((c, i) => {
-      if (c.kind !== 'prose') return c;
+    const emitted: TranslatedChunk[] = chunks.map((c, i) => {
+      if (c.kind !== 'prose') {
+        return { kind: c.kind, original: c.content, translated: null, cached: null };
+      }
       const h = chunkHashes[i];
-      const cached = chunkTranslations.get(h) ?? getCachedByHash('wiki', h, targetLang);
+      const cached = chunkTranslations.get(h) ?? getCachedByHash('wiki', h, targetLang) ?? null;
       if (!cached) {
         allProseResolved = false;
-        return c;
+        return { kind: 'prose', original: c.content, translated: null, cached: null };
       }
       langs.push(cached.detectedLanguage);
       if (!cached.skipped) anyDifferent = true;
-      return { ...c, content: cached.translatedContent };
+      return {
+        kind: 'prose',
+        original: c.content,
+        translated: cached.translatedContent,
+        cached,
+      };
     });
 
+    // Rebuild a single markdown string for any caller that wants the
+    // blob form. We use the translator output where available and
+    // fall back to the source.
+    const rebuiltForBlob: WikiChunk[] = emitted.map((c) => ({
+      kind: c.kind,
+      content: c.translated ?? c.original,
+    }));
+
     return {
-      translatedContent: allProseResolved ? reassembleWikiChunks(rebuilt) : null,
+      chunks: emitted,
+      translatedContent: allProseResolved ? reassembleWikiChunks(rebuiltForBlob) : null,
       detectedLanguages: langs,
       anyTranslated: anyDifferent,
     };
   }, [chunks, chunkHashes, chunkTranslations, enabled, settings.preferredLanguage]);
 
   return {
+    chunks: translatedChunks,
     translatedContent,
     isTranslating,
     detectedLanguages,

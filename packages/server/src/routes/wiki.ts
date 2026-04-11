@@ -12,8 +12,10 @@ import type {
   WikiPageView,
   WikiPageSummary,
   WikiBacklinkView,
+  WikiSettingsView,
   CreateWikiPageInput,
   UpdateWikiPageInput,
+  UpdateWikiSettingsInput,
 } from '@babelr/shared';
 
 type Db = ReturnType<typeof import('../db/index.ts').createDb>;
@@ -32,6 +34,28 @@ function slugify(input: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 128);
+}
+
+/**
+ * Clean up a user-supplied tag list: trim whitespace, lowercase for
+ * consistent matching, drop empties and exact duplicates, enforce a
+ * per-tag length cap and a per-page tag count cap. Returns a fresh
+ * array suitable for direct insertion into the `tags text[]` column.
+ */
+function normalizeTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const cleaned = item.trim().toLowerCase().slice(0, 48);
+    if (!cleaned) continue;
+    if (seen.has(cleaned)) continue;
+    seen.add(cleaned);
+    out.push(cleaned);
+    if (out.length >= 32) break; // per-page tag cap
+  }
+  return out;
 }
 
 async function ensureUniqueSlug(db: Db, serverId: string, base: string): Promise<string> {
@@ -94,6 +118,7 @@ async function toWikiPageView(
     slug: page.slug,
     title: page.title,
     content: page.content,
+    tags: page.tags ?? [],
     createdBy: creator ? toAuthorView(creator) : fallback,
     lastEditedBy: editor ? toAuthorView(editor) : fallback,
     createdAt: page.createdAt.toISOString(),
@@ -111,6 +136,7 @@ function toWikiPageSummary(
     serverId: page.serverId,
     slug: page.slug,
     title: page.title,
+    tags: page.tags ?? [],
     lastEditedBy: editor ? toAuthorView(editor) : fallback,
     updatedAt: page.updatedAt.toISOString(),
   };
@@ -245,6 +271,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           slug,
           title: body.title.trim(),
           content,
+          tags: normalizeTags(body.tags),
           createdById: request.actor.id,
           lastEditedById: request.actor.id,
         })
@@ -288,6 +315,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       const body = request.body ?? {};
       const nextTitle = body.title !== undefined ? body.title.trim() : page.title;
       const nextContent = body.content !== undefined ? body.content : page.content;
+      const nextTags = body.tags !== undefined ? normalizeTags(body.tags) : page.tags;
       if (!nextTitle) return reply.status(400).send({ error: 'title cannot be empty' });
 
       // Determine next revision number
@@ -302,6 +330,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .set({
           title: nextTitle,
           content: nextContent,
+          tags: nextTags,
           lastEditedById: request.actor.id,
           updatedAt: new Date(),
         })
@@ -456,6 +485,93 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       await db.delete(wikiPages).where(eq(wikiPages.id, page.id));
       return { ok: true };
+    },
+  );
+
+  // Get per-server wiki settings (currently just the home slug).
+  // Member-level read access; write requires mod+.
+  fastify.get<{ Params: { serverId: string } }>(
+    '/servers/:serverId/wiki/settings',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.serverId))
+        .limit(1);
+      const props = (server?.properties as Record<string, unknown> | null) ?? null;
+      const rawHome = props && typeof props.wikiHomeSlug === 'string' ? (props.wikiHomeSlug as string) : null;
+
+      // Validate that the stored home slug still points at a live page.
+      // If not, surface null — the client will fall back to recency order.
+      let homeSlug: string | null = null;
+      if (rawHome) {
+        const [home] = await db
+          .select({ id: wikiPages.id })
+          .from(wikiPages)
+          .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, rawHome)))
+          .limit(1);
+        if (home) homeSlug = rawHome;
+      }
+
+      const settings: WikiSettingsView = { homeSlug };
+      return { settings };
+    },
+  );
+
+  fastify.put<{ Params: { serverId: string }; Body: UpdateWikiSettingsInput }>(
+    '/servers/:serverId/wiki/settings',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const role = await getServerRole(db, request.params.serverId, request.actor.id, request.actor.uri);
+      if (!role) return reply.status(403).send({ error: 'Not a member of this server' });
+      if (!role.isMod) return reply.status(403).send({ error: 'Insufficient permissions' });
+
+      const body = request.body ?? {};
+
+      // Load the current server properties so we can merge rather than
+      // overwrite (other keys might live here).
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.serverId))
+        .limit(1);
+      if (!server) return reply.status(404).send({ error: 'Server not found' });
+
+      const currentProps = (server.properties as Record<string, unknown> | null) ?? {};
+      const nextProps: Record<string, unknown> = { ...currentProps };
+
+      if (body.homeSlug !== undefined) {
+        if (body.homeSlug === null) {
+          delete nextProps.wikiHomeSlug;
+        } else {
+          // Validate the slug exists in this server's wiki.
+          const [home] = await db
+            .select({ id: wikiPages.id })
+            .from(wikiPages)
+            .where(
+              and(
+                eq(wikiPages.serverId, request.params.serverId),
+                eq(wikiPages.slug, body.homeSlug),
+              ),
+            )
+            .limit(1);
+          if (!home) return reply.status(404).send({ error: 'Home page slug does not exist' });
+          nextProps.wikiHomeSlug = body.homeSlug;
+        }
+      }
+
+      await db
+        .update(actors)
+        .set({ properties: nextProps })
+        .where(eq(actors.id, request.params.serverId));
+
+      const homeSlug = (nextProps.wikiHomeSlug as string | undefined) ?? null;
+      const settings: WikiSettingsView = { homeSlug };
+      return { settings };
     },
   );
 }

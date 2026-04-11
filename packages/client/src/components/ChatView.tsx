@@ -467,6 +467,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         <WikiPanel
           serverId={selectedServer.id}
           serverName={selectedServer.name}
+          callerRole={callerRole}
           initialSlug={wikiInitialSlug}
           initialDraft={wikiInitialDraft}
           onClose={() => {

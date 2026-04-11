@@ -415,6 +415,22 @@ export async function getWikiBacklinks(
   return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/backlinks`);
 }
 
+export async function getWikiSettings(
+  serverId: string,
+): Promise<import('@babelr/shared').WikiSettingsResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/settings`);
+}
+
+export async function updateWikiSettings(
+  serverId: string,
+  input: import('@babelr/shared').UpdateWikiSettingsInput,
+): Promise<import('@babelr/shared').WikiSettingsResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/settings`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
 // E2E encryption
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiFetch('/auth/password', {

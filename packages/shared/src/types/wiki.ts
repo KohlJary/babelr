@@ -8,6 +8,7 @@ export interface WikiPageView {
   title: string;
   /** Markdown source */
   content: string;
+  tags: string[];
   createdBy: AuthorView;
   lastEditedBy: AuthorView;
   createdAt: string;
@@ -24,6 +25,7 @@ export interface WikiPageSummary {
   serverId: string;
   slug: string;
   title: string;
+  tags: string[];
   lastEditedBy: AuthorView;
   updatedAt: string;
 }
@@ -44,13 +46,33 @@ export interface CreateWikiPageInput {
   slug?: string;
   title: string;
   content?: string;
+  tags?: string[];
 }
 
 export interface UpdateWikiPageInput {
   title?: string;
   content?: string;
+  tags?: string[];
   /** Short message describing the change, stored on the revision row */
   summary?: string;
+}
+
+/**
+ * Per-server wiki-level settings. Currently just the home page slug;
+ * this shape is intentionally a container so future settings (default
+ * edit permission, default tag, etc.) can join it without another
+ * round of type plumbing.
+ */
+export interface WikiSettingsView {
+  homeSlug: string | null;
+}
+
+export interface UpdateWikiSettingsInput {
+  homeSlug?: string | null;
+}
+
+export interface WikiSettingsResponse {
+  settings: WikiSettingsView;
 }
 
 export interface WikiPageListResponse {

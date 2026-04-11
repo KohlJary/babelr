@@ -1,7 +1,18 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex, integer, customType } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { objects } from './objects.ts';
 import { actors } from './actors.ts';
+
+// text[] column type — drizzle's built-in array helpers still route
+// through jsonb or text in some codepaths, so we declare the raw
+// Postgres type directly to get a real array column with GIN-indexable
+// semantics for the tag filter.
+const textArray = customType<{ data: string[]; driverData: string[]; notNull: true; default: true }>({
+  dataType() {
+    return 'text[]';
+  },
+});
 
 /**
  * Server wiki pages. Long-form knowledge that persists outside the chat
@@ -24,6 +35,7 @@ export const wikiPages = pgTable(
     slug: varchar('slug', { length: 128 }).notNull(),
     title: varchar('title', { length: 256 }).notNull(),
     content: text('content').notNull().default(''),
+    tags: textArray('tags').notNull().default(sql`ARRAY[]::text[]`),
     createdById: uuid('created_by_id').notNull().references(() => actors.id),
     lastEditedById: uuid('last_edited_by_id').notNull().references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -33,6 +45,8 @@ export const wikiPages = pgTable(
     uniqueIndex('wiki_pages_server_slug_idx').on(table.serverId, table.slug),
     index('wiki_pages_server_idx').on(table.serverId),
     index('wiki_pages_updated_idx').on(table.updatedAt),
+    // GIN index for tag membership queries (tags @> ARRAY['...'])
+    index('wiki_pages_tags_gin_idx').using('gin', table.tags),
   ],
 );
 

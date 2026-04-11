@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { WikiPageSummary, WikiPageView, WikiBacklinkView } from '@babelr/shared';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import type {
+  WikiPageSummary,
+  WikiPageView,
+  WikiBacklinkView,
+  WikiSettingsView,
+  IdiomAnnotation,
+} from '@babelr/shared';
 import { useWikiPages } from '../hooks/useWikiPages';
-import { useWikiTranslation } from '../hooks/useWikiTranslation';
+import { useWikiTranslation, type TranslatedChunk } from '../hooks/useWikiTranslation';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useT } from '../i18n/I18nProvider';
+import type { UIStringKey } from '@babelr/shared';
 import { renderWikiMarkdown } from '../utils/markdown';
 import * as api from '../api';
 
 interface WikiPanelProps {
   serverId: string;
   serverName?: string;
+  /** Caller's role on this server — controls access to home-page controls */
+  callerRole?: string;
   /** Slug to open on mount, overriding the default "first page" behavior */
   initialSlug?: string | null;
   /** Initial content to seed a new page with (e.g. from a message) */
@@ -20,17 +29,119 @@ interface WikiPanelProps {
 
 type Mode = 'view' | 'edit' | 'create';
 
-export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onClose }: WikiPanelProps) {
+function ConfidenceDot({
+  confidence,
+  label,
+  title,
+}: {
+  confidence: number;
+  label: string;
+  title: string;
+}) {
+  const color = confidence > 0.8 ? '#22c55e' : confidence > 0.5 ? '#eab308' : '#ef4444';
+  return (
+    <span className="wiki-confidence" title={title}>
+      <span className="wiki-confidence-dot" style={{ backgroundColor: color }} />
+      <span className="wiki-confidence-label">{label}</span>
+    </span>
+  );
+}
+
+function ChunkIndicators({
+  chunk,
+  t,
+}: {
+  chunk: TranslatedChunk;
+  t: (key: UIStringKey, values?: Record<string, string | number>) => string;
+}) {
+  const [idiomsOpen, setIdiomsOpen] = useState(false);
+  if (chunk.kind !== 'prose' || !chunk.cached || chunk.cached.skipped) return null;
+  const meta = chunk.cached.metadata;
+  if (!meta) return null;
+  const confidenceLabel =
+    meta.confidence > 0.8
+      ? t('wiki.confidenceHigh')
+      : meta.confidence > 0.5
+        ? t('wiki.confidenceMedium')
+        : t('wiki.confidenceLow');
+  const idioms: IdiomAnnotation[] = meta.idioms ?? [];
+  return (
+    <div className="wiki-chunk-indicators">
+      <ConfidenceDot
+        confidence={meta.confidence}
+        label={`${meta.register} · ${meta.intent}`}
+        title={`${confidenceLabel} (${Math.round(meta.confidence * 100)}%)`}
+      />
+      {idioms.length > 0 && (
+        <button
+          type="button"
+          className="wiki-idiom-toggle"
+          onClick={() => setIdiomsOpen((v) => !v)}
+        >
+          {t('wiki.idiomsFlagged', { count: idioms.length })}
+          <span className="wiki-idiom-arrow">{idiomsOpen ? '▼' : '▶'}</span>
+        </button>
+      )}
+      {idiomsOpen && idioms.length > 0 && (
+        <div className="wiki-idiom-list">
+          {idioms.map((idiom, i) => (
+            <div key={i} className="wiki-idiom-entry">
+              <div className="wiki-idiom-original">
+                <span className="wiki-idiom-label">{t('wiki.idiomLabel')}:</span>{' '}
+                <em>{idiom.original}</em>
+                {idiom.equivalent && (
+                  <>
+                    {' → '}
+                    <em>{idiom.equivalent}</em>
+                  </>
+                )}
+              </div>
+              <div className="wiki-idiom-explanation">{idiom.explanation}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WikiPanel({
+  serverId,
+  serverName,
+  callerRole,
+  initialSlug,
+  initialDraft,
+  onClose,
+}: WikiPanelProps) {
   const t = useT();
   const { pages, loading, error, reload, getPage, createPage, updatePage, deletePage } =
     useWikiPages(serverId);
   const { settings: translationSettings } = useTranslationSettings();
+  const isMod = ['owner', 'admin', 'moderator'].includes(callerRole ?? '');
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<WikiPageView | null>(null);
   const [mode, setMode] = useState<Mode>('view');
   const [backlinks, setBacklinks] = useState<WikiBacklinkView[]>([]);
   const [showOriginal, setShowOriginal] = useState(false);
+
+  // Wiki-level settings (home page). Fetched on mount and refreshed
+  // whenever the caller changes it.
+  const [wikiSettings, setWikiSettings] = useState<WikiSettingsView | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getWikiSettings(serverId)
+      .then((res) => {
+        if (!cancelled) setWikiSettings(res.settings);
+      })
+      .catch(() => {
+        if (!cancelled) setWikiSettings({ homeSlug: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [serverId]);
 
   // Translate the current page's content lazily. Only runs in view
   // mode — edit/create show the user's literal draft.
@@ -40,9 +151,16 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
     Boolean(currentPage) && mode === 'view',
   );
 
+  // Sidebar filter state. `searchQuery` is the title/slug substring
+  // filter; `activeTag` is an optional tag filter that narrows further.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+
   // Edit form state
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
+  const [draftTags, setDraftTags] = useState<string[]>([]);
+  const [draftTagInput, setDraftTagInput] = useState('');
   const [draftSummary, setDraftSummary] = useState('');
   const [previewOn, setPreviewOn] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -73,20 +191,23 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
     if (!initialDraft) return;
     setDraftTitle(initialDraft.title ?? '');
     setDraftContent(initialDraft.content ?? '');
+    setDraftTags([]);
+    setDraftTagInput('');
     setDraftSummary('');
     setPreviewOn(false);
     setSaveError(null);
     setMode('create');
   }, [initialDraft]);
 
-  // Remember which initialSlug we've already applied so subsequent
+  // Track which initialSlug we've already applied so subsequent
   // in-panel navigations don't get snapped back to the prop value.
-  // We re-apply only when the caller passes a *new* initialSlug (e.g.
-  // clicking a wiki ref in a message while the panel is already open).
   const lastAppliedInitialSlug = useRef<string | null>(null);
 
-  // Auto-select first page when the list loads — or honor initialSlug
-  // if the caller passed a new one. Skip entirely if we're mid-create.
+  // Auto-select on list load:
+  // 1. explicit initialSlug (from a wiki-ref click) always wins
+  // 2. otherwise the server-configured home page if set
+  // 3. otherwise the first page by recency
+  // Skip entirely if we're mid-create.
   useEffect(() => {
     if (mode === 'create') return;
     if (initialSlug && initialSlug !== lastAppliedInitialSlug.current) {
@@ -96,10 +217,16 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
       return;
     }
     if (selectedSlug || pages.length === 0) return;
-    const first = pages[0];
-    setSelectedSlug(first.slug);
-    void loadPage(first.slug);
-  }, [pages, selectedSlug, loadPage, initialSlug, mode]);
+    // Wait for settings to resolve before picking a default — avoids a
+    // flash of the "first page" before the home page loads in.
+    if (wikiSettings === null) return;
+    const homeMatch = wikiSettings.homeSlug
+      ? pages.find((p) => p.slug === wikiSettings.homeSlug)
+      : undefined;
+    const chosen = homeMatch ?? pages[0];
+    setSelectedSlug(chosen.slug);
+    void loadPage(chosen.slug);
+  }, [pages, selectedSlug, loadPage, initialSlug, mode, wikiSettings]);
 
   const handleSelect = (summary: WikiPageSummary) => {
     setSelectedSlug(summary.slug);
@@ -110,10 +237,9 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
 
   /**
    * Intercept clicks on rendered `[[slug]]` refs inside this panel's
-   * own markdown (both view and preview mode). The global handler on
-   * ChatView opens the panel for refs clicked outside, but once the
-   * panel is already open we want to navigate in-place instead of
-   * re-opening, so we catch the click locally first.
+   * own markdown. The global handler on ChatView opens the panel for
+   * refs clicked outside, but once the panel is already open we want
+   * to navigate in-place instead of re-opening.
    */
   const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
@@ -152,6 +278,8 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
   const beginCreate = () => {
     setDraftTitle('');
     setDraftContent('');
+    setDraftTags([]);
+    setDraftTagInput('');
     setDraftSummary('');
     setPreviewOn(false);
     setSaveError(null);
@@ -162,6 +290,8 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
     if (!currentPage) return;
     setDraftTitle(currentPage.title);
     setDraftContent(currentPage.content);
+    setDraftTags(currentPage.tags ?? []);
+    setDraftTagInput('');
     setDraftSummary('');
     setPreviewOn(false);
     setSaveError(null);
@@ -169,9 +299,23 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
   };
 
   const cancelEdit = () => {
-    setMode(currentPage ? 'view' : 'view');
+    setMode('view');
     setSaveError(null);
   };
+
+  const commitTagFromInput = () => {
+    const cleaned = draftTagInput.trim().toLowerCase().slice(0, 48);
+    if (!cleaned) return;
+    if (draftTags.includes(cleaned)) {
+      setDraftTagInput('');
+      return;
+    }
+    if (draftTags.length >= 32) return;
+    setDraftTags([...draftTags, cleaned]);
+    setDraftTagInput('');
+  };
+
+  const removeTag = (tag: string) => setDraftTags(draftTags.filter((t) => t !== tag));
 
   const handleSave = async () => {
     if (!draftTitle.trim()) {
@@ -182,7 +326,11 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
     setSaveError(null);
     try {
       if (mode === 'create') {
-        const created = await createPage({ title: draftTitle.trim(), content: draftContent });
+        const created = await createPage({
+          title: draftTitle.trim(),
+          content: draftContent,
+          tags: draftTags,
+        });
         if (created) {
           setSelectedSlug(created.slug);
           setCurrentPage(created);
@@ -192,6 +340,7 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
         const updated = await updatePage(currentPage.slug, {
           title: draftTitle.trim(),
           content: draftContent,
+          tags: draftTags,
           summary: draftSummary.trim() || undefined,
         });
         if (updated) {
@@ -219,9 +368,60 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
     }
   };
 
+  const handleSetAsHome = async () => {
+    if (!currentPage) return;
+    try {
+      const nextSlug = wikiSettings?.homeSlug === currentPage.slug ? null : currentPage.slug;
+      const res = await api.updateWikiSettings(serverId, { homeSlug: nextSlug });
+      setWikiSettings(res.settings);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to update home page');
+    }
+  };
+
+  // Derived sidebar state: tag counts, filtered page list.
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of pages) {
+      for (const tag of p.tags ?? []) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [pages]);
+
+  const filteredPages = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return pages.filter((p) => {
+      if (q) {
+        const hay = `${p.title} ${p.slug}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (activeTag && !(p.tags ?? []).includes(activeTag)) return false;
+      return true;
+    });
+  }, [pages, searchQuery, activeTag]);
+
   const panelTitle = serverName
     ? `${t('wiki.serverWiki')} — ${serverName}`
     : t('wiki.serverWiki');
+
+  // Page-level register aggregate for the meta row. Collapses all
+  // registers seen across translated prose chunks into a sorted
+  // deduplicated list.
+  const pageRegisters = useMemo(() => {
+    const out = new Set<string>();
+    for (const c of translate.chunks) {
+      if (c.cached?.metadata && !c.cached.skipped) {
+        out.add(c.cached.metadata.register);
+      }
+    }
+    return Array.from(out).sort();
+  }, [translate.chunks]);
+
+  const isCurrentPageHome = Boolean(
+    currentPage && wikiSettings?.homeSlug === currentPage.slug,
+  );
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -241,23 +441,73 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
             <button className="auth-submit wiki-new-btn" onClick={beginCreate}>
               + {t('wiki.createPage')}
             </button>
+
+            <input
+              className="auth-input wiki-search-input"
+              type="search"
+              placeholder={t('wiki.searchPlaceholder')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+
+            {tagCounts.size > 0 && (
+              <div className="wiki-tag-filter">
+                <h3 className="friends-section-header">{t('wiki.tags')}</h3>
+                <div className="wiki-tag-filter-chips">
+                  {activeTag && (
+                    <button
+                      type="button"
+                      className="wiki-tag-chip active clearable"
+                      onClick={() => setActiveTag(null)}
+                      title={t('wiki.clearTagFilter')}
+                    >
+                      ✕ {activeTag}
+                    </button>
+                  )}
+                  {Array.from(tagCounts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([tag, count]) => (
+                      <button
+                        type="button"
+                        key={tag}
+                        className={`wiki-tag-chip ${activeTag === tag ? 'active' : ''}`}
+                        onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                      >
+                        {tag} <span className="wiki-tag-count">{count}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
             <h3 className="friends-section-header">{t('wiki.pages')}</h3>
             {loading && <div className="sidebar-empty">{t('wiki.loading')}</div>}
             {error && <div className="dm-lookup-error">{error}</div>}
             {!loading && !error && pages.length === 0 && (
               <div className="sidebar-empty">{t('wiki.noPages')}</div>
             )}
+            {!loading && !error && pages.length > 0 && filteredPages.length === 0 && (
+              <div className="sidebar-empty">{t('wiki.noSearchResults')}</div>
+            )}
             <ul className="wiki-page-list">
-              {pages.map((p) => (
-                <li key={p.id}>
-                  <button
-                    className={`wiki-page-item ${selectedSlug === p.slug ? 'selected' : ''}`}
-                    onClick={() => handleSelect(p)}
-                  >
-                    {p.title || t('wiki.untitled')}
-                  </button>
-                </li>
-              ))}
+              {filteredPages.map((p) => {
+                const isHome = wikiSettings?.homeSlug === p.slug;
+                return (
+                  <li key={p.id}>
+                    <button
+                      className={`wiki-page-item ${selectedSlug === p.slug ? 'selected' : ''}`}
+                      onClick={() => handleSelect(p)}
+                    >
+                      {isHome && (
+                        <span className="wiki-home-indicator" title={t('wiki.home')}>
+                          {t('wiki.homePageBadge')}
+                        </span>
+                      )}
+                      {p.title || t('wiki.untitled')}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </aside>
 
@@ -269,8 +519,28 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
             {mode === 'view' && currentPage && (
               <>
                 <div className="wiki-content-header">
-                  <h1 className="wiki-page-title">{currentPage.title}</h1>
+                  <h1 className="wiki-page-title">
+                    {isCurrentPageHome && (
+                      <span className="wiki-home-indicator" title={t('wiki.home')}>
+                        {t('wiki.homePageBadge')}
+                      </span>
+                    )}
+                    {currentPage.title}
+                  </h1>
                   <div className="wiki-content-actions">
+                    {isMod && (
+                      <button
+                        className="voice-control-btn"
+                        onClick={handleSetAsHome}
+                        title={
+                          isCurrentPageHome
+                            ? t('wiki.unsetHome')
+                            : t('wiki.setAsHome')
+                        }
+                      >
+                        {isCurrentPageHome ? t('wiki.unsetHome') : t('wiki.setAsHome')}
+                      </button>
+                    )}
                     <button className="voice-control-btn" onClick={beginEdit}>
                       {t('wiki.editPage')}
                     </button>
@@ -322,19 +592,61 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
                       </button>
                     </>
                   )}
+                  {pageRegisters.length > 1 && !showOriginal && translate.anyTranslated && (
+                    <>
+                      <span className="wiki-meta-sep">·</span>
+                      <span className="wiki-page-registers">
+                        {t('wiki.mixedRegisters', { registers: pageRegisters.join(', ') })}
+                      </span>
+                    </>
+                  )}
                 </div>
+
+                {(currentPage.tags ?? []).length > 0 && (
+                  <div className="wiki-page-tags">
+                    {(currentPage.tags ?? []).map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="wiki-tag-chip"
+                        onClick={() => setActiveTag(tag)}
+                        title={`Filter by ${tag}`}
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {currentPage.content.trim() ? (
-                  <div
-                    className="wiki-content-body"
-                    onClick={handleContentClick}
-                    dangerouslySetInnerHTML={{
-                      __html: renderWikiMarkdown(
-                        !showOriginal && translate.translatedContent
-                          ? translate.translatedContent
-                          : currentPage.content,
-                      ),
-                    }}
-                  />
+                  !showOriginal && translate.anyTranslated ? (
+                    // Chunk-by-chunk render with per-chunk indicators.
+                    // Each chunk gets its own rendered markdown block
+                    // followed by the register/idiom metadata row.
+                    <div className="wiki-content-body chunked" onClick={handleContentClick}>
+                      {translate.chunks.map((c, i) => {
+                        if (c.kind === 'blank') return null;
+                        const body = c.translated ?? c.original;
+                        return (
+                          <div key={i} className={`wiki-chunk wiki-chunk-${c.kind}`}>
+                            <div
+                              className="wiki-chunk-body"
+                              dangerouslySetInnerHTML={{ __html: renderWikiMarkdown(body) }}
+                            />
+                            <ChunkIndicators chunk={c} t={t} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div
+                      className="wiki-content-body"
+                      onClick={handleContentClick}
+                      dangerouslySetInnerHTML={{
+                        __html: renderWikiMarkdown(currentPage.content),
+                      }}
+                    />
+                  )
                 ) : (
                   <div className="sidebar-empty">{t('wiki.emptyContent')}</div>
                 )}
@@ -400,6 +712,39 @@ export function WikiPanel({ serverId, serverName, initialSlug, initialDraft, onC
                     placeholder={t('wiki.pageTitlePlaceholder')}
                     autoFocus
                   />
+                </label>
+
+                <label className="auth-label">
+                  {t('wiki.tagsLabel')}
+                  <div className="wiki-tag-input-row">
+                    {draftTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="wiki-tag-chip removable"
+                        onClick={() => removeTag(tag)}
+                        title="Remove"
+                      >
+                        {tag} ✕
+                      </button>
+                    ))}
+                    <input
+                      className="auth-input wiki-tag-input"
+                      type="text"
+                      value={draftTagInput}
+                      onChange={(e) => setDraftTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ',') {
+                          e.preventDefault();
+                          commitTagFromInput();
+                        } else if (e.key === 'Backspace' && !draftTagInput && draftTags.length) {
+                          setDraftTags(draftTags.slice(0, -1));
+                        }
+                      }}
+                      onBlur={commitTagFromInput}
+                      placeholder={t('wiki.tagInputPlaceholder')}
+                    />
+                  </div>
                 </label>
 
                 <div className="wiki-edit-toolbar">
