@@ -414,9 +414,18 @@ export function useVoice(selfActorId: string) {
           if (!ev.track.muted) {
             populateSlot('initial ontrack, not muted');
           }
-          ev.track.onended = () => clearSlot('onended');
-          ev.track.onmute = () => clearSlot('onmute');
-          ev.track.onunmute = () => populateSlot('onunmute');
+          ev.track.onended = () => {
+            console.log('voice: track onended', { from: actor.id, slot });
+            clearSlot('onended');
+          };
+          ev.track.onmute = () => {
+            console.log('voice: track onmute', { from: actor.id, slot });
+            clearSlot('onmute');
+          };
+          ev.track.onunmute = () => {
+            console.log('voice: track onunmute', { from: actor.id, slot });
+            populateSlot('onunmute');
+          };
 
           console.log('voice: ontrack video', {
             from: actor.id,
@@ -1209,7 +1218,25 @@ export function useVoice(selfActorId: string) {
       const now = performance.now();
       if (now - lastReconcileRef.current > 500) {
         lastReconcileRef.current = now;
+        // Verbose scan log: dump the state of every peer's video/screen
+        // transceivers so we can see exactly what's happening during a
+        // re-enable cycle.
         for (const entry of peersRef.current.values()) {
+          const txs = entry.pc
+            .getTransceivers()
+            .filter((t) => t.receiver.track?.kind === 'video');
+          console.log('voice: reconcile scan', {
+            peer: entry.actor.id,
+            slotVideo: entry.videoStream !== null,
+            slotScreen: entry.screenStream !== null,
+            txs: txs.map((t, i) => ({
+              i,
+              currentDirection: t.currentDirection,
+              trackReadyState: t.receiver.track?.readyState,
+              trackMuted: t.receiver.track?.muted,
+              trackId: t.receiver.track?.id,
+            })),
+          });
           reconcilePeerSlots(entry, false);
         }
       }
