@@ -6,6 +6,18 @@ import { useEventTranslation } from '../hooks/useEventTranslation';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { CreateEventModal } from './CreateEventModal';
 import { EventDetailPanel } from './EventDetailPanel';
+import { EventsWeekView } from './EventsWeekView';
+import { EventsMonthView } from './EventsMonthView';
+import {
+  addDays,
+  addMonths,
+  formatMonthHeader,
+  formatWeekHeader,
+  startOfMonthGrid,
+  endOfMonthGrid,
+  startOfWeek,
+  endOfWeek,
+} from '../utils/calendar';
 import { useT } from '../i18n/I18nProvider';
 
 interface EventsPanelProps {
@@ -18,6 +30,8 @@ interface EventsPanelProps {
   onClose: () => void;
   onGoToChannel?: (channelId: string) => void;
 }
+
+type ViewMode = 'agenda' | 'week' | 'month';
 
 /** Bucket events into Today / Tomorrow / This week / Later. */
 function bucketEvents(events: EventView[]): {
@@ -70,9 +84,38 @@ export function EventsPanel({
   onGoToChannel,
 }: EventsPanelProps) {
   const t = useT();
+
+  // View state. `anchor` is the date we're centered on for
+  // week/month views — navigation shifts it by ±1 unit and "Today"
+  // resets it to now.
+  const [viewMode, setViewMode] = useState<ViewMode>('agenda');
+  const [anchor, setAnchor] = useState<Date>(() => new Date());
+
+  // Compute the time window to fetch based on the active view.
+  // Agenda uses the server default (now → 60d). Week and month
+  // pass explicit bounds so past events and far-future events
+  // show up when the user navigates there.
+  const range = useMemo(() => {
+    if (viewMode === 'week') {
+      return {
+        rangeStart: startOfWeek(anchor).toISOString(),
+        rangeEnd: endOfWeek(anchor).toISOString(),
+      };
+    }
+    if (viewMode === 'month') {
+      return {
+        rangeStart: startOfMonthGrid(anchor).toISOString(),
+        rangeEnd: endOfMonthGrid(anchor).toISOString(),
+      };
+    }
+    return { rangeStart: undefined, rangeEnd: undefined };
+  }, [viewMode, anchor]);
+
   const { events, loading, error, createEvent, deleteEvent, rsvpEvent } = useEvents({
     scope,
     ownerId,
+    rangeStart: range.rangeStart,
+    rangeEnd: range.rangeEnd,
   });
   const { settings: translationSettings } = useTranslationSettings();
   const { translations: eventTranslations } = useEventTranslation(events, translationSettings);
@@ -85,6 +128,24 @@ export function EventsPanel({
     scope === 'server'
       ? `${t('events.serverCalendar')}${ownerName ? ` — ${ownerName}` : ''}`
       : t('events.myCalendar');
+
+  // Navigation helpers for week/month views.
+  const goPrev = () => {
+    if (viewMode === 'week') setAnchor(addDays(anchor, -7));
+    else if (viewMode === 'month') setAnchor(addMonths(anchor, -1));
+  };
+  const goNext = () => {
+    if (viewMode === 'week') setAnchor(addDays(anchor, 7));
+    else if (viewMode === 'month') setAnchor(addMonths(anchor, 1));
+  };
+  const goToday = () => setAnchor(new Date());
+
+  const rangeHeader =
+    viewMode === 'week'
+      ? formatWeekHeader(anchor)
+      : viewMode === 'month'
+        ? formatMonthHeader(anchor)
+        : '';
 
   const renderBucket = (label: string, list: EventView[]) => {
     if (list.length === 0) return null;
@@ -120,7 +181,7 @@ export function EventsPanel({
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div
-        className="settings-panel settings-panel-wide"
+        className="settings-panel settings-panel-wide events-panel-shell"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="settings-header">
@@ -130,27 +191,90 @@ export function EventsPanel({
           </button>
         </div>
 
-        <div className="settings-tab-content">
+        <div className="events-view-toolbar">
+          <div className="events-view-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              className={`events-view-tab ${viewMode === 'agenda' ? 'active' : ''}`}
+              onClick={() => setViewMode('agenda')}
+            >
+              {t('events.viewAgenda')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={`events-view-tab ${viewMode === 'week' ? 'active' : ''}`}
+              onClick={() => setViewMode('week')}
+            >
+              {t('events.viewWeek')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              className={`events-view-tab ${viewMode === 'month' ? 'active' : ''}`}
+              onClick={() => setViewMode('month')}
+            >
+              {t('events.viewMonth')}
+            </button>
+          </div>
+          {viewMode !== 'agenda' && (
+            <div className="events-view-nav">
+              <button type="button" className="events-view-nav-btn" onClick={goPrev} title={t('events.previous')}>
+                ‹
+              </button>
+              <button type="button" className="events-view-nav-btn events-view-today" onClick={goToday}>
+                {t('events.today')}
+              </button>
+              <button type="button" className="events-view-nav-btn" onClick={goNext} title={t('events.next')}>
+                ›
+              </button>
+              <span className="events-view-range-label">{rangeHeader}</span>
+            </div>
+          )}
           {canCreate && (
             <button
-              className="auth-submit"
-              style={{ marginBottom: '1rem' }}
+              className="auth-submit events-view-create-btn"
               onClick={() => setShowCreate(true)}
             >
               + {t('events.createEvent')}
             </button>
           )}
+        </div>
 
+        <div className="settings-tab-content events-panel-content">
           {loading && <div className="sidebar-empty">{t('events.loading')}</div>}
           {error && <div className="dm-lookup-error">{error}</div>}
-          {!loading && !error && events.length === 0 && (
-            <div className="sidebar-empty">{t('events.upcomingEmpty')}</div>
+
+          {viewMode === 'agenda' && (
+            <>
+              {!loading && !error && events.length === 0 && (
+                <div className="sidebar-empty">{t('events.upcomingEmpty')}</div>
+              )}
+              {renderBucket(t('events.today'), buckets.today)}
+              {renderBucket(t('events.tomorrow'), buckets.tomorrow)}
+              {renderBucket(t('events.thisWeek'), buckets.thisWeek)}
+              {renderBucket(t('events.later'), buckets.later)}
+            </>
           )}
 
-          {renderBucket(t('events.today'), buckets.today)}
-          {renderBucket(t('events.tomorrow'), buckets.tomorrow)}
-          {renderBucket(t('events.thisWeek'), buckets.thisWeek)}
-          {renderBucket(t('events.later'), buckets.later)}
+          {viewMode === 'week' && !loading && !error && (
+            <EventsWeekView
+              anchor={anchor}
+              events={events}
+              translations={eventTranslations}
+              onSelectEvent={setDetailEvent}
+            />
+          )}
+
+          {viewMode === 'month' && !loading && !error && (
+            <EventsMonthView
+              anchor={anchor}
+              events={events}
+              translations={eventTranslations}
+              onSelectEvent={setDetailEvent}
+            />
+          )}
         </div>
 
         {showCreate && (

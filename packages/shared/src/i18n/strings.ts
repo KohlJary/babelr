@@ -352,6 +352,11 @@ export const UI_STRINGS = {
   'events.failedToCreate': 'Failed to create event',
   'events.failedToSave': 'Failed to save event',
   'events.translating': 'Translating event details…',
+  'events.viewAgenda': 'Agenda',
+  'events.viewWeek': 'Week',
+  'events.viewMonth': 'Month',
+  'events.previous': 'Previous',
+  'events.next': 'Next',
   'events.showOriginal': 'Show original ({lang})',
   'events.showTranslation': 'Show translation (original: {lang})',
 

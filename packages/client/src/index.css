@@ -2081,6 +2081,292 @@ textarea.modal-input {
 .event-translation-toggle:hover {
   text-decoration: underline;
 }
+
+/* Events panel view toolbar ------------------------------------------ */
+.events-panel-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+.events-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+.events-view-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+  flex-wrap: wrap;
+}
+.events-view-tabs {
+  display: flex;
+  gap: 0;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  padding: 2px;
+}
+.events-view-tab {
+  background: transparent;
+  border: none;
+  color: #888;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.events-view-tab:hover {
+  color: #ccc;
+}
+.events-view-tab.active {
+  background: #2a3b5f;
+  color: #fff;
+}
+.events-view-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.events-view-nav-btn {
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  color: #bbb;
+  padding: 0.3rem 0.65rem;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.events-view-nav-btn:hover {
+  background: #1f1f1f;
+  color: #ddd;
+}
+.events-view-today {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+}
+.events-view-range-label {
+  color: #bbb;
+  font-size: 0.88rem;
+  margin-left: 0.35rem;
+  white-space: nowrap;
+}
+.events-view-create-btn {
+  margin-left: auto;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+/* Events month view -------------------------------------------------- */
+.events-month-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 500px;
+}
+.events-month-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid #2a2a2a;
+}
+.events-month-weekday {
+  padding: 0.5rem;
+  text-align: center;
+  color: #888;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.events-month-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: minmax(92px, 1fr);
+  gap: 0;
+  min-height: 0;
+}
+.events-month-cell {
+  border-right: 1px solid #1f1f1f;
+  border-bottom: 1px solid #1f1f1f;
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: #0f0f0f;
+  overflow: hidden;
+}
+.events-month-cell:nth-child(7n) {
+  border-right: none;
+}
+.events-month-cell.outside-month {
+  background: #0a0a0a;
+}
+.events-month-cell.outside-month .events-month-cell-date {
+  color: #555;
+}
+.events-month-cell.today {
+  background: #16203a;
+}
+.events-month-cell.today .events-month-cell-date {
+  color: #7ba6ff;
+  font-weight: 600;
+}
+.events-month-cell-date {
+  font-size: 0.78rem;
+  color: #888;
+  padding: 0.15rem 0.3rem;
+}
+.events-month-cell-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-height: 0;
+}
+.events-month-event {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  background: #1a2840;
+  border: 1px solid #2a3b5f;
+  color: #cdd6ee;
+  padding: 0.15rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.events-month-event:hover {
+  background: #223154;
+  border-color: #3f567f;
+}
+.events-month-event-time {
+  color: #7ba6ff;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.events-month-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.events-month-overflow {
+  font-size: 0.72rem;
+  color: #666;
+  padding: 0.1rem 0.3rem;
+}
+
+/* Events week view --------------------------------------------------- */
+.events-week-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+.events-week-header {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  border-bottom: 1px solid #2a2a2a;
+  position: sticky;
+  top: 0;
+  background: #0f0f0f;
+  z-index: 1;
+}
+.events-week-hour-rail-spacer {
+  border-right: 1px solid #1f1f1f;
+}
+.events-week-day-header {
+  padding: 0.5rem;
+  text-align: center;
+  border-right: 1px solid #1f1f1f;
+}
+.events-week-day-header:last-child {
+  border-right: none;
+}
+.events-week-day-header.today {
+  background: #16203a;
+}
+.events-week-day-weekday {
+  color: #888;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.events-week-day-header.today .events-week-day-weekday {
+  color: #7ba6ff;
+}
+.events-week-day-date {
+  color: #ddd;
+  font-size: 1.3rem;
+  font-weight: 500;
+  margin-top: 0.15rem;
+}
+.events-week-day-header.today .events-week-day-date {
+  color: #7ba6ff;
+}
+.events-week-body {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  position: relative;
+}
+.events-week-hour-rail {
+  border-right: 1px solid #1f1f1f;
+}
+.events-week-hour-label {
+  font-size: 0.7rem;
+  color: #666;
+  padding: 0.15rem 0.35rem;
+  border-top: 1px solid #1a1a1a;
+}
+.events-week-day-column {
+  position: relative;
+  border-right: 1px solid #1f1f1f;
+}
+.events-week-day-column:last-child {
+  border-right: none;
+}
+.events-week-day-column.today {
+  background: rgba(22, 32, 58, 0.3);
+}
+.events-week-hour-slot {
+  border-top: 1px solid #1a1a1a;
+}
+.events-week-event {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  background: #1a2840;
+  border: 1px solid #2a3b5f;
+  border-left: 3px solid #4b6cb7;
+  color: #cdd6ee;
+  border-radius: 3px;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.events-week-event:hover {
+  background: #223154;
+  border-color: #3f567f;
+}
+.events-week-event-title {
+  font-weight: 500;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.events-week-event-time {
+  color: #7ba6ff;
+  font-size: 0.68rem;
+}
 .event-rsvp-row {
   display: flex;
   gap: 0.5rem;

@@ -84,11 +84,11 @@
     },
     {
       "id": "calendar-monthly-view",
-      "title": "Monthly calendar view for EventsPanel",
-      "description": "Add a month-grid view alongside the current Today/Tomorrow/This week/Later bucket list. Toggle between 'upcoming' and 'month' modes.\n\nScope:\n- Standard 6-row month grid component (no library needed, ~150 lines of React)\n- Each day cell shows up to 3 event titles with overflow indicator ('+N more')\n- Click a day → show that day's events in a popover or drawer\n- Click an event → open EventDetailPanel\n- Month navigation (prev/next/today buttons)\n- Recurring events expand correctly across the month window\n- Visual distinction for today, past days, and days with events\n- Respects the user's week start preference (Sunday vs Monday) — store on actor.properties\n- Mobile-friendly layout: collapse to week view on narrow widths\n\nPairs naturally with the mobile-apps work since compact calendar views are one of the trickier pieces of responsive UI.",
+      "title": "Month and week calendar views for EventsPanel",
+      "description": "Adds month-grid and week-timeline views alongside the existing Today/Tomorrow/This week/Later bucket list, plus a three-way toggle to switch between them.\n\nShipped:\n- Three view modes: Agenda (existing bucket list, default), Week (Google Calendar shape with hour scale + day columns), Month (6-row × 7-col grid).\n- Week view uses a 6am–midnight hour rail with events positioned absolutely at their start time and height proportional to duration. Today column highlighted.\n- Month view renders 6 × 7 cells covering partial leading/trailing weeks. Up to 3 event summaries per cell with '+N more' overflow. Today cell highlighted; out-of-month cells dimmed.\n- Navigation: prev/next arrows that shift by ±1 week or ±1 month, a Today button that jumps to the current date, and a range label showing the current window.\n- Dynamic range management: week/month views pass explicit rangeStart/rangeEnd to useEvents based on the visible window, so past events and far-future events load when navigated to.\n- Event translation continues to work across all three views via the existing useEventTranslation hook.\n- ~270 lines of CSS for the grid and timeline layouts.\n\nExplicitly deferred (polish follow-ups): drag-to-reschedule, multi-day event spans in month grid, side-by-side layout for overlapping events in week view, all-day event lane at the top of week view, locale-aware week start (Monday vs Sunday), and collapse-to-week on narrow widths.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "calendar-push-notifications",
@@ -371,5 +371,5 @@
       "status": "backlog"
     }
   ],
-  "version": 26
+  "version": 27
 }
