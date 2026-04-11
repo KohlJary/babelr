@@ -141,6 +141,48 @@ features land.
 
 ---
 
+## Enforcement coverage (current state)
+
+Every permission listed below that has an action in the route tables
+is **enforced by a `hasPermission` call** AND has an allow/deny test
+pair in `permissions-matrix.test.ts`. The matrix file is the
+regression catch for every enforced gate — a missing or removed
+`hasPermission` call shows up as at least one red test.
+
+Enforced + tested:
+`MANAGE_SERVER`, `MANAGE_ROLES`, `MANAGE_INVITES`, `KICK_MEMBERS`,
+`CREATE_INVITES`, `VIEW_CHANNELS`, `MANAGE_CHANNELS`,
+`SEND_MESSAGES`, `MANAGE_MESSAGES`, `ADD_REACTIONS`,
+`VIEW_WIKI`, `CREATE_WIKI_PAGES`, `MANAGE_WIKI`,
+`CREATE_EVENTS`, `MANAGE_EVENTS`.
+
+## Known enforcement gaps (tracked as follow-ups)
+
+Permissions that exist in the enum but are NOT yet enforced at their
+target handler. The `remaining-enforcement-gaps` roadmap item tracks
+wiring these in. They're deliberate gaps, not oversights — the
+plumbing isn't a natural fit for the current route layer.
+
+- **`ATTACH_FILES`** — The upload endpoint (`POST /upload`) is
+  currently global (not server-scoped). To enforce `ATTACH_FILES`
+  the upload endpoint would need to accept a `serverId` query param
+  (or the file attachment check would need to move into the message
+  POST handler that references the upload). Either option is
+  manageable but needs a design pass.
+- **`CONNECT_VOICE`** — Voice join lives in `ws.ts` and goes
+  through a `voice:join` WS message handler, not a REST route.
+  The `hasPermission` helper works the same there, but we need
+  to thread an early gate into the WS message switch and add a
+  test harness for WS voice messages (we don't have one today).
+
+Reserved-for-future permissions (intentionally inert until their
+feature lands — not a gap):
+
+- `VIEW_AUDIT_LOG` — for the `granular-permissions-audit-log` item
+- `MENTION_EVERYONE` — for `@everyone`/`@here` rate limiting
+- `SPEAK` — for voice mute-others
+- `VIDEO` — for voice video-disable
+
 ## Bugs identified during the audit
 
 All three get fixed in PR2 as part of the enforcement pass — they're included

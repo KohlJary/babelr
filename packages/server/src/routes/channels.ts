@@ -322,6 +322,17 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         return reply.status(401).send({ error: 'Not authenticated' });
       }
 
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_CHANNELS,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Not a member of this server' });
+      }
+
       const channels = await db
         .select()
         .from(objects)
@@ -528,6 +539,19 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!channel) return reply.status(404).send({ error: 'Channel not found' });
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
+
+    // SEND_MESSAGES permission check — only for server-scoped channels.
+    // DMs and other non-server channels aren't gated on role permissions.
+    // Default role permissions grant SEND_MESSAGES to @everyone so
+    // existing behavior is unchanged, but admins can now revoke it to
+    // create read-only channels or temporarily mute a member via role.
+    if (channel.belongsTo) {
+      if (
+        !(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.SEND_MESSAGES))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions to send messages' });
+      }
+    }
 
     // Slow mode enforcement — bypassed for users with MANAGE_CHANNELS.
     // We reuse MANAGE_CHANNELS rather than adding a dedicated
@@ -844,8 +868,24 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     }
 
     // Check channel access
-    const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+    const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
+
+    // ADD_REACTIONS permission check — server-scoped channels only.
+    // @everyone has this by default so existing behavior is unchanged;
+    // admins can now revoke it via role to restrict reactions.
+    if (channel?.belongsTo) {
+      if (
+        !(await hasPermission(
+          db,
+          channel.belongsTo,
+          request.actor.id,
+          PERMISSIONS.ADD_REACTIONS,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions to add reactions' });
+      }
+    }
 
     // Check message exists
     const [message] = await db

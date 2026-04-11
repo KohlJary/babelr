@@ -155,6 +155,14 @@
       "status": "done"
     },
     {
+      "id": "granular-permissions-remaining-enforcement",
+      "title": "Remaining permission enforcement: ATTACH_FILES + CONNECT_VOICE",
+      "description": "Two permissions exist in the enum but aren't enforced at their target handlers yet. The granular-permissions-core feature landed all the rest (15 permissions gated end-to-end and tested in permissions-matrix.test.ts); these two were deferred because neither fits cleanly into the REST route layer the current helper assumes.\n\n**`ATTACH_FILES` — upload endpoint server-scoping**\n\nThe upload handler (`POST /upload` in `uploads.ts`) is global and authenticated but not server-scoped. Attachments get referenced later in message-send payloads. To enforce `ATTACH_FILES`, one of two approaches:\n\n1. **Accept a `serverId` on the upload request**. The client already knows which server/channel the upload is for — pass it through and check `hasPermission(serverId, ATTACH_FILES)` before writing the file. Clean but requires a client API change.\n2. **Check on message send instead**. When a message with an `attachments` property comes in, look up each attachment URL and verify the sender has `ATTACH_FILES` on the channel's server. Cheaper client-side but means uploads can be written to disk before the permission check — leaves orphaned blobs if denied.\n\nGo with (1) — cleaner model, and the orphaned-blob concern with (2) is a real operational problem.\n\n**`CONNECT_VOICE` — WS voice:join gating**\n\nVoice join is a WS message, not a REST endpoint. `packages/server/src/plugins/ws.ts` handles `voice:join` by calling `fastify.voiceJoin(...)`. To enforce `CONNECT_VOICE`:\n\n- Add a `hasPermission` check early in the `voice:join` switch arm. Easy.\n- Add a WS test harness. We don't have one today — the existing tests use `app.inject(...)` for HTTP, which can't send WS frames. Options: use `@fastify/websocket`'s built-in testing hooks, or spin up a real `ws` client against the test server. The latter is more realistic but adds a dependency and some fragility.\n\nBundled into one PR because they're the last two gaps and both benefit from the same 'close out the enforcement story' commit. Adds a matrix test per permission to `permissions-matrix.test.ts` so the regression catch is complete for every enforced permission.",
+      "type": "chore",
+      "priority": "P2",
+      "status": "ready"
+    },
+    {
       "id": "granular-permissions-channel-overrides",
       "title": "Per-channel permission overrides",
       "description": "Follow-up to the granular server permissions + roles system. Discord-style per-channel permission matrix that overrides server-level role permissions for a specific channel.\n\nExample use cases:\n- An `#announcements` channel where only the Admin role has SEND_MESSAGES even though @everyone has it server-wide.\n- A private #leadership channel that only specific roles can VIEW_CHANNELS for.\n- A #feedback channel where @everyone loses MANAGE_MESSAGES so mods can't delete user complaints.\n\nScope:\n- New `channel_permission_overrides` table: (channelId, roleId, permission, effect) where `effect` is 'allow' or 'deny'. Composite PK on (channelId, roleId, permission).\n- Effective permission evaluation order: server-level role permissions → channel allow-overrides → channel deny-overrides → (per-member overrides if we add them later). Deny wins, allow next, base permissions last.\n- Helper: `hasPermissionInChannel(db, channelId, actorId, permission)` that walks this precedence chain. Used in place of `hasPermission` for channel-scoped actions.\n- UI: channel settings panel gains a 'Permissions' tab with role pickers and per-permission allow/deny/inherit toggles per role.\n- Migration: no data to move. Existing channels remain fully inherited (zero override rows = fall through to server-level).\n\nDeferred from the initial permissions PR to keep the first landing bounded. The helper API is intentionally pluggable so switching `hasPermission` to `hasPermissionInChannel` at call sites is a find-and-replace when we land this.",
@@ -331,5 +339,5 @@
       "status": "backlog"
     }
   ],
-  "version": 23
+  "version": 24
 }
