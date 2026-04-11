@@ -228,20 +228,25 @@ export function useVoice(selfActorId: string) {
 
   /**
    * Reconcile peer slot state from the current RTCPeerConnection receivers.
-   * Called after renegotiation completes (both when we initiate and when we
-   * answer a remote offer), because in practice the onunmute event is
-   * unreliable — some browsers don't fire it when a transceiver's remote
-   * end goes from "sendrecv with no track" to "sendrecv with track" via
-   * replaceTrack.
+   * Called after renegotiation completes AND from the periodic rAF tick.
    *
    * Uses pc.getTransceivers() ORDER as the source of truth for which
    * transceiver is the webcam slot vs the screen slot — not stored
    * transceiver references, which can become ambiguous across
    * renegotiations. Index 0 among video transceivers = webcam,
    * index 1 = screen.
+   *
+   * `canClear`: when true (the post-renegotiation path), an empty-looking
+   * track causes the slot to be cleared. When false (the periodic rAF
+   * path), we ONLY populate empty slots from live tracks. The periodic
+   * path can't clear because polling `track.muted` / `track.readyState`
+   * from a rAF loop produces false negatives during normal operation —
+   * a transient "muted" reading would oscillate the slot state. The
+   * onmute/onended handlers plus the post-renegotiation reconcile are
+   * responsible for teardown.
    */
   const reconcilePeerSlots = useCallback(
-    (entry: PeerEntry) => {
+    (entry: PeerEntry, canClear = true) => {
       const videoTxs = entry.pc
         .getTransceivers()
         .filter((t) => t.receiver.track?.kind === 'video');
@@ -262,7 +267,7 @@ export function useVoice(selfActorId: string) {
             direction: tx.currentDirection,
           });
           syncPeersToState();
-        } else if (!live && currentSlot) {
+        } else if (canClear && !live && currentSlot) {
           if (slot === 'video') entry.videoStream = null;
           else entry.screenStream = null;
           console.log('voice: reconcile clear', {
@@ -1193,19 +1198,19 @@ export function useVoice(selfActorId: string) {
         };
       });
 
-      // Throttled reconcile. Catches video/screen slot changes that the
-      // onmute/onunmute events and the post-renegotiation immediate
-      // reconcile can miss — particularly the "second toggle" case where
-      // a track transitions muted→unmuted but the event either never
-      // fires or fires so late that our initial reconcile already ran
-      // against a still-muted track. Running every 500ms is cheap (just
-      // a few transceiver reads per peer) and bounds the worst-case
-      // latency for stuck state to half a second.
+      // Throttled populate-only reconcile. Catches muted→unmuted
+      // transitions that onunmute misses (notably the "second toggle"
+      // case). IMPORTANT: this path passes canClear=false because
+      // polling track.muted from rAF produces false-negative clears —
+      // transient readings would oscillate the slot state. Teardown
+      // is handled exclusively by onmute/onended and the explicit
+      // post-renegotiation reconcile, both of which see stable
+      // transitions rather than polled snapshots.
       const now = performance.now();
       if (now - lastReconcileRef.current > 500) {
         lastReconcileRef.current = now;
         for (const entry of peersRef.current.values()) {
-          reconcilePeerSlots(entry);
+          reconcilePeerSlots(entry, false);
         }
       }
 
