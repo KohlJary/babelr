@@ -289,15 +289,12 @@ export function useVoice(selfActorId: string) {
         // stored on the peer entry at construction time. Order is stable:
         // webcam = first video transceiver, screen share = second.
         if (ev.track.kind === 'video') {
-          const stream =
-            ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
           const pe = peersRef.current.get(actor.id);
           if (!pe) return;
 
           // Routing: match ev.transceiver to the stored webcam/screen
-          // transceiver references. If the match is ambiguous (e.g. very
-          // early WebRTC builds), fall back to filling whichever slot is
-          // empty — webcam first.
+          // transceiver references. If the match is ambiguous, fall back
+          // to filling whichever slot is empty — webcam first.
           let slot: 'video' | 'screen';
           if (ev.transceiver === pe.videoTransceiver) {
             slot = 'video';
@@ -309,16 +306,20 @@ export function useVoice(selfActorId: string) {
             slot = 'screen';
           }
 
-          if (slot === 'video') {
-            pe.videoStream = stream;
-          } else {
-            pe.screenStream = stream;
-          }
-          syncPeersToState();
-
-          // Remote end turning off their stream: the track transitions
-          // through mute → ended. Clear the right slot when that happens
-          // and restore it on unmute.
+          // A track arriving from a transceiver whose remote side has no
+          // real track attached (e.g. because we pre-allocate both video
+          // transceivers but the remote user only enabled one) comes in
+          // muted. We must NOT populate the slot in that case or the UI
+          // will render an empty tile forever. Wait for the onunmute
+          // event, which fires when the remote actually attaches a track.
+          const populateSlot = () => {
+            const p = peersRef.current.get(actor.id);
+            if (!p) return;
+            const stream = new MediaStream([ev.track]);
+            if (slot === 'video') p.videoStream = stream;
+            else p.screenStream = stream;
+            syncPeersToState();
+          };
           const clearSlot = () => {
             const p = peersRef.current.get(actor.id);
             if (!p) return;
@@ -326,22 +327,19 @@ export function useVoice(selfActorId: string) {
             else p.screenStream = null;
             syncPeersToState();
           };
-          const restoreSlot = () => {
-            const p = peersRef.current.get(actor.id);
-            if (!p) return;
-            const rebuilt = new MediaStream([ev.track]);
-            if (slot === 'video') p.videoStream = rebuilt;
-            else p.screenStream = rebuilt;
-            syncPeersToState();
-          };
+
+          if (!ev.track.muted) {
+            populateSlot();
+          }
           ev.track.onended = clearSlot;
           ev.track.onmute = clearSlot;
-          ev.track.onunmute = restoreSlot;
+          ev.track.onunmute = populateSlot;
 
           console.log('voice: ontrack video', {
             from: actor.id,
             slot,
             muted: ev.track.muted,
+            populated: !ev.track.muted,
           });
           return;
         }
