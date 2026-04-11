@@ -2382,10 +2382,18 @@ textarea.modal-input {
   color: #a7f3d0;
 }
 
-/* Screen share tiles: wider aspect, distinct border */
+/* Screen share tiles live in their own section below the webcam grid
+   so they're not fighting the 2-col layout for size. Each tile is full
+   panel width at 16:9 — big enough to see presentation content. */
+.voice-screen-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.75rem;
+}
 .voice-tile.screen {
   aspect-ratio: 16 / 9;
-  grid-column: span 2;
+  width: 100%;
   border-color: #334155;
 }
 .voice-tile.screen.speaking {

@@ -93,6 +93,7 @@ export function VoicePanel({
         </span>
       </div>
 
+      {/* Webcam/avatar tiles — compact 4:3 grid. */}
       <div className="voice-tiles">
         <VoiceTile
           actor={selfActor}
@@ -101,15 +102,6 @@ export function VoicePanel({
           muted={voice.micMuted}
           isSelf
         />
-        {localScreenStream && (
-          <VoiceTile
-            actor={selfActor}
-            stream={localScreenStream}
-            speaking={false}
-            isSelf
-            isScreen
-          />
-        )}
         {voice.peers.map((peer) => (
           <VoiceTile
             key={peer.actorId}
@@ -121,22 +113,40 @@ export function VoicePanel({
             onVolumeChange={(v) => onPeerVolume(peer.actorId, v)}
           />
         ))}
-        {voice.peers.map((peer) =>
-          peer.hasScreen ? (
-            <VoiceTile
-              key={`${peer.actorId}-screen`}
-              actor={peer.actor}
-              stream={peerScreenStreams.get(peer.actorId) ?? null}
-              speaking={false}
-              connected={peer.connected}
-              isScreen
-            />
-          ) : null,
-        )}
         {voice.peers.length === 0 && voice.status === 'connected' && (
           <div className="voice-empty">{t('voice.noParticipants')}</div>
         )}
       </div>
+
+      {/* Screen share tiles — separate stacked section, each tile is
+          full-width at 16:9 so presentation content is readable. Only
+          rendered when at least one participant is actually sharing. */}
+      {(localScreenStream ||
+        voice.peers.some((p) => p.hasScreen)) && (
+        <div className="voice-screen-tiles">
+          {localScreenStream && (
+            <VoiceTile
+              actor={selfActor}
+              stream={localScreenStream}
+              speaking={false}
+              isSelf
+              isScreen
+            />
+          )}
+          {voice.peers.map((peer) =>
+            peer.hasScreen ? (
+              <VoiceTile
+                key={`${peer.actorId}-screen`}
+                actor={peer.actor}
+                stream={peerScreenStreams.get(peer.actorId) ?? null}
+                speaking={false}
+                connected={peer.connected}
+                isScreen
+              />
+            ) : null,
+          )}
+        </div>
+      )}
 
       <div className="voice-controls">
         <button
