@@ -351,6 +351,9 @@ export const UI_STRINGS = {
   'events.failedToLoad': 'Failed to load events',
   'events.failedToCreate': 'Failed to create event',
   'events.failedToSave': 'Failed to save event',
+  'events.translating': 'Translating event details…',
+  'events.showOriginal': 'Show original ({lang})',
+  'events.showTranslation': 'Show translation (original: {lang})',
 
   // Wiki
   'wiki.title': 'Wiki',

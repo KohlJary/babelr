@@ -2061,6 +2061,26 @@ textarea.modal-input {
   line-height: 1.5;
   white-space: pre-wrap;
 }
+.event-translation-row {
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+}
+.event-translation-loading {
+  color: #888;
+  font-style: italic;
+}
+.event-translation-toggle {
+  background: transparent;
+  border: none;
+  color: #7ba6ff;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+}
+.event-translation-toggle:hover {
+  text-decoration: underline;
+}
 .event-rsvp-row {
   display: flex;
   gap: 0.5rem;

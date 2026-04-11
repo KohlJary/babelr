@@ -2,6 +2,8 @@
 import { useState, useMemo } from 'react';
 import type { EventView, ActorProfile, ChannelView } from '@babelr/shared';
 import { useEvents } from '../hooks/useEvents';
+import { useEventTranslation } from '../hooks/useEventTranslation';
+import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { CreateEventModal } from './CreateEventModal';
 import { EventDetailPanel } from './EventDetailPanel';
 import { useT } from '../i18n/I18nProvider';
@@ -72,6 +74,8 @@ export function EventsPanel({
     scope,
     ownerId,
   });
+  const { settings: translationSettings } = useTranslationSettings();
+  const { translations: eventTranslations } = useEventTranslation(events, translationSettings);
   const [showCreate, setShowCreate] = useState(false);
   const [detailEvent, setDetailEvent] = useState<EventView | null>(null);
 
@@ -87,24 +91,28 @@ export function EventsPanel({
     return (
       <div className="friends-section" key={label}>
         <h3 className="friends-section-header">{label}</h3>
-        {list.map((ev) => (
-          <button
-            key={ev.id}
-            className="event-row"
-            onClick={() => setDetailEvent(ev)}
-          >
-            <div className="event-row-main">
-              <span className="event-row-title">{ev.title}</span>
-              {ev.rrule && (
-                <span className="event-recurrence-badge">{t('events.recurringBadge')}</span>
-              )}
-            </div>
-            <div className="event-row-meta">
-              <span>{formatShortTime(ev.startAt)}</span>
-              {ev.location && <span> · {ev.location}</span>}
-            </div>
-          </button>
-        ))}
+        {list.map((ev) => {
+          const trans = eventTranslations.get(ev.id);
+          const displayTitle = trans?.title ?? ev.title;
+          return (
+            <button
+              key={ev.id}
+              className="event-row"
+              onClick={() => setDetailEvent(ev)}
+            >
+              <div className="event-row-main">
+                <span className="event-row-title">{displayTitle}</span>
+                {ev.rrule && (
+                  <span className="event-recurrence-badge">{t('events.recurringBadge')}</span>
+                )}
+              </div>
+              <div className="event-row-meta">
+                <span>{formatShortTime(ev.startAt)}</span>
+                {ev.location && <span> · {ev.location}</span>}
+              </div>
+            </button>
+          );
+        })}
       </div>
     );
   };

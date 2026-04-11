@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { EventView, EventRsvpStatus, ActorProfile, ChannelView } from '@babelr/shared';
 import { useChat } from '../hooks/useChat';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useTranslation } from '../hooks/useTranslation';
+import { useEventTranslation } from '../hooks/useEventTranslation';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { TypingIndicator } from './TypingIndicator';
@@ -66,6 +67,23 @@ export function EventDetailPanel({
   const { settings } = useTranslationSettings();
   const { translations, isTranslating } = useTranslation(messages, settings);
 
+  // Translate the event's own title + description. The single-event
+  // list is mostly a cache hit after EventsPanel already fetched the
+  // title, so the extra cost here is just the description if any.
+  const singleEventList = useMemo(() => [event], [event]);
+  const { translations: eventFieldTranslations, isTranslating: eventFieldsLoading } =
+    useEventTranslation(singleEventList, settings);
+  const eventTrans = eventFieldTranslations.get(event.id);
+
+  const [showOriginal, setShowOriginal] = useState(false);
+  const displayTitle =
+    showOriginal || !eventTrans ? event.title : eventTrans.title;
+  const displayDescription =
+    showOriginal || !eventTrans
+      ? event.description
+      : eventTrans.description ?? event.description;
+  const hasTranslation = eventTrans?.anyTranslated ?? false;
+
   const linkedChannel = useMemo(
     () => (event.channelId ? channels?.find((c) => c.id === event.channelId) : undefined),
     [event.channelId, channels],
@@ -92,7 +110,7 @@ export function EventDetailPanel({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="settings-header">
-          <h2>{event.title}</h2>
+          <h2>{displayTitle}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>
@@ -133,10 +151,34 @@ export function EventDetailPanel({
                 </button>
               </div>
             )}
+            {(eventFieldsLoading || hasTranslation) && (
+              <div className="event-meta-row event-translation-row">
+                {eventFieldsLoading && !hasTranslation && (
+                  <span className="event-translation-loading">
+                    {t('events.translating')}
+                  </span>
+                )}
+                {hasTranslation && eventTrans && (
+                  <button
+                    type="button"
+                    className="event-translation-toggle"
+                    onClick={() => setShowOriginal((v) => !v)}
+                  >
+                    {showOriginal
+                      ? t('events.showTranslation', {
+                          lang: eventTrans.detectedLanguage,
+                        })
+                      : t('events.showOriginal', {
+                          lang: eventTrans.detectedLanguage,
+                        })}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {event.description && (
-            <div className="event-description">{event.description}</div>
+          {displayDescription && (
+            <div className="event-description">{displayDescription}</div>
           )}
 
           <div className="settings-divider" />

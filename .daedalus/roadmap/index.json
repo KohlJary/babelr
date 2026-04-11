@@ -253,10 +253,10 @@
     {
       "id": "calendar-event-content-translation",
       "title": "Translation of event titles and descriptions",
-      "description": "Run event titles and descriptions through the same tone-preserving translation pipeline we use for messages, so a reader sees the event details in their preferredLanguage while the original is preserved.\n\nScope:\n- useTranslation hook already translates messages; extend it (or create a parallel useEventTranslation) to accept EventView objects and translate title + description fields\n- Display the translated title in EventsPanel row and EventDetailPanel header, with a 'show original' toggle next to it matching the message UX pattern\n- Cache translations in localStorage keyed by (eventId, targetLang) so re-opening the panel doesn't re-translate\n- Federation concern: when we receive a remote event, we only translate if the local user's preferredLanguage differs from the remote event's detected language (same logic as messages)\n- This is where Babelr's translation differentiation really shows: a multilingual team scheduling meetings across offices sees their agendas natively without anyone having to pre-translate\n\nSmall effort relative to impact. Probably the first follow-up to ship.",
+      "description": "Run event titles and descriptions through the same tone-preserving translation pipeline we use for messages, so a reader sees the event details in their preferredLanguage while the original is preserved.\n\nShipped:\n- New useEventTranslation hook mirroring the useWikiTranslation pattern. Takes an EventView[] and translates title + description per event via the existing `/translate` endpoint.\n- Content-hash cache keys (separate for title and description) via the shared hashed cache API with ContentKind='event', so two events with the same title share a cache hit and edits auto-invalidate.\n- Translated titles render in the EventsPanel list rows — no explicit indicator, list stays clean.\n- EventDetailPanel renders translated title + description with a show-original toggle next to the meta row and a 'Translating event details…' loading state. Matches the existing message and wiki translation UX.\n- 'events.translating', 'events.showOriginal', 'events.showTranslation' i18n strings added with {lang} interpolation.\n\nDelivered as a single PR after the message-embed landing. End-to-end usable for the multilingual team scheduling case described in the original scope.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "voice-channels-mvp",
@@ -371,5 +371,5 @@
       "status": "backlog"
     }
   ],
-  "version": 25
+  "version": 26
 }
