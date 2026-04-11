@@ -1031,7 +1031,13 @@ export function useVoice(selfActorId: string) {
       }
       return;
     }
-    // Currently on → turn off
+    // Currently on → turn off. Crucially, we do NOT renegotiate on
+    // disable. replaceTrack(null) stops transmission; the receiver's
+    // track goes muted and onmute clears their slot. Triggering a
+    // renegotiation here was causing the receiver's transceiver to
+    // transition into a state that the subsequent re-enable could not
+    // recover from — the track would stay muted forever on re-enable,
+    // which is exactly the "second toggle" bug.
     for (const entry of peersRef.current.values()) {
       if (entry.videoSender) {
         try {
@@ -1043,9 +1049,8 @@ export function useVoice(selfActorId: string) {
     }
     for (const track of localVideoStreamRef.current.getTracks()) track.stop();
     localVideoStreamRef.current = null;
-    await renegotiateAllPeers();
     setState((s) => ({ ...s, videoEnabled: false }));
-  }, [renegotiateAllPeers]);
+  }, []);
 
   /** Imperative accessor so VoicePanel can attach the local stream to a <video>. */
   const getLocalVideoStream = useCallback((): MediaStream | null => {
@@ -1126,7 +1131,11 @@ export function useVoice(selfActorId: string) {
       }
       return;
     }
-    // Currently on → stop sharing
+    // Currently on → stop sharing. Same reasoning as toggleVideo off:
+    // don't renegotiate here. replaceTrack(null) plus the natural
+    // onmute transition handles the teardown; renegotiating leaves
+    // the receiver's transceiver in a state that re-enable can't
+    // recover from.
     for (const entry of peersRef.current.values()) {
       if (entry.screenSender) {
         try {
@@ -1138,9 +1147,8 @@ export function useVoice(selfActorId: string) {
     }
     for (const track of localScreenStreamRef.current.getTracks()) track.stop();
     localScreenStreamRef.current = null;
-    await renegotiateAllPeers();
     setState((s) => ({ ...s, screenShareEnabled: false }));
-  }, [renegotiateAllPeers]);
+  }, []);
 
   const getLocalScreenStream = useCallback((): MediaStream | null => {
     return localScreenStreamRef.current;
