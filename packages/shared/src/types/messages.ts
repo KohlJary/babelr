@@ -12,6 +12,32 @@ export interface MessageView {
   inReplyTo?: string;
   replyCount?: number;
   reactions?: Record<string, string[]>;
+  /**
+   * Short copy-paste-friendly slug. Used to reference this message
+   * from other messages or wiki pages via `[[msg:slug]]` which
+   * renders as an inline embed. Present for all server-channel
+   * messages. Null/undefined for older messages pre-slug migration.
+   */
+  slug?: string | null;
+}
+
+/**
+ * Compact shape returned by the message-lookup-by-slug endpoint.
+ * Used by the `<MessageEmbed>` component to render inline previews
+ * of referenced messages. Includes enough context (channel + server
+ * name) for a reader to decide whether to click through.
+ */
+export interface MessageEmbedView {
+  id: string;
+  slug: string;
+  content: string;
+  channelId: string;
+  channelName: string | null;
+  serverId: string | null;
+  serverName: string | null;
+  author: AuthorView;
+  published: string;
+  updated?: string;
 }
 
 export interface ChannelWithUnread extends ChannelView {

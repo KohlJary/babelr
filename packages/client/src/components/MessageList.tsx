@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { MessageWithAuthor, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { MessageItem } from './MessageItem';
+import type { MessageEmbedView } from '@babelr/shared';
 
 interface MessageListProps {
   messages: MessageWithAuthor[];
@@ -18,6 +19,7 @@ interface MessageListProps {
   onEditMessage?: (messageId: string, content: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   onConvertToWikiPage?: (message: MessageWithAuthor) => void;
+  onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
   callerRole?: string;
 }
 
@@ -35,6 +37,7 @@ export function MessageList({
   onEditMessage,
   onDeleteMessage,
   onConvertToWikiPage,
+  onNavigateMessageEmbed,
   callerRole,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -96,6 +99,7 @@ export function MessageList({
             onConvertToWikiPage={
               onConvertToWikiPage ? () => onConvertToWikiPage(item) : undefined
             }
+            onNavigateMessageEmbed={onNavigateMessageEmbed}
           />
         );
       })}

@@ -10,11 +10,20 @@ marked.setOptions({
 });
 
 /**
- * Rewrite `[[slug|display]]` refs to markdown link form pointing at an
- * in-app wiki fragment. We use `#wiki/<slug>` so clicks can be
- * intercepted by a global handler without the browser trying to
- * navigate elsewhere, and so DOMPurify's default URL scheme checks
- * don't strip the href.
+ * Rewrite `[[slug|display]]` refs to markdown link form. Two kinds:
+ *
+ *   - **Wiki page refs** become `[display](#wiki/<slug>)`. A global
+ *     click handler on the chat view intercepts the navigation and
+ *     opens the WikiPanel at the target slug.
+ *
+ *   - **Message refs** (prefix `msg:`) become `[display](#msg/<slug>)`.
+ *     The post-processing render step scans for these anchors and
+ *     replaces each one with a `<MessageEmbed>` component that
+ *     fetches the message and renders a preview inline.
+ *
+ * Both use the `#foo/bar` fragment style so DOMPurify's default URL
+ * scheme checks don't strip the href and the browser doesn't try to
+ * navigate on its own.
  *
  * Code spans/fenced blocks are handled by parseWikiRefs — the parser
  * masks them out, so refs inside code samples are left alone.
@@ -26,11 +35,12 @@ export function preprocessWikiRefs(source: string): string {
   let cursor = 0;
   for (const ref of refs) {
     out += source.slice(cursor, ref.start);
-    // Escape pipe and brackets in display text to avoid breaking marked's
-    // link syntax. Backticks are left alone since inline code wouldn't
-    // have been parsed as a ref in the first place.
+    // Escape pipe and brackets in display text to avoid breaking
+    // marked's link syntax. Backticks are left alone since inline
+    // code wouldn't have been parsed as a ref in the first place.
     const safeDisplay = ref.display.replace(/[[\]]/g, '\\$&');
-    out += `[${safeDisplay}](#wiki/${ref.slug})`;
+    const prefix = ref.kind === 'message' ? '#msg/' : '#wiki/';
+    out += `[${safeDisplay}](${prefix}${ref.slug})`;
     cursor = ref.end;
   }
   out += source.slice(cursor);

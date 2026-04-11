@@ -3,7 +3,8 @@ import { useState } from 'react';
 import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
-import { renderMarkdown } from '../utils/markdown';
+import { renderWithEmbeds } from '../utils/render-with-embeds';
+import type { MessageEmbedView } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 
@@ -22,6 +23,8 @@ interface MessageItemProps {
   canDelete?: boolean;
   /** Seed a new wiki page from this message's content */
   onConvertToWikiPage?: () => void;
+  /** Called when the user clicks an inline message embed to navigate to the source. */
+  onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
 }
 
 type TFn = (key: UIStringKey, values?: Record<string, string | number>) => string;
@@ -89,6 +92,7 @@ export function MessageItem({
   onDelete,
   canDelete,
   onConvertToWikiPage,
+  onNavigateMessageEmbed,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -197,6 +201,31 @@ export function MessageItem({
           {t('wiki.convertMessage')}
         </button>
       )}
+      {message.slug && (
+        <button
+          className="message-action-btn"
+          onClick={async () => {
+            const text = `[[msg:${message.slug}]]`;
+            try {
+              await navigator.clipboard.writeText(text);
+            } catch {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              document.body.appendChild(ta);
+              ta.select();
+              try {
+                document.execCommand('copy');
+              } catch {
+                /* nothing more we can do */
+              }
+              document.body.removeChild(ta);
+            }
+          }}
+          title={t('messages.copyReference')}
+        >
+          {t('messages.copyReference')}
+        </button>
+      )}
     </div>
   );
 
@@ -240,7 +269,12 @@ export function MessageItem({
     return (
       <div className="message compact">
         <span className="message-time-hover">{formatTime(message.published, t)}</span>
-        <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
+        <div className={contentClass}>
+          {renderWithEmbeds(displayContent, {
+            variant: 'chat',
+            onNavigateMessage: onNavigateMessageEmbed,
+          })}
+        </div>
         {attachmentsBlock}
         {(indicator || metadataBadge) && (
           <div className="translation-info">
@@ -276,7 +310,12 @@ export function MessageItem({
           {message.updated && <span className="edited-badge"> {t('messages.edited')}</span>}
         </span>
       </div>
-      <div className={contentClass}><span dangerouslySetInnerHTML={{ __html: renderMarkdown(displayContent) }} /></div>
+      <div className={contentClass}>
+        {renderWithEmbeds(displayContent, {
+          variant: 'chat',
+          onNavigateMessage: onNavigateMessageEmbed,
+        })}
+      </div>
       {attachmentsBlock}
       {(indicator || metadataBadge) && (
         <div className="translation-info">

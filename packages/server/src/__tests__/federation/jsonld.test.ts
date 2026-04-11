@@ -45,6 +45,7 @@ const mockNote = {
   cc: [],
   belongsTo: null,
   properties: {},
+  slug: null,
   published: new Date('2026-01-01T12:00:00Z'),
   updated: null,
   contentSearch: '',

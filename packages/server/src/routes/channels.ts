@@ -24,7 +24,7 @@ import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, deliver
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
-import { PERMISSIONS } from '@babelr/shared';
+import { PERMISSIONS, generateMessageSlug, isValidMessageSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 
 const DEFAULT_LIMIT = 50;
@@ -70,6 +70,7 @@ export function toMessageView(obj: typeof objects.$inferSelect, reactionsData?: 
     content: obj.content ?? '',
     channelId: obj.context ?? '',
     authorId: obj.attributedTo ?? '',
+    slug: obj.slug ?? null,
     published: obj.published.toISOString(),
     ...(obj.updated && obj.updated.getTime() !== obj.published.getTime() && { updated: obj.updated.toISOString() }),
     ...(Object.keys(messageProps).length > 0 && { properties: messageProps }),
@@ -167,22 +168,43 @@ export async function createMessageInChannel(
 
   const mentionedIds = mentionedActors.map((a) => a.id);
 
-  const [note] = await db
-    .insert(objects)
-    .values({
-      uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
-      type: 'Note',
-      attributedTo: actor.id,
-      content: content.trim(),
-      context: channelId,
-      to: [],
-      cc: [],
-      properties: {
-        ...messageProperties,
-        ...(mentionedIds.length > 0 && { mentions: mentionedIds }),
-      },
-    })
-    .returning();
+  // Generate a short message slug. Collision probability at 31^10
+  // is vanishingly small, but we still retry a bounded number of
+  // times if the partial unique index rejects the insert — keeps
+  // the invariant even under a theoretical worst case.
+  let note: typeof objects.$inferSelect | undefined;
+  let slugAttempts = 0;
+  while (!note) {
+    slugAttempts += 1;
+    try {
+      const [inserted] = await db
+        .insert(objects)
+        .values({
+          uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
+          type: 'Note',
+          attributedTo: actor.id,
+          content: content.trim(),
+          context: channelId,
+          to: [],
+          cc: [],
+          properties: {
+            ...messageProperties,
+            ...(mentionedIds.length > 0 && { mentions: mentionedIds }),
+          },
+          slug: generateMessageSlug(),
+        })
+        .returning();
+      note = inserted;
+    } catch (err) {
+      // Retry on unique-index violation — but only the slug index,
+      // not e.g. the uri index which would indicate a real bug.
+      const pgErr = err as { code?: string; constraint_name?: string };
+      if (pgErr.code === '23505' && slugAttempts <= 5) {
+        continue;
+      }
+      throw err;
+    }
+  }
 
   await db.insert(activities).values({
     uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
@@ -1291,6 +1313,86 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       }
 
       return { ok: true };
+    },
+  );
+
+  // Look up a message by its copy-paste-friendly slug. Used by the
+  // MessageEmbed component to render inline previews of [[msg:slug]]
+  // refs. Returns a compact envelope with author, channel name, and
+  // server name so the embed can display the reader's context
+  // without additional fetches.
+  //
+  // Permission: caller must be able to access the message's channel.
+  // For server-scoped channels that means server membership + any
+  // private-channel access check. For DMs it means being a
+  // participant in the DM. Returns 404 on both "not found" and "no
+  // access" so embeds don't leak the existence of private messages.
+  fastify.get<{ Params: { slug: string } }>(
+    '/messages/by-slug/:slug',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const { slug } = request.params;
+      if (!isValidMessageSlug(slug)) {
+        return reply.status(400).send({ error: 'Invalid slug format' });
+      }
+
+      const [message] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.slug, slug), eq(objects.type, 'Note')))
+        .limit(1);
+      if (!message) return reply.status(404).send({ error: 'Message not found' });
+
+      const channelId = message.context;
+      if (!channelId) return reply.status(404).send({ error: 'Message not found' });
+
+      // Verify the caller can see the channel this message lives in.
+      const { allowed, channel } = await checkChannelAccess(
+        db,
+        channelId,
+        request.actor.uri,
+      );
+      if (!allowed || !channel) {
+        return reply.status(404).send({ error: 'Message not found' });
+      }
+
+      // Batch-load author + server metadata.
+      const [author] = message.attributedTo
+        ? await db.select().from(actors).where(eq(actors.id, message.attributedTo)).limit(1)
+        : [null];
+      const [server] = channel.belongsTo
+        ? await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1)
+        : [null];
+
+      const channelProps = channel.properties as Record<string, unknown> | null;
+      const serverProps = server?.properties as Record<string, unknown> | null;
+
+      return {
+        id: message.id,
+        slug: message.slug!,
+        content: message.content ?? '',
+        channelId: channel.id,
+        channelName: (channelProps?.name as string | undefined) ?? null,
+        serverId: channel.belongsTo ?? null,
+        serverName:
+          (serverProps?.name as string | undefined) ??
+          server?.displayName ??
+          server?.preferredUsername ??
+          null,
+        author: author
+          ? toAuthorView(author)
+          : {
+              id: message.attributedTo ?? '',
+              preferredUsername: 'unknown',
+              displayName: null,
+              avatarUrl: null,
+            },
+        published: message.published.toISOString(),
+        ...(message.updated &&
+          message.updated.getTime() !== message.published.getTime() && {
+            updated: message.updated.toISOString(),
+          }),
+      };
     },
   );
 }

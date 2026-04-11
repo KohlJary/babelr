@@ -415,6 +415,12 @@ export async function getWikiBacklinks(
   return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/backlinks`);
 }
 
+export async function getMessageBySlug(
+  slug: string,
+): Promise<import('@babelr/shared').MessageEmbedView> {
+  return apiFetch(`/messages/by-slug/${encodeURIComponent(slug)}`);
+}
+
 // ---- Server roles (granular permissions) ----
 
 export async function listServerRoles(

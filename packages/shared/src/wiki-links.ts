@@ -1,21 +1,33 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 
 /**
- * Shared parser for `[[slug]]` wiki refs embedded in markdown content.
- * Used both on the server (to sync wiki_page_links rows after a write)
- * and on the client (to render the refs as clickable links).
+ * Shared parser for `[[...]]` refs embedded in markdown content.
+ * Used both on the server (to sync wiki_page_links rows after a
+ * write) and on the client (to render the refs as clickable links
+ * or embedded previews).
  *
- * Syntax supported:
- *   [[page-slug]]              → ref to page with that exact slug
- *   [[Page Title]]             → ref resolved by slugifying the title
- *   [[page-slug|display text]] → ref with custom display text
+ * Two kinds of ref share the same bracket syntax, distinguished by
+ * an optional `msg:` prefix on the slug:
+ *
+ *   [[page-slug]]              → wiki page link
+ *   [[Page Title]]             → wiki page link (slugified from title)
+ *   [[page-slug|display]]      → wiki page link with custom display text
+ *   [[msg:abc1234xyz]]         → message embed (renders inline preview)
  *
  * Refs inside fenced or inline code blocks are ignored so people can
  * write about the syntax itself without triggering resolution.
  */
 
+export type WikiRefKind = 'page' | 'message';
+
 export interface WikiRef {
-  /** The slugified target (lowercase, a-z0-9-) */
+  /** Whether this ref points at a wiki page or a chat message */
+  kind: WikiRefKind;
+  /**
+   * The slugified target. For page refs, lowercase a-z0-9- produced
+   * by `slugifyWikiRef`. For message refs, the raw 10-char message
+   * slug (lowercase a-z2-9 only — see MESSAGE_SLUG_ALPHABET).
+   */
   slug: string;
   /** The raw text inside the brackets, as the user wrote it */
   raw: string;
@@ -26,6 +38,8 @@ export interface WikiRef {
   /** Character offset immediately after the closing `]]` */
   end: number;
 }
+
+const MESSAGE_REF_PREFIX = 'msg:';
 
 /**
  * Turn a title or slug fragment into the canonical slug form we store
@@ -67,9 +81,29 @@ export function parseWikiRefs(source: string): WikiRef[] {
   while ((match = WIKI_REF_RE.exec(masked)) !== null) {
     const raw = match[1].trim();
     const display = (match[2] ?? match[1]).trim();
+
+    // Message refs carry a `msg:` prefix that marks them as a
+    // different kind — they render as inline embeds rather than
+    // navigation links. Strip the prefix from the stored slug so
+    // downstream code just works with the message id.
+    if (raw.toLowerCase().startsWith(MESSAGE_REF_PREFIX)) {
+      const messageSlug = raw.slice(MESSAGE_REF_PREFIX.length).trim().toLowerCase();
+      if (!messageSlug) continue;
+      refs.push({
+        kind: 'message',
+        slug: messageSlug,
+        raw,
+        display,
+        start: match.index,
+        end: match.index + match[0].length,
+      });
+      continue;
+    }
+
     const slug = slugifyWikiRef(raw);
     if (!slug) continue;
     refs.push({
+      kind: 'page',
       slug,
       raw,
       display,
@@ -81,13 +115,31 @@ export function parseWikiRefs(source: string): WikiRef[] {
 }
 
 /**
- * Return the deduplicated set of slugs referenced in the source. Order
- * follows first appearance.
+ * Return the deduplicated set of page slugs referenced in the
+ * source. Message refs are excluded — use `extractMessageSlugs`
+ * for those. Order follows first appearance.
  */
 export function extractWikiSlugs(source: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const ref of parseWikiRefs(source)) {
+    if (ref.kind !== 'page') continue;
+    if (seen.has(ref.slug)) continue;
+    seen.add(ref.slug);
+    out.push(ref.slug);
+  }
+  return out;
+}
+
+/**
+ * Return the deduplicated set of message slugs referenced in the
+ * source. Page refs are excluded. Order follows first appearance.
+ */
+export function extractMessageSlugs(source: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const ref of parseWikiRefs(source)) {
+    if (ref.kind !== 'message') continue;
     if (seen.has(ref.slug)) continue;
     seen.add(ref.slug);
     out.push(ref.slug);

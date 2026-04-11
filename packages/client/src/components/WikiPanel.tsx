@@ -12,7 +12,8 @@ import { useWikiTranslation, type TranslatedChunk } from '../hooks/useWikiTransl
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
-import { renderWikiMarkdown } from '../utils/markdown';
+import { renderWithEmbeds } from '../utils/render-with-embeds';
+import type { MessageEmbedView } from '@babelr/shared';
 import * as api from '../api';
 
 interface WikiPanelProps {
@@ -24,6 +25,8 @@ interface WikiPanelProps {
   initialSlug?: string | null;
   /** Initial content to seed a new page with (e.g. from a message) */
   initialDraft?: { title?: string; content?: string } | null;
+  /** Called when the user clicks an inline message embed inside a wiki page. */
+  onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
   onClose: () => void;
 }
 
@@ -111,6 +114,7 @@ export function WikiPanel({
   callerRole,
   initialSlug,
   initialDraft,
+  onNavigateMessageEmbed,
   onClose,
 }: WikiPanelProps) {
   const t = useT();
@@ -636,23 +640,24 @@ export function WikiPanel({
                         const body = c.translated ?? c.original;
                         return (
                           <div key={i} className={`wiki-chunk wiki-chunk-${c.kind}`}>
-                            <div
-                              className="wiki-chunk-body"
-                              dangerouslySetInnerHTML={{ __html: renderWikiMarkdown(body) }}
-                            />
+                            <div className="wiki-chunk-body">
+                              {renderWithEmbeds(body, {
+                                variant: 'wiki',
+                                onNavigateMessage: onNavigateMessageEmbed,
+                              })}
+                            </div>
                             <ChunkIndicators chunk={c} t={t} />
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <div
-                      className="wiki-content-body"
-                      onClick={handleContentClick}
-                      dangerouslySetInnerHTML={{
-                        __html: renderWikiMarkdown(currentPage.content),
-                      }}
-                    />
+                    <div className="wiki-content-body" onClick={handleContentClick}>
+                      {renderWithEmbeds(currentPage.content, {
+                        variant: 'wiki',
+                        onNavigateMessage: onNavigateMessageEmbed,
+                      })}
+                    </div>
                   )
                 ) : (
                   <div className="sidebar-empty">{t('wiki.emptyContent')}</div>
@@ -775,8 +780,12 @@ export function WikiPanel({
                   <div
                     className="wiki-content-body wiki-preview"
                     onClick={handleContentClick}
-                    dangerouslySetInnerHTML={{ __html: renderWikiMarkdown(draftContent) }}
-                  />
+                  >
+                    {renderWithEmbeds(draftContent, {
+                      variant: 'wiki',
+                      onNavigateMessage: onNavigateMessageEmbed,
+                    })}
+                  </div>
                 ) : (
                   <textarea
                     className="auth-input wiki-content-textarea"

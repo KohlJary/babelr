@@ -3111,6 +3111,70 @@ textarea.modal-input {
   text-overflow: ellipsis;
 }
 
+/* Inline message embed — [[msg:slug]] refs */
+.message-embed {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 600px;
+  margin: 0.35rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-left: 3px solid #4b6cb7;
+  border-radius: 4px;
+  text-align: left;
+  color: #bbb;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.message-embed.ok:hover {
+  background: #1a1a1a;
+  border-color: #5d7dc9;
+}
+.message-embed.loading,
+.message-embed.locked {
+  cursor: default;
+  color: #777;
+  font-style: italic;
+  border-left-color: #3a3a3a;
+}
+.message-embed-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+.message-embed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+.message-embed-meta {
+  color: #888;
+  font-size: 0.78rem;
+}
+.message-embed-meta strong {
+  color: #ddd;
+  font-weight: 500;
+}
+.message-embed-server {
+  color: #666;
+  font-style: italic;
+}
+.message-embed-snippet {
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+
 /* Message content wiki refs — [[slug]] rendered as anchors */
 .message-content a[href^="#wiki/"],
 .wiki-content-body a[href^="#wiki/"] {

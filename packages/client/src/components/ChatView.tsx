@@ -295,6 +295,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 }
               : undefined
           }
+          onNavigateMessageEmbed={(embed) => {
+            // Clicking a message embed navigates to the source.
+            // Scrolling to the specific message is a follow-up — for
+            // now we just switch to the channel containing it.
+            if (embed.channelId) {
+              setDmMode(false);
+              selectChannel(embed.channelId);
+            }
+          }}
           callerRole={callerRole}
         />
         <TypingIndicator users={typingUsers} />
@@ -471,6 +480,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           callerRole={callerRole}
           initialSlug={wikiInitialSlug}
           initialDraft={wikiInitialDraft}
+          onNavigateMessageEmbed={(embed) => {
+            if (embed.channelId) {
+              setShowWiki(false);
+              setDmMode(false);
+              selectChannel(embed.channelId);
+            }
+          }}
           onClose={() => {
             setShowWiki(false);
             setWikiInitialSlug(null);
