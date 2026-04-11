@@ -92,9 +92,14 @@ export async function buildApp() {
   app.addContentTypeParser('application/activity+json', { parseAs: 'string' }, jsonParser);
   app.addContentTypeParser('application/ld+json', { parseAs: 'string' }, jsonParser);
 
-  // Security headers
+  // Security headers. CORP must be `cross-origin` so federation peers
+  // can load user-uploaded avatars and attachments served from this
+  // instance (an <img> on bob's instance pointing at alice's instance
+  // gets blocked otherwise, regardless of CORS). Helmet's default is
+  // `same-origin` which is too strict for a federating system.
   await app.register(helmet, {
     contentSecurityPolicy: false, // CSP handled by Tauri for desktop; web uses default
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
   });
 
   // Rate limiting
