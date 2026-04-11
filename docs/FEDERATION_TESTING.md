@@ -32,23 +32,36 @@ This requires sudo, but only once per machine.
 
 ### 2. Two databases
 
+Use the same Postgres role as your existing dev database (the default
+`.env` uses `babelr:babelr`):
+
 ```
-createdb babelr_a
-createdb babelr_b
+PGPASSWORD=babelr createdb -h localhost -U babelr babelr_a
+PGPASSWORD=babelr createdb -h localhost -U babelr babelr_b
 ```
+
+If your `.env` uses different credentials, substitute them in both the
+createdb commands and the `DATABASE_URL` env vars that follow.
 
 ### 3. Run migrations against both
 
 ```
-DATABASE_URL=postgresql://localhost/babelr_a \
+DATABASE_URL=postgresql://babelr:babelr@localhost:5432/babelr_a \
   npm run db:migrate -w packages/server
 
-DATABASE_URL=postgresql://localhost/babelr_b \
+DATABASE_URL=postgresql://babelr:babelr@localhost:5432/babelr_b \
   npm run db:migrate -w packages/server
 ```
 
 If you ever want to reset one instance's state during testing, drop and
-recreate just that database, then re-run its migrations.
+recreate just that database, then re-run its migrations:
+
+```
+PGPASSWORD=babelr dropdb -h localhost -U babelr babelr_a
+PGPASSWORD=babelr createdb -h localhost -U babelr babelr_a
+DATABASE_URL=postgresql://babelr:babelr@localhost:5432/babelr_a \
+  npm run db:migrate -w packages/server
+```
 
 ### 4. Keep your existing `.env`
 

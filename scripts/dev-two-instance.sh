@@ -12,14 +12,14 @@
 #        127.0.0.1 babelr-a.local
 #        127.0.0.1 babelr-b.local
 #
-#   2. Two Postgres databases:
-#        createdb babelr_a
-#        createdb babelr_b
+#   2. Two Postgres databases (matching the babelr role from .env):
+#        PGPASSWORD=babelr createdb -h localhost -U babelr babelr_a
+#        PGPASSWORD=babelr createdb -h localhost -U babelr babelr_b
 #
 #   3. Migrations applied to each:
-#        DATABASE_URL=postgresql://localhost/babelr_a \
+#        DATABASE_URL=postgresql://babelr:babelr@localhost:5432/babelr_a \
 #          npm run db:migrate -w packages/server
-#        DATABASE_URL=postgresql://localhost/babelr_b \
+#        DATABASE_URL=postgresql://babelr:babelr@localhost:5432/babelr_b \
 #          npm run db:migrate -w packages/server
 #
 # See docs/FEDERATION_TESTING.md for the full walkthrough and the
@@ -48,8 +48,8 @@ SERVER_PORT_B=3001
 CLIENT_PORT_A=1111
 CLIENT_PORT_B=1112
 
-DATABASE_URL_A="${DATABASE_URL_A:-postgresql://localhost/babelr_a}"
-DATABASE_URL_B="${DATABASE_URL_B:-postgresql://localhost/babelr_b}"
+DATABASE_URL_A="${DATABASE_URL_A:-postgresql://babelr:babelr@localhost:5432/babelr_a}"
+DATABASE_URL_B="${DATABASE_URL_B:-postgresql://babelr:babelr@localhost:5432/babelr_b}"
 SESSION_SECRET_A="${SESSION_SECRET_A:-federation-test-secret-a-not-for-production}"
 SESSION_SECRET_B="${SESSION_SECRET_B:-federation-test-secret-b-not-for-production}"
 
