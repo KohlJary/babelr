@@ -107,6 +107,14 @@
       "status": "backlog"
     },
     {
+      "id": "voice-video-reenable-bug",
+      "title": "Voice: second webcam/screen enable doesn't display on receiver",
+      "description": "After toggling webcam or screen share off then on again, the receiver doesn't see the re-enabled stream even though the sender's self-view works correctly. First enable works; second enable doesn't. See `.daedalus/open-issues/voice-video-reenable.md` for the full troubleshooting history — 11 shipped attempts across `6d94834..7c4da1b` trying different routing, reconcile, and renegotiation strategies.\n\nLatest attempt (`7c4da1b`) removed renegotiation from the disable path — theory is that disable-time renegotiation was driving the receiver's transceiver into `readyState === 'ended'` or a stuck direction that no subsequent enable could recover from. Untested as of pause.\n\nNext steps:\n1. Test the latest commit cold tomorrow\n2. If still broken, read `voice: reconcile scan` logs to see what receiver.track.readyState and muted actually report during the failing re-enable\n3. Fall back to alternative strategies: `addTrack`/`removeTrack` instead of pre-allocated transceivers + replaceTrack, or PC recreation on toggle\n4. Test in Firefox vs Chrome to rule out browser-specific quirks\n\nBlocker-class for the voice channels launch story. Polish pass, group-video, and screen-share all depend on reliable enable/disable.",
+      "type": "bug",
+      "priority": "P1",
+      "status": "in_progress"
+    },
+    {
       "id": "desktop-voice-linux-webkit-gap",
       "title": "Desktop voice on Linux — webkit2gtk WebRTC availability",
       "description": "Tauri on Linux uses wry → webkit2gtk as the embedded webview, and several major distributions (Arch, and historically others) ship webkit2gtk compiled WITHOUT WebRTC support. This is verifiable by grepping the library for RTCPeerConnection implementation symbols: `createOffer`, `createAnswer`, `setLocalDescription`, and `addIceCandidate` are absent even though `webkit_settings_set_enable_webrtc` exists (it's just a property setter on a stubbed-out feature). Voice channels fail to join in the desktop app on these distros with 'Can't find variable RTCPeerConnection'.\n\nThe client (`useVoice.join`) now detects this case and surfaces a clear error directing users to open Babelr in Firefox or Chromium to join voice channels from the same machine. Text, DMs, events, friends, translation, and everything else continues to work in the desktop app.\n\nMitigation options to revisit:\n- Monitor Arch's webkit2gtk package for a WebRTC-enabled build (community pressure exists)\n- Build a distribution-specific AppImage bundling a webkit2gtk with WebRTC enabled\n- Switch to Chromium Embedded Framework (CEF) or a custom Electron-style embed for Linux — large undertaking, breaks consistency with Tauri's story\n- Implement WebRTC natively in Rust (via webrtc-rs) and expose it to the webview via a JS bridge — complex but gives us full control and works around the webkit gap\n\nThe Rust-side settings flip (set_enable_webrtc, set_enable_media_stream, set_enable_mediasource, auto-allow permission requests) is still in place because it's the correct configuration for distros that DO have WebRTC (Fedora, Debian, Ubuntu). This item tracks the Arch-specific gap as a known limitation, not a bug in Babelr.",
@@ -235,5 +243,5 @@
       "status": "backlog"
     }
   ],
-  "version": 11
+  "version": 12
 }
