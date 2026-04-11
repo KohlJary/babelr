@@ -156,6 +156,7 @@ No other chat platform does this. It is not even on their roadmaps.
 - [Self-Hosting Guide](docs/SELF_HOST.md) -- Docker and manual deployment
 - [Architecture](docs/ARCHITECTURE.md) -- Data model, translation pipeline, E2E crypto
 - [Privacy](docs/PRIVACY.md) -- What data is stored, what isn't, and why
+- [Federation Testing](docs/FEDERATION_TESTING.md) -- Local two-instance rig and full manual test checklist
 - [Contributing](CONTRIBUTING.md) -- How to contribute
 
 ## License

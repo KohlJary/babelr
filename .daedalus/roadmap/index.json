@@ -598,6 +598,14 @@
       "type": "feature",
       "priority": "P1",
       "status": "backlog"
+    },
+    {
+      "id": "dev-db-drift-cleanup",
+      "title": "Clean up dev DB schema drift from the migration repair",
+      "description": "After the migration history was consolidated into a single 0004_baseline_consolidated.sql, the dev DB's schema still carries the artifacts of the broken incremental apply path:\n\n- Duplicate foreign-key constraints on events and event_attendees tables (e.g. both `event_attendees_actor_id_fk` AND `event_attendees_event_id_events_id_fk` exist — one with drizzle's standard naming, one with the hand-written name from the original broken migration)\n- Legacy constraint names on several other tables: `events_uri_key`, `invites_code_key`, `invites_created_by_fkey`, `invites_server_id_fkey`, `notification_preferences_actor_id_fkey` — should all follow drizzle's standardized naming (`_unique`, `_<target>_id_fk`)\n- Possibly other column-order or naming drift that the pg_dump comparison surfaced as cosmetic\n\nNone of this affects correctness — the app works, all constraints enforce the same rules, and the dev DB is marked as up-to-date in `drizzle.__drizzle_migrations`. But a fresh DB created from the current baseline is cleaner than the dev DB, so the two are not bit-identical.\n\nThe cleanest fix is to drop and recreate the dev DB from scratch using the current baseline migration, then re-seed any test data you care about. The nuisance is obviously the loss of any ad-hoc data you've accumulated (test servers, test events, test wiki pages, etc).\n\nAlternative: write a one-off SQL script that drops the legacy-named constraints and the duplicates, leaving only the drizzle-standard ones. That preserves dev data but is more manual work and needs careful testing.\n\nNot urgent — leave the drift in place until either (a) you hit a specific annoyance that makes it worth the dev data loss, or (b) you're about to onboard a contributor and want their fresh checkout to match yours exactly.\n\nSee /tmp/migration-repair/schema.diff (or re-run pg_dump --schema-only against both DBs) for the full list of remaining differences if you do decide to fix it.",
+      "type": "chore",
+      "priority": "P3",
+      "status": "backlog"
     }
   ],
   "version": 27

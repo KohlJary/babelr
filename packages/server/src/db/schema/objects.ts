@@ -49,5 +49,9 @@ export const objects = pgTable(
     uniqueIndex('objects_slug_idx')
       .on(table.slug)
       .where(sql`${table.slug} IS NOT NULL`),
+    // GIN index backing full-text message search. The tsvector column
+    // is populated via triggers/generated content elsewhere; this index
+    // is what makes to_tsquery lookups cheap.
+    index('objects_content_search_idx').using('gin', table.contentSearch),
   ],
 );
