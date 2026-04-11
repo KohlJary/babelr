@@ -2112,7 +2112,8 @@ textarea.modal-input {
   position: fixed;
   bottom: 1rem;
   right: 1rem;
-  width: 300px;
+  width: 380px;
+  max-height: calc(100vh - 2rem);
   background: #1a1a1a;
   border: 1px solid #333;
   border-radius: 8px;
@@ -2262,10 +2263,14 @@ textarea.modal-input {
 /* Voice tiles — grid layout for webcam-enabled rooms */
 .voice-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  /* Fixed 2-column layout so `grid-column: span 2` on screen tiles has
+     a well-defined target. Auto-fill with a narrow min was causing a
+     1-column collapse at narrow panel widths, making span 2 overflow
+     and produce a jacked-up layout. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.5rem;
   padding: 0.75rem;
-  max-height: 320px;
+  max-height: 50vh;
   overflow-y: auto;
 }
 .voice-tile {
@@ -2276,6 +2281,11 @@ textarea.modal-input {
   overflow: hidden;
   border: 2px solid transparent;
   transition: border-color 0.1s;
+  /* Grid items default to min-width/min-height: auto, which can let
+     video content push the tile beyond its aspect-ratio. Force 0 so
+     aspect-ratio is always honored. */
+  min-width: 0;
+  min-height: 0;
 }
 .voice-tile.speaking {
   border-color: #10b981;
@@ -2290,7 +2300,17 @@ textarea.modal-input {
   object-fit: cover;
   display: block;
   background: #000;
-  /* Mirror self-view horizontally so it feels like a mirror, not a camera */
+  /* Absolute position inside the aspect-ratio box so the video element
+     can't push the tile taller than the aspect-ratio dictates.
+     Combined with the parent's `overflow: hidden` this clips the video
+     to the tile cleanly. */
+  position: absolute;
+  inset: 0;
+}
+/* Screen tiles: contain the full content rather than cropping, since
+   users care about seeing the whole shared window/screen. */
+.voice-tile.screen .voice-tile-video {
+  object-fit: contain;
 }
 .voice-tile.self .voice-tile-video,
 .voice-tile:has(.voice-tile-badge) .voice-tile-video {
