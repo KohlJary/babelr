@@ -66,6 +66,11 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki'>('chat');
   const [wikiInitialSlug, setWikiInitialSlug] = useState<string | null>(null);
   const [wikiInitialDraft, setWikiInitialDraft] = useState<{ title?: string; content?: string } | null>(null);
+  // When the user clicks an `[[event:slug]]` embed we need to switch
+  // to the calendar view and auto-open the detail panel for that
+  // event. Tracked here so ChatView can pass the id into EventsPanel
+  // after mainView flips to 'calendar'.
+  const [calendarInitialEventId, setCalendarInitialEventId] = useState<string | null>(null);
   const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
@@ -280,11 +285,16 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 ? true
                 : ['owner', 'admin', 'moderator'].includes(callerRole)
             }
-            onClose={() => setMainView('chat')}
+            initialEventId={calendarInitialEventId}
+            onClose={() => {
+              setMainView('chat');
+              setCalendarInitialEventId(null);
+            }}
             onGoToChannel={(channelId) => {
               setDmMode(false);
               selectChannel(channelId);
               setMainView('chat');
+              setCalendarInitialEventId(null);
             }}
           />
         )}
@@ -301,6 +311,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 selectChannel(embed.channelId);
                 setMainView('chat');
               }
+            }}
+            onNavigateEventEmbed={(embed) => {
+              setCalendarInitialEventId(embed.id);
+              setMainView('calendar');
             }}
             onClose={() => {
               setMainView('chat');
@@ -357,6 +371,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               setDmMode(false);
               selectChannel(embed.channelId);
             }
+          }}
+          onNavigateEventEmbed={(embed) => {
+            setCalendarInitialEventId(embed.id);
+            setMainView('calendar');
           }}
           callerRole={callerRole}
         />

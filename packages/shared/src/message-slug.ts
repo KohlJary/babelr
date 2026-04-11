@@ -48,3 +48,17 @@ const SLUG_RE = new RegExp(`^[${MESSAGE_SLUG_ALPHABET}]{${MESSAGE_SLUG_LENGTH}}$
 export function isValidMessageSlug(slug: unknown): slug is string {
   return typeof slug === 'string' && SLUG_RE.test(slug);
 }
+
+/**
+ * Generic short slug helpers. Messages and events both use the
+ * same 10-char Crockford-ish format, so the two namespaces share
+ * this pool. Future slugged entity types (e.g. attachments if we
+ * ever promote them) can reuse the same generator.
+ *
+ * The `Message` aliases are kept as historical names so existing
+ * call sites don't need to churn.
+ */
+export const generateShortSlug = generateMessageSlug;
+export const isValidShortSlug = isValidMessageSlug;
+export const generateEventSlug = generateMessageSlug;
+export const isValidEventSlug = isValidMessageSlug;

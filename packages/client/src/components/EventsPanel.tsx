@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import * as api from '../api';
 import type { EventView, ActorProfile, ChannelView } from '@babelr/shared';
 import { useEvents } from '../hooks/useEvents';
 import { useEventTranslation } from '../hooks/useEventTranslation';
@@ -29,6 +30,13 @@ interface EventsPanelProps {
   canCreate: boolean;
   onClose: () => void;
   onGoToChannel?: (channelId: string) => void;
+  /**
+   * If set, the panel auto-opens the detail view for this event on
+   * mount. Used when the user clicks an `[[event:slug]]` embed —
+   * ChatView resolves the slug → id, flips to calendar view, and
+   * passes the id here.
+   */
+  initialEventId?: string | null;
 }
 
 type ViewMode = 'agenda' | 'week' | 'month';
@@ -82,6 +90,7 @@ export function EventsPanel({
   canCreate,
   onClose,
   onGoToChannel,
+  initialEventId,
 }: EventsPanelProps) {
   const t = useT();
 
@@ -121,6 +130,27 @@ export function EventsPanel({
   const { translations: eventTranslations } = useEventTranslation(events, translationSettings);
   const [showCreate, setShowCreate] = useState(false);
   const [detailEvent, setDetailEvent] = useState<EventView | null>(null);
+
+  // Auto-open the detail view if the panel was launched with a
+  // specific event id (e.g. from clicking an `[[event:slug]]` embed).
+  // We fetch the full EventView since the embed only carried a
+  // compact shape, and we can't assume the event is in the current
+  // range-bounded events list.
+  useEffect(() => {
+    if (!initialEventId) return;
+    let cancelled = false;
+    void api
+      .getEvent(initialEventId)
+      .then((ev) => {
+        if (!cancelled) setDetailEvent(ev);
+      })
+      .catch(() => {
+        /* 404/403 — silently no-op; the clicked embed was stale or forbidden */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialEventId]);
 
   const buckets = useMemo(() => bucketEvents(events), [events]);
 

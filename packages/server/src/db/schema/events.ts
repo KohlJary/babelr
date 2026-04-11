@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { actors } from './actors.ts';
 import { objects } from './objects.ts';
 
@@ -26,6 +27,16 @@ export const events = pgTable(
     ownerId: uuid('owner_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
     createdById: uuid('created_by_id').notNull().references(() => actors.id),
 
+    /**
+     * Short copy-paste-friendly identifier, generated at create
+     * time. Enables `[[event:slug]]` references from messages and
+     * wiki pages that render as inline invite cards. Globally
+     * unique across all events via a partial unique index — NULL
+     * is allowed for backwards compatibility during migration, but
+     * new rows always populate it.
+     */
+    slug: varchar('slug', { length: 16 }),
+
     title: varchar('title', { length: 256 }).notNull(),
     description: text('description'),
     startAt: timestamp('start_at', { withTimezone: true }).notNull(),
@@ -48,6 +59,10 @@ export const events = pgTable(
     index('events_owner_idx').on(table.ownerType, table.ownerId),
     index('events_start_at_idx').on(table.startAt),
     index('events_channel_idx').on(table.channelId),
+    // Partial unique index — only enforced where slug is set.
+    uniqueIndex('events_slug_idx')
+      .on(table.slug)
+      .where(sql`${table.slug} IS NOT NULL`),
   ],
 );
 

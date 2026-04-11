@@ -202,6 +202,31 @@ export function EventDetailPanel({
             >
               {t('events.rsvpDeclined')}
             </button>
+            {event.slug && (
+              <button
+                className="friends-btn"
+                onClick={async () => {
+                  const text = `[[event:${event.slug}]]`;
+                  try {
+                    await navigator.clipboard.writeText(text);
+                  } catch {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                      document.execCommand('copy');
+                    } catch {
+                      /* nothing more we can do */
+                    }
+                    document.body.removeChild(ta);
+                  }
+                }}
+                title={t('events.copyReference')}
+              >
+                {t('events.copyReference')}
+              </button>
+            )}
             {canDelete && (
               <button className="friends-btn decline" style={{ marginLeft: 'auto' }} onClick={handleDelete}>
                 {t('common.delete')}

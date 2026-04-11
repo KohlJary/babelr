@@ -4,7 +4,7 @@ import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/s
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
-import type { MessageEmbedView } from '@babelr/shared';
+import type { MessageEmbedView, EventEmbedView } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 
@@ -25,6 +25,8 @@ interface MessageItemProps {
   onConvertToWikiPage?: () => void;
   /** Called when the user clicks an inline message embed to navigate to the source. */
   onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
+  /** Called when the user clicks an inline event embed to open the event panel. */
+  onNavigateEventEmbed?: (embed: EventEmbedView) => void;
 }
 
 type TFn = (key: UIStringKey, values?: Record<string, string | number>) => string;
@@ -93,6 +95,7 @@ export function MessageItem({
   canDelete,
   onConvertToWikiPage,
   onNavigateMessageEmbed,
+  onNavigateEventEmbed,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -273,6 +276,7 @@ export function MessageItem({
           {renderWithEmbeds(displayContent, {
             variant: 'chat',
             onNavigateMessage: onNavigateMessageEmbed,
+            onNavigateEvent: onNavigateEventEmbed,
           })}
         </div>
         {attachmentsBlock}
@@ -314,6 +318,7 @@ export function MessageItem({
         {renderWithEmbeds(displayContent, {
           variant: 'chat',
           onNavigateMessage: onNavigateMessageEmbed,
+          onNavigateEvent: onNavigateEventEmbed,
         })}
       </div>
       {attachmentsBlock}

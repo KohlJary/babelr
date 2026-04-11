@@ -360,6 +360,13 @@ export const UI_STRINGS = {
   'events.backToChat': 'Back to chat',
   'events.showOriginal': 'Show original ({lang})',
   'events.showTranslation': 'Show translation (original: {lang})',
+  'events.embedLoading': 'Loading event…',
+  'events.embedLocked': 'Event unavailable',
+  'events.embedGoToEvent': 'Open event',
+  'events.embedCountsGoing': '{count} going',
+  'events.embedCountsInterested': '{count} interested',
+  'events.copyReference': 'Copy embed reference',
+  'events.referenceCopied': 'Reference copied to clipboard.',
 
   // Wiki
   'wiki.title': 'Wiki',

@@ -421,6 +421,25 @@ export async function getMessageBySlug(
   return apiFetch(`/messages/by-slug/${encodeURIComponent(slug)}`);
 }
 
+export async function getEventBySlug(
+  slug: string,
+): Promise<import('@babelr/shared').EventEmbedView> {
+  return apiFetch(`/events/by-slug/${encodeURIComponent(slug)}`);
+}
+
+export async function rsvpEventBySlug(
+  slug: string,
+  status: import('@babelr/shared').EventRsvpStatus,
+): Promise<import('@babelr/shared').EventEmbedView> {
+  // Embeds RSVP via slug so they don't need the full event id. The
+  // server resolves slug → event and applies the RSVP under the same
+  // access rules as /events/:id/rsvp.
+  return apiFetch(`/events/by-slug/${encodeURIComponent(slug)}/rsvp`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}
+
 // ---- Server roles (granular permissions) ----
 
 export async function listServerRoles(

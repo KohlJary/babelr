@@ -11,12 +11,13 @@ import { events, eventAttendees } from '../db/schema/events.ts';
 import { toAuthorView } from './channels.ts';
 import type {
   EventView,
+  EventEmbedView,
   EventAttendeeView,
   EventRsvpStatus,
   CreateEventInput,
   UpdateEventInput,
 } from '@babelr/shared';
-import { PERMISSIONS } from '@babelr/shared';
+import { PERMISSIONS, generateEventSlug, isValidEventSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 
 const VALID_RSVP: EventRsvpStatus[] = ['going', 'interested', 'declined'];
@@ -56,6 +57,7 @@ async function toEventView(
   return {
     id: event.id,
     uri: event.uri,
+    slug: event.slug,
     ownerType: event.ownerType as 'user' | 'server',
     ownerId: event.ownerId,
     ownerName,
@@ -236,24 +238,40 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       })
       .returning();
 
-    const [created] = await db
-      .insert(events)
-      .values({
-        id: eventId,
-        uri: eventUri,
-        ownerType: body.ownerType,
-        ownerId,
-        createdById: request.actor.id,
-        title: body.title.trim(),
-        description: body.description?.trim() || null,
-        startAt,
-        endAt,
-        location: body.location?.trim() || null,
-        rrule: body.rrule?.trim() || null,
-        channelId: body.channelId ?? null,
-        eventChatId: chatChannel.id,
-      })
-      .returning();
+    // Generate a short slug for `[[event:slug]]` embeds, retrying on
+    // the (vanishingly unlikely) unique-index collision. Mirrors the
+    // message slug insert pattern in channels.ts.
+    let created: typeof events.$inferSelect | undefined;
+    let slugAttempts = 0;
+    while (!created) {
+      slugAttempts++;
+      try {
+        const [row] = await db
+          .insert(events)
+          .values({
+            id: eventId,
+            uri: eventUri,
+            slug: generateEventSlug(),
+            ownerType: body.ownerType,
+            ownerId,
+            createdById: request.actor.id,
+            title: body.title.trim(),
+            description: body.description?.trim() || null,
+            startAt,
+            endAt,
+            location: body.location?.trim() || null,
+            rrule: body.rrule?.trim() || null,
+            channelId: body.channelId ?? null,
+            eventChatId: chatChannel.id,
+          })
+          .returning();
+        created = row;
+      } catch (err) {
+        const pgErr = err as { code?: string };
+        if (pgErr.code === '23505' && slugAttempts <= 5) continue;
+        throw err;
+      }
+    }
 
     // Auto-RSVP creator as going
     await db.insert(eventAttendees).values({
@@ -468,6 +486,148 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       }
 
       return toEventView(db, event, request.actor.id);
+    },
+  );
+
+  // Compact lookup-by-slug endpoint for `[[event:slug]]` embeds. Used
+  // by the EventEmbed component to render an inline invite card
+  // without paying for the full detail payload (attendee list, creator
+  // actor, etc). The response includes the caller's RSVP status and
+  // aggregate counts so the embed can show "12 going / 3 interested"
+  // and offer an inline Join button.
+  //
+  // Permission: caller must be able to access the event. Returns 404
+  // on both "not found" and "no access" so embeds don't leak the
+  // existence of private events.
+  fastify.get<{ Params: { slug: string } }>(
+    '/events/by-slug/:slug',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const { slug } = request.params;
+      if (!isValidEventSlug(slug)) {
+        return reply.status(400).send({ error: 'Invalid slug format' });
+      }
+
+      const [event] = await db
+        .select()
+        .from(events)
+        .where(eq(events.slug, slug))
+        .limit(1);
+      if (!event) return reply.status(404).send({ error: 'Event not found' });
+
+      const accessible = await canAccessEvent(
+        db,
+        event,
+        request.actor.id,
+        request.actor.uri,
+      );
+      if (!accessible) return reply.status(404).send({ error: 'Event not found' });
+
+      const attendees = await getAttendees(db, event.id);
+      const counts = { going: 0, interested: 0, declined: 0 };
+      for (const a of attendees) counts[a.status]++;
+      const mine = attendees.find((a) => a.actor.id === request.actor!.id);
+      const ownerName = await getOwnerName(db, event.ownerType, event.ownerId);
+
+      const view: EventEmbedView = {
+        id: event.id,
+        slug: event.slug!,
+        title: event.title,
+        description: event.description,
+        startAt: event.startAt.toISOString(),
+        endAt: event.endAt.toISOString(),
+        location: event.location,
+        rrule: event.rrule,
+        ownerType: event.ownerType as 'user' | 'server',
+        ownerId: event.ownerId,
+        ownerName,
+        myRsvp: (mine?.status as EventRsvpStatus | undefined) ?? null,
+        counts,
+      };
+      return view;
+    },
+  );
+
+  // RSVP directly via slug, so the inline EventEmbed component can
+  // offer "Join" / "Interested" / "Decline" buttons without forcing
+  // the reader to open the full detail panel. Permission model is
+  // identical to /events/:id/rsvp — server events require membership,
+  // user events are RSVP-able by anyone who holds the slug.
+  fastify.post<{ Params: { slug: string }; Body: { status: EventRsvpStatus } }>(
+    '/events/by-slug/:slug/rsvp',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const { slug } = request.params;
+      if (!isValidEventSlug(slug)) {
+        return reply.status(400).send({ error: 'Invalid slug format' });
+      }
+      const status = request.body?.status;
+      if (!VALID_RSVP.includes(status))
+        return reply.status(400).send({ error: 'status must be going, interested, or declined' });
+
+      const [event] = await db
+        .select()
+        .from(events)
+        .where(eq(events.slug, slug))
+        .limit(1);
+      if (!event) return reply.status(404).send({ error: 'Event not found' });
+
+      if (event.ownerType === 'server') {
+        const accessible = await canAccessEvent(
+          db,
+          event,
+          request.actor.id,
+          request.actor.uri,
+        );
+        if (!accessible) return reply.status(404).send({ error: 'Event not found' });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(eventAttendees)
+        .where(
+          and(
+            eq(eventAttendees.eventId, event.id),
+            eq(eventAttendees.actorId, request.actor.id),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(eventAttendees)
+          .set({ status, respondedAt: new Date() })
+          .where(eq(eventAttendees.id, existing.id));
+      } else {
+        await db.insert(eventAttendees).values({
+          eventId: event.id,
+          actorId: request.actor.id,
+          status,
+        });
+      }
+
+      const attendees = await getAttendees(db, event.id);
+      const counts = { going: 0, interested: 0, declined: 0 };
+      for (const a of attendees) counts[a.status]++;
+      const mine = attendees.find((a) => a.actor.id === request.actor!.id);
+      const ownerName = await getOwnerName(db, event.ownerType, event.ownerId);
+
+      const view: EventEmbedView = {
+        id: event.id,
+        slug: event.slug!,
+        title: event.title,
+        description: event.description,
+        startAt: event.startAt.toISOString(),
+        endAt: event.endAt.toISOString(),
+        location: event.location,
+        rrule: event.rrule,
+        ownerType: event.ownerType as 'user' | 'server',
+        ownerId: event.ownerId,
+        ownerName,
+        myRsvp: (mine?.status as EventRsvpStatus | undefined) ?? null,
+        counts,
+      };
+      return view;
     },
   );
 }

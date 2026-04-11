@@ -2,13 +2,25 @@
 /**
  * Seed UI string translations into the database.
  *
- * For each non-English supported language, batches all UI strings into a
- * single Anthropic Haiku call requesting a JSON dict back. Upserts the
- * results into ui_translations.
+ * For each non-English supported language, batches only the NEW UI
+ * strings (those absent from the committed seed JSON) into a single
+ * Anthropic Haiku call requesting a JSON dict back. Previously
+ * translated strings are reused verbatim from the JSON — we've
+ * accumulated hundreds of keys across many languages and
+ * re-translating all of them on every script run wastes tokens and
+ * introduces pointless churn in diffs.
  *
- * Re-runnable: existing rows are updated in place via ON CONFLICT, and
- * adding new keys to the master strings file just produces additional
- * inserts on the next run.
+ * The committed JSON is also upserted wholesale into the dev DB
+ * first, so a fresh dev environment picks up the full set without
+ * needing to re-run the full translation pass.
+ *
+ * Pass `--force` to re-translate every key regardless of what's
+ * already in the JSON (useful after a major prompt or phrasing
+ * change that should ripple through every language).
+ *
+ * Re-runnable: existing rows are updated in place via ON CONFLICT,
+ * and adding new keys to the master strings file just produces
+ * additional Anthropic calls for the delta on the next run.
  *
  * Usage:
  *   ANTHROPIC_API_KEY=sk-ant-... DATABASE_URL=postgres://... \
@@ -16,7 +28,11 @@
  *
  * Or via npm script:
  *   npm run seed:i18n -w packages/server
+ *   npm run seed:i18n -w packages/server -- --force
  */
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { createDb } from '../db/index.ts';
 import { uiTranslations } from '../db/schema/ui-translations.ts';
@@ -117,6 +133,50 @@ Rules:
   return parsed;
 }
 
+const CHUNK_SIZE = 100;
+
+async function upsertRows(
+  db: ReturnType<typeof createDb>,
+  rows: { lang: string; key: string; value: string }[],
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + CHUNK_SIZE);
+    await db
+      .insert(uiTranslations)
+      .values(chunk)
+      .onConflictDoUpdate({
+        target: [uiTranslations.lang, uiTranslations.key],
+        set: {
+          value: sql`excluded.value`,
+          updatedAt: sql`now()`,
+        },
+      });
+  }
+}
+
+function loadExistingSeed(): Record<string, Record<string, string>> {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const seedPath = `${__dirname}/../db/seed-data/ui-translations.json`;
+  if (!existsSync(seedPath)) {
+    console.log(`No existing seed JSON at ${seedPath} — will translate everything.`);
+    return {};
+  }
+  try {
+    return JSON.parse(readFileSync(seedPath, 'utf-8')) as Record<
+      string,
+      Record<string, string>
+    >;
+  } catch (err) {
+    console.warn(
+      `Failed to parse existing seed JSON — treating as empty: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return {};
+  }
+}
+
 async function main() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -129,40 +189,76 @@ async function main() {
     process.exit(1);
   }
 
+  const force = process.argv.includes('--force');
+
   const db = createDb(dbUrl);
   const sourceStrings = UI_STRINGS as Record<string, string>;
-  const totalKeys = Object.keys(sourceStrings).length;
+  const sourceKeys = Object.keys(sourceStrings);
+  const totalKeys = sourceKeys.length;
   const targets = SUPPORTED_LANGUAGES.filter((l) => l !== 'en');
 
-  console.log(`Seeding UI translations: ${totalKeys} strings × ${targets.length} languages`);
+  const existingSeed = force ? {} : loadExistingSeed();
+
+  console.log(
+    `Seeding UI translations: ${totalKeys} strings × ${targets.length} languages`,
+  );
   console.log(`Languages: ${targets.join(', ')}`);
+  if (force) {
+    console.log('--force: re-translating every key for every language');
+  } else {
+    console.log('Skipping keys already present in seed JSON (use --force to override)');
+  }
   console.log('');
 
+  // First, upsert everything we already have in the JSON so the dev
+  // DB is guaranteed to hold the full historical set before the
+  // delta-translation pass runs. Cheap and idempotent.
+  if (!force) {
+    const existingRows: { lang: string; key: string; value: string }[] = [];
+    for (const lang of Object.keys(existingSeed)) {
+      for (const [key, value] of Object.entries(existingSeed[lang])) {
+        if (key in sourceStrings) {
+          existingRows.push({ lang, key, value });
+        }
+      }
+    }
+    if (existingRows.length > 0) {
+      process.stdout.write(`Upserting ${existingRows.length} cached rows from seed JSON... `);
+      await upsertRows(db, existingRows);
+      console.log('✓');
+      console.log('');
+    }
+  }
+
   for (const lang of targets) {
-    process.stdout.write(`[${lang}] translating ${totalKeys} strings... `);
+    // Compute delta: source keys not yet translated for this language.
+    const existingForLang = existingSeed[lang] ?? {};
+    const missingKeys = force
+      ? sourceKeys
+      : sourceKeys.filter((k) => !(k in existingForLang));
+
+    if (missingKeys.length === 0) {
+      console.log(`[${lang}] up to date (${Object.keys(existingForLang).length} cached), skipping`);
+      continue;
+    }
+
+    const deltaStrings: Record<string, string> = {};
+    for (const k of missingKeys) deltaStrings[k] = sourceStrings[k];
+
+    process.stdout.write(
+      `[${lang}] translating ${missingKeys.length} new string${
+        missingKeys.length === 1 ? '' : 's'
+      }... `,
+    );
     const start = Date.now();
 
     try {
-      const translated = await translateBatch(apiKey, lang, sourceStrings);
+      const translated = await translateBatch(apiKey, lang, deltaStrings);
       const validRows = Object.entries(translated)
-        .filter(([k, v]) => k in sourceStrings && typeof v === 'string' && v.length > 0)
+        .filter(([k, v]) => k in deltaStrings && typeof v === 'string' && v.length > 0)
         .map(([key, value]) => ({ lang, key, value }));
 
-      // Upsert in chunks (Postgres has parameter limits)
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < validRows.length; i += CHUNK_SIZE) {
-        const chunk = validRows.slice(i, i + CHUNK_SIZE);
-        await db
-          .insert(uiTranslations)
-          .values(chunk)
-          .onConflictDoUpdate({
-            target: [uiTranslations.lang, uiTranslations.key],
-            set: {
-              value: sql`excluded.value`,
-              updatedAt: sql`now()`,
-            },
-          });
-      }
+      await upsertRows(db, validRows);
 
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
       console.log(`✓ ${validRows.length} rows in ${elapsed}s`);

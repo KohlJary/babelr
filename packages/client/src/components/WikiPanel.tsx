@@ -13,7 +13,7 @@ import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
-import type { MessageEmbedView } from '@babelr/shared';
+import type { MessageEmbedView, EventEmbedView } from '@babelr/shared';
 import * as api from '../api';
 
 interface WikiPanelProps {
@@ -27,6 +27,8 @@ interface WikiPanelProps {
   initialDraft?: { title?: string; content?: string } | null;
   /** Called when the user clicks an inline message embed inside a wiki page. */
   onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
+  /** Called when the user clicks an inline event embed inside a wiki page. */
+  onNavigateEventEmbed?: (embed: EventEmbedView) => void;
   onClose: () => void;
 }
 
@@ -115,6 +117,7 @@ export function WikiPanel({
   initialSlug,
   initialDraft,
   onNavigateMessageEmbed,
+  onNavigateEventEmbed,
   onClose,
 }: WikiPanelProps) {
   const t = useT();
@@ -640,6 +643,7 @@ export function WikiPanel({
                               {renderWithEmbeds(body, {
                                 variant: 'wiki',
                                 onNavigateMessage: onNavigateMessageEmbed,
+                                onNavigateEvent: onNavigateEventEmbed,
                               })}
                             </div>
                             <ChunkIndicators chunk={c} t={t} />
@@ -652,6 +656,7 @@ export function WikiPanel({
                       {renderWithEmbeds(currentPage.content, {
                         variant: 'wiki',
                         onNavigateMessage: onNavigateMessageEmbed,
+                        onNavigateEvent: onNavigateEventEmbed,
                       })}
                     </div>
                   )
@@ -780,6 +785,7 @@ export function WikiPanel({
                     {renderWithEmbeds(draftContent, {
                       variant: 'wiki',
                       onNavigateMessage: onNavigateMessageEmbed,
+                      onNavigateEvent: onNavigateEventEmbed,
                     })}
                   </div>
                 ) : (

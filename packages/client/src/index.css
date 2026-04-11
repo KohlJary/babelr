@@ -3543,6 +3543,108 @@ textarea.modal-input {
   line-height: 1.4;
 }
 
+/* Inline event embed — [[event:slug]] refs. Shares the visual
+   family of .message-embed but is a block container (not a button)
+   since it hosts inline RSVP actions that must not share the
+   navigation click target. */
+.event-embed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 600px;
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.8rem;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-left: 3px solid #d97706;
+  border-radius: 4px;
+  color: #bbb;
+  font-size: 0.85rem;
+}
+.event-embed.loading,
+.event-embed.locked {
+  display: inline-block;
+  color: #777;
+  font-style: italic;
+  border-left-color: #3a3a3a;
+}
+.event-embed-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.event-embed-body:hover .event-embed-title {
+  color: #fff;
+}
+.event-embed-icon {
+  flex-shrink: 0;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+.event-embed-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+.event-embed-title {
+  color: #eee;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: color 0.12s;
+}
+.event-embed-when {
+  color: #d97706;
+  font-size: 0.8rem;
+}
+.event-embed-location {
+  color: #888;
+  font-size: 0.78rem;
+}
+.event-embed-counts {
+  color: #777;
+  font-size: 0.78rem;
+}
+.event-embed-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.event-embed-rsvp {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #3a3a3a;
+  background: #1a1a1a;
+  color: #ccc;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.event-embed-rsvp:hover:not(:disabled) {
+  background: #222;
+  border-color: #555;
+  color: #fff;
+}
+.event-embed-rsvp.active {
+  background: #d97706;
+  border-color: #d97706;
+  color: #fff;
+}
+.event-embed-rsvp:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 /* Message content wiki refs — [[slug]] rendered as anchors */
 .message-content a[href^="#wiki/"],
 .wiki-content-body a[href^="#wiki/"] {
