@@ -4,8 +4,9 @@ import type React from 'react';
 import type { ServerView } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { RolesPanel } from './RolesPanel';
 
-type Tab = 'info' | 'invites';
+type Tab = 'info' | 'invites' | 'roles';
 
 interface ServerSettingsPanelProps {
   server: ServerView;
@@ -38,10 +39,17 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
           >
             {t('serverSettings.tabInvites')}
           </button>
+          <button
+            className={`settings-tab ${tab === 'roles' ? 'active' : ''}`}
+            onClick={() => setTab('roles')}
+          >
+            {t('serverSettings.tabRoles')}
+          </button>
         </div>
 
         {tab === 'info' && <InfoTab server={server} onUpdated={onUpdated} />}
         {tab === 'invites' && <InvitesTab serverId={server.id} />}
+        {tab === 'roles' && <RolesPanel serverId={server.id} />}
       </div>
     </div>
   );

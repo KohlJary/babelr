@@ -166,6 +166,7 @@ export const UI_STRINGS = {
   'serverSettings.title': 'Server Settings',
   'serverSettings.tabInfo': 'Info',
   'serverSettings.tabInvites': 'Invites',
+  'serverSettings.tabRoles': 'Roles',
   'serverSettings.logo': 'Logo',
   'serverSettings.uploadImage': 'Upload image',
   'serverSettings.removeLogo': 'Remove',

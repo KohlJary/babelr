@@ -117,6 +117,94 @@ export const DEFAULT_ROLE_PERMISSIONS = {
  * both the migration (when backfilling existing servers) and the
  * server-creation flow (when bootstrapping new ones).
  */
+/**
+ * UI grouping for the permission checkbox grid in the role editor.
+ * Order here determines display order in the settings panel. Each
+ * group gets a header; permissions within a group appear in the
+ * order listed.
+ *
+ * Kept in the shared module so the client UI and any future role
+ * templates read from the same source of truth.
+ */
+export const PERMISSION_CATEGORIES: ReadonlyArray<{
+  id: string;
+  label: string;
+  permissions: readonly Permission[];
+}> = [
+  {
+    id: 'server',
+    label: 'Server administration',
+    permissions: [
+      PERMISSIONS.MANAGE_SERVER,
+      PERMISSIONS.MANAGE_ROLES,
+      PERMISSIONS.MANAGE_INVITES,
+      PERMISSIONS.KICK_MEMBERS,
+      PERMISSIONS.VIEW_AUDIT_LOG,
+    ],
+  },
+  {
+    id: 'channels',
+    label: 'Channels',
+    permissions: [PERMISSIONS.VIEW_CHANNELS, PERMISSIONS.MANAGE_CHANNELS],
+  },
+  {
+    id: 'messages',
+    label: 'Messages',
+    permissions: [
+      PERMISSIONS.SEND_MESSAGES,
+      PERMISSIONS.MANAGE_MESSAGES,
+      PERMISSIONS.ADD_REACTIONS,
+      PERMISSIONS.ATTACH_FILES,
+      PERMISSIONS.MENTION_EVERYONE,
+      PERMISSIONS.CREATE_INVITES,
+    ],
+  },
+  {
+    id: 'voice',
+    label: 'Voice',
+    permissions: [PERMISSIONS.CONNECT_VOICE, PERMISSIONS.SPEAK, PERMISSIONS.VIDEO],
+  },
+  {
+    id: 'wiki',
+    label: 'Wiki',
+    permissions: [PERMISSIONS.VIEW_WIKI, PERMISSIONS.CREATE_WIKI_PAGES, PERMISSIONS.MANAGE_WIKI],
+  },
+  {
+    id: 'events',
+    label: 'Events',
+    permissions: [PERMISSIONS.CREATE_EVENTS, PERMISSIONS.MANAGE_EVENTS],
+  },
+];
+
+/**
+ * Human-readable label for each permission flag, used by the role
+ * editor. Keep in sync with `PERMISSIONS` — a lint rule would be
+ * nice here but missing labels fall back to the raw flag name.
+ */
+export const PERMISSION_LABELS: Record<Permission, string> = {
+  MANAGE_SERVER: 'Manage server',
+  MANAGE_ROLES: 'Manage roles',
+  MANAGE_INVITES: 'Manage invites',
+  KICK_MEMBERS: 'Kick members',
+  VIEW_AUDIT_LOG: 'View audit log (reserved)',
+  VIEW_CHANNELS: 'View channels',
+  MANAGE_CHANNELS: 'Manage channels',
+  SEND_MESSAGES: 'Send messages',
+  MANAGE_MESSAGES: "Manage messages (delete others')",
+  ADD_REACTIONS: 'Add reactions',
+  ATTACH_FILES: 'Attach files',
+  MENTION_EVERYONE: 'Mention @everyone (reserved)',
+  CREATE_INVITES: 'Create invites',
+  CONNECT_VOICE: 'Connect to voice',
+  SPEAK: 'Speak in voice (reserved)',
+  VIDEO: 'Enable video (reserved)',
+  VIEW_WIKI: 'View wiki',
+  CREATE_WIKI_PAGES: 'Create wiki pages',
+  MANAGE_WIKI: "Manage wiki (edit/delete others')",
+  CREATE_EVENTS: 'Create events',
+  MANAGE_EVENTS: "Manage events (edit/delete others')",
+};
+
 export const DEFAULT_ROLE_DEFINITIONS = [
   {
     name: '@everyone',

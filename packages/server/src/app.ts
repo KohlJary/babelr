@@ -27,6 +27,7 @@ import friendsRoutes from './routes/friends.ts';
 import i18nRoutes from './routes/i18n.ts';
 import eventRoutes from './routes/events.ts';
 import wikiRoutes from './routes/wiki.ts';
+import roleRoutes from './routes/roles.ts';
 import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
 import uploadRoutes from './routes/uploads.ts';
@@ -132,6 +133,7 @@ export async function buildApp() {
   await app.register(i18nRoutes);
   await app.register(eventRoutes);
   await app.register(wikiRoutes);
+  await app.register(roleRoutes);
   await app.register(searchRoutes);
   await app.register(federationPlugin);
   await app.register(uploadRoutes);

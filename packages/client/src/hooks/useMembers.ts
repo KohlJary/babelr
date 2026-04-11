@@ -6,25 +6,29 @@ export function useMembers(serverId: string | null) {
   const [members, setMembers] = useState<api.MemberView[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const reload = useCallback(async () => {
     if (!serverId) {
       setMembers([]);
       return;
     }
     setLoading(true);
-    api
-      .getMembers(serverId)
-      .then(setMembers)
-      .finally(() => setLoading(false));
+    try {
+      const next = await api.getMembers(serverId);
+      setMembers(next);
+    } finally {
+      setLoading(false);
+    }
   }, [serverId]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   const setRole = useCallback(
     async (userId: string, role: string) => {
       if (!serverId) return;
       await api.setMemberRole(serverId, userId, role);
-      setMembers((prev) =>
-        prev.map((m) => (m.id === userId ? { ...m, role } : m)),
-      );
+      setMembers((prev) => prev.map((m) => (m.id === userId ? { ...m, role } : m)));
     },
     [serverId],
   );
@@ -38,5 +42,5 @@ export function useMembers(serverId: string | null) {
     [serverId],
   );
 
-  return { members, loading, setRole, kick };
+  return { members, loading, reload, setRole, kick };
 }

@@ -73,7 +73,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   );
   const { conversations, selectedDM, selectDM, startDM } = useDMs();
   const e2e = useE2E();
-  const { members, setRole, kick } = useMembers(
+  const { members, reload: reloadMembers, kick } = useMembers(
     dmMode ? null : selectedServer?.id ?? null,
   );
   const { unreadCounts } = useUnreadBadges();
@@ -350,13 +350,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       )}
       {showMembers && selectedServer && (
         <MemberList
+          serverId={selectedServer.id}
           members={members}
           actor={actor}
           callerRole={callerRole}
           presenceStatus={presenceStatus}
-          onSetRole={setRole}
           onKick={kick}
           onClose={() => setShowMembers(false)}
+          onRolesChanged={reloadMembers}
         />
       )}
       {showGlossary && activeChannelId && (

@@ -419,13 +419,30 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .innerJoin(actors, eq(collectionItems.itemId, actors.id))
         .where(eq(collectionItems.collectionUri, server.followersUri));
 
+      // Batch-load role assignments for every member so the client
+      // can render multi-role chips without an N+1 query. Group by
+      // actorId into a Map for O(1) lookup during the response map.
+      const assignmentRows = await db
+        .select()
+        .from(serverRoleAssignments)
+        .where(eq(serverRoleAssignments.serverId, request.params.serverId));
+      const roleIdsByActor = new Map<string, string[]>();
+      for (const row of assignmentRows) {
+        const list = roleIdsByActor.get(row.actorId) ?? [];
+        list.push(row.roleId);
+        roleIdsByActor.set(row.actorId, list);
+      }
+
       return members.map((m) => {
         const itemProps = m.item.properties as Record<string, unknown> | null;
+        const memberProps = m.member.properties as Record<string, unknown> | null;
         return {
           id: m.member.id,
           preferredUsername: m.member.preferredUsername,
           displayName: m.member.displayName,
           role: (itemProps?.role as string) ?? 'member',
+          roleIds: roleIdsByActor.get(m.member.id) ?? [],
+          avatarUrl: (memberProps?.avatarUrl as string | undefined) ?? null,
         };
       });
     },

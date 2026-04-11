@@ -415,6 +415,62 @@ export async function getWikiBacklinks(
   return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/backlinks`);
 }
 
+// ---- Server roles (granular permissions) ----
+
+export async function listServerRoles(
+  serverId: string,
+): Promise<import('@babelr/shared').ServerRoleListResponse> {
+  return apiFetch(`/servers/${serverId}/roles`);
+}
+
+export async function createServerRole(
+  serverId: string,
+  input: import('@babelr/shared').CreateServerRoleInput,
+): Promise<import('@babelr/shared').ServerRoleResponse> {
+  return apiFetch(`/servers/${serverId}/roles`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateServerRole(
+  serverId: string,
+  roleId: string,
+  input: import('@babelr/shared').UpdateServerRoleInput,
+): Promise<import('@babelr/shared').ServerRoleResponse> {
+  return apiFetch(`/servers/${serverId}/roles/${roleId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteServerRole(
+  serverId: string,
+  roleId: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/servers/${serverId}/roles/${roleId}`, { method: 'DELETE' });
+}
+
+export async function assignServerRole(
+  serverId: string,
+  actorId: string,
+  roleId: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/servers/${serverId}/members/${actorId}/roles/${roleId}`, {
+    method: 'POST',
+  });
+}
+
+export async function unassignServerRole(
+  serverId: string,
+  actorId: string,
+  roleId: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/servers/${serverId}/members/${actorId}/roles/${roleId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function getWikiSettings(
   serverId: string,
 ): Promise<import('@babelr/shared').WikiSettingsResponse> {
@@ -471,7 +527,13 @@ export interface MemberView {
   id: string;
   preferredUsername: string;
   displayName: string | null;
+  /** Legacy single-role string — kept for back-compat during the
+   *  granular-permissions rollout. New code should consume `roleIds`. */
   role: string;
+  /** IDs of server_roles this member is explicitly assigned to.
+   *  Excludes the implicit @everyone role. */
+  roleIds: string[];
+  avatarUrl?: string | null;
 }
 
 export async function getMembers(serverId: string): Promise<MemberView[]> {
