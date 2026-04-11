@@ -110,6 +110,7 @@ export function useVoice(selfActorId: string) {
   } | null>(null);
   const localMicLogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speakingRafRef = useRef<number | null>(null);
+  const lastReconcileRef = useRef(0);
   // Push-to-talk runtime state. When `pushToTalk` is true in state, the
   // mic is muted by default and only un-muted while PTT_KEY is held down.
   // These refs let the keydown/keyup listeners read the latest values
@@ -1191,6 +1192,22 @@ export function useVoice(selfActorId: string) {
           })),
         };
       });
+
+      // Throttled reconcile. Catches video/screen slot changes that the
+      // onmute/onunmute events and the post-renegotiation immediate
+      // reconcile can miss — particularly the "second toggle" case where
+      // a track transitions muted→unmuted but the event either never
+      // fires or fires so late that our initial reconcile already ran
+      // against a still-muted track. Running every 500ms is cheap (just
+      // a few transceiver reads per peer) and bounds the worst-case
+      // latency for stuck state to half a second.
+      const now = performance.now();
+      if (now - lastReconcileRef.current > 500) {
+        lastReconcileRef.current = now;
+        for (const entry of peersRef.current.values()) {
+          reconcilePeerSlots(entry);
+        }
+      }
 
       speakingRafRef.current = requestAnimationFrame(tick);
     };
