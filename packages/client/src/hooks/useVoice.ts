@@ -243,11 +243,12 @@ export function useVoice(selfActorId: string) {
     (entry: PeerEntry) => {
       const videoTxs = entry.pc
         .getTransceivers()
-        .filter((t) => t.receiver.track.kind === 'video');
+        .filter((t) => t.receiver.track?.kind === 'video');
       for (let i = 0; i < videoTxs.length && i < 2; i++) {
         const tx = videoTxs[i];
         const slot: 'video' | 'screen' = i === 0 ? 'video' : 'screen';
         const track = tx.receiver.track;
+        if (!track) continue;
         const live = track.readyState === 'live' && !track.muted;
         const currentSlot = slot === 'video' ? entry.videoStream : entry.screenStream;
         if (live && !currentSlot) {
@@ -337,21 +338,44 @@ export function useVoice(selfActorId: string) {
 
       pc.ontrack = (ev) => {
         // Video track handling: determine which slot (webcam vs screen)
-        // by the transceiver's INDEX among video transceivers in the
-        // peer connection. We always add webcam first, screen second,
-        // so index 0 = webcam, index 1 = screen. Index-based routing is
-        // more reliable than identity-based because transceiver identity
-        // can become ambiguous across renegotiations (and the PC may
-        // return slightly different object references in some paths).
+        // using a combination of identity check and index fallback, both
+        // wrapped in a try/catch so a routing failure can't wedge the
+        // whole ontrack handler.
+        //
+        // Ordering rule: we always addTransceiver('video') twice — webcam
+        // first, screen second — so the two video transceivers on the PC
+        // correspond to slots 'video' and 'screen' in that order.
         if (ev.track.kind === 'video') {
           const pe = peersRef.current.get(actor.id);
           if (!pe) return;
 
-          const videoTxs = pc.getTransceivers().filter(
-            (t) => t.receiver.track.kind === 'video',
-          );
-          const index = videoTxs.indexOf(ev.transceiver);
-          const slot: 'video' | 'screen' = index === 1 ? 'screen' : 'video';
+          let slot: 'video' | 'screen' = 'video';
+          try {
+            // Primary: identity match against stored transceiver refs
+            if (ev.transceiver === pe.videoTransceiver) {
+              slot = 'video';
+            } else if (ev.transceiver === pe.screenTransceiver) {
+              slot = 'screen';
+            } else {
+              // Fallback: find the transceiver's position in the PC's
+              // video-track transceivers. Use optional chaining on
+              // receiver.track in case any transceiver lacks one.
+              const videoTxs = pc
+                .getTransceivers()
+                .filter((t) => t.receiver.track?.kind === 'video');
+              const index = videoTxs.indexOf(ev.transceiver);
+              if (index === 1) slot = 'screen';
+              else if (index === 0) slot = 'video';
+              // If index is -1 (not found), last-ditch: use whichever
+              // slot is currently empty (webcam first). Keeps legacy
+              // behavior for the case where nothing else matches.
+              else if (pe.videoStream === null) slot = 'video';
+              else slot = 'screen';
+            }
+          } catch (err) {
+            console.warn('voice: ontrack routing failed, defaulting to video', err);
+            slot = 'video';
+          }
 
           // A track arriving from a transceiver whose remote side has no
           // real track attached (e.g. because we pre-allocate both video
