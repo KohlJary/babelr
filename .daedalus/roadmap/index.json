@@ -163,6 +163,38 @@
       "status": "ready"
     },
     {
+      "id": "message-embed-scroll-to-message",
+      "title": "Message embed: scroll to the referenced message after navigation",
+      "description": "Clicking a `[[msg:slug]]` embed today switches to the source channel via `selectChannel(embed.channelId)` and calls it done. The user still has to scan or scroll to find the actual message they clicked. Fix: after the channel switches and the message list renders, scroll the referenced message into view and highlight it for a moment.\n\nImplementation sketch:\n\n- Extend `ChatView`'s navigation handler to set a `pendingScrollToMessageId` state alongside the channel selection.\n- `MessageList` watches that state via a prop. On next render (after messages load for the new channel), it finds the matching message by id, calls `scrollIntoView({block: 'center'})` on its DOM ref, and applies a CSS class (`.highlighted` or similar) for a 2-3 second fade.\n- Edge case: the target message might not be in the first page of messages. If not found, fire a `fetchMessagesAroundId(messageId)` that loads a window around the target. Reuses the existing thread-load pattern.\n- Edge case: if the target channel is already selected (user clicked an embed to a message in the current channel), skip the channel-switch and go directly to scroll.\n- Nice-to-have: a URL hash like `#channel/{channelId}/msg/{slug}` so the navigation is bookmarkable and browser-back works. Lower priority than the scroll itself.\n\nOne sitting of work. The feature was deliberately cut from the message-slugs landing to keep that PR bounded; picking it up independently is cheap and adds real polish.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "message-embed-reverse-backlinks",
+      "title": "Reverse backlinks: show 'referenced from' on messages",
+      "description": "The wiki panel already has a 'Linked from' section that lists pages and messages that reference the current wiki page. Message embeds introduced a symmetric case: a wiki page (or another message) can reference a specific message via `[[msg:slug]]`, but there's no surface showing those citations from the referenced message's perspective.\n\nWhy this matters: citation awareness. If Alice quotes Bob's message in a wiki page, Bob has no way to discover that happened. The one-directional link model means the reference effectively leaves the source message's context. For a knowledge graph to feel alive, the edges should be walkable from both ends.\n\nScope:\n\n- **Schema**: extend `wiki_page_links` (or create a parallel `message_refs` table) to record message-as-target references. Today `wiki_page_links` has a `targetMessageId` column but the source is always a wiki page; we'd need to also track message-source → message-target refs.\n- **Sync**: when a message is created/edited and its content contains `[[msg:otherSlug]]`, insert a row. When a wiki page is created/edited and its content contains `[[msg:otherSlug]]`, insert a row (may already work — verify).\n- **Endpoint**: `GET /messages/:id/backlinks` returning a list of source pages + source messages that reference this message. Permission-gated the same way the lookup endpoint is.\n- **UI**: MessageItem gains a small 'N references' badge when backlinks exist. Clicking expands a panel below the message showing source page titles and source message snippets, each clickable to navigate.\n\nScope cut: no federation for now. Backlinks are local-only, same as the message embed feature itself.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "message-embed-batch-lookup",
+      "title": "Batch message lookup endpoint for high-density embed pages",
+      "description": "The current `GET /messages/by-slug/:slug` endpoint works one-at-a-time. `MessageEmbed` has a module-level dedupe cache so three embeds of the *same* message share one fetch, but three embeds of *different* messages on one page still fire three serial HTTP requests. For short chat or typical wiki pages that's fine. For pages with many embeds it shows up as a visible loading cascade.\n\nFix: `POST /messages/by-slugs` accepting `{slugs: string[]}` and returning `{results: MessageEmbedView[]}` in a single call. Each slug individually permission-checked server-side; results for inaccessible messages omitted from the response (client treats missing slugs as 'locked').\n\nClient change: introduce a `useMessageEmbedBatch(slugs)` hook that collects all slugs seen during a render pass and fires a single batch request, then serves the cache to each individual `MessageEmbed`. Requires a small refactor of the embed component to consume from a context-provided store rather than fetching directly on mount — nontrivial but mechanical.\n\nDefer until actual docs hit the pain point. The module cache already handles the common case (user hovering over a message that references a popular message already shown in chat). A wiki page with 20 distinct embeds is not yet a real use case — reserve this item for when it is.",
+      "type": "chore",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "message-embed-federation",
+      "title": "Federate message slugs across instances",
+      "description": "Message slugs are currently local-only. A slug generated on babelr.local uniquely identifies a message *on that server*, but `[[msg:abc1234xyz]]` in a federated context is ambiguous — which instance's message? Since ActivityPub inbound is already AP-shaped and we eventually want federation to work, this is a real gap we'll hit the moment two instances start talking.\n\nProposed addressing scheme: `[[msg:abc1234xyz@babelr.local]]` — slug, `@`, origin domain. Local refs (no `@`) default to the current server. Cross-instance refs fall through to a federated lookup path that hits the target instance's `/messages/by-slug/:slug` endpoint (which needs to exist and be public-read for non-private channels).\n\nComplications:\n\n- **Permission check on federated reads**: the target instance has to decide whether the caller can see the message. Simplest model: public channels are readable by any federated caller with proof-of-membership in some shared server; private channels return 403. Matches the AP visibility model.\n- **Caching and staleness**: federated lookups should cache more aggressively than local because the round-trip is slower. Same localStorage cache we already have for translations could apply. TTL invalidation on message-edit activities.\n- **Embed rendering for unreachable instances**: the target instance might be down or unreachable. Locked-message placeholder needs a distinct 'remote instance unavailable' state.\n\nGated on: message federation itself (currently in the AP-shaped-from-day-one bucket but not actively delivered). This item probably lands alongside whatever PR activates federated messaging for the first time — no point implementing federated slug lookup if messages aren't federated yet.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
       "id": "granular-permissions-channel-overrides",
       "title": "Per-channel permission overrides",
       "description": "Follow-up to the granular server permissions + roles system. Discord-style per-channel permission matrix that overrides server-level role permissions for a specific channel.\n\nExample use cases:\n- An `#announcements` channel where only the Admin role has SEND_MESSAGES even though @everyone has it server-wide.\n- A private #leadership channel that only specific roles can VIEW_CHANNELS for.\n- A #feedback channel where @everyone loses MANAGE_MESSAGES so mods can't delete user complaints.\n\nScope:\n- New `channel_permission_overrides` table: (channelId, roleId, permission, effect) where `effect` is 'allow' or 'deny'. Composite PK on (channelId, roleId, permission).\n- Effective permission evaluation order: server-level role permissions → channel allow-overrides → channel deny-overrides → (per-member overrides if we add them later). Deny wins, allow next, base permissions last.\n- Helper: `hasPermissionInChannel(db, channelId, actorId, permission)` that walks this precedence chain. Used in place of `hasPermission` for channel-scoped actions.\n- UI: channel settings panel gains a 'Permissions' tab with role pickers and per-permission allow/deny/inherit toggles per role.\n- Migration: no data to move. Existing channels remain fully inherited (zero override rows = fall through to server-level).\n\nDeferred from the initial permissions PR to keep the first landing bounded. The helper API is intentionally pluggable so switching `hasPermission` to `hasPermissionInChannel` at call sites is a find-and-replace when we land this.",
@@ -339,5 +371,5 @@
       "status": "backlog"
     }
   ],
-  "version": 24
+  "version": 25
 }
