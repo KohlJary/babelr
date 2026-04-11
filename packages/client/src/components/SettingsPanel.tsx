@@ -5,6 +5,7 @@ import type { ActorProfile } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';
+import { useOllamaModels } from '../hooks/useOllamaModels';
 
 interface SettingsPanelProps {
   settings: TranslationSettings;
@@ -19,6 +20,12 @@ export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: Se
   const [newPw, setNewPw] = useState('');
   const [pwStatus, setPwStatus] = useState<string | null>(null);
   const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  // Only actually probe Ollama when the user is on that provider —
+  // avoids firing discovery requests when the field isn't even shown.
+  const ollama = useOllamaModels(
+    settings.provider === 'ollama' ? settings.ollamaBaseUrl : '',
+  );
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,18 +119,27 @@ export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: Se
           </div>
         </div>
 
-        {(settings.provider === 'anthropic' || settings.provider === 'openai') && (
+        {settings.provider === 'anthropic' && (
           <div className="settings-field">
-            <label>
-              {settings.provider === 'anthropic'
-                ? t('settings.anthropicApiKey')
-                : t('settings.openaiApiKey')}
-            </label>
+            <label>{t('settings.anthropicApiKey')}</label>
             <input
               type="password"
-              placeholder={settings.provider === 'anthropic' ? 'sk-ant-...' : 'sk-...'}
-              value={settings.apiKey}
-              onChange={(e) => onUpdate({ apiKey: e.target.value })}
+              placeholder="sk-ant-..."
+              value={settings.anthropicApiKey}
+              onChange={(e) => onUpdate({ anthropicApiKey: e.target.value })}
+            />
+            <p className="settings-hint">{t('settings.apiKeyHint')}</p>
+          </div>
+        )}
+
+        {settings.provider === 'openai' && (
+          <div className="settings-field">
+            <label>{t('settings.openaiApiKey')}</label>
+            <input
+              type="password"
+              placeholder="sk-..."
+              value={settings.openaiApiKey}
+              onChange={(e) => onUpdate({ openaiApiKey: e.target.value })}
             />
             <p className="settings-hint">{t('settings.apiKeyHint')}</p>
           </div>
@@ -140,15 +156,55 @@ export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: Se
                 onChange={(e) => onUpdate({ ollamaBaseUrl: e.target.value })}
               />
               <p className="settings-hint">{t('settings.ollamaBaseUrlHint')}</p>
+              {ollama.status === 'checking' && (
+                <p className="settings-hint">{t('settings.ollamaChecking')}</p>
+              )}
+              {ollama.status === 'ok' && (
+                <p className="settings-hint success">
+                  {ollama.models.length === 1
+                    ? t('settings.ollamaConnectedOne')
+                    : t('settings.ollamaConnected', { count: ollama.models.length })}
+                </p>
+              )}
+              {ollama.status === 'empty' && (
+                <p className="settings-hint error">{t('settings.ollamaNoModels')}</p>
+              )}
+              {ollama.status === 'error' && (
+                <p className="settings-hint error">
+                  {t('settings.ollamaUnreachable', { error: ollama.error ?? '' })}
+                </p>
+              )}
             </div>
+
             <div className="settings-field">
               <label>{t('settings.ollamaModel')}</label>
-              <input
-                type="text"
-                placeholder="llama3.1:8b"
-                value={settings.ollamaModel}
-                onChange={(e) => onUpdate({ ollamaModel: e.target.value })}
-              />
+              {ollama.status === 'ok' && ollama.models.length > 0 ? (
+                <select
+                  value={
+                    // If the stored model is in the discovered list, select it.
+                    // Otherwise fall back to the first discovered model so the
+                    // dropdown never shows an empty-string selection, but don't
+                    // silently overwrite the stored preference.
+                    ollama.models.includes(settings.ollamaModel)
+                      ? settings.ollamaModel
+                      : ollama.models[0]
+                  }
+                  onChange={(e) => onUpdate({ ollamaModel: e.target.value })}
+                >
+                  {ollama.models.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="llama3.1:8b"
+                  value={settings.ollamaModel}
+                  onChange={(e) => onUpdate({ ollamaModel: e.target.value })}
+                />
+              )}
               <p className="settings-hint">{t('settings.ollamaModelHint')}</p>
             </div>
           </>

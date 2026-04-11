@@ -26,10 +26,14 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
         providerRef.current = new TransformersJsProvider();
         break;
       case 'anthropic':
-        providerRef.current = settings.apiKey ? new AnthropicProvider(settings.apiKey) : null;
+        providerRef.current = settings.anthropicApiKey
+          ? new AnthropicProvider(settings.anthropicApiKey)
+          : null;
         break;
       case 'openai':
-        providerRef.current = settings.apiKey ? new OpenAIProvider(settings.apiKey) : null;
+        providerRef.current = settings.openaiApiKey
+          ? new OpenAIProvider(settings.openaiApiKey)
+          : null;
         break;
       case 'ollama':
         providerRef.current = settings.ollamaBaseUrl
@@ -40,7 +44,8 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
         providerRef.current = null;
     }
   }, [
-    settings.apiKey,
+    settings.anthropicApiKey,
+    settings.openaiApiKey,
     settings.provider,
     settings.ollamaBaseUrl,
     settings.ollamaModel,
@@ -109,7 +114,16 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
           inflightRef.current.delete(m.message.id);
         }
       });
-  }, [messages, settings.enabled, settings.preferredLanguage, settings.apiKey, settings.provider]);
+  }, [
+    messages,
+    settings.enabled,
+    settings.preferredLanguage,
+    settings.anthropicApiKey,
+    settings.openaiApiKey,
+    settings.ollamaBaseUrl,
+    settings.ollamaModel,
+    settings.provider,
+  ]);
 
   // Merge in-memory state with cache
   const allTranslations = useMemo(() => {

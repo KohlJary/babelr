@@ -22,8 +22,10 @@ export interface CachedTranslation {
 export type ProviderType = 'anthropic' | 'openai' | 'ollama' | 'local';
 
 export interface TranslationSettings {
-  /** Shared field — used for both Anthropic and OpenAI. Only whichever provider is selected reads it. */
-  apiKey: string;
+  /** Anthropic Claude API key. Read only when provider === 'anthropic'. */
+  anthropicApiKey: string;
+  /** OpenAI API key. Read only when provider === 'openai'. */
+  openaiApiKey: string;
   /** Ollama instance URL. Only read when provider === 'ollama'. */
   ollamaBaseUrl: string;
   /** Optional Ollama model override. Empty string = provider default (llama3.1:8b). */

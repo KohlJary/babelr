@@ -74,10 +74,14 @@ export function useWikiTranslation(
         providerRef.current = new TransformersJsProvider();
         break;
       case 'anthropic':
-        providerRef.current = settings.apiKey ? new AnthropicProvider(settings.apiKey) : null;
+        providerRef.current = settings.anthropicApiKey
+          ? new AnthropicProvider(settings.anthropicApiKey)
+          : null;
         break;
       case 'openai':
-        providerRef.current = settings.apiKey ? new OpenAIProvider(settings.apiKey) : null;
+        providerRef.current = settings.openaiApiKey
+          ? new OpenAIProvider(settings.openaiApiKey)
+          : null;
         break;
       case 'ollama':
         providerRef.current = settings.ollamaBaseUrl
@@ -88,7 +92,8 @@ export function useWikiTranslation(
         providerRef.current = null;
     }
   }, [
-    settings.apiKey,
+    settings.anthropicApiKey,
+    settings.openaiApiKey,
     settings.provider,
     settings.ollamaBaseUrl,
     settings.ollamaModel,
@@ -164,7 +169,8 @@ export function useWikiTranslation(
     enabled,
     settings.enabled,
     settings.preferredLanguage,
-    settings.apiKey,
+    settings.anthropicApiKey,
+    settings.openaiApiKey,
     settings.provider,
     settings.ollamaBaseUrl,
     settings.ollamaModel,

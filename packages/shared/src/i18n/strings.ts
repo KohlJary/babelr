@@ -112,6 +112,14 @@ export const UI_STRINGS = {
   'settings.ollamaModel': 'Model name',
   'settings.ollamaModelHint':
     'Ollama model tag. Leave blank to use llama3.1:8b. Any instruction-following model that can return JSON will work.',
+  'settings.ollamaChecking': 'Checking Ollama…',
+  'settings.ollamaConnected': 'Connected. {count} models available.',
+  'settings.ollamaConnectedOne': 'Connected. 1 model available.',
+  'settings.ollamaNoModels':
+    'Connected, but no models are installed. Run `ollama pull llama3.1:8b` (or your preferred model) on your Ollama host, then click into the field to refresh.',
+  'settings.ollamaUnreachable':
+    'Could not reach Ollama at this URL. Make sure Ollama is running and started with OLLAMA_ORIGINS=* for browser access. ({error})',
+  'settings.ollamaModelDefault': 'Default (llama3.1:8b)',
   'settings.readMessagesIn': 'Read messages in',
   'settings.enableTranslation': 'Enable translation',
   'settings.changePassword': 'Change password',
