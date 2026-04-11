@@ -225,6 +225,65 @@ export function useVoice(selfActorId: string) {
     await Promise.all(jobs);
   }, [renegotiatePeer]);
 
+  /**
+   * Reconcile peer slot state from the current RTCPeerConnection receivers.
+   * Called after renegotiation completes (both when we initiate and when we
+   * answer a remote offer), because in practice the onunmute event is
+   * unreliable — some browsers don't fire it when a transceiver's remote
+   * end goes from "sendrecv with no track" to "sendrecv with track" via
+   * replaceTrack.
+   *
+   * Walks the PC's transceivers in declaration order (webcam first, screen
+   * second) and sets the peer entry's video/screen stream based on whether
+   * the receiver's track is currently live.
+   */
+  const reconcilePeerSlots = useCallback(
+    (entry: PeerEntry) => {
+      const transceivers = entry.pc.getTransceivers().filter((t) => {
+        return (
+          t.receiver.track.kind === 'video' &&
+          (t === entry.videoTransceiver || t === entry.screenTransceiver)
+        );
+      });
+      // Maintain the documented ordering — webcam first, screen second.
+      const sorted = [
+        ...(entry.videoTransceiver ? [entry.videoTransceiver] : []),
+        ...(entry.screenTransceiver ? [entry.screenTransceiver] : []),
+      ];
+      void transceivers; // referenced for the filter's side effect
+      for (const tx of sorted) {
+        const slot: 'video' | 'screen' =
+          tx === entry.videoTransceiver ? 'video' : 'screen';
+        const track = tx.receiver.track;
+        const live = track.readyState === 'live' && !track.muted;
+        const currentSlot = slot === 'video' ? entry.videoStream : entry.screenStream;
+        if (live && !currentSlot) {
+          const stream = new MediaStream([track]);
+          if (slot === 'video') entry.videoStream = stream;
+          else entry.screenStream = stream;
+          console.log('voice: reconcile populate', {
+            from: entry.actor.id,
+            slot,
+            direction: tx.currentDirection,
+          });
+          syncPeersToState();
+        } else if (!live && currentSlot) {
+          if (slot === 'video') entry.videoStream = null;
+          else entry.screenStream = null;
+          console.log('voice: reconcile clear', {
+            from: entry.actor.id,
+            slot,
+            direction: tx.currentDirection,
+            muted: track.muted,
+            readyState: track.readyState,
+          });
+          syncPeersToState();
+        }
+      }
+    },
+    [syncPeersToState],
+  );
+
   const createPeerConnection = useCallback(
     (actor: AuthorView, channelId: string): PeerEntry => {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -312,28 +371,34 @@ export function useVoice(selfActorId: string) {
           // muted. We must NOT populate the slot in that case or the UI
           // will render an empty tile forever. Wait for the onunmute
           // event, which fires when the remote actually attaches a track.
-          const populateSlot = () => {
+          const populateSlot = (reason: string) => {
             const p = peersRef.current.get(actor.id);
             if (!p) return;
             const stream = new MediaStream([ev.track]);
             if (slot === 'video') p.videoStream = stream;
             else p.screenStream = stream;
+            console.log('voice: populate', {
+              from: actor.id,
+              slot,
+              reason,
+            });
             syncPeersToState();
           };
-          const clearSlot = () => {
+          const clearSlot = (reason: string) => {
             const p = peersRef.current.get(actor.id);
             if (!p) return;
             if (slot === 'video') p.videoStream = null;
             else p.screenStream = null;
+            console.log('voice: clear', { from: actor.id, slot, reason });
             syncPeersToState();
           };
 
           if (!ev.track.muted) {
-            populateSlot();
+            populateSlot('initial ontrack, not muted');
           }
-          ev.track.onended = clearSlot;
-          ev.track.onmute = clearSlot;
-          ev.track.onunmute = populateSlot;
+          ev.track.onended = () => clearSlot('onended');
+          ev.track.onmute = () => clearSlot('onmute');
+          ev.track.onunmute = () => populateSlot('onunmute');
 
           console.log('voice: ontrack video', {
             from: actor.id,
@@ -598,6 +663,9 @@ export function useVoice(selfActorId: string) {
                 sdp: answer.sdp ?? '',
               },
             });
+            // Reconcile slot state after the answer is set up — covers
+            // cases where onunmute doesn't fire reliably.
+            reconcilePeerSlots(entry);
           } catch (err) {
             console.error('answer failed', err);
           }
@@ -610,6 +678,11 @@ export function useVoice(selfActorId: string) {
           if (!entry) return;
           try {
             await entry.pc.setRemoteDescription({ type: 'answer', sdp: msg.payload.sdp });
+            // Reconcile slot state on the initiating side too — covers
+            // the case where the remote end attached a new track and the
+            // answer is completing our renegotiation. onunmute on the
+            // receivers here is unreliable for the same reason.
+            reconcilePeerSlots(entry);
           } catch (err) {
             console.error('setRemoteDescription answer failed', err);
           }
