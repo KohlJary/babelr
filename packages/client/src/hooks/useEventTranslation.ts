@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EventView, TranslationMetadata } from '@babelr/shared';
 import {
   AnthropicProvider,
@@ -16,14 +16,12 @@ import {
 
 /**
  * Per-event translated view returned by `useEventTranslation`.
- * The caller picks `title`/`description` when the show-original
- * toggle is off, and falls back to the raw event fields otherwise.
  *
  * Each field caches independently by content hash so two events
  * with the same title ("Standup") share the same cache entry. The
- * `detectedLanguage` is reported from whichever field we have
- * metadata for — usually the description (longer, more reliable
- * detection), or the title as a fallback.
+ * `detectedLanguage` comes from whichever field has metadata —
+ * usually the description (longer, more reliable detection), or
+ * the title as a fallback.
  */
 export interface TranslatedEventFields {
   title: string;
@@ -63,27 +61,60 @@ function parseBatchId(id: string): { eventId: string; field: FieldKind } | null 
 }
 
 /**
- * Translate event titles and descriptions through the same tone-
- * preserving pipeline used for messages and wiki content. Runs on
- * any component that has an `EventView[]` to display; cache hits
- * are free and cache misses batch into a single `/translate` call
- * per render pass.
+ * Compose a single `TranslatedEventFields` from the title + optional
+ * description cache entries for one event. Returns null if the
+ * required fields aren't all present yet.
+ */
+function assembleEventView(
+  event: EventView,
+  titleEntry: CachedTranslation,
+  descEntry: CachedTranslation | null,
+): TranslatedEventFields {
+  const anyTranslated =
+    !titleEntry.skipped || (!!descEntry && !descEntry.skipped);
+  const detectedLanguage =
+    descEntry?.detectedLanguage || titleEntry.detectedLanguage;
+  return {
+    title: titleEntry.translatedContent,
+    description: descEntry?.translatedContent ?? event.description,
+    titleSkipped: titleEntry.skipped,
+    descriptionSkipped: descEntry?.skipped ?? true,
+    titleMetadata: titleEntry.metadata,
+    descriptionMetadata: descEntry?.metadata,
+    detectedLanguage,
+    anyTranslated,
+  };
+}
+
+/**
+ * Translate event titles and descriptions through the tone-
+ * preserving pipeline used by messages and wiki content. Mirrors
+ * the session-state-plus-cache-merge shape of `useTranslation` for
+ * messages — field-hash keyed caching via `getCachedByHash`, batch
+ * writes into a single `/translate` call, and a `useMemo` that
+ * merges in-session results with persisted cache entries at return
+ * time.
  *
- * Design mirrors `useWikiTranslation` — same cache module, same
- * provider pattern, just a different content unit.
+ * Both title and description of every event enter the batch as
+ * `{id: 'evt-{eventId}-title', content: 'Standup'}` style items.
+ * The batch id lets us route each result back to its source field
+ * when the response arrives.
  */
 export function useEventTranslation(
   events: EventView[],
   settings: TranslationSettings,
 ): UseEventTranslationResult {
-  const [translations, setTranslations] = useState<Map<string, TranslatedEventFields>>(
+  // Session state: field-hash -> cached translation. Never shrinks
+  // within a mount; cleared on unmount. The module-level cache
+  // (getCachedByHash) is what persists across sessions.
+  const [sessionFields, setSessionFields] = useState<Map<string, CachedTranslation>>(
     () => new Map(),
   );
-  const [inflight, setInflight] = useState<Set<string>>(() => new Set());
+  const [loadingHashes, setLoadingHashes] = useState<Set<string>>(() => new Set());
   const providerRef = useRef<TranslationProvider | null>(null);
   const inflightRef = useRef<Set<string>>(new Set());
 
-  // Provider construction — identical branching to useWikiTranslation.
+  // Provider construction — identical branching to useTranslation.
   useEffect(() => {
     switch (settings.provider) {
       case 'local':
@@ -115,119 +146,76 @@ export function useEventTranslation(
     settings.ollamaModel,
   ]);
 
-  /**
-   * Load any field translations already present in the cache and
-   * assemble them into the per-event view shape. Runs on every
-   * render as part of the derived state memo; callers see both
-   * freshly-fetched and previously-cached entries with no
-   * additional plumbing.
-   */
-  const buildFromCache = useCallback((): Map<string, TranslatedEventFields> => {
-    if (!settings.enabled || !settings.preferredLanguage) return new Map();
-    const targetLang = settings.preferredLanguage;
-    const out = new Map<string, TranslatedEventFields>();
-    for (const ev of events) {
-      if (!ev.title && !ev.description) continue;
-      const titleHash = hashContent(ev.title);
-      const descHash = ev.description ? hashContent(ev.description) : null;
-      const titleCached = getCachedByHash('event', titleHash, targetLang);
-      const descCached = descHash ? getCachedByHash('event', descHash, targetLang) : null;
-
-      // Only include the event in the result if every field we care
-      // about has resolved. Partial entries are hidden so the caller
-      // never flashes a half-translated row.
-      if (!titleCached) continue;
-      if (ev.description && !descCached) continue;
-
-      const anyTranslated = !titleCached.skipped || (!!descCached && !descCached.skipped);
-      const detectedLanguage =
-        descCached?.detectedLanguage || titleCached.detectedLanguage;
-
-      out.set(ev.id, {
-        title: titleCached.translatedContent,
-        description: descCached?.translatedContent ?? ev.description,
-        titleSkipped: titleCached.skipped,
-        descriptionSkipped: descCached?.skipped ?? true,
-        titleMetadata: titleCached.metadata,
-        descriptionMetadata: descCached?.metadata,
-        detectedLanguage,
-        anyTranslated,
-      });
-    }
-    return out;
-  }, [events, settings.enabled, settings.preferredLanguage]);
-
-  // Hydrate the derived state from cache on every render. Cheap
-  // because getCachedByHash reads from the in-memory layer for hot
-  // entries and falls back to localStorage only on cold hits.
-  useEffect(() => {
-    setTranslations(buildFromCache());
-  }, [buildFromCache]);
-
-  // Fetch any uncached fields from the provider.
+  // Fetch uncached fields from the provider. Mirrors the shape of
+  // useTranslation's fetch effect — direct state writes in the
+  // .then() callback rather than a derived-from-cache pattern.
   useEffect(() => {
     if (!settings.enabled || !providerRef.current?.isConfigured()) return;
     if (!settings.preferredLanguage) return;
 
     const targetLang = settings.preferredLanguage;
-    const uncached: { id: string; content: string }[] = [];
+    const uncached: { id: string; content: string; fieldHash: string }[] = [];
     const seenHashes = new Set<string>();
 
     for (const ev of events) {
-      if (!ev.title) continue;
-      const titleHash = hashContent(ev.title);
-      const titleCacheKey = `${titleHash}:${targetLang}`;
-      if (
-        !inflightRef.current.has(titleCacheKey) &&
-        !getCachedByHash('event', titleHash, targetLang) &&
-        !seenHashes.has(titleCacheKey)
-      ) {
-        uncached.push({ id: batchId(ev.id, 'title'), content: ev.title });
-        seenHashes.add(titleCacheKey);
+      if (ev.title) {
+        const titleHash = hashContent(ev.title);
+        const inflightKey = `${titleHash}:${targetLang}`;
+        if (
+          !inflightRef.current.has(inflightKey) &&
+          !getCachedByHash('event', titleHash, targetLang) &&
+          !seenHashes.has(inflightKey)
+        ) {
+          uncached.push({
+            id: batchId(ev.id, 'title'),
+            content: ev.title,
+            fieldHash: titleHash,
+          });
+          seenHashes.add(inflightKey);
+        }
       }
       if (ev.description) {
         const descHash = hashContent(ev.description);
-        const descCacheKey = `${descHash}:${targetLang}`;
+        const inflightKey = `${descHash}:${targetLang}`;
         if (
-          !inflightRef.current.has(descCacheKey) &&
+          !inflightRef.current.has(inflightKey) &&
           !getCachedByHash('event', descHash, targetLang) &&
-          !seenHashes.has(descCacheKey)
+          !seenHashes.has(inflightKey)
         ) {
-          uncached.push({ id: batchId(ev.id, 'desc'), content: ev.description });
-          seenHashes.add(descCacheKey);
+          uncached.push({
+            id: batchId(ev.id, 'desc'),
+            content: ev.description,
+            fieldHash: descHash,
+          });
+          seenHashes.add(inflightKey);
         }
       }
     }
 
     if (uncached.length === 0) return;
 
-    // Mark each uncached field as in-flight via the ref so a
-    // parallel render pass doesn't re-enqueue the same field.
-    // The state version of inflight is kept separately for the
-    // isTranslating return value — refs don't trigger re-renders.
-    for (const u of uncached) {
-      const parsed = parseBatchId(u.id);
-      if (!parsed) continue;
-      const ev = events.find((e) => e.id === parsed.eventId);
-      if (!ev) continue;
-      const content = parsed.field === 'title' ? ev.title : ev.description ?? '';
-      const key = `${hashContent(content)}:${targetLang}`;
-      inflightRef.current.add(key);
-    }
-    setInflight(new Set(inflightRef.current));
+    const inflightKeys = uncached.map((u) => `${u.fieldHash}:${targetLang}`);
+    for (const k of inflightKeys) inflightRef.current.add(k);
+    setLoadingHashes((prev) => {
+      const next = new Set(prev);
+      for (const k of inflightKeys) next.add(k);
+      return next;
+    });
 
     const provider = providerRef.current;
+    const batch = uncached.map((u) => ({ id: u.id, content: u.content }));
 
     provider
-      .translate(uncached, targetLang)
+      .translate(batch, targetLang)
       .then((results) => {
+        const resultEntries: Array<[string, CachedTranslation]> = [];
         for (const r of results) {
           const parsed = parseBatchId(r.id);
           if (!parsed) continue;
-          const ev = events.find((e) => e.id === parsed.eventId);
-          if (!ev) continue;
-          const source = parsed.field === 'title' ? ev.title : ev.description ?? '';
-          const hash = hashContent(source);
+          // Find the uncached entry that matched this batch id to
+          // get back to the field hash. Avoids re-hashing content.
+          const u = uncached.find((x) => x.id === r.id);
+          if (!u) continue;
           const entry: CachedTranslation = {
             translatedContent: r.translatedContent,
             detectedLanguage: r.detectedLanguage,
@@ -235,23 +223,29 @@ export function useEventTranslation(
             targetLanguage: targetLang,
             metadata: r.metadata,
           };
-          setCachedByHash('event', hash, targetLang, entry);
-          inflightRef.current.delete(`${hash}:${targetLang}`);
+          setCachedByHash('event', u.fieldHash, targetLang, entry);
+          resultEntries.push([u.fieldHash, entry]);
         }
-        setInflight(new Set(inflightRef.current));
-        setTranslations(buildFromCache());
+        setSessionFields((prev) => {
+          const next = new Map(prev);
+          for (const [hash, entry] of resultEntries) next.set(hash, entry);
+          return next;
+        });
+        for (const k of inflightKeys) inflightRef.current.delete(k);
+        setLoadingHashes((prev) => {
+          const next = new Set(prev);
+          for (const k of inflightKeys) next.delete(k);
+          return next;
+        });
       })
       .catch((err) => {
         console.error('Event translation failed:', err);
-        for (const u of uncached) {
-          const parsed = parseBatchId(u.id);
-          if (!parsed) continue;
-          const ev = events.find((e) => e.id === parsed.eventId);
-          if (!ev) continue;
-          const content = parsed.field === 'title' ? ev.title : ev.description ?? '';
-          inflightRef.current.delete(`${hashContent(content)}:${targetLang}`);
-        }
-        setInflight(new Set(inflightRef.current));
+        for (const k of inflightKeys) inflightRef.current.delete(k);
+        setLoadingHashes((prev) => {
+          const next = new Set(prev);
+          for (const k of inflightKeys) next.delete(k);
+          return next;
+        });
       });
   }, [
     events,
@@ -262,10 +256,42 @@ export function useEventTranslation(
     settings.provider,
     settings.ollamaBaseUrl,
     settings.ollamaModel,
-    buildFromCache,
   ]);
 
-  const isTranslating = useMemo(() => inflight.size > 0, [inflight]);
+  // Assemble the per-event view by merging session state with
+  // persisted cache entries. Computed at return time so both
+  // sources are live. Matches useTranslation's `allTranslations`
+  // memo pattern.
+  const translations = useMemo(() => {
+    if (!settings.enabled || !settings.preferredLanguage) {
+      return new Map<string, TranslatedEventFields>();
+    }
+    const targetLang = settings.preferredLanguage;
+    const out = new Map<string, TranslatedEventFields>();
+    for (const ev of events) {
+      if (!ev.title) continue;
+      const titleHash = hashContent(ev.title);
+      const titleEntry =
+        sessionFields.get(titleHash) ??
+        getCachedByHash('event', titleHash, targetLang) ??
+        null;
+      if (!titleEntry) continue;
+
+      let descEntry: CachedTranslation | null = null;
+      if (ev.description) {
+        const descHash = hashContent(ev.description);
+        descEntry =
+          sessionFields.get(descHash) ??
+          getCachedByHash('event', descHash, targetLang) ??
+          null;
+        if (!descEntry) continue;
+      }
+      out.set(ev.id, assembleEventView(ev, titleEntry, descEntry));
+    }
+    return out;
+  }, [events, sessionFields, settings.enabled, settings.preferredLanguage]);
+
+  const isTranslating = loadingHashes.size > 0;
 
   return { translations, isTranslating };
 }
