@@ -179,17 +179,13 @@ export function EventsPanel({
   };
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div
-        className="settings-panel settings-panel-wide events-panel-shell"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="settings-header">
-          <h2>{panelTitle}</h2>
-          <button className="settings-close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
+    <div className="inline-main-view events-panel-shell">
+      <div className="inline-main-header">
+        <h2>{panelTitle}</h2>
+        <button className="settings-close" onClick={onClose} title={t('events.backToChat')}>
+          &times;
+        </button>
+      </div>
 
         <div className="events-view-toolbar">
           <div className="events-view-tabs" role="tablist">
@@ -314,7 +310,6 @@ export function EventsPanel({
             }}
           />
         )}
-      </div>
     </div>
   );
 }

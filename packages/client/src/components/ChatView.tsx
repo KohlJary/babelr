@@ -57,8 +57,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showWiki, setShowWiki] = useState(false);
+  // Which primary view fills the chat panel area. 'chat' is the
+  // default — messages + input. 'calendar' and 'wiki' replace the
+  // chat with the respective content surface, matching how Discord
+  // renders its Events and Server Discovery tabs as primary
+  // content rather than modal overlays. Channel selection or DM
+  // selection implicitly resets this to 'chat'.
+  const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki'>('chat');
   const [wikiInitialSlug, setWikiInitialSlug] = useState<string | null>(null);
   const [wikiInitialDraft, setWikiInitialDraft] = useState<{ title?: string; content?: string } | null>(null);
   const voice = useVoice(actor.id);
@@ -202,7 +207,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       const slug = decodeURIComponent(anchor.getAttribute('href')!.slice('#wiki/'.length));
       setWikiInitialDraft(null);
       setWikiInitialSlug(slug);
-      setShowWiki(true);
+      setMainView('wiki');
     };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
@@ -231,8 +236,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         selectedDMId={selectedDM?.id ?? null}
         actor={actor}
         unreadCounts={unreadCounts}
-        onSelectChannel={selectChannel}
-        onSelectDM={selectDM}
+        onSelectChannel={(id) => {
+          selectChannel(id);
+          setMainView('chat');
+        }}
+        onSelectDM={(id) => {
+          selectDM(id);
+          setMainView('chat');
+        }}
         onCreateChannel={() => setShowCreateChannel(true)}
         onNewDM={() => setShowNewDM(true)}
         onShowMembers={() => setShowMembers(true)}
@@ -247,8 +258,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         onShowFriends={dmMode ? () => setShowFriends(true) : undefined}
         canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
         onEditChannel={(channelId) => setEditingChannelId(channelId)}
-        onShowCalendar={() => setShowCalendar(true)}
-        onShowWiki={!dmMode && selectedServer ? () => setShowWiki(true) : undefined}
+        onShowCalendar={() => setMainView('calendar')}
+        onShowWiki={!dmMode && selectedServer ? () => setMainView('wiki') : undefined}
         onJoinVoice={(channelId) => {
           if (voice.state.channelId === channelId) return;
           if (voice.state.channelId) voice.leave();
@@ -257,6 +268,49 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         activeVoiceChannelId={voice.state.channelId}
       />
       <div className="chat-panel">
+        {mainView === 'calendar' && (
+          <EventsPanel
+            scope={dmMode || !selectedServer ? 'user' : 'server'}
+            ownerId={dmMode || !selectedServer ? actor.id : selectedServer.id}
+            ownerName={dmMode || !selectedServer ? undefined : selectedServer.name}
+            actor={actor}
+            channels={!dmMode ? channels : undefined}
+            canCreate={
+              dmMode || !selectedServer
+                ? true
+                : ['owner', 'admin', 'moderator'].includes(callerRole)
+            }
+            onClose={() => setMainView('chat')}
+            onGoToChannel={(channelId) => {
+              setDmMode(false);
+              selectChannel(channelId);
+              setMainView('chat');
+            }}
+          />
+        )}
+        {mainView === 'wiki' && selectedServer && (
+          <WikiPanel
+            serverId={selectedServer.id}
+            serverName={selectedServer.name}
+            callerRole={callerRole}
+            initialSlug={wikiInitialSlug}
+            initialDraft={wikiInitialDraft}
+            onNavigateMessageEmbed={(embed) => {
+              if (embed.channelId) {
+                setDmMode(false);
+                selectChannel(embed.channelId);
+                setMainView('chat');
+              }
+            }}
+            onClose={() => {
+              setMainView('chat');
+              setWikiInitialSlug(null);
+              setWikiInitialDraft(null);
+            }}
+          />
+        )}
+        {mainView === 'chat' && (
+          <>
         <ChannelHeader
           channelName={headerName}
           channelTopic={dmMode ? undefined : selectedChannel?.topic}
@@ -291,7 +345,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                     firstBreak === -1 ? content.slice(0, 120) : content.slice(0, firstBreak).slice(0, 120);
                   setWikiInitialSlug(null);
                   setWikiInitialDraft({ title, content });
-                  setShowWiki(true);
+                  setMainView('wiki');
                 }
               : undefined
           }
@@ -318,6 +372,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           return <div className="dm-seen-indicator">Seen by {name}</div>;
         })()}
         <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
+          </>
+        )}
       </div>
 
       {showSettings && (
@@ -454,46 +510,6 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           />
         );
       })()}
-      {showCalendar && (
-        <EventsPanel
-          scope={dmMode || !selectedServer ? 'user' : 'server'}
-          ownerId={dmMode || !selectedServer ? actor.id : selectedServer.id}
-          ownerName={dmMode || !selectedServer ? undefined : selectedServer.name}
-          actor={actor}
-          channels={!dmMode ? channels : undefined}
-          canCreate={
-            dmMode || !selectedServer
-              ? true
-              : ['owner', 'admin', 'moderator'].includes(callerRole)
-          }
-          onClose={() => setShowCalendar(false)}
-          onGoToChannel={(channelId) => {
-            setDmMode(false);
-            selectChannel(channelId);
-          }}
-        />
-      )}
-      {showWiki && selectedServer && (
-        <WikiPanel
-          serverId={selectedServer.id}
-          serverName={selectedServer.name}
-          callerRole={callerRole}
-          initialSlug={wikiInitialSlug}
-          initialDraft={wikiInitialDraft}
-          onNavigateMessageEmbed={(embed) => {
-            if (embed.channelId) {
-              setShowWiki(false);
-              setDmMode(false);
-              selectChannel(embed.channelId);
-            }
-          }}
-          onClose={() => {
-            setShowWiki(false);
-            setWikiInitialSlug(null);
-            setWikiInitialDraft(null);
-          }}
-        />
-      )}
     </div>
   );
 }

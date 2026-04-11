@@ -296,6 +296,68 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+}
+
+/* Inline primary-content views (calendar, wiki) rendered in place of
+ * the chat area when the user picks them from the sidebar. Fill the
+ * full chat panel, scroll internally, share a common header.
+ */
+.inline-main-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #0a0a0a;
+}
+.inline-main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
+}
+.inline-main-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ddd;
+}
+.inline-main-view .settings-close {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+.inline-main-view .settings-close:hover {
+  color: #ddd;
+}
+
+/* Override the legacy events-panel-shell sizing — it used to be a
+ * modal with max-height; inline we want to fill the container. */
+.events-panel-shell {
+  max-height: none !important;
+}
+.events-panel-shell .events-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0 1.25rem 1rem;
+}
+
+/* Same override for the wiki panel. The inline variant wants to
+ * fill the available height instead of honoring the old modal max.
+ */
+.wiki-panel {
+  max-height: none !important;
+  height: auto !important;
+}
+.inline-main-view.wiki-panel .wiki-body {
+  flex: 1;
+  min-height: 0;
 }
 
 /* Modal inputs */

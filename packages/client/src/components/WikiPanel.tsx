@@ -428,19 +428,15 @@ export function WikiPanel({
   );
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div
-        className="settings-panel settings-panel-wide wiki-panel"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="settings-header">
-          <h2>{panelTitle}</h2>
-          <button className="settings-close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
+    <div className="inline-main-view wiki-panel">
+      <div className="inline-main-header">
+        <h2>{panelTitle}</h2>
+        <button className="settings-close" onClick={onClose}>
+          &times;
+        </button>
+      </div>
 
-        <div className="wiki-body">
+      <div className="wiki-body">
           <aside className="wiki-sidebar">
             <button className="auth-submit wiki-new-btn" onClick={beginCreate}>
               + {t('wiki.createPage')}
@@ -827,7 +823,6 @@ export function WikiPanel({
             )}
           </main>
         </div>
-      </div>
     </div>
   );
 }

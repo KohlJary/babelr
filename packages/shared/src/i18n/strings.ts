@@ -357,6 +357,7 @@ export const UI_STRINGS = {
   'events.viewMonth': 'Month',
   'events.previous': 'Previous',
   'events.next': 'Next',
+  'events.backToChat': 'Back to chat',
   'events.showOriginal': 'Show original ({lang})',
   'events.showTranslation': 'Show translation (original: {lang})',
 
