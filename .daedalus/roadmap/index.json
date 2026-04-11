@@ -1,35 +1,215 @@
 {
   "items": [
-    { "id": "test-suite", "title": "Automated test suite", "type": "chore", "priority": "P1", "status": "done" },
-    { "id": "admin-moderation", "title": "Admin and moderation tooling", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "typing-indicators", "title": "Typing indicators", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "unread-badges", "title": "Unread message badges/counters", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "user-presence", "title": "User presence", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "emoji-reactions", "title": "Emoji reactions", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "mentions", "title": "@ mentions", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "threaded-replies", "title": "Threaded replies", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "message-search", "title": "Message search", "type": "feature", "priority": "P1", "status": "done" },
-    { "id": "markdown-formatting", "title": "Markdown formatting", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "file-uploads", "title": "File uploads", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "user-profiles", "title": "User profiles + avatars", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "edit-history", "title": "Edit history indicator", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "notification-settings", "title": "Notification settings", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "channel-categories", "title": "Channel categories", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "private-channels", "title": "Private channels", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "per-room-glossary", "title": "Per-room glossaries", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "serve-client", "title": "Serve client build from server", "type": "chore", "priority": "P0", "status": "done" },
-    { "id": "admin-bootstrap", "title": "First-user-becomes-admin", "type": "feature", "priority": "P0", "status": "done" },
-    { "id": "invite-links", "title": "Server invite links", "type": "feature", "priority": "P0", "status": "done" },
-    { "id": "cors-lockdown", "title": "CORS lockdown for production", "type": "security", "priority": "P0", "status": "done" },
-    { "id": "rate-limiting", "title": "Rate limiting", "type": "security", "priority": "P0", "status": "done" },
-    { "id": "error-handler", "title": "Production error handler", "type": "security", "priority": "P0", "status": "done" },
-    { "id": "docker-migrations", "title": "DB migrations on Docker startup", "type": "chore", "priority": "P0", "status": "done" },
-    { "id": "db-pooling", "title": "Database connection pooling", "type": "chore", "priority": "P1", "status": "done" },
-    { "id": "security-headers", "title": "Security headers (helmet)", "type": "security", "priority": "P1", "status": "done" },
-    { "id": "federation-rate-limit", "title": "Federation inbox rate limiting", "type": "security", "priority": "P1", "status": "done" },
-    { "id": "graceful-shutdown", "title": "Graceful shutdown handler", "type": "chore", "priority": "P2", "status": "done" },
-    { "id": "nodeinfo", "title": "NodeInfo endpoint", "type": "feature", "priority": "P2", "status": "done" },
-    { "id": "desktop-app", "title": "Tauri desktop application", "type": "feature", "priority": "P2", "status": "done" },
+    {
+      "id": "test-suite",
+      "title": "Automated test suite",
+      "type": "chore",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "admin-moderation",
+      "title": "Admin and moderation tooling",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "typing-indicators",
+      "title": "Typing indicators",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "unread-badges",
+      "title": "Unread message badges/counters",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "user-presence",
+      "title": "User presence",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "emoji-reactions",
+      "title": "Emoji reactions",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "mentions",
+      "title": "@ mentions",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "threaded-replies",
+      "title": "Threaded replies",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "message-search",
+      "title": "Message search",
+      "type": "feature",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "markdown-formatting",
+      "title": "Markdown formatting",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "file-uploads",
+      "title": "File uploads",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "user-profiles",
+      "title": "User profiles + avatars",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "edit-history",
+      "title": "Edit history indicator",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "notification-settings",
+      "title": "Notification settings",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "channel-categories",
+      "title": "Channel categories",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "private-channels",
+      "title": "Private channels",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "per-room-glossary",
+      "title": "Per-room glossaries",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "serve-client",
+      "title": "Serve client build from server",
+      "type": "chore",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "admin-bootstrap",
+      "title": "First-user-becomes-admin",
+      "type": "feature",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "invite-links",
+      "title": "Server invite links",
+      "type": "feature",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "cors-lockdown",
+      "title": "CORS lockdown for production",
+      "type": "security",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "rate-limiting",
+      "title": "Rate limiting",
+      "type": "security",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "error-handler",
+      "title": "Production error handler",
+      "type": "security",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "docker-migrations",
+      "title": "DB migrations on Docker startup",
+      "type": "chore",
+      "priority": "P0",
+      "status": "done"
+    },
+    {
+      "id": "db-pooling",
+      "title": "Database connection pooling",
+      "type": "chore",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "security-headers",
+      "title": "Security headers (helmet)",
+      "type": "security",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "federation-rate-limit",
+      "title": "Federation inbox rate limiting",
+      "type": "security",
+      "priority": "P1",
+      "status": "done"
+    },
+    {
+      "id": "graceful-shutdown",
+      "title": "Graceful shutdown handler",
+      "type": "chore",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "nodeinfo",
+      "title": "NodeInfo endpoint",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
+    {
+      "id": "desktop-app",
+      "title": "Tauri desktop application",
+      "type": "feature",
+      "priority": "P2",
+      "status": "done"
+    },
     {
       "id": "email-verification",
       "title": "Email verification on registration",
@@ -46,10 +226,35 @@
       "priority": "P2",
       "status": "backlog"
     },
-    { "id": "voice-realtime-translation", "title": "Real-time speech translation in voice channels", "description": "Whisper STT + tone-preserving rewrite + TTS in the listener's language. Major bet — requires latency budget, model orchestration, GPU costs. Phase after voice-channels-mvp ships.", "type": "feature", "priority": "P3", "status": "backlog" },
-    { "id": "dm-federation", "title": "DM federation", "type": "feature", "priority": "P3", "status": "done" },
-    { "id": "bots-webhooks", "title": "Bot API and webhooks", "type": "feature", "priority": "P3", "status": "backlog" },
-    { "id": "2fa", "title": "Two-factor authentication", "type": "feature", "priority": "P3", "status": "backlog" },
+    {
+      "id": "voice-realtime-translation",
+      "title": "Real-time speech translation in voice channels",
+      "description": "Whisper STT + tone-preserving rewrite + TTS in the listener's language. Major bet — requires latency budget, model orchestration, GPU costs. Phase after voice-channels-mvp ships.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "dm-federation",
+      "title": "DM federation",
+      "type": "feature",
+      "priority": "P3",
+      "status": "done"
+    },
+    {
+      "id": "bots-webhooks",
+      "title": "Bot API and webhooks",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
+    {
+      "id": "2fa",
+      "title": "Two-factor authentication",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
+    },
     {
       "id": "federation-interop-test",
       "title": "Federation interop validation against a second instance",
@@ -368,6 +573,30 @@
       "description": "Not engineering work per se, but real launch tasks that gate enterprise adoption. Procurement teams and security reviewers ask for these by name.\n\nChecklist:\n- Public security disclosures policy + responsible reporting address (security@)\n- SOC2 Type 1 audit (months of process work — policies, controls, evidence collection — typically via Vanta or Drata)\n- SOC2 Type 2 follow-up (6+ months of operating evidence after Type 1)\n- Public status page (statuspage.io, BetterStack, or self-hosted) with incident history\n- Documented uptime SLA for hosted offering\n- DPA (Data Processing Agreement) template for GDPR / CCPA customers\n- Sub-processor list (Anthropic, hosting provider, etc.) published\n- Incident response plan documented\n- Penetration test from a reputable firm before broad enterprise rollout\n- Dependency vulnerability scanning in CI (Snyk, Dependabot, etc.)\n\nMostly process and paperwork, but a hard gate at procurement. Track separately from feature work.",
       "type": "chore",
       "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "embed-plugin-system",
+      "title": "Pluggable [[kind:slug]] embed system",
+      "description": "The current [[msg:slug]] / [[event:slug]] / [[page-slug]] embeds are hardcoded kinds in the shared wiki-links parser, with dedicated React components (MessageEmbed, EventEmbed) rendered by renderWithEmbeds. This is great for first-party kinds but caps at whatever we ship ourselves. A plugin system would let third parties add new ref kinds that render real content inside Babelr.\n\nMotivating example: an Azure DevOps plugin that registers the 'ado' kind, so a [[ado:pr-1234]] in a wiki page or chat message renders the actual pull request — title, author, status, file list, diff viewer, comments — without leaving Babelr. Same pattern for Jira tickets ([[jira:PROJ-456]]), GitHub PRs ([[gh:owner/repo#123]]), Linear issues, Figma frames, Notion pages, Google Docs, and so on.\n\nScope:\n\nPlugin manifest\n- Each plugin declares: kind string (must not collide with built-ins), display name, icon, whether it needs backend credentials, client entry point, server entry point (optional)\n- Kind registration happens at server startup; conflict detection prevents two plugins from claiming the same prefix\n- Manifests loaded from a plugins directory or an npm-package convention\n\nParser extension\n- wiki-links.ts parseWikiRefs gains a registered-kinds argument (or a registry lookup) so unknown prefixes fall through to page refs as today but recognized prefixes become typed refs\n- Parser stays pure and synchronous — all the dynamic behavior lives in the resolver layer above it\n\nClient-side plugin API\n- Plugins export a React component with a stable prop shape: { slug, onNavigate } (same contract as MessageEmbed/EventEmbed)\n- A plugin registry maps kind → lazy-loaded component; renderWithEmbeds consults the registry and falls back to a generic 'unknown kind' placeholder for unregistered prefixes\n- Plugins may ship their own styles scoped under .embed-<kind> to avoid global collisions\n- Safe-mode sandboxing: plugin components render inside an iframe or a React error boundary with strict CSP, so a broken plugin can't crash the host page\n\nServer-side plugin API\n- Plugins may register Fastify routes under /plugins/<kind>/* for their backing data fetches\n- Credentials storage: per-user or per-server OAuth tokens for the plugin's upstream service, stored encrypted and fetched via a plugin-scoped secrets API\n- Rate limiting and audit logging applied at the plugin boundary so a misbehaving plugin can't DoS the server or leak credentials\n- Optional federation passthrough: if a plugin chooses to, it can publish resolved content into the AP graph so remote instances without the plugin still see a snapshot\n\nPermissions + trust\n- Server admins opt in to plugins — plugins aren't active just because they exist on disk\n- Per-plugin permission grants (e.g. 'this Azure DevOps plugin may read PRs but not write comments')\n- User-facing indicator that a plugin is the source of the content, with a click-through to the plugin's homepage/source\n- Sandbox review model: first-party plugins live in packages/plugins/, third-party plugins require explicit install and show a trust warning on first use\n\nDeveloper experience\n- @babelr/plugin-sdk package exporting the types and helpers plugins import\n- Example plugin in the monorepo (likely the ADO one, since it's the motivating case)\n- Docs walking through manifest, client component, server route, credential storage, testing\n- Plugin scaffolder CLI: npx @babelr/create-plugin my-plugin\n\nOpen questions\n- Do we allow plugins to contribute toolbar buttons / slash commands, or is this strictly a rendering extension? (recommend starting rendering-only, expand later)\n- How do plugins handle translation of their content? Probably surface a translate() hook the host can call, with the plugin deciding whether the content is worth translating at all\n- What's the update story — do plugins auto-update, or do admins pin versions?\n\nThis is a meaty feature but it's what turns Babelr from a chat+wiki tool into an extensible workspace. The embed substrate is already in place; extending it to third parties is mostly API design and security hardening rather than net-new infrastructure.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-import",
+      "title": "Wiki content import from common sources",
+      "description": "Enterprises considering Babelr as a replacement for Confluence, Notion, SharePoint, or similar already have years of accumulated wiki content they can't leave behind. A greenfield deployment with an empty wiki is a non-starter for those buyers. A first-class import workflow removes that blocker and turns 'we'd need to migrate everything manually' into 'point us at the export and we'll handle it.'\n\nScope:\n\nSource formats (tiered by strategic value)\n\nTier 1 — highest enterprise value:\n- Confluence (Cloud + Server/Data Center) — XML space export, attachment archive, page hierarchy, storage-format macros. The big one for Atlassian migration stories. Confluence storage format is XHTML with custom macros that need translation.\n- Notion — Markdown+CSV bulk export (official), preserves page tree, databases become CSV, embedded media sits next to the markdown files. Fairly clean source format.\n- SharePoint / OneNote — trickier, proprietary formats. Likely via a Graph API pull with OAuth rather than a file upload. Deferred until there's real demand.\n\nTier 2 — common in dev-centric orgs:\n- MediaWiki XML export (Special:Export) — standard dump format used by Wikipedia and most self-hosted wikis. Wikitext markup requires a converter.\n- GitHub / GitLab wikis — just git repositories of Markdown or other markup; clone and walk the tree.\n- Obsidian vaults — folder of Markdown files with [[wikilinks]] that map very cleanly to our own syntax. Probably the cheapest import to implement because the format is closest to ours.\n- DokuWiki — flat-file PHP wiki, distinctive markup syntax, popular in older enterprise deployments.\n\nTier 3 — nice to have:\n- Google Docs / Google Sites — via Drive export, probably DOCX or HTML\n- Microsoft Word / DOCX / HTML dumps — lowest-common-denominator fallback for orgs whose 'wiki' is actually a shared drive of documents\n- Bookstack, Wiki.js, TiddlyWiki, Outline — smaller but vocal communities\n\nCore workflow\n- Admin navigates to Server Settings → Wiki → Import\n- Picks a source format from a dropdown, uploads the archive (or authorizes an OAuth connection for live-pull sources)\n- Server extracts and parses the archive, streams progress updates via WebSocket\n- Preview step shows a tree of pages-to-be-created with counts, detected attachments, link resolution stats, any parse errors\n- Admin confirms; import runs as a background job and creates pages, attachments, tags, and tries to rewire internal links into [[slug]] refs\n- On completion, admin sees a report: N pages imported, M attachments uploaded, K broken links, any skipped content with reasons\n\nContent conversion pipeline\n- Per-format parser converts source markup to our internal markdown + extensions (e.g. the Obsidian [[wikilinks]] parser is trivial; the Confluence storage-format parser is a months-long project)\n- Attachments uploaded through the existing file upload pipeline, URLs rewritten to point at the new canonical paths\n- Internal wiki links resolved: if the import contains 'Engineering Onboarding' and another page links to it, the link becomes [[engineering-onboarding]] using our slug convention\n- External links preserved as-is\n- Tables, code blocks, images, lists, headings round-trip faithfully; everything else is best-effort with a warning in the report\n- Optional translation pass: if the target server has a preferred language, run imported content through the existing wiki translation pipeline so imported docs arrive already translated\n\nPermissions + scoping\n- Import is a server-admin-only action, gated on a new MANAGE_WIKI_IMPORT permission\n- Imported pages inherit the server's default wiki page permissions; admin can optionally scope the import to a specific wiki section\n- Dry-run mode that validates the archive and produces a report without actually writing any pages\n\nIdempotency + rollback\n- Each import run gets an import_id tracked in a new wiki_imports table; imported pages carry that id as a foreign key\n- 'Undo last import' deletes all pages created by that import_id, giving admins a safety net if the preview didn't catch problems\n- Re-running the same import is either idempotent (pages updated in place by stable slug) or rejected (if the admin wants to start fresh), selected at run time\n\nFederation consideration\n- Imported pages should generate the same Create activities as hand-written pages so remote followers see them arrive. Optional batch mode suppresses the notification flood for very large imports.\n\nDeveloper experience\n- Importers live in packages/server/src/wiki-import/<format>/ with a consistent Importer interface: parse → preview → apply → report\n- Adding a new format is purely additive — the UI dropdown picks up new importers automatically\n- Shared helpers for slug generation, link resolution, attachment upload, and the progress reporter\n\nShipping order\n1. Obsidian importer (cheapest, tests the substrate)\n2. MediaWiki XML (standard format, unlocks many self-hosted wikis)\n3. Confluence XML (biggest enterprise payoff, also the biggest parsing project)\n4. Notion Markdown+CSV (rounds out the Tier 1 targets)\n5. GitHub/GitLab wiki repos (trivial once the core substrate exists)\n6. Defer SharePoint / Google / DOCX until there's a specific customer asking\n\nOpen questions\n- Do we store the original source content alongside the converted page for future re-conversion if the importer improves? (probably yes, in a wiki_import_artifacts table)\n- How do we handle conflicts if an importer would overwrite a hand-edited page? (prompt per-page, or global policy: skip / overwrite / rename)\n- Confluence storage-format macros are the hardest part — do we try to convert common ones (table of contents, info/warning panels, task lists) or just drop them with a warning? Probably the former for the top 10 macros, the latter beyond that.\n\nThis is a clear enterprise-sales lever: the moment a prospect says 'but we have 8 years of Confluence' the answer is 'upload your space export and give us 20 minutes' instead of 'you'll need to rewrite everything by hand.'",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-attachments",
+      "title": "File attachments + inline image rendering on wiki pages",
+      "description": "Wiki pages are text-only right now. You can reference external images via URL and the markdown renderer will display them, but there's no way to actually attach a file to a page — diagrams, PDFs, spreadsheets, screenshots captured while writing a runbook — or to paste an image directly into the editor and have it 'just work.' For any real documentation use case (architecture diagrams, onboarding screenshots, process SOPs with embedded flowcharts) this is table stakes.\n\nThe message attachment pipeline already exists (uploads, storage, URL generation, inline image rendering in messages). This item wires wiki pages into that same substrate rather than building a parallel system.\n\nScope:\n\nUpload model\n- New wiki_page_attachments table: (id, page_id FK, uploader_id FK, filename, content_type, size, url, created_at)\n- Attachments are scoped to a single page — if you want to reuse an image on another page you upload it again, or reference it via direct URL. Avoids the 'orphaned attachment with unclear ownership' problem.\n- On page delete, cascade-delete the attachments (and the underlying storage objects via the existing upload cleanup path)\n- Reuses the existing /uploads endpoint and storage backend — no new infrastructure\n\nEditor UX\n- Drag-and-drop files onto the editor drops them as an upload with a markdown stub inserted at the cursor: ![filename](attachment-url) for images, [filename](attachment-url) for everything else\n- Paste handler for clipboard images — screenshot someone took two seconds ago goes straight into the page\n- Explicit 'Attach file' button on the edit toolbar for the discoverability case\n- Upload progress shown inline where the stub will land; failed uploads show a retry button\n- Attachment panel at the bottom of the edit view showing all attachments on the page with filename, size, type icon, and a remove button\n\nRendering\n- Images render inline with lazy loading, max-width constrained to the content column, click-to-expand into a lightbox (reuse the existing message image lightbox if it exists, build one if not)\n- Non-image attachments render as a card: icon based on content type, filename, size, download button. PDFs optionally get a thumbnail preview via a lightweight client-side renderer, deferred if it turns into a project\n- Alt text editable via a small control on hover over an inline image; persisted as the markdown alt attribute\n- Caption support via the standard markdown-image-in-figure convention, or a dedicated [[attachment:id|caption]] ref kind if we want tighter control — worth prototyping both\n\nTranslation interaction\n- Alt text and captions flow through the existing wiki translation pipeline so a reader in another language sees translated descriptions\n- The image binary itself obviously doesn't translate, but if a diagram contains text the translation layer could optionally flag it and suggest an OCR-translate pass — deferred as a follow-up\n\nPermissions\n- Uploading requires the caller to have edit permission on the page (the same permission that gates text edits)\n- Viewing an attachment requires read permission on the page; the upload URL is gated behind the same access checks, not just obscurity\n- Hotlink protection: the URL either carries a signed token scoped to the page, or the CDN checks the referrer/auth on each fetch. Need a threat-model pass before settling on the approach.\n\nStorage hygiene\n- Per-server or per-page size quotas configurable by admins, enforced at upload time with a clear error\n- Storage metrics surfaced in the admin settings panel — 'Wiki attachments: 1.2 GB across 340 files'\n- Orphaned attachment GC: a background sweep deletes storage objects that have no wiki_page_attachments row (in case of partial failures)\n\nFederation\n- Attachments ride along on the wiki page's Create/Update activity so remote followers receive them\n- Content-addressable storage would make this cleaner (same file on two instances has the same hash), but that's a much bigger project — for v1 the remote instance just fetches the attachment URL directly from the origin, same as message attachments today\n\nImport interaction\n- The wiki-import feature (see wiki-import roadmap item) lifts attachments from source archives through this same pipeline, so importing a Confluence page with embedded images Just Works\n\nOpen questions\n- Inline embeds of non-image content — do we render a PDF viewer inline, or always make the user download? Leaning: show a PDF.js preview inline for PDFs up to some size cap, download-only for everything else. Revisit when there's a specific use case asking for it.\n- Versioning: if someone replaces an image, do we keep the old one for history? Initial answer: no, replacing deletes the previous version. Wiki page content is versioned but attachments are not, to keep the model simple.\n- Per-attachment alt text vs page-level figure captions — both are useful, the markdown substrate supports both naturally, so expose both in the editor and let users pick.\n\nThis slots cleanly on top of the existing upload + wiki infrastructure and mostly reuses what's already there. The bulk of the work is editor UX polish (drag-drop, paste, progress, lightbox) rather than backend plumbing.",
+      "type": "feature",
+      "priority": "P1",
       "status": "backlog"
     }
   ],

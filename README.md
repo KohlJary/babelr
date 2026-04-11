@@ -2,7 +2,9 @@
 
 **Keep your language. The routing layer handles the rest.**
 
-Babelr is a federated chat system with a tone-preserving LLM translation layer at its core. Users write in their native language; recipients read in theirs. The translation pipeline treats register, idiom, humor, and intent shape as first-class concerns, not afterthoughts.
+Babelr is a federated workspace — chat, wiki, and calendar — built around a tone-preserving LLM translation layer. Users write in their native language and recipients read in theirs, but translation is the thread rather than the destination. What makes Babelr cohere is the substrate underneath it: messages, wiki pages, and calendar events all reference each other through a single `[[kind:slug]]` embed fabric. A wiki page can cite the chat message where a decision was made. A calendar event can link to the runbook it's briefing. A chat thread can invite readers directly into an event's RSVP list with a single click. The surfaces stop feeling like separate tools and start behaving like one connected space.
+
+The translation pipeline treats register, idiom, humor, and intent shape as first-class concerns across every surface — the runbook you wrote in English and the meeting invite your colleague wrote in Japanese both land in each reader's preferred language with their voice intact. Federation is ActivityPub-shaped from day one, so a partner company on their own Babelr instance can follow a channel, read a wiki page, or RSVP to a calendar event without leaving their home server. Very few workspaces can offer even two of those three at once.
 
 The name is a statement. The Tower of Babel story is usually read as punishment for human hubris, but structurally it is a story about power fragmenting a communication layer that threatened incumbents. Babelr is infrastructure that makes linguistic difference navigable without erasing it.
 
@@ -13,6 +15,10 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 **Tone-preserving translation** -- Not "translate X to French" but "translate X to French preserving the casual-affectionate register and the self-deprecating joke structure." Every translation carries a metadata envelope: detected register, intent classification, confidence score, and flagged idioms with hover-gloss explanations.
 
 **Server wikis with mixed-language translation** -- Long-form knowledge that persists outside the chat stream, and the first wiki system in any chat platform where a single page can be authored in five languages and read natively in any sixth. Bidirectional links between wiki pages and chat messages, click-to-navigate `[[slug]]` refs, and a backlinks panel showing every page and message that references the current page. See [Wikis](#wikis) below for why this matters.
+
+**Calendars and events with embedded chat** -- Every event carries its own message channel that inherits the full chat pipeline (reactions, threads, attachments, translation). Recurring events via RFC 5545 RRULE, agenda/week/month views, RSVP tracking, and owner-scoping to either a user or a server. Event titles and descriptions translate through the same tone-preserving pipeline as everything else, so a Spanish-language standup invite lands natively in every reader's preferred language.
+
+**Connected surfaces via `[[kind:slug]]` embeds** -- Messages, wiki pages, and events all share a single embed fabric. `[[page-slug]]` renders as a clickable wiki link; `[[msg:slug]]` renders as an inline message preview with author and channel context; `[[event:slug]]` renders as an inline invite card with RSVP buttons you can click without leaving the page you're reading. A weekly standup embedded on a wiki page lets readers join the invite list in one click. A runbook linked from a chat message opens the wiki panel at that section. Each surface's content keeps flowing through the translation pipeline whether it's viewed directly or as an embed.
 
 **End-to-end encrypted DMs** -- Client-side ECDH P-256 key exchange with AES-256-GCM encryption. The server never sees DM plaintext. Translation runs after local decryption.
 
