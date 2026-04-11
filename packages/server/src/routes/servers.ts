@@ -7,6 +7,8 @@ import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { invites } from '../db/schema/invites.ts';
+import { serverRoles, serverRoleAssignments } from '../db/schema/roles.ts';
+import { DEFAULT_ROLE_DEFINITIONS } from '@babelr/shared';
 import type { CreateServerInput, ServerView, UpdateServerInput } from '@babelr/shared';
 
 function slugify(name: string): string {
@@ -105,6 +107,35 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       itemId: actor.id,
       properties: { role: 'owner' },
     });
+
+    // Bootstrap the three default roles (@everyone, Moderator, Admin)
+    // and assign the creator to Admin. The DEFAULT_ROLE_DEFINITIONS
+    // constant in `@babelr/shared` is the single source of truth for
+    // the default permission sets; keep it in sync with the migration
+    // SQL in 0011_nasty_giant_man.sql when it changes.
+    const insertedRoles = await db
+      .insert(serverRoles)
+      .values(
+        DEFAULT_ROLE_DEFINITIONS.map((def) => ({
+          serverId: server.id,
+          name: def.name,
+          color: def.color ?? null,
+          position: def.position,
+          permissions: [...def.permissions],
+          isDefault: def.isDefault,
+          isSystem: def.isSystem,
+        })),
+      )
+      .returning();
+
+    const adminRole = insertedRoles.find((r) => r.name === 'Admin');
+    if (adminRole) {
+      await db.insert(serverRoleAssignments).values({
+        serverId: server.id,
+        actorId: actor.id,
+        roleId: adminRole.id,
+      });
+    }
 
     // Create Follow activity
     await db.insert(activities).values({

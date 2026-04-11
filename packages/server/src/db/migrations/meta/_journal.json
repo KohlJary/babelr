@@ -78,6 +78,13 @@
       "when": 1775902309174,
       "tag": "0010_dusty_black_tom",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1775906482464,
+      "tag": "0011_nasty_giant_man",
+      "breakpoints": true
     }
   ]
 }

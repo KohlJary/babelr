@@ -4,3 +4,4 @@ export * from './i18n/strings.js';
 export * from './wiki-links.js';
 export * from './wiki-chunker.js';
 export * from './translation-prompt.js';
+export * from './permissions.js';
