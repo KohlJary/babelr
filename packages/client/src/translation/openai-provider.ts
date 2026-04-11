@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { TranslateProxyResponse, TranslationResult } from '@babelr/shared';
-import type { TranslationProvider } from './types';
+import type { TranslationProvider, TranslationProgressCallback } from './types';
 
 /**
  * OpenAI-backed translation provider. Goes through the server's
@@ -22,6 +22,7 @@ export class OpenAIProvider implements TranslationProvider {
     messages: { id: string; content: string }[],
     targetLanguage: string,
     sourceLanguage?: string,
+    onProgress?: TranslationProgressCallback,
   ): Promise<TranslationResult[]> {
     const res = await fetch('/api/translate', {
       method: 'POST',
@@ -42,6 +43,9 @@ export class OpenAIProvider implements TranslationProvider {
     }
 
     const data: TranslateProxyResponse = await res.json();
+    if (onProgress) {
+      for (const r of data.results) onProgress(r);
+    }
     return data.results;
   }
 }

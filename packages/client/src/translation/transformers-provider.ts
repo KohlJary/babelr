@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { TranslationResult } from '@babelr/shared';
-import type { TranslationProvider } from './types';
+import type { TranslationProvider, TranslationProgressCallback } from './types';
 import { getModelId, FRANC_TO_OPUS, FRANC_TO_ISO1, OPUS_CODES } from './opus-models';
 
 // Module-level pipeline cache — persists across provider re-instantiation
@@ -50,6 +50,7 @@ export class TransformersJsProvider implements TranslationProvider {
     messages: { id: string; content: string }[],
     targetLanguage: string,
     sourceLanguage?: string,
+    onProgress?: TranslationProgressCallback,
   ): Promise<TranslationResult[]> {
     const tgtOpus = OPUS_CODES[targetLanguage] ?? targetLanguage;
     const results: TranslationResult[] = [];
@@ -70,12 +71,14 @@ export class TransformersJsProvider implements TranslationProvider {
 
       // Skip if same language
       if (srcIso1 === targetLanguage || srcOpus === tgtOpus) {
-        results.push({
+        const result: TranslationResult = {
           id: msg.id,
           translatedContent: msg.content,
           detectedLanguage: srcIso1,
           skipped: true,
-        });
+        };
+        results.push(result);
+        onProgress?.(result);
         continue;
       }
 
@@ -83,12 +86,14 @@ export class TransformersJsProvider implements TranslationProvider {
       const modelId = getModelId(srcIso1, targetLanguage);
       if (!modelId) {
         // No model available — return original
-        results.push({
+        const result: TranslationResult = {
           id: msg.id,
           translatedContent: msg.content,
           detectedLanguage: srcIso1,
           skipped: true,
-        });
+        };
+        results.push(result);
+        onProgress?.(result);
         continue;
       }
 
@@ -99,21 +104,25 @@ export class TransformersJsProvider implements TranslationProvider {
           ? (output[0] as { translation_text: string }).translation_text
           : (output as { translation_text: string }).translation_text;
 
-        results.push({
+        const result: TranslationResult = {
           id: msg.id,
           translatedContent: translated,
           detectedLanguage: srcIso1,
           skipped: false,
           // No metadata — local models don't produce tone analysis
-        });
+        };
+        results.push(result);
+        onProgress?.(result);
       } catch (err) {
         console.error(`Local translation failed for ${modelId}:`, err);
-        results.push({
+        const result: TranslationResult = {
           id: msg.id,
           translatedContent: msg.content,
           detectedLanguage: srcIso1,
           skipped: true,
-        });
+        };
+        results.push(result);
+        onProgress?.(result);
       }
     }
 

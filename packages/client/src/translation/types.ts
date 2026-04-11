@@ -1,12 +1,27 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { TranslationResult, TranslationMetadata } from '@babelr/shared';
 
+/**
+ * Optional callback fired after each individual result resolves.
+ * Lets callers render translations incrementally instead of waiting
+ * for the whole batch to land.
+ *
+ * For providers that return the whole batch in a single API call
+ * (Anthropic, OpenAI), this is fired once per result after parsing,
+ * just before the promise resolves — so it's strictly best-effort
+ * and primarily a win for sequential providers (Ollama, local
+ * Transformers.js) where the time-between-results is long enough
+ * that incremental UI updates actually matter.
+ */
+export type TranslationProgressCallback = (result: TranslationResult) => void;
+
 export interface TranslationProvider {
   name: string;
   translate(
     messages: { id: string; content: string }[],
     targetLanguage: string,
     sourceLanguage?: string,
+    onProgress?: TranslationProgressCallback,
   ): Promise<TranslationResult[]>;
   isConfigured(): boolean;
 }

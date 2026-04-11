@@ -570,7 +570,14 @@ export function WikiPanel({
                   {translate.isTranslating && (
                     <>
                       <span className="wiki-meta-sep">·</span>
-                      <span className="wiki-translating">{t('wiki.translating')}</span>
+                      <span className="wiki-translating">
+                        {translate.progressTotal > 1
+                          ? t('wiki.translatingProgress', {
+                              done: translate.progressTotal - translate.progressRemaining,
+                              total: translate.progressTotal,
+                            })
+                          : t('wiki.translating')}
+                      </span>
                     </>
                   )}
                   {translate.anyTranslated && translate.translatedContent && (

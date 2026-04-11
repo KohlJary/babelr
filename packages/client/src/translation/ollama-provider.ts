@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { buildPrompt, parseResponse, type TranslationResult } from '@babelr/shared';
-import type { TranslationProvider } from './types';
+import type { TranslationProvider, TranslationProgressCallback } from './types';
 
 const DEFAULT_MODEL = 'llama3.1:8b';
 /**
@@ -63,6 +63,7 @@ export class OllamaProvider implements TranslationProvider {
     messages: { id: string; content: string }[],
     targetLanguage: string,
     sourceLanguage?: string,
+    onProgress?: TranslationProgressCallback,
   ): Promise<TranslationResult[]> {
     // Normalize the base URL once — people paste it with or without
     // trailing slash, sometimes with /api already appended.
@@ -118,7 +119,9 @@ export class OllamaProvider implements TranslationProvider {
       // If the model somehow emitted multiple entries, keep only the
       // first and force its id back to the source id we asked for —
       // some small models rewrite the id field to arbitrary strings.
-      results.push({ ...parsed[0], id: msg.id });
+      const result = { ...parsed[0], id: msg.id };
+      results.push(result);
+      onProgress?.(result);
     }
 
     return results;

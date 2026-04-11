@@ -35,6 +35,10 @@ interface UseWikiTranslationResult {
   translatedContent: string | null;
   /** True if at least one chunk is currently being translated */
   isTranslating: boolean;
+  /** How many prose chunks still have to resolve in the current in-flight batch. 0 when idle. */
+  progressRemaining: number;
+  /** How many prose chunks are being translated in total in the current batch. 0 when idle. */
+  progressTotal: number;
   /** Per-chunk detected languages, in chunk order. Only populated for prose chunks. */
   detectedLanguages: string[];
   /** True if any chunk's detected language differs from the target */
@@ -66,6 +70,8 @@ export function useWikiTranslation(
     new Map(),
   );
   const [isTranslating, setIsTranslating] = useState(false);
+  const [progressTotal, setProgressTotal] = useState(0);
+  const [progressRemaining, setProgressRemaining] = useState(0);
 
   // Provider reconstruction on settings change — mirrors useTranslation.
   useEffect(() => {
@@ -135,33 +141,53 @@ export function useWikiTranslation(
 
     for (const u of uncached) inflightRef.current.add(`${u.hash}:${targetLang}`);
     setIsTranslating(true);
+    setProgressTotal(uncached.length);
+    setProgressRemaining(uncached.length);
 
     const provider = providerRef.current;
     const batch = uncached.map((u) => ({ id: u.hash, content: u.content }));
 
+    // onProgress fires as each chunk resolves. For Ollama (sequential)
+    // this drops paragraphs into the page one at a time as the model
+    // finishes them, so the user sees partial results instead of
+    // watching a blank "Translating…" indicator for 30 seconds. Cloud
+    // providers fire it at the end of their single API call, which is
+    // a wash.
+    const onChunkDone = (r: import('@babelr/shared').TranslationResult) => {
+      const entry: CachedTranslation = {
+        translatedContent: r.translatedContent,
+        detectedLanguage: r.detectedLanguage,
+        skipped: r.skipped,
+        targetLanguage: targetLang,
+        metadata: r.metadata,
+      };
+      setCachedByHash('wiki', r.id, targetLang, entry);
+      setChunkTranslations((prev) => {
+        const next = new Map(prev);
+        next.set(r.id, entry);
+        return next;
+      });
+      inflightRef.current.delete(`${r.id}:${targetLang}`);
+      setProgressRemaining((n) => Math.max(0, n - 1));
+    };
+
     provider
-      .translate(batch, targetLang)
-      .then((results) => {
-        const next = new Map<string, CachedTranslation>();
-        for (const r of results) {
-          const entry: CachedTranslation = {
-            translatedContent: r.translatedContent,
-            detectedLanguage: r.detectedLanguage,
-            skipped: r.skipped,
-            targetLanguage: targetLang,
-            metadata: r.metadata,
-          };
-          setCachedByHash('wiki', r.id, targetLang, entry);
-          next.set(r.id, entry);
-        }
-        setChunkTranslations((prev) => new Map([...prev, ...next]));
+      .translate(batch, targetLang, undefined, onChunkDone)
+      .then(() => {
+        // Fallback: make sure any uncached entries we started with
+        // get their inflight flag cleared even if the provider didn't
+        // fire onProgress for them (belt-and-suspenders).
         for (const u of uncached) inflightRef.current.delete(`${u.hash}:${targetLang}`);
         setIsTranslating(false);
+        setProgressRemaining(0);
+        setProgressTotal(0);
       })
       .catch((err) => {
         console.error('Wiki translation failed:', err);
         for (const u of uncached) inflightRef.current.delete(`${u.hash}:${targetLang}`);
         setIsTranslating(false);
+        setProgressRemaining(0);
+        setProgressTotal(0);
       });
   }, [
     chunks,
@@ -240,6 +266,8 @@ export function useWikiTranslation(
     chunks: translatedChunks,
     translatedContent,
     isTranslating,
+    progressTotal,
+    progressRemaining,
     detectedLanguages,
     anyTranslated,
   };

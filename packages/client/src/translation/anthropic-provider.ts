@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { TranslateProxyResponse, TranslationResult } from '@babelr/shared';
-import type { TranslationProvider } from './types';
+import type { TranslationProvider, TranslationProgressCallback } from './types';
 
 export class AnthropicProvider implements TranslationProvider {
   name = 'anthropic';
@@ -15,6 +15,7 @@ export class AnthropicProvider implements TranslationProvider {
     messages: { id: string; content: string }[],
     targetLanguage: string,
     sourceLanguage?: string,
+    onProgress?: TranslationProgressCallback,
   ): Promise<TranslationResult[]> {
     const res = await fetch('/api/translate', {
       method: 'POST',
@@ -35,6 +36,12 @@ export class AnthropicProvider implements TranslationProvider {
     }
 
     const data: TranslateProxyResponse = await res.json();
+    // Fire progress for consistency with sequential providers — callers
+    // that pass onProgress rely on it to accumulate incrementally.
+    // Cheap no-op when no callback is provided.
+    if (onProgress) {
+      for (const r of data.results) onProgress(r);
+    }
     return data.results;
   }
 }

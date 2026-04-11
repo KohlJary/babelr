@@ -377,6 +377,7 @@ export const UI_STRINGS = {
   'wiki.convertMessage': 'New wiki page from message',
   'wiki.copyLink': 'Copy [[slug]] link to clipboard',
   'wiki.translating': 'Translating…',
+  'wiki.translatingProgress': 'Translating paragraph {done} of {total}…',
   'wiki.translatedBadge': 'Translated from {langs}',
   'wiki.showOriginal': 'Show original',
   'wiki.showTranslated': 'Show translated',
