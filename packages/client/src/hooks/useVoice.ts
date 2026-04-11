@@ -47,6 +47,11 @@ interface PeerEntry {
   analyserBuf: Uint8Array<ArrayBuffer> | null;
   speaking: boolean;
   volume: number;
+  // Glare guard: true between createOffer() and receiving the matching
+  // voice:answer (or rolling back on a remote offer arriving during the
+  // window). Prevents two simultaneous renegotiations from corrupting
+  // the peer connection's signaling state.
+  makingOffer: boolean;
 }
 
 /** Signal-strength threshold (0–255) above which we consider a track "speaking". */
@@ -82,7 +87,7 @@ const IDLE_STATE: UseVoiceState = {
  * 6. On voice:participant-left, close that connection
  * 7. leave() — tears down peers, releases mic, closes WS
  */
-export function useVoice() {
+export function useVoice(selfActorId: string) {
   const [state, setState] = useState<UseVoiceState>(IDLE_STATE);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -158,11 +163,67 @@ export function useVoice() {
     }
   }, []);
 
+
   const sendWs = useCallback((msg: WsClientMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
     }
   }, []);
+
+  /**
+   * Trigger a renegotiation on a single peer by creating a fresh offer
+   * and sending it over the signaling channel. Needed after replaceTrack
+   * on a video/screen transceiver because — in practice, despite what the
+   * spec says — adding a track to a transceiver that was negotiated with
+   * no track leaves the effective SDP direction in a state where the new
+   * track doesn't actually flow until a new offer/answer exchange.
+   *
+   * Glare handling: we mark makingOffer = true before creating the offer
+   * and clear it when the matching answer arrives. If the signaling state
+   * transitions out of 'stable' mid-call (e.g. because a remote offer
+   * arrived during our createOffer await), we skip sending to avoid
+   * corrupting the PC's state.
+   */
+  const renegotiatePeer = useCallback(
+    async (entry: PeerEntry, channelId: string) => {
+      try {
+        entry.makingOffer = true;
+        const offer = await entry.pc.createOffer();
+        if (entry.pc.signalingState !== 'stable') {
+          console.warn(
+            'voice: skipping renegotiation, signalingState =',
+            entry.pc.signalingState,
+          );
+          return;
+        }
+        await entry.pc.setLocalDescription(offer);
+        sendWs({
+          type: 'voice:offer',
+          payload: {
+            channelId,
+            toActorId: entry.actor.id,
+            sdp: offer.sdp ?? '',
+          },
+        });
+      } catch (err) {
+        console.warn('voice: renegotiation failed for', entry.actor.id, err);
+      } finally {
+        entry.makingOffer = false;
+      }
+    },
+    [sendWs],
+  );
+
+  /** Renegotiate every connected peer. Called after local toggles. */
+  const renegotiateAllPeers = useCallback(async () => {
+    const channel = channelIdRef.current;
+    if (!channel) return;
+    const jobs: Promise<void>[] = [];
+    for (const entry of peersRef.current.values()) {
+      jobs.push(renegotiatePeer(entry, channel));
+    }
+    await Promise.all(jobs);
+  }, [renegotiatePeer]);
 
   const createPeerConnection = useCallback(
     (actor: AuthorView, channelId: string): PeerEntry => {
@@ -409,6 +470,7 @@ export function useVoice() {
         analyserBuf: null,
         speaking: false,
         volume: 1.0,
+        makingOffer: false,
       };
       peersRef.current.set(actor.id, entry);
       syncPeersToState();
@@ -508,7 +570,25 @@ export function useVoice() {
             };
             entry = createPeerConnection(actor, currentChannel);
           }
+          // Perfect-negotiation-lite glare handling. If we're also making
+          // an offer right now, both sides need to resolve the collision.
+          // The peer with the lower actor id is "polite" and rolls back
+          // their local offer to accept the remote; the impolite peer
+          // ignores the remote offer and expects the polite one to retry.
+          const isPolite = selfActorId < fromId;
+          const offerCollision =
+            entry.makingOffer || entry.pc.signalingState !== 'stable';
+          if (offerCollision && !isPolite) {
+            console.log('voice: offer collision, impolite — ignoring remote offer');
+            break;
+          }
           try {
+            if (offerCollision && isPolite) {
+              console.log('voice: offer collision, polite — rolling back');
+              // Roll our local offer back by setting an answer-style
+              // "rollback" description, then accept the remote offer.
+              await entry.pc.setLocalDescription({ type: 'rollback' });
+            }
             await entry.pc.setRemoteDescription({ type: 'offer', sdp: msg.payload.sdp });
             const answer = await entry.pc.createAnswer();
             await entry.pc.setLocalDescription(answer);
@@ -812,7 +892,8 @@ export function useVoice() {
         localVideoStreamRef.current = stream;
         const track = stream.getVideoTracks()[0];
         if (!track) throw new Error('No video track in acquired stream');
-        // Attach to every peer's video sender
+        // Attach to every peer's video sender, then renegotiate so the
+        // effective SDP direction becomes sendrecv-active.
         for (const entry of peersRef.current.values()) {
           if (entry.videoSender) {
             try {
@@ -822,6 +903,7 @@ export function useVoice() {
             }
           }
         }
+        await renegotiateAllPeers();
         // If the track ends unexpectedly (user revoked permission, camera
         // unplugged), mirror that into state and release the stream.
         track.onended = () => {
@@ -863,8 +945,9 @@ export function useVoice() {
     }
     for (const track of localVideoStreamRef.current.getTracks()) track.stop();
     localVideoStreamRef.current = null;
+    await renegotiateAllPeers();
     setState((s) => ({ ...s, videoEnabled: false }));
-  }, []);
+  }, [renegotiateAllPeers]);
 
   /** Imperative accessor so VoicePanel can attach the local stream to a <video>. */
   const getLocalVideoStream = useCallback((): MediaStream | null => {
@@ -900,7 +983,8 @@ export function useVoice() {
         const track = stream.getVideoTracks()[0];
         if (!track) throw new Error('No video track in display media stream');
 
-        // Attach the screen track to every peer's screen sender
+        // Attach the screen track to every peer's screen sender, then
+        // renegotiate for the same reason as webcam.
         for (const entry of peersRef.current.values()) {
           if (entry.screenSender) {
             try {
@@ -914,6 +998,7 @@ export function useVoice() {
             }
           }
         }
+        await renegotiateAllPeers();
 
         // The browser's native "Stop sharing" bar fires track.onended
         // when the user clicks it. Mirror that into state.
@@ -955,8 +1040,9 @@ export function useVoice() {
     }
     for (const track of localScreenStreamRef.current.getTracks()) track.stop();
     localScreenStreamRef.current = null;
+    await renegotiateAllPeers();
     setState((s) => ({ ...s, screenShareEnabled: false }));
-  }, []);
+  }, [renegotiateAllPeers]);
 
   const getLocalScreenStream = useCallback((): MediaStream | null => {
     return localScreenStreamRef.current;

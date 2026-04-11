@@ -57,7 +57,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showFriends, setShowFriends] = useState(false);
   const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const voice = useVoice();
+  const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
