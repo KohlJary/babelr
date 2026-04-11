@@ -233,27 +233,20 @@ export function useVoice(selfActorId: string) {
    * end goes from "sendrecv with no track" to "sendrecv with track" via
    * replaceTrack.
    *
-   * Walks the PC's transceivers in declaration order (webcam first, screen
-   * second) and sets the peer entry's video/screen stream based on whether
-   * the receiver's track is currently live.
+   * Uses pc.getTransceivers() ORDER as the source of truth for which
+   * transceiver is the webcam slot vs the screen slot — not stored
+   * transceiver references, which can become ambiguous across
+   * renegotiations. Index 0 among video transceivers = webcam,
+   * index 1 = screen.
    */
   const reconcilePeerSlots = useCallback(
     (entry: PeerEntry) => {
-      const transceivers = entry.pc.getTransceivers().filter((t) => {
-        return (
-          t.receiver.track.kind === 'video' &&
-          (t === entry.videoTransceiver || t === entry.screenTransceiver)
-        );
-      });
-      // Maintain the documented ordering — webcam first, screen second.
-      const sorted = [
-        ...(entry.videoTransceiver ? [entry.videoTransceiver] : []),
-        ...(entry.screenTransceiver ? [entry.screenTransceiver] : []),
-      ];
-      void transceivers; // referenced for the filter's side effect
-      for (const tx of sorted) {
-        const slot: 'video' | 'screen' =
-          tx === entry.videoTransceiver ? 'video' : 'screen';
+      const videoTxs = entry.pc
+        .getTransceivers()
+        .filter((t) => t.receiver.track.kind === 'video');
+      for (let i = 0; i < videoTxs.length && i < 2; i++) {
+        const tx = videoTxs[i];
+        const slot: 'video' | 'screen' = i === 0 ? 'video' : 'screen';
         const track = tx.receiver.track;
         const live = track.readyState === 'live' && !track.muted;
         const currentSlot = slot === 'video' ? entry.videoStream : entry.screenStream;
@@ -344,26 +337,21 @@ export function useVoice(selfActorId: string) {
 
       pc.ontrack = (ev) => {
         // Video track handling: determine which slot (webcam vs screen)
-        // by matching the event's transceiver against the transceivers we
-        // stored on the peer entry at construction time. Order is stable:
-        // webcam = first video transceiver, screen share = second.
+        // by the transceiver's INDEX among video transceivers in the
+        // peer connection. We always add webcam first, screen second,
+        // so index 0 = webcam, index 1 = screen. Index-based routing is
+        // more reliable than identity-based because transceiver identity
+        // can become ambiguous across renegotiations (and the PC may
+        // return slightly different object references in some paths).
         if (ev.track.kind === 'video') {
           const pe = peersRef.current.get(actor.id);
           if (!pe) return;
 
-          // Routing: match ev.transceiver to the stored webcam/screen
-          // transceiver references. If the match is ambiguous, fall back
-          // to filling whichever slot is empty — webcam first.
-          let slot: 'video' | 'screen';
-          if (ev.transceiver === pe.videoTransceiver) {
-            slot = 'video';
-          } else if (ev.transceiver === pe.screenTransceiver) {
-            slot = 'screen';
-          } else if (pe.videoStream === null) {
-            slot = 'video';
-          } else {
-            slot = 'screen';
-          }
+          const videoTxs = pc.getTransceivers().filter(
+            (t) => t.receiver.track.kind === 'video',
+          );
+          const index = videoTxs.indexOf(ev.transceiver);
+          const slot: 'video' | 'screen' = index === 1 ? 'screen' : 'video';
 
           // A track arriving from a transceiver whose remote side has no
           // real track attached (e.g. because we pre-allocate both video
