@@ -130,17 +130,6 @@ export function WikiPanel({
     useWikiPages(serverId);
   const { settings: translationSettings } = useTranslationSettings();
 
-  // Live-reload wiki page list when another user (or federation)
-  // creates, edits, or deletes a page on this server.
-  const handleWikiWs = useCallback(
-    (msg: WsServerMessage) => {
-      if (msg.type === 'wiki:page-changed' && msg.payload.serverId === serverId) {
-        void reload();
-      }
-    },
-    [serverId, reload],
-  );
-  useWebSocket(true, handleWikiWs);
   const isMod = ['owner', 'admin', 'moderator'].includes(callerRole ?? '');
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -148,6 +137,25 @@ export function WikiPanel({
   const [mode, setMode] = useState<Mode>('view');
   const [backlinks, setBacklinks] = useState<WikiBacklinkView[]>([]);
   const [showOriginal, setShowOriginal] = useState(false);
+
+  // Live-reload wiki page list when another user (or federation)
+  // creates, edits, or deletes a page on this server.
+  const handleWikiWs = useCallback(
+    (msg: WsServerMessage) => {
+      if (msg.type === 'wiki:page-changed' && msg.payload.serverId === serverId) {
+        void reload();
+        if (msg.payload.action === 'updated' && msg.payload.slug === selectedSlug) {
+          void getPage(msg.payload.slug).then(setCurrentPage);
+        }
+        if (msg.payload.action === 'deleted' && msg.payload.slug === selectedSlug) {
+          setSelectedSlug(null);
+          setCurrentPage(null);
+        }
+      }
+    },
+    [serverId, reload, selectedSlug, getPage],
+  );
+  useWebSocket(true, handleWikiWs);
 
   // Wiki-level settings (home page). Fetched on mount and refreshed
   // whenever the caller changes it.
