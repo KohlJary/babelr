@@ -13,6 +13,44 @@ import { ensureActorKeys } from './keys.ts';
 import type { Database } from '../db/index.ts';
 
 const DELIVERY_TIMEOUT = 10_000;
+
+/**
+ * Perform an HTTP-signed GET request on behalf of a local actor.
+ * Used for federation proxy calls (by-slug lookups, channel/member
+ * listing) so the receiving instance can verify the caller is a
+ * known actor rather than an anonymous crawler. Returns the parsed
+ * JSON response, or null on failure.
+ */
+export async function signedGet<T = unknown>(
+  db: Database,
+  actorId: string,
+  url: string,
+): Promise<T | null> {
+  const [actor] = await db.select().from(actors).where(eq(actors.id, actorId)).limit(1);
+  if (!actor?.local) return null;
+
+  const actorWithKeys = await ensureActorKeys(db, actor);
+  if (!actorWithKeys.privateKeyPem) return null;
+
+  const keyId = `${actor.uri}#main-key`;
+  const { headers } = signRequest(actorWithKeys.privateKeyPem, keyId, 'GET', url);
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        ...headers,
+        Accept: 'application/json',
+        'User-Agent': 'Babelr/0.1.0',
+      },
+      signal: AbortSignal.timeout(DELIVERY_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
 const QUEUE_INTERVAL = 5_000;
 const BATCH_SIZE = 10;
 

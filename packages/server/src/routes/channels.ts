@@ -20,7 +20,7 @@ import type {
   UpdateChannelInput,
   WsServerMessage,
 } from '@babelr/shared';
-import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, enqueueDelivery, deliverDMCreate, deliverDMRead } from '../federation/delivery.ts';
+import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, enqueueDelivery, deliverDMCreate, deliverDMRead, signedGet } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
@@ -526,6 +526,12 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Notify all connected clients about the new channel.
+      fastify.broadcastToAllSubscribers({
+        type: 'server:updated',
+        payload: { serverId: request.params.serverId },
+      });
+
       return reply.status(201).send(toChannelView(channel));
     },
   );
@@ -596,6 +602,13 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         .set({ properties: nextProps, updated: new Date() })
         .where(eq(objects.id, channel.id))
         .returning();
+
+      if (channel.belongsTo) {
+        fastify.broadcastToAllSubscribers({
+          type: 'server:updated',
+          payload: { serverId: channel.belongsTo },
+        });
+      }
 
       return toChannelView(updated);
     },
@@ -1609,11 +1622,10 @@ export default async function channelRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { slug: string } }>(
     '/messages/by-slug/:slug',
     async (request, reply) => {
-      // Auth is optional for this endpoint: authenticated users get
-      // full access checks, unauthenticated requests (including
-      // federation proxy calls from remote instances) only receive
-      // messages from public channels. This mirrors AP semantics —
-      // public notes are public.
+      // Auth: session cookie OR HTTP Signature. Signed requests come
+      // from federation proxy calls (remote instance resolving a
+      // [[msg:slug]] embed on behalf of a member). Unauthenticated
+      // requests still fall through to public-channel-only access.
       const { slug } = request.params;
       if (!isValidMessageSlug(slug)) {
         return reply.status(400).send({ error: 'Invalid slug format' });
@@ -1644,19 +1656,12 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         for (const group of memberGroups) {
           try {
             const origin = new URL(group.uri).origin;
-            const res = await fetch(
+            const result = await signedGet(
+              db,
+              request.actor.id,
               `${origin}/messages/by-slug/${encodeURIComponent(slug)}`,
-              {
-                headers: {
-                  Accept: 'application/json',
-                  'User-Agent': 'Babelr/0.1.0',
-                },
-                signal: AbortSignal.timeout(5_000),
-              },
             );
-            if (res.ok) {
-              return await res.json();
-            }
+            if (result) return result;
           } catch {
             // Try next origin.
           }
@@ -1679,15 +1684,19 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       if (!channel) return reply.status(404).send({ error: 'Message not found' });
 
       const channelProps = channel.properties as Record<string, unknown> | null;
-      if (!request.actor) {
-        // Unauthenticated: only public channels.
+      if (request.actor) {
+        // Authenticated (session): full access check.
+        const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+        if (!allowed) return reply.status(404).send({ error: 'Message not found' });
+      } else {
+        // Unauthenticated or signed: only public channels.
+        // (Signed requests from federation peers are treated the same
+        // as unauthenticated for now — the signature proves identity
+        // but we don't check membership. That's the next step if
+        // private-channel embeds need to cross instances.)
         if (channelProps?.isPrivate || channelProps?.isDM) {
           return reply.status(404).send({ error: 'Message not found' });
         }
-      } else {
-        // Authenticated: full access check.
-        const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
-        if (!allowed) return reply.status(404).send({ error: 'Message not found' });
       }
 
       // Batch-load author + server metadata.

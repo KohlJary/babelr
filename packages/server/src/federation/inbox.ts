@@ -26,6 +26,55 @@ interface APActivity {
   cc?: string[];
 }
 
+/**
+ * Verify an HTTP Signature on any request (GET or POST). Returns the
+ * resolved actor on success, null on failure. Retries with a fresh
+ * key fetch on verification failure (handles key rotation). Does NOT
+ * check activity.actor — that's inbox-specific.
+ */
+export async function verifySignedRequest(
+  fastify: FastifyInstance,
+  request: { headers: Record<string, string | string[] | undefined>; method: string; url: string },
+): Promise<typeof actors.$inferSelect | null> {
+  const signatureHeader = request.headers.signature as string | undefined;
+  if (!signatureHeader) return null;
+
+  const keyId = getKeyIdFromSignature(signatureHeader);
+  const headerParts = {
+    host: (request.headers.host as string) ?? '',
+    date: (request.headers.date as string) ?? '',
+    digest: (request.headers.digest as string) ?? '',
+  };
+
+  const remoteActor = await resolveActorByKeyId(fastify.db, keyId);
+  if (!remoteActor) return null;
+
+  const tryVerify = (actor: typeof remoteActor) => {
+    const apPublicKey = (actor.properties as Record<string, unknown>)?.apPublicKey as
+      | { publicKeyPem?: string }
+      | undefined;
+    if (!apPublicKey?.publicKeyPem) return false;
+    return verifySignatureFromParts(
+      apPublicKey.publicKeyPem,
+      signatureHeader,
+      request.method,
+      request.url,
+      headerParts,
+    );
+  };
+
+  let valid = tryVerify(remoteActor);
+  if (!valid) {
+    const actorUri = keyId.split('#')[0];
+    const refreshed = await resolveActor(fastify.db, actorUri, true);
+    if (refreshed && refreshed.id === remoteActor.id) {
+      valid = tryVerify(refreshed);
+      if (valid) return refreshed;
+    }
+  }
+  return valid ? remoteActor : null;
+}
+
 async function verifyInboxRequest(
   fastify: FastifyInstance,
   request: { headers: Record<string, string | string[] | undefined>; method: string; url: string; body: APActivity },
