@@ -31,28 +31,47 @@ async function verifyInboxRequest(
   if (!signatureHeader) return null;
 
   const keyId = getKeyIdFromSignature(signatureHeader);
+  const headerParts = {
+    host: (request.headers.host as string) ?? '',
+    date: (request.headers.date as string) ?? '',
+    digest: (request.headers.digest as string) ?? '',
+  };
+
+  // Try with cached key first.
   const remoteActor = await resolveActorByKeyId(fastify.db, keyId);
   if (!remoteActor) return null;
 
-  const apPublicKey = (remoteActor.properties as Record<string, unknown>)?.apPublicKey as
-    | { publicKeyPem?: string }
-    | undefined;
-  if (!apPublicKey?.publicKeyPem) return null;
+  const tryVerify = (actor: typeof remoteActor) => {
+    const apPublicKey = (actor.properties as Record<string, unknown>)?.apPublicKey as
+      | { publicKeyPem?: string }
+      | undefined;
+    if (!apPublicKey?.publicKeyPem) return false;
+    return verifySignatureFromParts(
+      apPublicKey.publicKeyPem,
+      signatureHeader,
+      request.method,
+      request.url,
+      headerParts,
+    );
+  };
 
-  const valid = verifySignatureFromParts(
-    apPublicKey.publicKeyPem,
-    signatureHeader,
-    request.method,
-    request.url,
-    {
-      host: (request.headers.host as string) ?? '',
-      date: (request.headers.date as string) ?? '',
-      digest: (request.headers.digest as string) ?? '',
-    },
-  );
+  let valid = tryVerify(remoteActor);
+  let actor = remoteActor;
 
-  if (!valid || request.body.actor !== remoteActor.uri) return null;
-  return remoteActor;
+  // If verification fails, the cached key may be stale (the remote
+  // rotated keys, or the actor was cached before keys were generated).
+  // Refetch the actor profile to get the current key and retry once.
+  if (!valid) {
+    const actorUri = keyId.split('#')[0];
+    const refreshed = await resolveActor(fastify.db, actorUri, true);
+    if (refreshed && refreshed.id === remoteActor.id) {
+      valid = tryVerify(refreshed);
+      actor = refreshed;
+    }
+  }
+
+  if (!valid || request.body.actor !== actor.uri) return null;
+  return actor;
 }
 
 export default async function inboxRoutes(fastify: FastifyInstance) {

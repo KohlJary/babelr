@@ -49,11 +49,12 @@ async function fetchAP(uri: string): Promise<Record<string, unknown> | null> {
 export async function resolveActor(
   db: Database,
   uri: string,
+  forceRefresh = false,
 ): Promise<typeof actors.$inferSelect | null> {
   // Check local cache first
   const [existing] = await db.select().from(actors).where(eq(actors.uri, uri)).limit(1);
 
-  if (existing) {
+  if (existing && !forceRefresh) {
     // If local actor, always return
     if (existing.local) return existing;
 
