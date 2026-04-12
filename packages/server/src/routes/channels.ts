@@ -20,7 +20,7 @@ import type {
   UpdateChannelInput,
   WsServerMessage,
 } from '@babelr/shared';
-import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, deliverDMCreate, deliverDMRead } from '../federation/delivery.ts';
+import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, enqueueDelivery, deliverDMCreate, deliverDMRead } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
@@ -255,19 +255,48 @@ export async function createMessageInChannel(
           .catch((err) => fastify.log.error(err, 'DM federation enqueue failed'));
       }
     } else if (!messageProperties?.encrypted) {
-      // Public channel: broadcast to followers
-      ensureActorKeys(db, actor)
-        .then((actorWithKeys) => broadcastCreate(fastify, note, actorWithKeys))
-        .catch((err) => fastify.log.error(err, 'Federation enqueue failed'));
-
-      // Also deliver to Group followers if channel belongs to a server
       if (channel?.belongsTo) {
         const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
-        if (group) {
+        if (group && !group.local) {
+          // Remote server: deliver the Create to the origin Group's
+          // inbox so the origin can relay it to all members. Fanning
+          // out locally would be useless — B's followers collection
+          // for the remote Group only contains bob (the sender).
+          if (group.inboxUri) {
+            let contextUri: string | undefined;
+            const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, channelId)).limit(1);
+            if (ch) contextUri = ch.uri;
+            const noteJson = serializeNote(note, actor.uri, contextUri);
+            const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+            const activity = serializeActivity(
+              activityUri,
+              'Create',
+              actor.uri,
+              noteJson,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
+            ensureActorKeys(db, actor)
+              .then((actorWithKeys) =>
+                enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id),
+              )
+              .catch((err) => fastify.log.error(err, 'Remote group delivery enqueue failed'));
+          }
+        } else if (group) {
+          // Local server: fan out to the Group's remote followers
+          // (the existing path).
+          ensureActorKeys(db, actor)
+            .then((actorWithKeys) => broadcastCreate(fastify, note, actorWithKeys))
+            .catch((err) => fastify.log.error(err, 'Federation enqueue failed'));
           ensureActorKeys(db, group)
             .then((groupWithKeys) => broadcastToGroupFollowers(fastify, note, actor, groupWithKeys))
             .catch((err) => fastify.log.error(err, 'Group federation enqueue failed'));
         }
+      } else {
+        // No server owner (legacy channel) — personal fanout only.
+        ensureActorKeys(db, actor)
+          .then((actorWithKeys) => broadcastCreate(fastify, note, actorWithKeys))
+          .catch((err) => fastify.log.error(err, 'Federation enqueue failed'));
       }
     }
   }
