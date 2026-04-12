@@ -355,6 +355,56 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
 
+      // For remote servers, re-fetch the channel list from the origin
+      // on every listing request so newly-created channels show up
+      // without the user needing to leave and re-join. The fetch is
+      // fast (single HTTP call) and the upsert is idempotent.
+      const [serverActor] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.serverId))
+        .limit(1);
+      if (serverActor && !serverActor.local) {
+        try {
+          const origin = new URL(serverActor.uri).origin;
+          const slug = serverActor.preferredUsername;
+          const channelsUrl = `${origin}/groups/${encodeURIComponent(slug)}/channels`;
+          const res = await fetch(channelsUrl, {
+            headers: { Accept: 'application/json', 'User-Agent': 'Babelr/0.1.0' },
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              channels: Array<{
+                uri: string;
+                name: string;
+                channelType?: string;
+                topic?: string;
+                category?: string;
+              }>;
+            };
+            for (const ch of data.channels ?? []) {
+              await db
+                .insert(objects)
+                .values({
+                  uri: ch.uri,
+                  type: 'OrderedCollection',
+                  belongsTo: serverActor.id,
+                  properties: {
+                    name: ch.name,
+                    channelType: ch.channelType ?? 'text',
+                    ...(ch.topic ? { topic: ch.topic } : {}),
+                    ...(ch.category ? { category: ch.category } : {}),
+                  },
+                })
+                .onConflictDoNothing({ target: objects.uri });
+            }
+          }
+        } catch {
+          // Non-fatal — serve whatever we have cached.
+        }
+      }
+
       const channels = await db
         .select()
         .from(objects)
