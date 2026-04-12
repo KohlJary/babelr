@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { WsServerMessage, MessageWithAuthor } from '@babelr/shared';
 import * as api from '../api';
 
@@ -7,9 +7,29 @@ export function useReactions(channelId: string | null, actorId: string, messages
   const [messageReactions, setMessageReactions] = useState<Map<string, Record<string, string[]>>>(
     () => new Map(),
   );
+  const seededChannelRef = useRef<string | null>(null);
 
-  // Seed reactions from message history
+  // Seed reactions from message history only when the channel changes
+  // (initial load or channel switch). Subsequent message arrivals
+  // must NOT re-seed — that would overwrite WS-delivered reaction
+  // updates since message:new payloads don't carry reactions.
   useEffect(() => {
+    if (channelId === seededChannelRef.current && messages.length > 0) {
+      // Same channel, just new messages — merge any reactions from
+      // the new messages without wiping existing WS-delivered state.
+      setMessageReactions((prev) => {
+        const next = new Map(prev);
+        for (const m of messages) {
+          if (m.message.reactions && Object.keys(m.message.reactions).length > 0 && !next.has(m.message.id)) {
+            next.set(m.message.id, m.message.reactions);
+          }
+        }
+        return next;
+      });
+      return;
+    }
+    // Channel changed — full reset from history.
+    seededChannelRef.current = channelId;
     const next = new Map<string, Record<string, string[]>>();
     for (const m of messages) {
       if (m.message.reactions && Object.keys(m.message.reactions).length > 0) {
@@ -17,7 +37,7 @@ export function useReactions(channelId: string | null, actorId: string, messages
       }
     }
     setMessageReactions(next);
-  }, [messages]);
+  }, [channelId, messages]);
 
   const handleWsMessage = useCallback((msg: WsServerMessage) => {
     if (msg.type === 'reaction:add') {

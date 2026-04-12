@@ -1095,19 +1095,25 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         const cfg = fastify.config;
         const proto = cfg.secureCookies ? 'https' : 'http';
         const activityUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
-        const activity = serializeActivity(
-          activityUri,
-          'Like',
-          request.actor.uri,
-          { id: message.uri, emoji },
-          ['https://www.w3.org/ns/activitystreams#Public'],
-          [group.followersUri ?? ''],
-        );
         if (!group.local && group.inboxUri) {
+          // Remote server: alice signs, alice is the actor.
+          const activity = serializeActivity(
+            activityUri, 'Like', request.actor.uri,
+            { id: message.uri, emoji },
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, request.actor)
             .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
             .catch((err) => fastify.log.error(err, 'Reaction federation failed'));
         } else {
+          // Local server: Group signs and is the outer actor.
+          const activity = serializeActivity(
+            activityUri, 'Like', group.uri,
+            { id: message.uri, emoji, actor: request.actor.uri },
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, group)
             .then((k) => enqueueToFollowers(fastify, k, activity))
             .catch((err) => fastify.log.error(err, 'Reaction federation failed'));
@@ -1180,19 +1186,25 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           const config = fastify.config;
           const protocol = config.secureCookies ? 'https' : 'http';
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
-          const activity = serializeActivity(
-            activityUri,
-            'Undo',
-            request.actor.uri,
-            { type: 'Like', actor: request.actor.uri, object: { id: message.uri, emoji } },
-            ['https://www.w3.org/ns/activitystreams#Public'],
-            [group.followersUri ?? ''],
-          );
           if (!group.local && group.inboxUri) {
+            // Remote server: alice signs, alice is the actor.
+            const activity = serializeActivity(
+              activityUri, 'Undo', request.actor.uri,
+              { type: 'Like', actor: request.actor.uri, object: { id: message.uri, emoji } },
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, request.actor)
               .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
               .catch((err) => fastify.log.error(err, 'Reaction undo federation failed'));
           } else {
+            // Local server: Group signs and is the outer actor.
+            const activity = serializeActivity(
+              activityUri, 'Undo', group.uri,
+              { type: 'Like', actor: request.actor.uri, object: { id: message.uri, emoji } },
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, group)
               .then((k) => enqueueToFollowers(fastify, k, activity))
               .catch((err) => fastify.log.error(err, 'Reaction undo federation failed'));
