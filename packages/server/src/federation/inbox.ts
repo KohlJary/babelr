@@ -9,6 +9,7 @@ import { collectionItems } from '../db/schema/collections.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { reactions } from '../db/schema/reactions.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
+import { events } from '../db/schema/events.ts';
 import { toAuthorView } from '../routes/channels.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
 import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
@@ -715,6 +716,65 @@ async function handleCreate(
       });
       fastify.log.info({ pageUri, slug: pageSlug }, 'Remote Create(Article) processed');
     }
+  } else if (obj?.type === 'Event' && obj.id) {
+    // Calendar event — create a shadow event on this instance.
+    const objData = obj as Record<string, unknown>;
+    const eventUri = obj.id as string;
+    const groupUri = (objData.context as string) ?? '';
+
+    let groupId: string | null = null;
+    if (groupUri) {
+      const [group] = await fastify.db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(eq(actors.uri, groupUri))
+        .limit(1);
+      if (group) groupId = group.id;
+    }
+    if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
+
+    if (groupId) {
+      let authorId = remoteActor.id;
+      const attrTo = objData.attributedTo as string | undefined;
+      if (attrTo && attrTo !== remoteActor.uri) {
+        const resolved = await resolveActor(fastify.db, attrTo);
+        if (resolved) authorId = resolved.id;
+      }
+
+      // Create event chat collection
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
+      const chatUri = `${protocol}://${config.domain}/events/${crypto.randomUUID()}/chat`;
+      const [chatChannel] = await fastify.db
+        .insert(objects)
+        .values({
+          uri: chatUri,
+          type: 'OrderedCollection',
+          belongsTo: null,
+          properties: { name: objData.name ?? 'Event', isEventChat: true },
+        })
+        .returning();
+
+      await fastify.db
+        .insert(events)
+        .values({
+          uri: eventUri,
+          ownerType: 'server',
+          ownerId: groupId,
+          createdById: authorId,
+          slug: (objData.slug as string) ?? null,
+          title: (objData.name as string) ?? 'Untitled Event',
+          description: (objData.content as string) ?? null,
+          startAt: new Date((objData.startTime as string) ?? new Date()),
+          endAt: new Date((objData.endTime as string) ?? new Date()),
+          location: (objData.location as string) ?? null,
+          rrule: (objData.rrule as string) ?? null,
+          eventChatId: chatChannel.id,
+        })
+        .onConflictDoNothing();
+
+      fastify.log.info({ eventUri }, 'Remote Create(Event) processed');
+    }
   }
 
   // Log the activity
@@ -939,6 +999,19 @@ async function handleDelete(
   const objectUri = typeof activity.object === 'string' ? activity.object : activity.object?.id;
   if (!objectUri) return;
 
+  // Check for event deletion.
+  const [eventRow] = await fastify.db
+    .select({ id: events.id, eventChatId: events.eventChatId })
+    .from(events)
+    .where(eq(events.uri, objectUri))
+    .limit(1);
+  if (eventRow) {
+    await fastify.db.delete(events).where(eq(events.id, eventRow.id));
+    await fastify.db.delete(objects).where(eq(objects.id, eventRow.eventChatId));
+    fastify.log.info({ objectUri }, 'Remote Delete(Event) processed');
+    return;
+  }
+
   // Check for wiki page deletion first (Article URIs live in
   // wiki_pages, not objects).
   const [wikiPage] = await fastify.db
@@ -1101,6 +1174,33 @@ async function handleUpdate(
       { actor: remoteActor.uri, type: innerType },
       'Remote Update(Actor) processed',
     );
+    return;
+  }
+
+  // Event update.
+  if (innerType === 'Event') {
+    if (!obj.id) return;
+    const objData = obj as Record<string, unknown>;
+    const [existing] = await fastify.db
+      .select()
+      .from(events)
+      .where(eq(events.uri, obj.id as string))
+      .limit(1);
+    if (existing) {
+      await fastify.db
+        .update(events)
+        .set({
+          title: (objData.name as string) ?? existing.title,
+          description: (objData.content as string) ?? existing.description,
+          startAt: objData.startTime ? new Date(objData.startTime as string) : existing.startAt,
+          endAt: objData.endTime ? new Date(objData.endTime as string) : existing.endAt,
+          location: (objData.location as string) ?? existing.location,
+          rrule: (objData.rrule as string) ?? existing.rrule,
+          updatedAt: new Date(),
+        })
+        .where(eq(events.id, existing.id));
+      fastify.log.info({ eventUri: obj.id }, 'Remote Update(Event) processed');
+    }
     return;
   }
 

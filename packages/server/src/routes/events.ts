@@ -19,6 +19,23 @@ import type {
 } from '@babelr/shared';
 import { PERMISSIONS, generateEventSlug, isValidEventSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
+import { enqueueToFollowers, enqueueDelivery } from '../federation/delivery.ts';
+import { serializeActivity } from '../federation/jsonld.ts';
+import { ensureActorKeys } from '../federation/keys.ts';
+
+function serializeEvent(event: typeof events.$inferSelect) {
+  return {
+    type: 'Event',
+    id: event.uri,
+    name: event.title,
+    content: event.description,
+    slug: event.slug,
+    startTime: event.startAt.toISOString(),
+    endTime: event.endAt.toISOString(),
+    location: event.location,
+    rrule: event.rrule,
+  };
+}
 
 const VALID_RSVP: EventRsvpStatus[] = ['going', 'interested', 'declined'];
 const DEFAULT_LOOKAHEAD_DAYS = 60;
@@ -280,6 +297,26 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       status: 'going',
     });
 
+    // Federation: deliver Create(Event) to Group followers (server events only).
+    if (body.ownerType === 'server' && request.actor.local) {
+      const [group] = await db.select().from(actors).where(eq(actors.id, ownerId)).limit(1);
+      if (group) {
+        const article = { ...serializeEvent(created), attributedTo: request.actor.uri, context: group.uri };
+        const actUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+        if (!group.local && group.inboxUri) {
+          const act = serializeActivity(actUri, 'Create', request.actor.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, request.actor)
+            .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
+            .catch((err) => fastify.log.error(err, 'Event create remote federation failed'));
+        } else {
+          const act = serializeActivity(actUri, 'Create', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((k) => enqueueToFollowers(fastify, k, act))
+            .catch((err) => fastify.log.error(err, 'Event create federation failed'));
+        }
+      }
+    }
+
     const view = await toEventView(db, created, request.actor.id);
     return reply.status(201).send(view);
   });
@@ -304,6 +341,60 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       if (!ownerId) return reply.status(400).send({ error: 'ownerId required when scope=server' });
       conditions.push(eq(events.ownerType, 'server'));
       conditions.push(eq(events.ownerId, ownerId));
+    }
+
+    // For remote servers, sync events from the origin.
+    if (scope === 'server' && ownerId) {
+      const [serverActor] = await db.select().from(actors).where(eq(actors.id, ownerId)).limit(1);
+      if (serverActor && !serverActor.local) {
+        try {
+          const origin = new URL(serverActor.uri).origin;
+          const slug = serverActor.preferredUsername;
+          const eventsUrl = `${origin}/groups/${encodeURIComponent(slug)}/events`;
+          const res = await fetch(eventsUrl, {
+            headers: { Accept: 'application/json', 'User-Agent': 'Babelr/0.1.0' },
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              events: Array<{
+                uri: string; slug: string | null; title: string; description: string | null;
+                startAt: string; endAt: string; location: string | null; rrule: string | null;
+              }>;
+            };
+            for (const e of data.events ?? []) {
+              if (!e.uri) continue;
+              const [existing] = await db.select({ id: events.id }).from(events).where(eq(events.uri, e.uri)).limit(1);
+              if (existing) {
+                await db.update(events).set({
+                  title: e.title, description: e.description,
+                  startAt: new Date(e.startAt), endAt: new Date(e.endAt),
+                  location: e.location, rrule: e.rrule, updatedAt: new Date(),
+                }).where(eq(events.id, existing.id));
+              } else {
+                // Create event chat collection for the shadow
+                const cfg = fastify.config;
+                const proto = cfg.secureCookies ? 'https' : 'http';
+                const chatUri = `${proto}://${cfg.domain}/events/${crypto.randomUUID()}/chat`;
+                const [chatChannel] = await db.insert(objects).values({
+                  uri: chatUri, type: 'OrderedCollection', belongsTo: null,
+                  properties: { name: e.title, isEventChat: true },
+                }).returning();
+                await db.insert(events).values({
+                  uri: e.uri, ownerType: 'server', ownerId: serverActor.id,
+                  createdById: serverActor.id, slug: e.slug,
+                  title: e.title, description: e.description,
+                  startAt: new Date(e.startAt), endAt: new Date(e.endAt),
+                  location: e.location, rrule: e.rrule,
+                  eventChatId: chatChannel.id,
+                }).onConflictDoNothing();
+              }
+            }
+          }
+        } catch {
+          // Non-fatal — serve cached events.
+        }
+      }
     }
 
     // Fetch all events matching the scope filters; we do range filtering
@@ -408,6 +499,28 @@ export default async function eventRoutes(fastify: FastifyInstance) {
         .where(eq(events.id, event.id))
         .returning();
 
+      // Federation: deliver Update(Event).
+      if (updated.ownerType === 'server' && request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, updated.ownerId)).limit(1);
+        if (group) {
+          const config = fastify.config;
+          const protocol = config.secureCookies ? 'https' : 'http';
+          const article = { ...serializeEvent(updated), attributedTo: request.actor.uri, context: group.uri };
+          const actUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          if (!group.local && group.inboxUri) {
+            const act = serializeActivity(actUri, 'Update', request.actor.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'Event update remote federation failed'));
+          } else {
+            const act = serializeActivity(actUri, 'Update', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, act))
+              .catch((err) => fastify.log.error(err, 'Event update federation failed'));
+          }
+        }
+      }
+
       return toEventView(db, updated, request.actor.id);
     },
   );
@@ -427,6 +540,27 @@ export default async function eventRoutes(fastify: FastifyInstance) {
 
       const manageable = await canManageEvent(db, event, request.actor.id);
       if (!manageable) return reply.status(403).send({ error: 'Insufficient permissions' });
+
+      // Federation: deliver Delete(Event).
+      if (event.ownerType === 'server' && request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, event.ownerId)).limit(1);
+        if (group) {
+          const config = fastify.config;
+          const protocol = config.secureCookies ? 'https' : 'http';
+          const actUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          if (!group.local && group.inboxUri) {
+            const act = serializeActivity(actUri, 'Delete', request.actor.uri, event.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'Event delete remote federation failed'));
+          } else {
+            const act = serializeActivity(actUri, 'Delete', group.uri, event.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, act))
+              .catch((err) => fastify.log.error(err, 'Event delete federation failed'));
+          }
+        }
+      }
 
       await db.delete(events).where(eq(events.id, event.id));
       // Cascade handles event_attendees; also clean up the event chat collection

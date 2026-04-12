@@ -6,6 +6,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
+import { events } from '../db/schema/events.ts';
 import { serializeOrderedCollection } from './jsonld.ts';
 
 async function getActorByUsername(fastify: FastifyInstance, username: string) {
@@ -217,6 +218,46 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
           tags: p.tags,
           createdAt: p.createdAt.toISOString(),
           updatedAt: p.updatedAt.toISOString(),
+        })),
+      };
+    },
+  );
+
+  // Group events — used by remote instances to populate the
+  // calendar for a federated server.
+  fastify.get<{ Params: { slug: string } }>(
+    '/groups/:slug/events',
+    async (request, reply) => {
+      const allGroups = await fastify.db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
+
+      const actor = allGroups.find((g) =>
+        g.preferredUsername === request.params.slug ||
+        g.uri.includes(`/groups/${request.params.slug}`),
+      );
+
+      if (!actor) {
+        return reply.status(404).send({ error: 'Group not found' });
+      }
+
+      const rows = await fastify.db
+        .select()
+        .from(events)
+        .where(eq(events.ownerId, actor.id));
+
+      reply.header('Content-Type', 'application/json; charset=utf-8');
+      return {
+        events: rows.map((e) => ({
+          uri: e.uri,
+          slug: e.slug,
+          title: e.title,
+          description: e.description,
+          startAt: e.startAt.toISOString(),
+          endAt: e.endAt.toISOString(),
+          location: e.location,
+          rrule: e.rrule,
         })),
       };
     },
