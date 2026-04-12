@@ -584,6 +584,7 @@ async function handleCreate(
         content: stored.content ?? '',
         channelId: channelContextId,
         authorId: noteAuthor.id,
+        slug: stored.slug ?? null,
         published: stored.published.toISOString(),
         ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
       };
