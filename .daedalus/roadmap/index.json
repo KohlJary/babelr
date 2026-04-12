@@ -653,7 +653,7 @@
       "description": "Reactions (Like activities in AP terms) don't cross instance boundaries. When alice reacts to bob's message on A, bob doesn't see the reaction on B, and vice versa.\n\nOutbound: when a user adds a reaction, deliver a Like(Note) activity to the Group's inbox (for server channels) or to the remote participant's inbox (for DMs). When removed, deliver an Undo(Like). The activity should carry the emoji and the Note URI so the receiver can match it.\n\nInbound: new handleLike / handleUndoLike in inbox.ts that finds the local Note by URI, upserts/deletes the reaction row, and broadcasts a reaction:add/reaction:remove WS event to the channel's subscribers.\n\nSmall scope — reactions are simple single-field objects. Main risk is the N reactions × M followers fanout volume on a busy channel, but the delivery queue handles batching already.",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-server-metadata",
