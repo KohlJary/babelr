@@ -1254,6 +1254,43 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       payload: { message: messageView, author: authorView },
     });
 
+    // Federation: same remote-vs-local Group delivery as top-level messages.
+    if (request.actor.local) {
+      const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+      if (channel?.belongsTo) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        if (group && !group.local && group.inboxUri) {
+          // Remote server: deliver to the origin Group's inbox.
+          let contextUri: string | undefined;
+          if (channel) contextUri = channel.uri;
+          const noteJson = serializeNote(reply_msg, request.actor.uri, contextUri);
+          const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          const activity = serializeActivity(
+            activityUri,
+            'Create',
+            request.actor.uri,
+            noteJson,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
+          ensureActorKeys(db, request.actor)
+            .then((actorWithKeys) =>
+              enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id),
+            )
+            .catch((err) => fastify.log.error(err, 'Remote group reply delivery failed'));
+        } else if (group) {
+          // Local server: fan out to remote followers.
+          const actor = request.actor!;
+          ensureActorKeys(db, actor)
+            .then((actorWithKeys) => broadcastCreate(fastify, reply_msg, actorWithKeys))
+            .catch((err) => fastify.log.error(err, 'Reply federation enqueue failed'));
+          ensureActorKeys(db, group)
+            .then((groupWithKeys) => broadcastToGroupFollowers(fastify, reply_msg, actor, groupWithKeys))
+            .catch((err) => fastify.log.error(err, 'Reply group federation enqueue failed'));
+        }
+      }
+    }
+
     return reply.status(201).send({ message: messageView, author: authorView });
   });
 
