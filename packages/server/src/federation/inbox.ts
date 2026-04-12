@@ -7,6 +7,7 @@ import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { friendships } from '../db/schema/friendships.ts';
+import { reactions } from '../db/schema/reactions.ts';
 import { toAuthorView } from '../routes/channels.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
 import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
@@ -175,6 +176,9 @@ async function routeActivity(
       break;
     case 'Update':
       await handleUpdate(fastify, remoteActor, body);
+      break;
+    case 'Like':
+      await handleLike(fastify, remoteActor, body);
       break;
     case 'Add':
       await handleAdd(fastify, localActor, remoteActor, body);
@@ -390,6 +394,43 @@ async function handleUndo(
         );
       fastify.log.info({ follower: remoteActor.uri, unfollowed: localActor.uri }, 'Undo Follow');
     }
+  }
+
+  if (innerType === 'Like') {
+    // Undo a reaction. The inner Like's object carries the Note URI
+    // and emoji. Resolve the author — for Group-relayed Undos, the
+    // remoteActor is the Group, but the inner Like's actor is the
+    // person who originally reacted.
+    const innerActor = typeof innerObject === 'string' ? null : (innerObject as Record<string, unknown>)?.actor as string | undefined;
+    const innerObj = typeof innerObject === 'string' ? null : (innerObject as Record<string, unknown>)?.object as Record<string, unknown> | undefined;
+    const noteUri = innerObj?.id as string | undefined;
+    const emoji = innerObj?.emoji as string | undefined;
+    if (!noteUri || !emoji) return;
+
+    let reactorId = remoteActor.id;
+    if (innerActor && innerActor !== remoteActor.uri) {
+      const resolved = await resolveActor(fastify.db, innerActor);
+      if (resolved) reactorId = resolved.id;
+    }
+
+    const [note] = await fastify.db
+      .select({ id: objects.id, context: objects.context })
+      .from(objects)
+      .where(eq(objects.uri, noteUri))
+      .limit(1);
+    if (!note) return;
+
+    await fastify.db
+      .delete(reactions)
+      .where(and(eq(reactions.objectId, note.id), eq(reactions.actorId, reactorId), eq(reactions.emoji, emoji)));
+
+    if (note.context) {
+      fastify.broadcastToChannel(note.context, {
+        type: 'reaction:remove',
+        payload: { messageId: note.id, emoji, actorId: reactorId },
+      });
+    }
+    fastify.log.info({ noteUri, emoji }, 'Remote Undo(Like) processed');
   }
 }
 
@@ -638,6 +679,73 @@ async function handleCreate(
   }
 
   fastify.log.info({ actor: remoteActor.uri, type: 'Create' }, 'Remote Create processed');
+}
+
+async function handleLike(
+  fastify: FastifyInstance,
+  remoteActor: typeof actors.$inferSelect,
+  activity: APActivity,
+) {
+  const obj = activity.object;
+  if (typeof obj === 'string' || !obj?.id) return;
+
+  const noteUri = obj.id as string;
+  const emoji = (obj as Record<string, unknown>).emoji as string | undefined;
+  if (!emoji) return;
+
+  // Resolve the actual reactor — for Group-relayed Likes, the
+  // activity.actor is the Group but the Like is on behalf of a
+  // member. We use the activity's original actor field which was
+  // validated by signature verification. For person-signed Likes,
+  // remoteActor IS the reactor.
+  let reactorId = remoteActor.id;
+  const noteAttributedTo = (obj as Record<string, unknown>).attributedTo as string | undefined;
+  // If the Like has an explicit actor different from remoteActor (Group relay case),
+  // the activity.actor in the outer envelope was the Group but the actual reactor
+  // might be encoded differently. For now, use remoteActor since that's who signed.
+  // For Group-relayed reactions, the Group IS the actor; we resolve the real reactor
+  // if the inner object carries an actor field.
+  const likeActor = activity.actor;
+  if (likeActor && likeActor !== remoteActor.uri) {
+    const resolved = await resolveActor(fastify.db, likeActor);
+    if (resolved) reactorId = resolved.id;
+  }
+  void noteAttributedTo;
+
+  const [note] = await fastify.db
+    .select({ id: objects.id, context: objects.context })
+    .from(objects)
+    .where(eq(objects.uri, noteUri))
+    .limit(1);
+  if (!note) return;
+
+  // Upsert the reaction.
+  await fastify.db
+    .insert(reactions)
+    .values({ objectId: note.id, actorId: reactorId, emoji })
+    .onConflictDoNothing();
+
+  // Broadcast to local WS subscribers.
+  if (note.context) {
+    // Look up the reactor for the author view.
+    const [reactor] = await fastify.db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, reactorId))
+      .limit(1);
+    if (reactor) {
+      fastify.broadcastToChannel(note.context, {
+        type: 'reaction:add',
+        payload: {
+          messageId: note.id,
+          emoji,
+          actor: toAuthorView(reactor),
+        },
+      });
+    }
+  }
+
+  fastify.log.info({ noteUri, emoji, reactor: reactorId }, 'Remote Like processed');
 }
 
 /**

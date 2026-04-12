@@ -1088,6 +1088,33 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     };
     fastify.broadcastToChannel(channelId, reactionMsg);
 
+    // Federation: deliver Like to the appropriate inbox.
+    if (request.actor.local && channel?.belongsTo) {
+      const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+      if (group) {
+        const cfg = fastify.config;
+        const proto = cfg.secureCookies ? 'https' : 'http';
+        const activityUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
+        const activity = serializeActivity(
+          activityUri,
+          'Like',
+          request.actor.uri,
+          { id: message.uri, emoji },
+          ['https://www.w3.org/ns/activitystreams#Public'],
+          [group.followersUri ?? ''],
+        );
+        if (!group.local && group.inboxUri) {
+          ensureActorKeys(db, request.actor)
+            .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
+            .catch((err) => fastify.log.error(err, 'Reaction federation failed'));
+        } else {
+          ensureActorKeys(db, group)
+            .then((k) => enqueueToFollowers(fastify, k, activity))
+            .catch((err) => fastify.log.error(err, 'Reaction federation failed'));
+        }
+      }
+    }
+
     return { ok: true };
   });
 
@@ -1143,6 +1170,36 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       },
     };
     fastify.broadcastToChannel(channelId, reactionMsg);
+
+    // Federation: deliver Undo(Like) to the appropriate inbox.
+    if (request.actor.local) {
+      const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+      if (channel?.belongsTo) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        if (group) {
+          const config = fastify.config;
+          const protocol = config.secureCookies ? 'https' : 'http';
+          const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          const activity = serializeActivity(
+            activityUri,
+            'Undo',
+            request.actor.uri,
+            { type: 'Like', actor: request.actor.uri, object: { id: message.uri, emoji } },
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
+          if (!group.local && group.inboxUri) {
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'Reaction undo federation failed'));
+          } else {
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, activity))
+              .catch((err) => fastify.log.error(err, 'Reaction undo federation failed'));
+          }
+        }
+      }
+    }
 
     return { ok: true };
   });
