@@ -726,6 +726,22 @@
       "type": "feature",
       "priority": "P1",
       "status": "backlog"
+    },
+    {
+      "id": "wiki-comments",
+      "title": "Wiki page comment threads via the message pipeline",
+      "description": "Wiki pages should have comment threads, same pattern as event chat and file comments — each page gets an OrderedCollection on creation, and the comment thread uses useChat + MessageList + MessageInput. Reactions, threads, typing indicators, translation, and federation all come for free.\n\nScope:\n- Add chat_id column to wiki_pages (FK to objects, same as events.event_chat_id and server_files.chat_id)\n- Create the OrderedCollection on page creation\n- WikiPanel renders the comment thread alongside the page content (below the content or in a side panel)\n- Delete cleans up the chat collection (cascade handles messages)\n- Migration + backfill for existing pages (create empty collections)\n\nThis is a well-proven pattern at this point — events and files both use it. The implementation is mostly copy-paste from the file comments refactor.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-revision-history",
+      "title": "Wiki revision history viewer with restore functionality",
+      "description": "The wiki_page_revisions table already tracks every edit (revision_number, title, content, edited_by, summary, timestamp) — it's been populated since day one but there's no UI to view or restore revisions.\n\nScope:\n- Revision list view: show all revisions for a page with revision number, editor name, timestamp, and optional summary. Clickable to view that revision's content.\n- Diff view: side-by-side or inline diff between any two revisions (or between a revision and the current content). Use a lightweight diff library or compute on the server.\n- Restore button: restores a previous revision's content by creating a new revision with the old content (not by deleting history). The restore itself is just an update with content = selectedRevision.content.\n- Translation: revision content translates through the existing wiki translation pipeline when viewed.\n- Federation: revision history is local to each instance — the origin tracks the canonical history, remote shadows just see the latest content. Restoring a revision on the origin triggers a normal Update(Article) that federates.\n\nEndpoints:\n- GET /servers/:serverId/wiki/pages/:slug/revisions — list revisions (already partially exists as revision data is written, just needs the read endpoint)\n- GET /servers/:serverId/wiki/pages/:slug/revisions/:revisionNumber — single revision content\n- POST /servers/:serverId/wiki/pages/:slug/restore/:revisionNumber — convenience endpoint that updates content to the specified revision\n\nClient:\n- Revision list panel (sidebar or dropdown in the wiki view header)\n- Revision viewer (read-only render of old content)\n- Diff viewer (stretch goal — start with just viewing old versions and restoring)\n- 'Restored from revision N' summary auto-populated on restore\n\nThis is critical for any real wiki use — the ability to see who changed what and roll back mistakes is what makes a wiki trustworthy for shared documentation.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
     }
   ],
   "version": 27
