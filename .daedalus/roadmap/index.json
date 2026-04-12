@@ -669,7 +669,7 @@
       "description": "Calendar events on a server are invisible to remote members. When alice creates, edits, or deletes an event on Test Server, bob on instance B has no idea — his calendar view for the remote server is empty.\n\nScope:\n- Outbound: when a server event is created/updated/deleted, deliver a Create/Update/Delete(Event) activity to the Group's remote followers. The Event object carries title, description, startAt, endAt, location, rrule, slug.\n- Inbound: new handler for Event-typed objects that creates/updates/deletes a local shadow event row in the events table with the remote server as owner.\n- RSVP federation: when bob RSVPs from B, deliver the RSVP to the origin Group's inbox. The origin updates the attendee list and relays the updated counts to other followers.\n- The event embed system ([[event:slug]]) should work cross-instance once the event slug is carried in the federated payload, same pattern as message slugs.\n\nMedium scope — events have more fields than messages and the RSVP relay adds a round-trip, but the delivery infrastructure is the same.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-wiki",
