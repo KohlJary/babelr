@@ -753,13 +753,36 @@ export default async function channelRoutes(fastify: FastifyInstance) {
     });
 
     if (actor.local) {
-      const noteJson = serializeNote(updated, actor.uri);
-      const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
-      const activity = serializeActivity(activityUri, 'Update', actor.uri, noteJson, ['https://www.w3.org/ns/activitystreams#Public'], []);
+      // Resolve context + inReplyTo URIs for the serialized Note.
+      let contextUri: string | undefined;
+      const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, channelId)).limit(1);
+      if (ch) contextUri = ch.uri;
+      let inReplyToUri: string | undefined;
+      if (updated.inReplyTo) {
+        const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, updated.inReplyTo)).limit(1);
+        if (parent) inReplyToUri = parent.uri;
+      }
 
-      ensureActorKeys(db, actor)
-        .then((actorWithKeys) => enqueueToFollowers(fastify, actorWithKeys, activity))
-        .catch((err) => fastify.log.error(err, 'Update federation enqueue failed'));
+      const noteJson = serializeNote(updated, actor.uri, contextUri, inReplyToUri);
+      const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+
+      const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+      if (channel?.belongsTo) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        if (group && !group.local && group.inboxUri) {
+          // Remote server: deliver to the origin Group's inbox.
+          const activity = serializeActivity(activityUri, 'Update', actor.uri, noteJson, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, actor)
+            .then((actorWithKeys) => enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id))
+            .catch((err) => fastify.log.error(err, 'Remote update delivery failed'));
+        } else if (group) {
+          // Local server: fan out via Group to remote followers.
+          const activity = serializeActivity(activityUri, 'Update', group.uri, noteJson, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((groupWithKeys) => enqueueToFollowers(fastify, groupWithKeys, activity))
+            .catch((err) => fastify.log.error(err, 'Update federation enqueue failed'));
+        }
+      }
     }
 
     return toMessageView(updated);
@@ -822,11 +845,24 @@ export default async function channelRoutes(fastify: FastifyInstance) {
 
     if (actor.local) {
       const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
-      const activity = serializeActivity(activityUri, 'Delete', actor.uri, message.uri, ['https://www.w3.org/ns/activitystreams#Public'], []);
 
-      ensureActorKeys(db, actor)
-        .then((actorWithKeys) => enqueueToFollowers(fastify, actorWithKeys, activity))
-        .catch((err) => fastify.log.error(err, 'Delete federation enqueue failed'));
+      const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+      if (channel?.belongsTo) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        if (group && !group.local && group.inboxUri) {
+          // Remote server: deliver to the origin Group's inbox.
+          const activity = serializeActivity(activityUri, 'Delete', actor.uri, message.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, actor)
+            .then((actorWithKeys) => enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id))
+            .catch((err) => fastify.log.error(err, 'Remote delete delivery failed'));
+        } else if (group) {
+          // Local server: fan out via Group to remote followers.
+          const activity = serializeActivity(activityUri, 'Delete', group.uri, message.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((groupWithKeys) => enqueueToFollowers(fastify, groupWithKeys, activity))
+            .catch((err) => fastify.log.error(err, 'Delete federation enqueue failed'));
+        }
+      }
     }
 
     return { ok: true };

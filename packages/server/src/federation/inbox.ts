@@ -681,18 +681,56 @@ async function handleDelete(
   const objectUri = typeof activity.object === 'string' ? activity.object : activity.object?.id;
   if (!objectUri) return;
 
-  // Find local copy and tombstone it
+  // Find local copy and tombstone it. Accept if the remoteActor is
+  // the author OR a Group that owns the channel (Group-relayed delete).
   const [obj] = await fastify.db
     .select()
     .from(objects)
     .where(eq(objects.uri, objectUri))
     .limit(1);
 
-  if (obj && obj.attributedTo === remoteActor.id) {
+  if (!obj) return;
+
+  const isAuthor = obj.attributedTo === remoteActor.id;
+  const isOwnerGroup =
+    remoteActor.type === 'Group' &&
+    obj.context != null &&
+    (await (async () => {
+      const [ch] = await fastify.db
+        .select({ belongsTo: objects.belongsTo })
+        .from(objects)
+        .where(eq(objects.id, obj.context!))
+        .limit(1);
+      return ch?.belongsTo === remoteActor.id;
+    })());
+
+  if (isAuthor || isOwnerGroup) {
     await fastify.db
       .update(objects)
       .set({ type: 'Tombstone', content: null, updated: new Date() })
       .where(eq(objects.id, obj.id));
+
+    // Broadcast deletion to local WS subscribers.
+    if (obj.context) {
+      fastify.broadcastToChannel(obj.context, {
+        type: 'message:new',
+        payload: {
+          message: {
+            id: obj.id,
+            content: '',
+            channelId: obj.context,
+            authorId: obj.attributedTo ?? '',
+            published: obj.published.toISOString(),
+          },
+          author: {
+            id: obj.attributedTo ?? '',
+            preferredUsername: 'unknown',
+            displayName: null,
+            avatarUrl: null,
+          },
+        },
+      });
+    }
 
     fastify.log.info({ objectUri }, 'Remote Delete processed (tombstoned)');
   }
@@ -797,14 +835,32 @@ async function handleUpdate(
     return;
   }
 
-  // Object update (e.g. Note edited) — the pre-existing behavior.
+  // Object update (e.g. Note edited). Accept the update if the
+  // remoteActor is the Note's author OR a Group that owns the
+  // channel the Note belongs to (Groups relay edits on behalf of
+  // their members).
   const [existing] = await fastify.db
     .select()
     .from(objects)
     .where(eq(objects.uri, obj.id))
     .limit(1);
 
-  if (existing && existing.attributedTo === remoteActor.id) {
+  if (!existing) return;
+
+  const isAuthor = existing.attributedTo === remoteActor.id;
+  const isOwnerGroup =
+    remoteActor.type === 'Group' &&
+    existing.context != null &&
+    (await (async () => {
+      const [ch] = await fastify.db
+        .select({ belongsTo: objects.belongsTo })
+        .from(objects)
+        .where(eq(objects.id, existing.context!))
+        .limit(1);
+      return ch?.belongsTo === remoteActor.id;
+    })());
+
+  if (isAuthor || isOwnerGroup) {
     await fastify.db
       .update(objects)
       .set({
@@ -812,6 +868,29 @@ async function handleUpdate(
         updated: new Date(),
       })
       .where(eq(objects.id, existing.id));
+
+    // Broadcast the edit to local WS subscribers so the UI updates.
+    if (existing.context) {
+      fastify.broadcastToChannel(existing.context, {
+        type: 'message:new',
+        payload: {
+          message: {
+            id: existing.id,
+            content: (obj.content as string) ?? existing.content ?? '',
+            channelId: existing.context,
+            authorId: existing.attributedTo ?? '',
+            published: existing.published.toISOString(),
+            updated: new Date().toISOString(),
+          },
+          author: {
+            id: existing.attributedTo ?? '',
+            preferredUsername: 'unknown',
+            displayName: null,
+            avatarUrl: null,
+          },
+        },
+      });
+    }
 
     fastify.log.info({ objectUri: obj.id }, 'Remote Update processed');
   }
