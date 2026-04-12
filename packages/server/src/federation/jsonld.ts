@@ -70,6 +70,7 @@ export function serializeNote(
     cc: (obj.cc as string[]) ?? [],
     ...(contextUri ? { context: contextUri } : {}),
     ...(inReplyToUri ? { inReplyTo: inReplyToUri } : {}),
+    ...(obj.slug ? { babelrSlug: obj.slug } : {}),
     ...(obj.mediaType && { mediaType: obj.mediaType }),
     ...(props?.encrypted ? { babelrEncrypted: true } : {}),
     ...(props?.iv ? { babelrIv: props.iv } : {}),

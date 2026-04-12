@@ -553,6 +553,10 @@ async function handleCreate(
       noteProps.attachments = (obj as Record<string, unknown>).babelrAttachments;
     }
 
+    // Preserve the message slug so [[msg:slug]] embeds resolve
+    // on the receiving instance without a round-trip to the origin.
+    const remoteSlug = (obj as Record<string, unknown>).babelrSlug as string | undefined;
+
     const [stored] = await fastify.db
       .insert(objects)
       .values({
@@ -562,6 +566,7 @@ async function handleCreate(
         content: obj.content ?? null,
         context: channelContextId,
         inReplyTo: localInReplyTo,
+        slug: remoteSlug ?? null,
         to: toList,
         cc: (obj.cc as string[]) ?? [],
         published: obj.published ? new Date(obj.published as string) : new Date(),
