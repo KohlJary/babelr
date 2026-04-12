@@ -122,6 +122,38 @@ Ollama is notably the only backend where the Babelr server is **not** in the tra
 
 Transformers.js is the "no setup, no API key, works offline" option. It uses purpose-built neural translation models (Helsinki-NLP OPUS) rather than an instruction-following LLM, so the output is direct translation without the register/intent/idiom metadata. The UI degrades cleanly — confidence dots and idiom panels simply don't render when the metadata isn't there.
 
+## The `[[kind:slug]]` Embed System
+
+Every piece of content in Babelr — messages, wiki pages, calendar events, files (coming soon), work items (via plugin) — carries a short, copy-paste-friendly slug. Type `[[kind:slug]]` anywhere that accepts text and it renders as a live, interactive embed of the referenced content. This is the connective tissue that makes Babelr feel like one workspace instead of five separate tools.
+
+### Built-in embed kinds
+
+| Syntax | Renders as | Interactive? |
+|--------|-----------|-------------|
+| `[[page-slug]]` | Clickable wiki link | Opens wiki panel at that page |
+| `[[msg:abc1234xyz]]` | Inline message preview with author, channel, and content snippet | Click navigates to the source channel |
+| `[[event:abc1234xyz]]` | Inline invite card with date/time, location, and attendee counts | RSVP buttons (Going / Interested / Decline) work directly from the card |
+
+### How it works
+
+The parser (`parseWikiRefs` in `@babelr/shared`) is pure and synchronous — it scans text for `[[...]]` refs, classifies each by prefix, and returns typed ref objects with slug, kind, display text, and character offsets. Refs inside fenced or inline code blocks are ignored so people can write about the syntax without triggering resolution.
+
+On the client, `renderWithEmbeds` splits markdown content on embed refs and interleaves the corresponding React components (`MessageEmbed`, `EventEmbed`, and soon `FileEmbed`, `TaskEmbed`) between the rendered markdown chunks. Each embed component fetches its data independently with a module-level cache that dedupes concurrent requests and keeps every mounted instance of the same slug in sync — change your RSVP on one event embed and every other embed of the same event on the page updates instantly.
+
+Embeds translate. If the referenced content is in a different language, the embed runs through the same translation pipeline as everything else. A Spanish wiki page can embed a Japanese meeting invite and an English chat message, and a French reader sees all three in French.
+
+### Plugin extensibility
+
+The embed system is designed to be extended. The built-in kinds (page, msg, event) are the foundation; the plugin system (in development) allows third parties to register new `[[kind:slug]]` prefixes that render real content from external services inside Babelr:
+
+- `[[jira:PROJ-456]]` → inline Jira ticket with status, assignee, and priority
+- `[[gh:owner/repo#123]]` → GitHub PR with file list and review status
+- `[[ado:pr-1234]]` → Azure DevOps pull request with diff viewer
+
+Plugins export a React component with the same `{ slug, onNavigate }` contract as the built-in embeds, register their kind prefix in a manifest, and optionally provide server-side routes for data fetching and credential storage. The project management surface is being built as the first plugin — a full-featured kanban board and sprint planner implemented entirely through the plugin API — to validate that the API is expressive enough for real workloads before third parties build on it.
+
+The parser stays pure. All dynamic behavior lives in the component registry above it. An unrecognized prefix falls through to a generic placeholder, so a broken or missing plugin never crashes the page.
+
 ## Wikis
 
 Chat platforms are structurally hostile to knowledge. Threads scroll away. Pins get buried. Search finds fragments without context. Every team eventually ends up with "the one person who remembers how X works" and a dread of what happens when they leave. Slack, Discord, and Teams have all had a decade to solve this and none of them have.
