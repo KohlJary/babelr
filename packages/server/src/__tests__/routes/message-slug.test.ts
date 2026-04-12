@@ -220,11 +220,11 @@ describe('GET /messages/by-slug/:slug', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns 401 for unauthenticated requests', async () => {
+  it('returns 404 (not 401) for unauthenticated requests — public messages are fetchable without auth for federation proxy', async () => {
     const res = await app.inject({
       method: 'GET',
       url: `/messages/by-slug/abcdefghjk`,
     });
-    expect(res.statusCode).toBe(401);
+    expect(res.statusCode).toBe(404);
   });
 });

@@ -1540,7 +1540,11 @@ export default async function channelRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { slug: string } }>(
     '/messages/by-slug/:slug',
     async (request, reply) => {
-      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      // Auth is optional for this endpoint: authenticated users get
+      // full access checks, unauthenticated requests (including
+      // federation proxy calls from remote instances) only receive
+      // messages from public channels. This mirrors AP semantics —
+      // public notes are public.
       const { slug } = request.params;
       if (!isValidMessageSlug(slug)) {
         return reply.status(400).send({ error: 'Invalid slug format' });
@@ -1551,19 +1555,70 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         .from(objects)
         .where(and(eq(objects.slug, slug), eq(objects.type, 'Note')))
         .limit(1);
+
+      // If the slug isn't found locally and we have an authenticated
+      // user, try proxying to remote servers the user is a member of.
+      if (!message && request.actor) {
+        const memberships = await db
+          .select({ collectionUri: collectionItems.collectionUri })
+          .from(collectionItems)
+          .where(eq(collectionItems.itemUri, request.actor.uri));
+        const followerUris = memberships.map((m) => m.collectionUri);
+        const remoteGroups = await db
+          .select()
+          .from(actors)
+          .where(and(eq(actors.type, 'Group'), eq(actors.local, false)));
+        const memberGroups = remoteGroups.filter(
+          (g) => g.followersUri && followerUris.includes(g.followersUri),
+        );
+
+        for (const group of memberGroups) {
+          try {
+            const origin = new URL(group.uri).origin;
+            const res = await fetch(
+              `${origin}/messages/by-slug/${encodeURIComponent(slug)}`,
+              {
+                headers: {
+                  Accept: 'application/json',
+                  'User-Agent': 'Babelr/0.1.0',
+                },
+                signal: AbortSignal.timeout(5_000),
+              },
+            );
+            if (res.ok) {
+              return await res.json();
+            }
+          } catch {
+            // Try next origin.
+          }
+        }
+        return reply.status(404).send({ error: 'Message not found' });
+      }
+
       if (!message) return reply.status(404).send({ error: 'Message not found' });
 
       const channelId = message.context;
       if (!channelId) return reply.status(404).send({ error: 'Message not found' });
 
-      // Verify the caller can see the channel this message lives in.
-      const { allowed, channel } = await checkChannelAccess(
+      // For unauthenticated (federation proxy) requests, only serve
+      // messages from public (non-private, non-DM) channels.
+      const { channel } = await checkChannelAccess(
         db,
         channelId,
-        request.actor.uri,
+        request.actor?.uri ?? '',
       );
-      if (!allowed || !channel) {
-        return reply.status(404).send({ error: 'Message not found' });
+      if (!channel) return reply.status(404).send({ error: 'Message not found' });
+
+      const channelProps = channel.properties as Record<string, unknown> | null;
+      if (!request.actor) {
+        // Unauthenticated: only public channels.
+        if (channelProps?.isPrivate || channelProps?.isDM) {
+          return reply.status(404).send({ error: 'Message not found' });
+        }
+      } else {
+        // Authenticated: full access check.
+        const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+        if (!allowed) return reply.status(404).send({ error: 'Message not found' });
       }
 
       // Batch-load author + server metadata.
@@ -1574,7 +1629,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         ? await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1)
         : [null];
 
-      const channelProps = channel.properties as Record<string, unknown> | null;
+      const chProps = channel.properties as Record<string, unknown> | null;
       const serverProps = server?.properties as Record<string, unknown> | null;
 
       return {
@@ -1582,7 +1637,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         slug: message.slug!,
         content: message.content ?? '',
         channelId: channel.id,
-        channelName: (channelProps?.name as string | undefined) ?? null,
+        channelName: (chProps?.name as string | undefined) ?? null,
         serverId: channel.belongsTo ?? null,
         serverName:
           (serverProps?.name as string | undefined) ??
