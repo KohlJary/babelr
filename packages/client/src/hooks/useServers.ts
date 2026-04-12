@@ -57,6 +57,11 @@ export function useServers() {
     [selectedServer, servers],
   );
 
+  const refreshServers = useCallback(async () => {
+    const refreshed = await api.getServers();
+    setServers(refreshed);
+  }, []);
+
   return {
     servers,
     selectedServer,
@@ -66,5 +71,6 @@ export function useServers() {
     joinServer: handleJoinServer,
     leaveServer: handleLeaveServer,
     updateServer,
+    refreshServers,
   };
 }

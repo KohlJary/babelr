@@ -104,6 +104,15 @@ export async function joinServer(serverId: string): Promise<void> {
   await apiFetch(`/servers/${serverId}/join`, { method: 'POST' });
 }
 
+export async function joinRemoteServer(
+  handle: string,
+): Promise<{ ok: boolean; server: import('@babelr/shared').ServerView }> {
+  return apiFetch('/servers/join-remote', {
+    method: 'POST',
+    body: JSON.stringify({ handle }),
+  });
+}
+
 export async function leaveServer(serverId: string): Promise<void> {
   await apiFetch(`/servers/${serverId}/leave`, { method: 'POST' });
 }

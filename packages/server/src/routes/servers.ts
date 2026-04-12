@@ -11,6 +11,10 @@ import { serverRoles, serverRoleAssignments } from '../db/schema/roles.ts';
 import { DEFAULT_ROLE_DEFINITIONS, PERMISSIONS } from '@babelr/shared';
 import type { CreateServerInput, ServerView, UpdateServerInput } from '@babelr/shared';
 import { hasPermission, ensureManageRolesSurvives, LockoutError } from '../permissions.ts';
+import { lookupActorByHandle } from '../federation/resolve.ts';
+import { ensureActorKeys } from '../federation/keys.ts';
+import { enqueueDelivery } from '../federation/delivery.ts';
+import { serializeActivity } from '../federation/jsonld.ts';
 
 function slugify(name: string): string {
   return name
@@ -152,11 +156,13 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
     const followerUris = memberships.map((m) => m.collectionUri);
 
-    // Find Group actors whose followersUri matches
+    // Find Group actors whose followersUri matches — includes both
+    // local servers and remote servers the user has joined via
+    // federation, so cross-instance memberships show up in the sidebar.
     const servers = await db
       .select()
       .from(actors)
-      .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
+      .where(eq(actors.type, 'Group'));
 
     const results: ServerView[] = [];
     for (const server of servers) {
@@ -392,6 +398,78 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         );
 
       return { ok: true };
+    },
+  );
+
+  // Join a remote server by handle (e.g. test-server@babelr-a.local:3000).
+  // Resolves the Group actor via WebFinger, caches it locally, sends a
+  // Follow activity to the remote inbox, and optimistically adds
+  // membership since Groups auto-accept. The server appears in the
+  // user's sidebar once the local collectionItems row is created.
+  fastify.post<{ Body: { handle: string } }>(
+    '/servers/join-remote',
+    async (request, reply) => {
+      if (!request.actor)
+        return reply.status(401).send({ error: 'Not authenticated' });
+
+      const raw = (request.body?.handle ?? '').trim().replace(/^@/, '');
+      if (!raw)
+        return reply.status(400).send({ error: 'handle is required' });
+
+      const remoteGroup = await lookupActorByHandle(db, raw);
+      if (!remoteGroup || remoteGroup.type !== 'Group') {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      if (!remoteGroup.followersUri) {
+        // Groups should always have a followersUri. If the remote
+        // actor doesn't, synthesize one from the URI convention.
+        return reply.status(400).send({ error: 'Remote server has no followers collection' });
+      }
+
+      // Check if already a member
+      const [existing] = await db
+        .select({ id: collectionItems.id })
+        .from(collectionItems)
+        .where(
+          and(
+            eq(collectionItems.collectionUri, remoteGroup.followersUri),
+            eq(collectionItems.itemUri, request.actor.uri),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        return { ok: true, server: toServerView(remoteGroup, 1) };
+      }
+
+      // Optimistically add the local membership — Groups auto-accept
+      // Follows so we don't need to wait for the Accept round-trip.
+      await db.insert(collectionItems).values({
+        collectionUri: remoteGroup.followersUri,
+        collectionId: null,
+        itemUri: request.actor.uri,
+        itemId: request.actor.id,
+        properties: { role: 'member' },
+      });
+
+      // Enqueue the Follow activity so the remote instance knows
+      // about the new member and starts delivering channel messages.
+      const actorWithKeys = await ensureActorKeys(db, request.actor);
+      if (actorWithKeys.privateKeyPem && remoteGroup.inboxUri) {
+        const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+        const activity = serializeActivity(
+          activityUri,
+          'Follow',
+          request.actor.uri,
+          remoteGroup.uri,
+          [remoteGroup.uri],
+          [],
+        );
+        await enqueueDelivery(db, activity, remoteGroup.inboxUri, request.actor.id);
+      }
+
+      return { ok: true, server: toServerView(remoteGroup, 1) };
     },
   );
 

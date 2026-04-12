@@ -77,7 +77,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
 
-  const { servers, selectedServer, selectServer, createServer, joinServer, updateServer } = useServers();
+  const { servers, selectedServer, selectServer, createServer, joinServer, updateServer, refreshServers } = useServers();
   const { channels, selectedChannel, selectChannel, createChannel, updateChannel } = useChannels(
     dmMode ? null : selectedServer?.id ?? null,
   );
@@ -410,6 +410,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           }}
           onJoinServer={async (id) => {
             await joinServer(id);
+            setDmMode(false);
+          }}
+          onJoinedRemote={() => {
+            void refreshServers();
             setDmMode(false);
           }}
           onClose={() => setShowCreateServer(false)}

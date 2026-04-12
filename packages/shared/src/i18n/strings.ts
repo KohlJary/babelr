@@ -270,6 +270,11 @@ export const UI_STRINGS = {
   'createServer.noServersAvailable': 'No servers available',
   'createServer.memberOne': 'member',
   'createServer.memberMany': 'members',
+  'createServer.joinRemoteLabel': 'Join a remote server',
+  'createServer.joinRemotePlaceholder': 'server-name@other-instance.com',
+  'createServer.joinRemoteButton': 'Join',
+  'createServer.joinRemoteNotFound': 'Server not found — check the handle',
+  'createServer.joinRemoteSuccess': 'Joined!',
 
   // Create channel (additions)
   'createChannel.titleHeading': 'Create Channel',
