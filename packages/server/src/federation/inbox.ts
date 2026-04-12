@@ -693,24 +693,17 @@ async function handleLike(
   const emoji = (obj as Record<string, unknown>).emoji as string | undefined;
   if (!emoji) return;
 
-  // Resolve the actual reactor — for Group-relayed Likes, the
-  // activity.actor is the Group but the Like is on behalf of a
-  // member. We use the activity's original actor field which was
-  // validated by signature verification. For person-signed Likes,
-  // remoteActor IS the reactor.
+  // Resolve the actual reactor. For Group-relayed Likes, the outer
+  // activity.actor is the Group (it signed the delivery) but the
+  // inner object carries an `actor` field with the real person who
+  // reacted. For direct person-signed Likes, remoteActor IS the
+  // reactor and the inner actor field may be absent.
   let reactorId = remoteActor.id;
-  const noteAttributedTo = (obj as Record<string, unknown>).attributedTo as string | undefined;
-  // If the Like has an explicit actor different from remoteActor (Group relay case),
-  // the activity.actor in the outer envelope was the Group but the actual reactor
-  // might be encoded differently. For now, use remoteActor since that's who signed.
-  // For Group-relayed reactions, the Group IS the actor; we resolve the real reactor
-  // if the inner object carries an actor field.
-  const likeActor = activity.actor;
-  if (likeActor && likeActor !== remoteActor.uri) {
-    const resolved = await resolveActor(fastify.db, likeActor);
+  const innerReactor = (obj as Record<string, unknown>).actor as string | undefined;
+  if (innerReactor) {
+    const resolved = await resolveActor(fastify.db, innerReactor);
     if (resolved) reactorId = resolved.id;
   }
-  void noteAttributedTo;
 
   const [note] = await fastify.db
     .select({ id: objects.id, context: objects.context })
