@@ -25,6 +25,8 @@ export interface VoiceIcePayload {
 export type WsServerMessage =
   | { type: 'connected'; payload: { actorId: string } }
   | { type: 'message:new'; payload: { message: MessageView; author: AuthorView } }
+  | { type: 'message:updated'; payload: { messageId: string; channelId: string; content: string; updatedAt: string } }
+  | { type: 'message:deleted'; payload: { messageId: string; channelId: string } }
   | { type: 'typing:start'; payload: { channelId: string; actor: AuthorView } }
   | { type: 'presence:update'; payload: { actorId: string; status: PresenceStatus } }
   | { type: 'reaction:add'; payload: { messageId: string; emoji: string; actor: AuthorView } }

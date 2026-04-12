@@ -752,6 +752,18 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       objectId: updated.id,
     });
 
+    // Broadcast the edit to all local WS subscribers so other
+    // viewers in the channel see the update in real time.
+    fastify.broadcastToChannel(channelId, {
+      type: 'message:updated',
+      payload: {
+        messageId: updated.id,
+        channelId,
+        content: updated.content ?? '',
+        updatedAt: (updated.updated ?? new Date()).toISOString(),
+      },
+    });
+
     if (actor.local) {
       // Resolve context + inReplyTo URIs for the serialized Note.
       let contextUri: string | undefined;
@@ -829,6 +841,12 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       .update(objects)
       .set({ type: 'Tombstone', content: null, updated: new Date() })
       .where(eq(objects.id, messageId));
+
+    // Broadcast deletion to all local WS subscribers.
+    fastify.broadcastToChannel(channelId, {
+      type: 'message:deleted',
+      payload: { messageId, channelId },
+    });
 
     // Create Delete activity and enqueue federation delivery
     const config = fastify.config;

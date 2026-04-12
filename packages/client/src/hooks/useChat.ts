@@ -30,7 +30,26 @@ export function useChat(
 
   const handleWsMessage = useCallback(
     (msg: WsServerMessage) => {
-      if (msg.type === 'message:new') {
+      if (msg.type === 'message:updated') {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.message.id === msg.payload.messageId
+              ? {
+                  ...m,
+                  message: {
+                    ...m.message,
+                    content: msg.payload.content,
+                    updated: msg.payload.updatedAt,
+                  },
+                }
+              : m,
+          ),
+        );
+      } else if (msg.type === 'message:deleted') {
+        setMessages((prev) =>
+          prev.filter((m) => m.message.id !== msg.payload.messageId),
+        );
+      } else if (msg.type === 'message:new') {
         const e2e = e2eRef.current;
         if (isDM && e2e?.e2e.ready && msg.payload.message.properties?.encrypted) {
           e2e.e2e.decryptMsg(msg.payload).then((decrypted) => {

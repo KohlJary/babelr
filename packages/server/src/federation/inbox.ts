@@ -713,22 +713,8 @@ async function handleDelete(
     // Broadcast deletion to local WS subscribers.
     if (obj.context) {
       fastify.broadcastToChannel(obj.context, {
-        type: 'message:new',
-        payload: {
-          message: {
-            id: obj.id,
-            content: '',
-            channelId: obj.context,
-            authorId: obj.attributedTo ?? '',
-            published: obj.published.toISOString(),
-          },
-          author: {
-            id: obj.attributedTo ?? '',
-            preferredUsername: 'unknown',
-            displayName: null,
-            avatarUrl: null,
-          },
-        },
+        type: 'message:deleted',
+        payload: { messageId: obj.id, channelId: obj.context },
       });
     }
 
@@ -872,22 +858,12 @@ async function handleUpdate(
     // Broadcast the edit to local WS subscribers so the UI updates.
     if (existing.context) {
       fastify.broadcastToChannel(existing.context, {
-        type: 'message:new',
+        type: 'message:updated',
         payload: {
-          message: {
-            id: existing.id,
-            content: (obj.content as string) ?? existing.content ?? '',
-            channelId: existing.context,
-            authorId: existing.attributedTo ?? '',
-            published: existing.published.toISOString(),
-            updated: new Date().toISOString(),
-          },
-          author: {
-            id: existing.attributedTo ?? '',
-            preferredUsername: 'unknown',
-            displayName: null,
-            avatarUrl: null,
-          },
+          messageId: existing.id,
+          channelId: existing.context,
+          content: (obj.content as string) ?? existing.content ?? '',
+          updatedAt: new Date().toISOString(),
         },
       });
     }
