@@ -31,6 +31,8 @@ export const wikiPages = pgTable(
   'wiki_pages',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    /** Federation identity URI — globally unique across instances. */
+    uri: varchar('uri', { length: 512 }),
     serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
     slug: varchar('slug', { length: 128 }).notNull(),
     title: varchar('title', { length: 256 }).notNull(),

@@ -8,6 +8,9 @@ import { wikiPages, wikiPageRevisions, wikiPageLinks } from '../db/schema/wiki.t
 import { toAuthorView } from './channels.ts';
 import { extractWikiSlugs, PERMISSIONS } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
+import { enqueueToFollowers } from '../federation/delivery.ts';
+import { serializeActivity } from '../federation/jsonld.ts';
+import { ensureActorKeys } from '../federation/keys.ts';
 import type {
   WikiPageView,
   WikiPageSummary,
@@ -184,6 +187,64 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
 
+      // For remote servers, sync wiki pages from the origin so
+      // newly created pages show up without re-joining.
+      const [serverActor] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.serverId))
+        .limit(1);
+      if (serverActor && !serverActor.local) {
+        try {
+          const origin = new URL(serverActor.uri).origin;
+          const slug = serverActor.preferredUsername;
+          const pagesUrl = `${origin}/groups/${encodeURIComponent(slug)}/wiki/pages`;
+          const res = await fetch(pagesUrl, {
+            headers: { Accept: 'application/json', 'User-Agent': 'Babelr/0.1.0' },
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              pages: Array<{
+                uri: string;
+                slug: string;
+                title: string;
+                content: string;
+                tags: string[];
+              }>;
+            };
+            for (const p of data.pages ?? []) {
+              if (!p.uri || !p.slug) continue;
+              const [existing] = await db
+                .select({ id: wikiPages.id })
+                .from(wikiPages)
+                .where(eq(wikiPages.uri, p.uri))
+                .limit(1);
+              if (existing) {
+                // Update content if changed.
+                await db
+                  .update(wikiPages)
+                  .set({ title: p.title, content: p.content, tags: p.tags, updatedAt: new Date() })
+                  .where(eq(wikiPages.id, existing.id));
+              } else {
+                await db.insert(wikiPages).values({
+                  uri: p.uri,
+                  serverId: serverActor.id,
+                  slug: p.slug,
+                  title: p.title,
+                  content: p.content,
+                  tags: p.tags,
+                  createdById: serverActor.id,
+                  lastEditedById: serverActor.id,
+                }).onConflictDoNothing();
+              }
+            }
+          }
+        } catch {
+          // Non-fatal — serve cached pages.
+        }
+      }
+
       const rows = await db
         .select()
         .from(wikiPages)
@@ -258,10 +319,15 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       const slug = await ensureUniqueSlug(db, request.params.serverId, baseSlug);
       const content = body.content ?? '';
 
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
+      const pageUri = `${protocol}://${config.domain}/servers/${request.params.serverId}/wiki/${slug}`;
+
       const [created] = await db
         .insert(wikiPages)
         .values({
           serverId: request.params.serverId,
+          uri: pageUri,
           slug,
           title: body.title.trim(),
           content,
@@ -281,6 +347,28 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       });
 
       await syncPageOutboundLinks(db, created.serverId, created.id, created.content);
+
+      // Federation: deliver Create(Article) to Group followers.
+      if (request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        if (group?.local) {
+          const article = {
+            type: 'Article',
+            id: created.uri,
+            name: created.title,
+            content: created.content,
+            slug: created.slug,
+            tags: created.tags,
+            attributedTo: request.actor.uri,
+            context: group.uri,
+          };
+          const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          const activity = serializeActivity(activityUri, 'Create', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((k) => enqueueToFollowers(fastify, k, activity))
+            .catch((err) => fastify.log.error(err, 'Wiki page federation failed'));
+        }
+      }
 
       return reply.status(201).send({ page: await toWikiPageView(db, created) });
     },
@@ -355,6 +443,30 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       });
 
       await syncPageOutboundLinks(db, updated.serverId, updated.id, updated.content);
+
+      // Federation: deliver Update(Article) to Group followers.
+      if (request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        if (group?.local) {
+          const config = fastify.config;
+          const protocol = config.secureCookies ? 'https' : 'http';
+          const article = {
+            type: 'Article',
+            id: updated.uri ?? `${protocol}://${config.domain}/servers/${request.params.serverId}/wiki/${updated.slug}`,
+            name: updated.title,
+            content: updated.content,
+            slug: updated.slug,
+            tags: updated.tags,
+            attributedTo: request.actor.uri,
+            context: group.uri,
+          };
+          const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          const activity = serializeActivity(activityUri, 'Update', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((k) => enqueueToFollowers(fastify, k, activity))
+            .catch((err) => fastify.log.error(err, 'Wiki page update federation failed'));
+        }
+      }
 
       return { page: await toWikiPageView(db, updated) };
     },
@@ -507,6 +619,21 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       }
 
       await db.delete(wikiPages).where(eq(wikiPages.id, page.id));
+
+      // Federation: deliver Delete(Article) to Group followers.
+      if (request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        if (group?.local && page.uri) {
+          const config = fastify.config;
+          const protocol = config.secureCookies ? 'https' : 'http';
+          const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+          const activity = serializeActivity(activityUri, 'Delete', group.uri, page.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((k) => enqueueToFollowers(fastify, k, activity))
+            .catch((err) => fastify.log.error(err, 'Wiki page delete federation failed'));
+        }
+      }
+
       return { ok: true };
     },
   );

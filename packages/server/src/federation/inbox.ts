@@ -8,6 +8,7 @@ import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { reactions } from '../db/schema/reactions.ts';
+import { wikiPages } from '../db/schema/wiki.ts';
 import { toAuthorView } from '../routes/channels.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
 import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
@@ -663,6 +664,53 @@ async function handleCreate(
         });
       }
     }
+  } else if (obj?.type === 'Article' && obj.id) {
+    // Wiki page — create a shadow wiki_pages row on this instance.
+    const objData = obj as Record<string, unknown>;
+    const pageUri = obj.id as string;
+    const pageSlug = (objData.slug as string) ?? '';
+    const pageTitle = (objData.name as string) ?? 'Untitled';
+    const pageContent = (objData.content as string) ?? '';
+    const pageTags = Array.isArray(objData.tags) ? (objData.tags as string[]) : [];
+    const groupUri = (objData.context as string) ?? '';
+
+    // Find the cached remote Group that owns this wiki.
+    let groupId: string | null = null;
+    if (groupUri) {
+      const [group] = await fastify.db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(eq(actors.uri, groupUri))
+        .limit(1);
+      if (group) groupId = group.id;
+    }
+    if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
+
+    if (groupId && pageSlug) {
+      // Resolve the author.
+      let authorId = remoteActor.id;
+      const attrTo = objData.attributedTo as string | undefined;
+      if (attrTo && attrTo !== remoteActor.uri) {
+        const resolved = await resolveActor(fastify.db, attrTo);
+        if (resolved) authorId = resolved.id;
+      }
+
+      await fastify.db
+        .insert(wikiPages)
+        .values({
+          uri: pageUri,
+          serverId: groupId,
+          slug: pageSlug,
+          title: pageTitle,
+          content: pageContent,
+          tags: pageTags,
+          createdById: authorId,
+          lastEditedById: authorId,
+        })
+        .onConflictDoNothing();
+
+      fastify.log.info({ pageUri, slug: pageSlug }, 'Remote Create(Article) processed');
+    }
   }
 
   // Log the activity
@@ -887,6 +935,19 @@ async function handleDelete(
   const objectUri = typeof activity.object === 'string' ? activity.object : activity.object?.id;
   if (!objectUri) return;
 
+  // Check for wiki page deletion first (Article URIs live in
+  // wiki_pages, not objects).
+  const [wikiPage] = await fastify.db
+    .select({ id: wikiPages.id })
+    .from(wikiPages)
+    .where(eq(wikiPages.uri, objectUri))
+    .limit(1);
+  if (wikiPage) {
+    await fastify.db.delete(wikiPages).where(eq(wikiPages.id, wikiPage.id));
+    fastify.log.info({ objectUri }, 'Remote Delete(Article) processed');
+    return;
+  }
+
   // Find local copy and tombstone it. Accept if the remoteActor is
   // the author OR a Group that owns the channel (Group-relayed delete).
   const [obj] = await fastify.db
@@ -1024,6 +1085,32 @@ async function handleUpdate(
       { actor: remoteActor.uri, type: innerType },
       'Remote Update(Actor) processed',
     );
+    return;
+  }
+
+  // Article update (wiki page edited on the origin).
+  if (innerType === 'Article') {
+    if (!obj.id) return;
+    const objData = obj as Record<string, unknown>;
+    const [existing] = await fastify.db
+      .select()
+      .from(wikiPages)
+      .where(eq(wikiPages.uri, obj.id as string))
+      .limit(1);
+
+    if (existing) {
+      await fastify.db
+        .update(wikiPages)
+        .set({
+          title: (objData.name as string) ?? existing.title,
+          content: (objData.content as string) ?? existing.content,
+          tags: Array.isArray(objData.tags) ? (objData.tags as string[]) : existing.tags,
+          updatedAt: new Date(),
+        })
+        .where(eq(wikiPages.id, existing.id));
+
+      fastify.log.info({ pageUri: obj.id }, 'Remote Update(Article) processed');
+    }
     return;
   }
 
