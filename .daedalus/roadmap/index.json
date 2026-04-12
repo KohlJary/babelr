@@ -661,7 +661,7 @@
       "description": "When the origin server's name, logo, or description changes, remote instances that have the Group actor cached continue showing the old values. Same pattern as the actor-profile federation (Update(Actor)) but the audience is Group followers instead of friends.\n\nFix: when a server admin updates the Group actor's display name, properties.logoUrl, or summary via PUT /servers/:id, enqueue an Update(Actor) to every remote follower's inbox. The receiving instance's handleUpdate already handles Person and Group actor updates and overwrites the cached row.\n\nThe missing piece is just the outbound trigger — the inbound handler is already wired from the profile-updates work.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-events",
