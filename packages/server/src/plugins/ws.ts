@@ -257,14 +257,17 @@ async function wsPlugin(fastify: FastifyInstance) {
     }
   });
 
-  // Broadcast to all WS clients subscribed to any channel. Used for
+  // Broadcast to ALL authenticated WS connections. Used for
   // server-scoped events (wiki changes, file changes) that should
-  // reach any online member regardless of which channel they're in.
+  // reach any online member regardless of which channel they're
+  // subscribed to. Iterates actorConnections (not channelSubscriptions)
+  // so connections that haven't subscribed to any channel — like the
+  // WikiPanel's own useWebSocket — still receive the event.
   fastify.decorate('broadcastToAllSubscribers', (message: WsServerMessage) => {
     const data = JSON.stringify(message);
     const seen = new Set<WebSocket>();
-    for (const subs of channelSubscriptions.values()) {
-      for (const ws of subs) {
+    for (const connections of actorConnections.values()) {
+      for (const ws of connections) {
         if (!seen.has(ws) && ws.readyState === ws.OPEN) {
           ws.send(data);
           seen.add(ws);
