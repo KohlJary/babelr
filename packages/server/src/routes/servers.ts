@@ -14,7 +14,8 @@ import { hasPermission, ensureManageRolesSurvives, LockoutError } from '../permi
 import { lookupActorByHandle } from '../federation/resolve.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { enqueueDelivery } from '../federation/delivery.ts';
-import { serializeActivity } from '../federation/jsonld.ts';
+import { serializeActivity, serializeActor } from '../federation/jsonld.ts';
+import { enqueueToFollowers } from '../federation/delivery.ts';
 
 function slugify(name: string): string {
   return name
@@ -305,6 +306,21 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .select({ count: sql<number>`count(*)::int` })
         .from(collectionItems)
         .where(eq(collectionItems.collectionUri, updated.followersUri!));
+
+      // Federation: deliver Update(Actor) to the Group's remote
+      // followers so they see the new name/icon/description. The
+      // inbound handleUpdate already handles Group actor updates.
+      if (updated.local) {
+        ensureActorKeys(db, updated)
+          .then((actorWithKeys) => {
+            const actorJson = serializeActor(actorWithKeys);
+            const proto = fastify.config.secureCookies ? 'https' : 'http';
+            const actUri = `${proto}://${fastify.config.domain}/activities/${crypto.randomUUID()}`;
+            const act = serializeActivity(actUri, 'Update', updated.uri, actorJson, [updated.followersUri ?? 'https://www.w3.org/ns/activitystreams#Public'], []);
+            return enqueueToFollowers(fastify, actorWithKeys, act);
+          })
+          .catch((err) => fastify.log.error(err, 'Server metadata federation failed'));
+      }
 
       return toServerView(updated, count?.count ?? 0);
     },
