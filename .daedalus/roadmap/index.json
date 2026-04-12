@@ -677,7 +677,7 @@
       "description": "Wiki pages on a federated server are invisible to remote members. Bob can see channels and messages but the wiki panel for a remote server is empty.\n\nScope:\n- Outbound: when a wiki page is created/updated/deleted, deliver a Create/Update/Delete(Article) activity to the Group's remote followers. The Article object carries title, slug, content, tags.\n- Inbound: new handler for Article-typed objects that creates/updates/deletes a local shadow wiki_pages row. The shadow page's server_id points at the cached remote Group actor.\n- The wiki translation pipeline should work transparently on shadow pages since it operates on content, not origin.\n- Bidirectional links ([[page-slug]]) would resolve locally against the shadow pages. Cross-instance wiki backlinks are a stretch goal.\n- Wiki page revisions could be carried as additional metadata on the Update activity, but a simpler v1 just overwrites the shadow page's content on each Update.\n\nMedium-to-large scope. The wiki data model (pages, revisions, links, tags) is richer than messages, and the translation interaction needs testing. But the underlying delivery and shadow-object patterns are the same as channels.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "server-files",
