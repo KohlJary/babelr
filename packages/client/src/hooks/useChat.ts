@@ -15,6 +15,10 @@ export function useChat(
   channelId: string | null,
   isDM = false,
   e2eOptions?: E2EOptions,
+  /** Extra WS handler called for every message — used to pipe
+   *  channel-scoped events to hooks (like useReactions) that don't
+   *  have their own WS subscription. */
+  extraWsHandler?: (msg: WsServerMessage) => void,
 ) {
   const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -85,8 +89,10 @@ export function useChat(
           return next;
         });
       }
+      // Forward to extra handler (reactions, etc.)
+      extraWsHandler?.(msg);
     },
-    [isDM],
+    [isDM, extraWsHandler],
   );
 
   const { connected, send } = useWebSocket(!!actor, handleWsMessage);

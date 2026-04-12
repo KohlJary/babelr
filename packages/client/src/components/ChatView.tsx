@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useEffect, useCallback } from 'react';
-import type { ActorProfile, MessageWithAuthor } from '@babelr/shared';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { ActorProfile, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
 import { useServers } from '../hooks/useServers';
 import { useChannels } from '../hooks/useChannels';
@@ -36,7 +36,6 @@ import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
-import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ChatViewProps {
   actor: ActorProfile;
@@ -98,15 +97,21 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     ? selectedDM.participants.find((p) => p.id !== actor.id)?.id ?? ''
     : '';
 
+  // Ref-based forwarder so useChat can pipe WS events to useReactions
+  // without a dependency cycle (useReactions needs messages from useChat).
+  const extraWsRef = useRef<(msg: WsServerMessage) => void>(() => {});
+  const stableExtraWs = useCallback((msg: WsServerMessage) => extraWsRef.current(msg), []);
+
   const { messages, loading, hasMore, connected, sendMessage, loadMore, typingUsers, notifyTyping, updateMessageContent, removeMessage } = useChat(
     actor,
     activeChannelId,
     dmMode,
     dmMode && e2e.ready && recipientId ? { e2e, recipientId } : undefined,
+    stableExtraWs,
   );
 
   const { messageReactions, handleWsMessage: handleReactionWs, toggleReaction } = useReactions(activeChannelId, actor.id, messages);
-  useWebSocket(true, handleReactionWs);
+  extraWsRef.current = handleReactionWs;
 
   const { settings, updateSettings } = useTranslationSettings();
   const { translations, isTranslating } = useTranslation(messages, settings);
