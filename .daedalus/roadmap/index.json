@@ -614,6 +614,30 @@
       "type": "feature",
       "priority": "P1",
       "status": "backlog"
+    },
+    {
+      "id": "federation-channel-sync",
+      "title": "Federate channel lifecycle events (create, rename, topic, delete)",
+      "description": "After join-remote, the remote instance caches a snapshot of the server's channels as local shadow objects. But new channels created on the origin after the join don't appear on the remote until someone manually re-joins or a refresh mechanism fires. Similarly, channel renames, topic changes, and deletions on the origin don't propagate to the shadow objects.\n\nFix: when the origin creates/updates/deletes a channel, broadcast a Create/Update/Delete(OrderedCollection) activity to the Group's remote followers. The receiving instance creates/updates/tombstones the shadow object accordingly. Also add a periodic or on-select refresh that re-fetches GET /groups/:slug/channels to catch any activities that were missed (e.g. during downtime).\n\nSmall but visible gap — a user on the remote instance clicks a server and sees a stale channel list. Worth fixing before any public federation launch.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "federation-message-edit-delete",
+      "title": "Route federated message edits and deletes through channel context resolution",
+      "description": "The channel discovery work added context-URI resolution to handleCreate so inbound Notes land in the correct shadow channel. But handleUpdate and handleDelete still operate on Notes by URI without resolving the channel context — so a federated message edit or delete doesn't trigger a WS broadcast to the shadow channel's subscribers, meaning remote viewers don't see edits or deletions in real time.\n\nFix: after updating/tombstoning the Note in handleUpdate/handleDelete, look up the stored Note's context (shadow channel id), and broadcast a message:updated or message:deleted WS event to that channel's subscribers. The outbound Update/Delete activities already carry the Note URI, so the receiver can find the stored Note and its context. Small change, high visibility — messages appearing to be uneditable/undeletable from the remote side is a confusing UX.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "federation-voice-relay",
+      "title": "Cross-instance voice channels via TURN relay",
+      "description": "Voice channels use P2P WebRTC mesh between participants on the same instance. Cross-instance voice doesn't work because the signaling (offer/answer/ICE) is relayed through the local WS and there's no mechanism for a remote participant's browser to exchange SDP with peers on the origin instance.\n\nTwo paths:\n1. Forward voice signaling activities through the federation delivery queue so the remote user's browser can establish peer connections with participants on the origin. Requires a shared TURN server that both instances can reach for NAT traversal.\n2. SFU approach: the origin runs a media relay (e.g. mediasoup/Janus) and remote participants connect to it directly via WebRTC. More infrastructure but better quality at scale.\n\nEither way this is a significant project — voice federation is a hard problem that even mature platforms (Matrix/Element) have only recently solved. Defer until the basic federation story is stable and there's real demand for cross-instance voice.",
+      "type": "feature",
+      "priority": "P3",
+      "status": "backlog"
     }
   ],
   "version": 27
