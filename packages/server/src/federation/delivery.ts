@@ -191,7 +191,14 @@ export async function broadcastCreate(
     if (ch) contextUri = ch.uri;
   }
 
-  const noteJson = serializeNote(note, senderActor.uri, contextUri);
+  // Resolve the parent message URI for threaded replies.
+  let inReplyToUri: string | undefined;
+  if (note.inReplyTo) {
+    const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.inReplyTo)).limit(1);
+    if (parent) inReplyToUri = parent.uri;
+  }
+
+  const noteJson = serializeNote(note, senderActor.uri, contextUri, inReplyToUri);
   const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
 
   const activity = serializeActivity(
@@ -356,7 +363,13 @@ export async function broadcastToGroupFollowers(
     if (ch) contextUri = ch.uri;
   }
 
-  const noteJson = serializeNote(note, senderActor.uri, contextUri);
+  let inReplyToUri: string | undefined;
+  if (note.inReplyTo) {
+    const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.inReplyTo)).limit(1);
+    if (parent) inReplyToUri = parent.uri;
+  }
+
+  const noteJson = serializeNote(note, senderActor.uri, contextUri, inReplyToUri);
   const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
 
   // The Group is the outer `actor` — it's the entity that signed and

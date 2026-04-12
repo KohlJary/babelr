@@ -508,6 +508,19 @@ async function handleCreate(
       if (shadow) channelContextId = shadow.id;
     }
 
+    // Resolve inReplyTo URI to a local object ID so the reply
+    // attaches to the correct thread on the receiving instance.
+    let localInReplyTo: string | null = null;
+    const inReplyToUri = (obj as Record<string, unknown>).inReplyTo as string | undefined;
+    if (inReplyToUri) {
+      const [parent] = await fastify.db
+        .select({ id: objects.id })
+        .from(objects)
+        .where(eq(objects.uri, inReplyToUri))
+        .limit(1);
+      if (parent) localInReplyTo = parent.id;
+    }
+
     // Extract Babelr-custom encryption fields
     const noteProps: Record<string, unknown> = {};
     if ((obj as Record<string, unknown>).babelrEncrypted) noteProps.encrypted = true;
@@ -526,6 +539,7 @@ async function handleCreate(
         attributedTo: noteAuthor.id,
         content: obj.content ?? null,
         context: channelContextId,
+        inReplyTo: localInReplyTo,
         to: toList,
         cc: (obj.cc as string[]) ?? [],
         published: obj.published ? new Date(obj.published as string) : new Date(),

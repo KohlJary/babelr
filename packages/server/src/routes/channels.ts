@@ -1263,7 +1263,14 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           // Remote server: deliver to the origin Group's inbox.
           let contextUri: string | undefined;
           if (channel) contextUri = channel.uri;
-          const noteJson = serializeNote(reply_msg, request.actor.uri, contextUri);
+          // Resolve the parent message URI so the receiver can
+          // attach the reply to the correct thread.
+          let inReplyToUri: string | undefined;
+          if (reply_msg.inReplyTo) {
+            const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, reply_msg.inReplyTo)).limit(1);
+            if (parent) inReplyToUri = parent.uri;
+          }
+          const noteJson = serializeNote(reply_msg, request.actor.uri, contextUri, inReplyToUri);
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
           const activity = serializeActivity(
             activityUri,
