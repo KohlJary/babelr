@@ -638,6 +638,14 @@
       "type": "feature",
       "priority": "P3",
       "status": "backlog"
+    },
+    {
+      "id": "federation-signed-proxy-requests",
+      "title": "Replace unauthenticated by-slug proxy with HTTP-signed federation requests",
+      "description": "The message embed proxy (GET /messages/by-slug/:slug) currently allows unauthenticated access for public-channel messages so remote instances can resolve [[msg:slug]] embeds without a session cookie. This works but is too permissive for enterprise deployments that want to lock down their instance — any crawler or unauthorized client can enumerate public message slugs and read content.\n\nThe right fix: use HTTP Signatures for the proxy request, same as inbox deliveries. When instance B needs to resolve a slug on instance A, B signs the GET request with the requesting user's (or the instance's) actor key. A verifies the signature, checks that the signing actor is a member of the server that owns the channel, and returns the embed data. Unauthorized or non-member requests get 404 as before.\n\nThis requires:\n- A signed-GET helper in the federation layer (currently only POST deliveries are signed)\n- The by-slug endpoint to accept either session auth OR a valid HTTP Signature from a known actor\n- The proxy code in the by-slug fallback to use the signed-GET helper instead of a plain fetch\n\nSmall scope, but touches the signature infrastructure which needs careful testing. The current unauthenticated path should be removed once this lands — it's a temporary expedient, not a design choice.\n\nAlso worth auditing: the /groups/:slug/channels and /groups/:slug/members endpoints are similarly unauthenticated. Those should also move to signed requests for consistency, though they're less sensitive (channel names and member lists vs message content).",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
     }
   ],
   "version": 27
