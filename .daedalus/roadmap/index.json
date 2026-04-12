@@ -621,7 +621,7 @@
       "description": "After join-remote, the remote instance caches a snapshot of the server's channels as local shadow objects. But new channels created on the origin after the join don't appear on the remote until someone manually re-joins or a refresh mechanism fires. Similarly, channel renames, topic changes, and deletions on the origin don't propagate to the shadow objects.\n\nFix: when the origin creates/updates/deletes a channel, broadcast a Create/Update/Delete(OrderedCollection) activity to the Group's remote followers. The receiving instance creates/updates/tombstones the shadow object accordingly. Also add a periodic or on-select refresh that re-fetches GET /groups/:slug/channels to catch any activities that were missed (e.g. during downtime).\n\nSmall but visible gap — a user on the remote instance clicks a server and sees a stale channel list. Worth fixing before any public federation launch.",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-message-edit-delete",
@@ -645,7 +645,7 @@
       "description": "The message embed proxy (GET /messages/by-slug/:slug) currently allows unauthenticated access for public-channel messages so remote instances can resolve [[msg:slug]] embeds without a session cookie. This works but is too permissive for enterprise deployments that want to lock down their instance — any crawler or unauthorized client can enumerate public message slugs and read content.\n\nThe right fix: use HTTP Signatures for the proxy request, same as inbox deliveries. When instance B needs to resolve a slug on instance A, B signs the GET request with the requesting user's (or the instance's) actor key. A verifies the signature, checks that the signing actor is a member of the server that owns the channel, and returns the embed data. Unauthorized or non-member requests get 404 as before.\n\nThis requires:\n- A signed-GET helper in the federation layer (currently only POST deliveries are signed)\n- The by-slug endpoint to accept either session auth OR a valid HTTP Signature from a known actor\n- The proxy code in the by-slug fallback to use the signed-GET helper instead of a plain fetch\n\nSmall scope, but touches the signature infrastructure which needs careful testing. The current unauthenticated path should be removed once this lands — it's a temporary expedient, not a design choice.\n\nAlso worth auditing: the /groups/:slug/channels and /groups/:slug/members endpoints are similarly unauthenticated. Those should also move to signed requests for consistency, though they're less sensitive (channel names and member lists vs message content).",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-reactions",
