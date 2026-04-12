@@ -176,6 +176,9 @@ async function routeActivity(
     case 'Update':
       await handleUpdate(fastify, remoteActor, body);
       break;
+    case 'Add':
+      await handleAdd(fastify, localActor, remoteActor, body);
+      break;
     case 'Read':
       await handleRead(fastify, remoteActor, body);
       break;
@@ -629,6 +632,102 @@ async function handleCreate(
   }
 
   fastify.log.info({ actor: remoteActor.uri, type: 'Create' }, 'Remote Create processed');
+}
+
+/**
+ * Handle an Add activity — used when a remote server invites a local
+ * user to a private channel. The activity's object carries the
+ * channel metadata (URI, name, type, belongsTo) so we can create a
+ * local shadow without a follow-up fetch. The `to` field addresses
+ * the invited local actor.
+ */
+async function handleAdd(
+  fastify: FastifyInstance,
+  localActor: typeof actors.$inferSelect | null,
+  remoteActor: typeof actors.$inferSelect,
+  activity: APActivity,
+) {
+  const obj = activity.object;
+  if (typeof obj === 'string' || !obj) return;
+
+  const objData = obj as Record<string, unknown>;
+  if (objData.type !== 'OrderedCollection' || !objData.id) return;
+
+  // Find the local user being invited (from the `to` field).
+  const toList = activity.to ?? [];
+  let targetActor = localActor;
+  if (!targetActor) {
+    for (const uri of toList) {
+      const [local] = await fastify.db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.uri, uri), eq(actors.local, true)))
+        .limit(1);
+      if (local) { targetActor = local; break; }
+    }
+  }
+  if (!targetActor) return;
+
+  // Resolve the server Group that owns this channel. The belongsTo
+  // field from the activity carries the Group's actor id on the
+  // origin — look up our cached copy by matching the origin server.
+  const belongsToId = objData.belongsTo as string | undefined;
+  let localGroupId: string | null = null;
+  if (belongsToId) {
+    // Try to find a cached remote Group actor matching this id.
+    const [group] = await fastify.db
+      .select({ id: actors.id })
+      .from(actors)
+      .where(and(eq(actors.type, 'Group'), eq(actors.local, false)))
+      .limit(1);
+    if (group) localGroupId = group.id;
+  }
+
+  // Create (or find) the shadow channel.
+  const channelUri = objData.id as string;
+  const [existing] = await fastify.db
+    .select({ id: objects.id })
+    .from(objects)
+    .where(eq(objects.uri, channelUri))
+    .limit(1);
+
+  let shadowId: string;
+  if (existing) {
+    shadowId = existing.id;
+  } else {
+    const [created] = await fastify.db
+      .insert(objects)
+      .values({
+        uri: channelUri,
+        type: 'OrderedCollection',
+        belongsTo: localGroupId,
+        properties: {
+          name: (objData.name as string) ?? 'unnamed',
+          channelType: (objData.channelType as string) ?? 'text',
+          isPrivate: true,
+          ...(objData.topic ? { topic: objData.topic } : {}),
+          ...(objData.category ? { category: objData.category } : {}),
+        },
+      })
+      .returning();
+    shadowId = created.id;
+  }
+
+  // Add the local user to the channel's membership.
+  await fastify.db
+    .insert(collectionItems)
+    .values({
+      collectionUri: channelUri,
+      collectionId: shadowId,
+      itemUri: targetActor.uri,
+      itemId: targetActor.id,
+    })
+    .onConflictDoNothing();
+
+  fastify.log.info(
+    { channel: channelUri, user: targetActor.uri },
+    'Remote channel invite (Add) processed',
+  );
 }
 
 async function handleRead(

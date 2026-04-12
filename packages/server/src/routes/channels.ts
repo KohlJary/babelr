@@ -1436,6 +1436,39 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         })
         .onConflictDoNothing();
 
+      // Federation: if the invited user is remote, deliver an Add
+      // activity to their inbox so their instance creates a shadow
+      // channel and adds them to it. The activity carries enough
+      // channel metadata for the receiving instance to construct
+      // the shadow without a follow-up fetch.
+      if (!user.local && user.inboxUri && request.actor.local) {
+        const config = fastify.config;
+        const protocol = config.secureCookies ? 'https' : 'http';
+        const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+        const activity = serializeActivity(
+          activityUri,
+          'Add',
+          request.actor.uri,
+          {
+            type: 'OrderedCollection',
+            id: channel.uri,
+            name: (props as Record<string, unknown>)?.name ?? 'unnamed',
+            channelType: (props as Record<string, unknown>)?.channelType ?? 'text',
+            ...(props?.topic ? { topic: props.topic } : {}),
+            ...(props?.category ? { category: props.category } : {}),
+            isPrivate: true,
+            belongsTo: channel.belongsTo,
+          },
+          [user.uri],
+          [],
+        );
+        ensureActorKeys(db, request.actor)
+          .then((actorWithKeys) =>
+            enqueueDelivery(db, activity, user.inboxUri!, actorWithKeys.id),
+          )
+          .catch((err) => fastify.log.error(err, 'Channel invite federation failed'));
+      }
+
       return { ok: true };
     },
   );
