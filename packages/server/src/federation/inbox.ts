@@ -1170,6 +1170,14 @@ async function handleUpdate(
       }
     }
 
+    // Notify local clients so sidebars update for Group metadata changes.
+    if (innerType === 'Group') {
+      fastify.broadcastToAllSubscribers({
+        type: 'server:updated',
+        payload: { serverId: remoteActor.id },
+      });
+    }
+
     fastify.log.info(
       { actor: remoteActor.uri, type: innerType },
       'Remote Update(Actor) processed',

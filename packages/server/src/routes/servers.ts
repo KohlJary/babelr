@@ -307,6 +307,12 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .from(collectionItems)
         .where(eq(collectionItems.collectionUri, updated.followersUri!));
 
+      // Notify all connected clients so sidebars update live.
+      fastify.broadcastToAllSubscribers({
+        type: 'server:updated',
+        payload: { serverId: updated.id },
+      });
+
       // Federation: deliver Update(Actor) to the Group's remote
       // followers so they see the new name/icon/description. The
       // inbound handleUpdate already handles Group actor updates.

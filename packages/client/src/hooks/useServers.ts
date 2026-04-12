@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useCallback } from 'react';
-import type { ServerView, CreateServerInput } from '@babelr/shared';
+import type { ServerView, CreateServerInput, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
+import { useWebSocket } from './useWebSocket';
 
 export function useServers() {
   const [servers, setServers] = useState<ServerView[]>([]);
@@ -17,6 +18,20 @@ export function useServers() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Live-refresh server list when metadata changes (local or federated).
+  const handleWs = useCallback((msg: WsServerMessage) => {
+    if (msg.type === 'server:updated') {
+      void api.getServers().then((refreshed) => {
+        setServers(refreshed);
+        setSelectedServer((prev) => {
+          if (!prev) return prev;
+          return refreshed.find((s) => s.id === prev.id) ?? prev;
+        });
+      });
+    }
+  }, []);
+  useWebSocket(true, handleWs);
 
   const selectServer = useCallback(
     (id: string) => {
