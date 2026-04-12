@@ -488,6 +488,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       {showChannelInvite && activeChannelId && (
         <ChannelInviteModal
           channelId={activeChannelId}
+          serverId={selectedServer?.id}
           onClose={() => setShowChannelInvite(false)}
         />
       )}

@@ -5,10 +5,14 @@ import { useT } from '../i18n/I18nProvider';
 
 interface ChannelInviteModalProps {
   channelId: string;
+  /** Server the channel belongs to. When provided, the user list
+   *  is populated from the server's member list (which includes
+   *  federated members) instead of the global local-users endpoint. */
+  serverId?: string | null;
   onClose: () => void;
 }
 
-export function ChannelInviteModal({ channelId, onClose }: ChannelInviteModalProps) {
+export function ChannelInviteModal({ channelId, serverId, onClose }: ChannelInviteModalProps) {
   const t = useT();
   const [users, setUsers] = useState<{ id: string; preferredUsername: string; displayName: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,8 +20,17 @@ export function ChannelInviteModal({ channelId, onClose }: ChannelInviteModalPro
   const [invited, setInvited] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    api.getUsers().then(setUsers).finally(() => setLoading(false));
-  }, []);
+    const fetch = serverId
+      ? api.getMembers(serverId).then((members) =>
+          members.map((m) => ({
+            id: m.id,
+            preferredUsername: m.preferredUsername,
+            displayName: m.displayName,
+          })),
+        )
+      : api.getUsers();
+    fetch.then(setUsers).finally(() => setLoading(false));
+  }, [serverId]);
 
   const handleInvite = async (userId: string) => {
     setInviting(userId);
