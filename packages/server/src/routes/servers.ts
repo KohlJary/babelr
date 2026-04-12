@@ -397,6 +397,29 @@ export default async function serverRoutes(fastify: FastifyInstance) {
           ),
         );
 
+      // For remote servers, send Undo(Follow) so the origin removes
+      // us from their followers list and stops delivering messages.
+      if (!server.local && server.inboxUri && request.actor.local) {
+        const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
+        const undoActivity = serializeActivity(
+          activityUri,
+          'Undo',
+          request.actor.uri,
+          {
+            type: 'Follow',
+            actor: request.actor.uri,
+            object: server.uri,
+          },
+          [server.uri],
+          [],
+        );
+        ensureActorKeys(db, request.actor)
+          .then((actorWithKeys) =>
+            enqueueDelivery(db, undoActivity, server.inboxUri!, actorWithKeys.id),
+          )
+          .catch((err) => fastify.log.error(err, 'Leave server Undo delivery failed'));
+      }
+
       return { ok: true };
     },
   );
