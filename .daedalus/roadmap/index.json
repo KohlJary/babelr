@@ -261,7 +261,7 @@
       "description": "Stand up a second Babelr deployment (and where applicable test against a Mastodon-compatible instance) and validate every federation path end-to-end: WebFinger lookup, Person actor resolution + ECDH key fetch, Group actor + Follow/Accept for server joins, Note delivery for public channel messages, targeted DM Create activities with E2E payloads, Read receipts, friend-request Follow/Accept/Undo, Delete tombstones, avatar icon round-trip, Group server logo icon round-trip. Currently every federated feature has only been tested against itself; the wire format may pass our own validation and still get rejected by stricter implementations. Highest-leverage launch blocker.",
       "type": "chore",
       "priority": "P0",
-      "status": "ready"
+      "status": "done"
     },
     {
       "id": "calendars-events",
@@ -613,7 +613,7 @@
       "description": "When a user changes their display name, avatar, or bio on one instance, remote instances that have them as a friend (or have otherwise cached them) continue to show the stale values until the 24-hour resolver cache expires. This is one of the first things any real user will notice — federating a friend request but not the display name makes the whole federation story look broken.\n\nFix:\n- On POST /auth/profile (and any other route that mutates actor.displayName, summary, or properties.avatarUrl), enqueue an Update(Actor) activity via the delivery queue to every remote inbox that has a relationship with this actor. Start with the friends set (accepted friendships row with a remote otherActorId) — that's the smallest-possible audience that covers the visible-papercut case.\n- Extend federation/inbox.ts handleUpdate to detect when the inner object's `type` is `Person` or `Group` and write the new fields back to the cached `actors` row (displayName, summary, properties.avatarUrl), instead of only handling Note updates.\n- Consider tightening the 24-hour STALE_THRESHOLD_MS in resolve.ts for actors we have an active relationship with. For friends, 24h is too long; for one-off message-chain actors it's fine.\n\nScope-adjacent follow-ups to consider as separate items:\n- Group actor metadata updates (server name/icon/description changing on origin → remote followers see the change). Same Update(Actor) shape, different audience (group followers instead of friends).\n- Actor deletion — when someone deletes their account, deliver Delete(Actor) to remote peers and have them remove or tombstone the cached row.",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-channel-sync",
@@ -629,7 +629,7 @@
       "description": "The channel discovery work added context-URI resolution to handleCreate so inbound Notes land in the correct shadow channel. But handleUpdate and handleDelete still operate on Notes by URI without resolving the channel context — so a federated message edit or delete doesn't trigger a WS broadcast to the shadow channel's subscribers, meaning remote viewers don't see edits or deletions in real time.\n\nFix: after updating/tombstoning the Note in handleUpdate/handleDelete, look up the stored Note's context (shadow channel id), and broadcast a message:updated or message:deleted WS event to that channel's subscribers. The outbound Update/Delete activities already carry the Note URI, so the receiver can find the stored Note and its context. Small change, high visibility — messages appearing to be uneditable/undeletable from the remote side is a confusing UX.",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "federation-voice-relay",
@@ -645,6 +645,38 @@
       "description": "The message embed proxy (GET /messages/by-slug/:slug) currently allows unauthenticated access for public-channel messages so remote instances can resolve [[msg:slug]] embeds without a session cookie. This works but is too permissive for enterprise deployments that want to lock down their instance — any crawler or unauthorized client can enumerate public message slugs and read content.\n\nThe right fix: use HTTP Signatures for the proxy request, same as inbox deliveries. When instance B needs to resolve a slug on instance A, B signs the GET request with the requesting user's (or the instance's) actor key. A verifies the signature, checks that the signing actor is a member of the server that owns the channel, and returns the embed data. Unauthorized or non-member requests get 404 as before.\n\nThis requires:\n- A signed-GET helper in the federation layer (currently only POST deliveries are signed)\n- The by-slug endpoint to accept either session auth OR a valid HTTP Signature from a known actor\n- The proxy code in the by-slug fallback to use the signed-GET helper instead of a plain fetch\n\nSmall scope, but touches the signature infrastructure which needs careful testing. The current unauthenticated path should be removed once this lands — it's a temporary expedient, not a design choice.\n\nAlso worth auditing: the /groups/:slug/channels and /groups/:slug/members endpoints are similarly unauthenticated. Those should also move to signed requests for consistency, though they're less sensitive (channel names and member lists vs message content).",
       "type": "feature",
       "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "federation-reactions",
+      "title": "Federate emoji reactions across instances",
+      "description": "Reactions (Like activities in AP terms) don't cross instance boundaries. When alice reacts to bob's message on A, bob doesn't see the reaction on B, and vice versa.\n\nOutbound: when a user adds a reaction, deliver a Like(Note) activity to the Group's inbox (for server channels) or to the remote participant's inbox (for DMs). When removed, deliver an Undo(Like). The activity should carry the emoji and the Note URI so the receiver can match it.\n\nInbound: new handleLike / handleUndoLike in inbox.ts that finds the local Note by URI, upserts/deletes the reaction row, and broadcasts a reaction:add/reaction:remove WS event to the channel's subscribers.\n\nSmall scope — reactions are simple single-field objects. Main risk is the N reactions × M followers fanout volume on a busy channel, but the delivery queue handles batching already.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "federation-server-metadata",
+      "title": "Federate server metadata updates (name, icon, description)",
+      "description": "When the origin server's name, logo, or description changes, remote instances that have the Group actor cached continue showing the old values. Same pattern as the actor-profile federation (Update(Actor)) but the audience is Group followers instead of friends.\n\nFix: when a server admin updates the Group actor's display name, properties.logoUrl, or summary via PUT /servers/:id, enqueue an Update(Actor) to every remote follower's inbox. The receiving instance's handleUpdate already handles Person and Group actor updates and overwrites the cached row.\n\nThe missing piece is just the outbound trigger — the inbound handler is already wired from the profile-updates work.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "federation-events",
+      "title": "Federate calendar events (Create, Update, Delete, RSVP)",
+      "description": "Calendar events on a server are invisible to remote members. When alice creates, edits, or deletes an event on Test Server, bob on instance B has no idea — his calendar view for the remote server is empty.\n\nScope:\n- Outbound: when a server event is created/updated/deleted, deliver a Create/Update/Delete(Event) activity to the Group's remote followers. The Event object carries title, description, startAt, endAt, location, rrule, slug.\n- Inbound: new handler for Event-typed objects that creates/updates/deletes a local shadow event row in the events table with the remote server as owner.\n- RSVP federation: when bob RSVPs from B, deliver the RSVP to the origin Group's inbox. The origin updates the attendee list and relays the updated counts to other followers.\n- The event embed system ([[event:slug]]) should work cross-instance once the event slug is carried in the federated payload, same pattern as message slugs.\n\nMedium scope — events have more fields than messages and the RSVP relay adds a round-trip, but the delivery infrastructure is the same.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "federation-wiki",
+      "title": "Federate wiki pages (Create, Update, Delete)",
+      "description": "Wiki pages on a federated server are invisible to remote members. Bob can see channels and messages but the wiki panel for a remote server is empty.\n\nScope:\n- Outbound: when a wiki page is created/updated/deleted, deliver a Create/Update/Delete(Article) activity to the Group's remote followers. The Article object carries title, slug, content, tags.\n- Inbound: new handler for Article-typed objects that creates/updates/deletes a local shadow wiki_pages row. The shadow page's server_id points at the cached remote Group actor.\n- The wiki translation pipeline should work transparently on shadow pages since it operates on content, not origin.\n- Bidirectional links ([[page-slug]]) would resolve locally against the shadow pages. Cross-instance wiki backlinks are a stretch goal.\n- Wiki page revisions could be carried as additional metadata on the Update activity, but a simpler v1 just overwrites the shadow page's content on each Update.\n\nMedium-to-large scope. The wiki data model (pages, revisions, links, tags) is richer than messages, and the translation interaction needs testing. But the underlying delivery and shadow-object patterns are the same as channels.",
+      "type": "feature",
+      "priority": "P2",
       "status": "backlog"
     }
   ],
