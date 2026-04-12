@@ -55,6 +55,8 @@ export const UI_STRINGS = {
   'channelSidebar.glossary': 'Glossary',
   'channelSidebar.serverSettings': 'Server Settings',
   'channelSidebar.inviteToChannel': 'Invite to Channel',
+  'channelSidebar.leaveServer': 'Leave Server',
+  'channelSidebar.leaveConfirm': 'Leave this server? You can rejoin later.',
   'channelSidebar.muteChannel': 'Mute',
   'channelSidebar.unmuteChannel': 'Unmute',
   'channelSidebar.channelSettingsTitle': 'Channel settings',

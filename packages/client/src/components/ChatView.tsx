@@ -263,6 +263,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         onShowFriends={dmMode ? () => setShowFriends(true) : undefined}
         canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
         onEditChannel={(channelId) => setEditingChannelId(channelId)}
+        onLeaveServer={
+          !dmMode && selectedServer && callerRole !== 'owner'
+            ? async () => {
+                await api.leaveServer(selectedServer.id);
+                void refreshServers();
+              }
+            : undefined
+        }
         onShowCalendar={() => setMainView('calendar')}
         onShowWiki={!dmMode && selectedServer ? () => setMainView('wiki') : undefined}
         onJoinVoice={(channelId) => {

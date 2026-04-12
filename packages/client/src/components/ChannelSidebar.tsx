@@ -31,6 +31,7 @@ interface ChannelSidebarProps {
   onShowWiki?: () => void;
   onJoinVoice?: (channelId: string) => void;
   activeVoiceChannelId?: string | null;
+  onLeaveServer?: () => void;
 }
 
 export function ChannelSidebar({
@@ -61,6 +62,7 @@ export function ChannelSidebar({
   onShowWiki,
   onJoinVoice,
   activeVoiceChannelId,
+  onLeaveServer,
 }: ChannelSidebarProps) {
   const t = useT();
   if (mode === 'dms') {
@@ -217,6 +219,19 @@ export function ChannelSidebar({
         {onShowServerSettings && (
           <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
             {t('channelSidebar.serverSettings')}
+          </button>
+        )}
+        {onLeaveServer && (
+          <button
+            className="sidebar-item add-channel"
+            style={{ color: '#ef4444' }}
+            onClick={() => {
+              if (window.confirm(t('channelSidebar.leaveConfirm'))) {
+                onLeaveServer();
+              }
+            }}
+          >
+            {t('channelSidebar.leaveServer')}
           </button>
         )}
       </div>
