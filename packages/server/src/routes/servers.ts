@@ -469,6 +469,57 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         await enqueueDelivery(db, activity, remoteGroup.inboxUri, request.actor.id);
       }
 
+      // Fetch the remote server's public channels and create local
+      // shadow objects so the existing channel listing and WS
+      // subscription paths work without any special remote-vs-local
+      // branching on the client side. Each shadow object carries the
+      // remote channel's URI so inbound Create(Note) activities can
+      // be routed to the correct shadow by matching on context URI.
+      try {
+        const origin = new URL(remoteGroup.uri).origin;
+        const slug = remoteGroup.preferredUsername;
+        const channelsUrl = `${origin}/groups/${encodeURIComponent(slug)}/channels`;
+        const res = await fetch(channelsUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': 'Babelr/0.1.0' },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            channels: Array<{
+              uri: string;
+              name: string;
+              channelType?: string;
+              topic?: string;
+              category?: string;
+            }>;
+          };
+          for (const ch of data.channels ?? []) {
+            await db
+              .insert(objects)
+              .values({
+                uri: ch.uri,
+                type: 'OrderedCollection',
+                belongsTo: remoteGroup.id,
+                properties: {
+                  name: ch.name,
+                  channelType: ch.channelType ?? 'text',
+                  ...(ch.topic ? { topic: ch.topic } : {}),
+                  ...(ch.category ? { category: ch.category } : {}),
+                },
+              })
+              .onConflictDoNothing({ target: objects.uri });
+          }
+        }
+      } catch {
+        // Non-fatal — the user joined the server but channels couldn't
+        // be fetched. They'll be retried on the next channel listing or
+        // when the first message arrives and creates the shadow.
+        fastify.log.warn(
+          { group: remoteGroup.uri },
+          'Failed to fetch remote channels on join',
+        );
+      }
+
       return { ok: true, server: toServerView(remoteGroup, 1) };
     },
   );

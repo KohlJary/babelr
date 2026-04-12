@@ -55,6 +55,7 @@ export function serializeActor(actor: typeof actors.$inferSelect) {
 export function serializeNote(
   obj: typeof objects.$inferSelect,
   actorUri: string,
+  contextUri?: string,
 ) {
   const props = obj.properties as Record<string, unknown> | null;
   return {
@@ -66,6 +67,7 @@ export function serializeNote(
     published: obj.published.toISOString(),
     to: (obj.to as string[]) ?? ['https://www.w3.org/ns/activitystreams#Public'],
     cc: (obj.cc as string[]) ?? [],
+    ...(contextUri ? { context: contextUri } : {}),
     ...(obj.mediaType && { mediaType: obj.mediaType }),
     ...(props?.encrypted ? { babelrEncrypted: true } : {}),
     ...(props?.iv ? { babelrIv: props.iv } : {}),

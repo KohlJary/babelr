@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Permission } from '@babelr/shared';
-import { PERMISSIONS } from '@babelr/shared';
+import { PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from '@babelr/shared';
 import { serverRoles, serverRoleAssignments } from './db/schema/roles.ts';
 import { collectionItems } from './db/schema/collections.ts';
 import { actors } from './db/schema/actors.ts';
@@ -68,6 +68,21 @@ export async function getEffectivePermissions(
     )
     .limit(1);
   if (!membership) return new Set();
+
+  // Remote servers: we don't have local role definitions — permissions
+  // are defined and enforced by the origin server. For a remote
+  // member, grant the standard @everyone permission set so the local
+  // channel listing and other permission-gated paths work. The origin
+  // server is the real authority; these permissions only govern what
+  // the local UI exposes.
+  const [serverActor] = await db
+    .select({ local: actors.local })
+    .from(actors)
+    .where(eq(actors.id, serverId))
+    .limit(1);
+  if (serverActor && !serverActor.local) {
+    return new Set(DEFAULT_ROLE_PERMISSIONS.everyone);
+  }
 
   // Load the @everyone role (always applies to every member).
   const defaultRoles = await db

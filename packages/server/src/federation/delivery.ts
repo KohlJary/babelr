@@ -181,8 +181,17 @@ export async function broadcastCreate(
 ) {
   const config = fastify.config;
   const protocol = config.secureCookies ? 'https' : 'http';
+  const db = fastify.db;
 
-  const noteJson = serializeNote(note, senderActor.uri);
+  // Resolve the channel URI so remote instances can route the
+  // message into the correct shadow channel on their end.
+  let contextUri: string | undefined;
+  if (note.context) {
+    const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.context)).limit(1);
+    if (ch) contextUri = ch.uri;
+  }
+
+  const noteJson = serializeNote(note, senderActor.uri, contextUri);
   const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
 
   const activity = serializeActivity(
@@ -339,8 +348,15 @@ export async function broadcastToGroupFollowers(
 ) {
   const config = fastify.config;
   const protocol = config.secureCookies ? 'https' : 'http';
+  const db = fastify.db;
 
-  const noteJson = serializeNote(note, senderActor.uri);
+  let contextUri: string | undefined;
+  if (note.context) {
+    const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.context)).limit(1);
+    if (ch) contextUri = ch.uri;
+  }
+
+  const noteJson = serializeNote(note, senderActor.uri, contextUri);
   const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
 
   const activity = serializeActivity(

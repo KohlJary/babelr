@@ -480,6 +480,22 @@ async function handleCreate(
       }
     }
 
+    // For public channel messages, resolve the `context` URI from the
+    // inbound Note to a local shadow channel. If the message references
+    // a channel URI we already cached during join-remote, the Note gets
+    // stored with the shadow's local id as its context — then the
+    // existing message-list and WS subscription flows Just Work.
+    let channelContextId: string | null = localDMId;
+    if (!channelContextId && (obj as Record<string, unknown>).context) {
+      const contextUri = (obj as Record<string, unknown>).context as string;
+      const [shadow] = await fastify.db
+        .select({ id: objects.id })
+        .from(objects)
+        .where(eq(objects.uri, contextUri))
+        .limit(1);
+      if (shadow) channelContextId = shadow.id;
+    }
+
     // Extract Babelr-custom encryption fields
     const noteProps: Record<string, unknown> = {};
     if ((obj as Record<string, unknown>).babelrEncrypted) noteProps.encrypted = true;
@@ -497,7 +513,7 @@ async function handleCreate(
         type: 'Note',
         attributedTo: remoteActor.id,
         content: obj.content ?? null,
-        context: localDMId,
+        context: channelContextId,
         to: toList,
         cc: (obj.cc as string[]) ?? [],
         published: obj.published ? new Date(obj.published as string) : new Date(),
@@ -506,12 +522,14 @@ async function handleCreate(
       .onConflictDoNothing({ target: objects.uri })
       .returning();
 
-    // Broadcast to locally-connected DM participants
-    if (localDMId && stored) {
+    // Broadcast to locally-connected participants. For DMs this
+    // targets the local DM collection; for federated channel
+    // messages it targets the shadow channel's subscribers.
+    if (channelContextId && stored) {
       const messageView = {
         id: stored.id,
         content: stored.content ?? '',
-        channelId: localDMId,
+        channelId: channelContextId,
         authorId: remoteActor.id,
         published: stored.published.toISOString(),
         ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
@@ -522,14 +540,14 @@ async function handleCreate(
         displayName: remoteActor.displayName,
         avatarUrl: ((remoteActor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
       };
-      fastify.broadcastToChannel(localDMId, {
+      fastify.broadcastToChannel(channelContextId, {
         type: 'message:new',
         payload: { message: messageView, author: authorView },
       });
 
       // If this is a brand-new DM, push conversation:new to the recipient
       // so their sidebar updates without a reload
-      if (dmIsNew && dmLocalRecipient) {
+      if (dmIsNew && dmLocalRecipient && localDMId) {
         const localAuthorView = {
           id: dmLocalRecipient.id,
           preferredUsername: dmLocalRecipient.preferredUsername,
