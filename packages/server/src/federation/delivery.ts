@@ -359,10 +359,17 @@ export async function broadcastToGroupFollowers(
   const noteJson = serializeNote(note, senderActor.uri, contextUri);
   const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
 
+  // The Group is the outer `actor` — it's the entity that signed and
+  // relayed this Note to its followers. The Note's `attributedTo`
+  // still points at the original author (senderActor.uri) so
+  // receivers know who actually wrote the message. This separation
+  // is critical for inbox verification: the receiver checks that
+  // `activity.actor === signing key owner`, which only holds when
+  // the Group is the claimed actor.
   const activity = serializeActivity(
     activityUri,
     'Create',
-    senderActor.uri,
+    groupActor.uri,
     noteJson,
     ['https://www.w3.org/ns/activitystreams#Public'],
     [groupActor.followersUri ?? ''],

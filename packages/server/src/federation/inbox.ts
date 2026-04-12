@@ -9,7 +9,7 @@ import { collectionItems } from '../db/schema/collections.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { toAuthorView } from '../routes/channels.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
-import { resolveActorByKeyId, resolveObject } from './resolve.ts';
+import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
 import { enqueueDelivery } from './delivery.ts';
 import { serializeActivity } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
@@ -480,6 +480,18 @@ async function handleCreate(
       }
     }
 
+    // Resolve the Note's real author. For DMs and personal-fanout
+    // deliveries, remoteActor IS the author. But for Group-relayed
+    // messages, remoteActor is the Group and the Note's attributedTo
+    // points at the actual person who wrote the message. Resolve
+    // that person so the stored Note gets the right author.
+    let noteAuthor = remoteActor;
+    const noteAttributedTo = (obj as Record<string, unknown>).attributedTo as string | undefined;
+    if (noteAttributedTo && noteAttributedTo !== remoteActor.uri) {
+      const resolved = await resolveActor(fastify.db, noteAttributedTo);
+      if (resolved) noteAuthor = resolved;
+    }
+
     // For public channel messages, resolve the `context` URI from the
     // inbound Note to a local shadow channel. If the message references
     // a channel URI we already cached during join-remote, the Note gets
@@ -511,7 +523,7 @@ async function handleCreate(
       .values({
         uri: obj.id,
         type: 'Note',
-        attributedTo: remoteActor.id,
+        attributedTo: noteAuthor.id,
         content: obj.content ?? null,
         context: channelContextId,
         to: toList,
@@ -530,15 +542,15 @@ async function handleCreate(
         id: stored.id,
         content: stored.content ?? '',
         channelId: channelContextId,
-        authorId: remoteActor.id,
+        authorId: noteAuthor.id,
         published: stored.published.toISOString(),
         ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
       };
       const authorView = {
-        id: remoteActor.id,
-        preferredUsername: remoteActor.preferredUsername,
-        displayName: remoteActor.displayName,
-        avatarUrl: ((remoteActor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
+        id: noteAuthor.id,
+        preferredUsername: noteAuthor.preferredUsername,
+        displayName: noteAuthor.displayName,
+        avatarUrl: ((noteAuthor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
       };
       fastify.broadcastToChannel(channelContextId, {
         type: 'message:new',
