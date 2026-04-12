@@ -85,7 +85,6 @@ export function useChat(
           return next;
         });
       }
-      // Note: reaction:add and reaction:remove are handled by useReactions hook
     },
     [isDM],
   );

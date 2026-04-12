@@ -36,6 +36,7 @@ import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface ChatViewProps {
   actor: ActorProfile;
@@ -104,7 +105,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     dmMode && e2e.ready && recipientId ? { e2e, recipientId } : undefined,
   );
 
-  const { messageReactions, toggleReaction } = useReactions(activeChannelId, actor.id, messages);
+  const { messageReactions, handleWsMessage: handleReactionWs, toggleReaction } = useReactions(activeChannelId, actor.id, messages);
+  useWebSocket(true, handleReactionWs);
 
   const { settings, updateSettings } = useTranslationSettings();
   const { translations, isTranslating } = useTranslation(messages, settings);
