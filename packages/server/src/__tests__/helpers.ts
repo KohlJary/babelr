@@ -56,6 +56,7 @@ export async function createTestApp() {
     fp(
       async (fastify) => {
         fastify.decorate('broadcastToChannel', () => {});
+        fastify.decorate('broadcastToAllSubscribers', () => {});
         fastify.decorate('broadcastToActor', () => {});
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});

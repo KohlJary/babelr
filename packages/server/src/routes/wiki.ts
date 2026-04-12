@@ -8,7 +8,7 @@ import { wikiPages, wikiPageRevisions, wikiPageLinks } from '../db/schema/wiki.t
 import { toAuthorView } from './channels.ts';
 import { extractWikiSlugs, PERMISSIONS } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
-import { enqueueToFollowers } from '../federation/delivery.ts';
+import { enqueueToFollowers, enqueueDelivery } from '../federation/delivery.ts';
 import { serializeActivity } from '../federation/jsonld.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import type {
@@ -348,10 +348,10 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       await syncPageOutboundLinks(db, created.serverId, created.id, created.content);
 
-      // Federation: deliver Create(Article) to Group followers.
+      // Federation: deliver Create(Article).
       if (request.actor.local) {
         const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
-        if (group?.local) {
+        if (group) {
           const article = {
             type: 'Article',
             id: created.uri,
@@ -363,12 +363,27 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
             context: group.uri,
           };
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
-          const activity = serializeActivity(activityUri, 'Create', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
-          ensureActorKeys(db, group)
-            .then((k) => enqueueToFollowers(fastify, k, activity))
-            .catch((err) => fastify.log.error(err, 'Wiki page federation failed'));
+          if (!group.local && group.inboxUri) {
+            // Remote server: deliver to the origin Group's inbox.
+            const activity = serializeActivity(activityUri, 'Create', request.actor.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'Wiki page remote federation failed'));
+          } else {
+            // Local server: fan out to Group followers.
+            const activity = serializeActivity(activityUri, 'Create', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, activity))
+              .catch((err) => fastify.log.error(err, 'Wiki page federation failed'));
+          }
         }
       }
+
+      // Notify all online members so wiki panels update live.
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: request.params.serverId, action: 'created', slug: created.slug },
+      });
 
       return reply.status(201).send({ page: await toWikiPageView(db, created) });
     },
@@ -444,10 +459,10 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       await syncPageOutboundLinks(db, updated.serverId, updated.id, updated.content);
 
-      // Federation: deliver Update(Article) to Group followers.
+      // Federation: deliver Update(Article).
       if (request.actor.local) {
         const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
-        if (group?.local) {
+        if (group) {
           const config = fastify.config;
           const protocol = config.secureCookies ? 'https' : 'http';
           const article = {
@@ -461,12 +476,24 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
             context: group.uri,
           };
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
-          const activity = serializeActivity(activityUri, 'Update', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
-          ensureActorKeys(db, group)
-            .then((k) => enqueueToFollowers(fastify, k, activity))
-            .catch((err) => fastify.log.error(err, 'Wiki page update federation failed'));
+          if (!group.local && group.inboxUri) {
+            const activity = serializeActivity(activityUri, 'Update', request.actor.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'Wiki page update remote federation failed'));
+          } else {
+            const activity = serializeActivity(activityUri, 'Update', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, activity))
+              .catch((err) => fastify.log.error(err, 'Wiki page update federation failed'));
+          }
         }
       }
+
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: request.params.serverId, action: 'updated', slug: updated.slug },
+      });
 
       return { page: await toWikiPageView(db, updated) };
     },
@@ -620,19 +647,31 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       await db.delete(wikiPages).where(eq(wikiPages.id, page.id));
 
-      // Federation: deliver Delete(Article) to Group followers.
-      if (request.actor.local) {
+      // Federation: deliver Delete(Article).
+      if (request.actor.local && page.uri) {
         const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
-        if (group?.local && page.uri) {
+        if (group) {
           const config = fastify.config;
           const protocol = config.secureCookies ? 'https' : 'http';
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
-          const activity = serializeActivity(activityUri, 'Delete', group.uri, page.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
-          ensureActorKeys(db, group)
-            .then((k) => enqueueToFollowers(fastify, k, activity))
-            .catch((err) => fastify.log.error(err, 'Wiki page delete federation failed'));
+          if (!group.local && group.inboxUri) {
+            const activity = serializeActivity(activityUri, 'Delete', request.actor.uri, page.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'Wiki page delete remote federation failed'));
+          } else {
+            const activity = serializeActivity(activityUri, 'Delete', group.uri, page.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, activity))
+              .catch((err) => fastify.log.error(err, 'Wiki page delete federation failed'));
+          }
         }
       }
+
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: request.params.serverId, action: 'deleted', slug: page.slug },
+      });
 
       return { ok: true };
     },

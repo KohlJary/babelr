@@ -37,6 +37,7 @@ export type WsServerMessage =
   | { type: 'friend:accepted'; payload: { friendship: FriendshipView } }
   | { type: 'friend:removed'; payload: { friendshipId: string } }
   | { type: 'friend:updated'; payload: { friendship: FriendshipView } }
+  | { type: 'wiki:page-changed'; payload: { serverId: string; action: 'created' | 'updated' | 'deleted'; slug: string } }
   | { type: 'voice:room-state'; payload: { channelId: string; participants: AuthorView[] } }
   | { type: 'voice:participant-joined'; payload: { channelId: string; participant: AuthorView } }
   | { type: 'voice:participant-left'; payload: { channelId: string; actorId: string } }

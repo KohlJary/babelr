@@ -709,6 +709,10 @@ async function handleCreate(
         })
         .onConflictDoNothing();
 
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: groupId, action: 'created', slug: pageSlug },
+      });
       fastify.log.info({ pageUri, slug: pageSlug }, 'Remote Create(Article) processed');
     }
   }
@@ -943,7 +947,19 @@ async function handleDelete(
     .where(eq(wikiPages.uri, objectUri))
     .limit(1);
   if (wikiPage) {
+    // Look up serverId before deleting for the WS broadcast.
+    const [pageInfo] = await fastify.db
+      .select({ serverId: wikiPages.serverId, slug: wikiPages.slug })
+      .from(wikiPages)
+      .where(eq(wikiPages.id, wikiPage.id))
+      .limit(1);
     await fastify.db.delete(wikiPages).where(eq(wikiPages.id, wikiPage.id));
+    if (pageInfo) {
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: pageInfo.serverId, action: 'deleted', slug: pageInfo.slug },
+      });
+    }
     fastify.log.info({ objectUri }, 'Remote Delete(Article) processed');
     return;
   }
@@ -1109,6 +1125,10 @@ async function handleUpdate(
         })
         .where(eq(wikiPages.id, existing.id));
 
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: existing.serverId, action: 'updated', slug: existing.slug },
+      });
       fastify.log.info({ pageUri: obj.id }, 'Remote Update(Article) processed');
     }
     return;

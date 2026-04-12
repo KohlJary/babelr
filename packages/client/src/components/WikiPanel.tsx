@@ -13,6 +13,8 @@ import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
+import { useWebSocket } from '../hooks/useWebSocket';
+import type { WsServerMessage } from '@babelr/shared';
 import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
 import * as api from '../api';
 
@@ -127,6 +129,18 @@ export function WikiPanel({
   const { pages, loading, error, reload, getPage, createPage, updatePage, deletePage } =
     useWikiPages(serverId);
   const { settings: translationSettings } = useTranslationSettings();
+
+  // Live-reload wiki page list when another user (or federation)
+  // creates, edits, or deletes a page on this server.
+  const handleWikiWs = useCallback(
+    (msg: WsServerMessage) => {
+      if (msg.type === 'wiki:page-changed' && msg.payload.serverId === serverId) {
+        void reload();
+      }
+    },
+    [serverId, reload],
+  );
+  useWebSocket(true, handleWikiWs);
   const isMod = ['owner', 'admin', 'moderator'].includes(callerRole ?? '');
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
