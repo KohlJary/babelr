@@ -19,6 +19,25 @@ import type {
 } from '@babelr/shared';
 import { PERMISSIONS, generateShortSlug, isValidShortSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
+import { enqueueToFollowers, enqueueDelivery } from '../federation/delivery.ts';
+import { serializeActivity } from '../federation/jsonld.ts';
+import { ensureActorKeys } from '../federation/keys.ts';
+
+function serializeFile(file: typeof serverFiles.$inferSelect) {
+  return {
+    type: 'Document',
+    id: file.storageUrl,
+    name: file.title ?? file.filename,
+    filename: file.filename,
+    contentType: file.contentType,
+    sizeBytes: file.sizeBytes,
+    storageUrl: file.storageUrl,
+    slug: file.slug,
+    description: file.description,
+    tags: file.tags,
+    folderPath: file.folderPath,
+  };
+}
 
 function toFileView(
   file: typeof serverFiles.$inferSelect,
@@ -109,6 +128,54 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
     if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))) {
       return reply.status(403).send({ error: 'Not a member of this server' });
+    }
+
+    // For remote servers, sync files from the origin.
+    const [serverActor] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+    if (serverActor && !serverActor.local) {
+      try {
+        const origin = new URL(serverActor.uri).origin;
+        const slug = serverActor.preferredUsername;
+        const filesUrl = `${origin}/groups/${encodeURIComponent(slug)}/files`;
+        const res = await fetch(filesUrl, {
+          headers: { Accept: 'application/json', 'User-Agent': 'Babelr/0.1.0' },
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as {
+            files: Array<{
+              storageUrl: string; filename: string; contentType: string;
+              sizeBytes: number; slug: string | null; title: string | null;
+              description: string | null; tags: string[]; folderPath: string | null;
+            }>;
+          };
+          for (const f of data.files ?? []) {
+            const [existing] = await db.select({ id: serverFiles.id }).from(serverFiles)
+              .where(eq(serverFiles.storageUrl, f.storageUrl)).limit(1);
+            if (existing) {
+              await db.update(serverFiles).set({
+                title: f.title, description: f.description, tags: f.tags,
+                folderPath: f.folderPath, updatedAt: new Date(),
+              }).where(eq(serverFiles.id, existing.id));
+            } else {
+              const chatUri = `${new URL(serverActor.uri).protocol}//${new URL(serverActor.uri).host}/files/${crypto.randomUUID()}/chat`;
+              const [chatChannel] = await db.insert(objects).values({
+                uri: chatUri, type: 'OrderedCollection', belongsTo: null,
+                properties: { name: f.filename, isFileChat: true },
+              }).returning();
+              await db.insert(serverFiles).values({
+                serverId: serverActor.id, uploaderId: serverActor.id,
+                filename: f.filename, contentType: f.contentType,
+                sizeBytes: f.sizeBytes, storageUrl: f.storageUrl,
+                slug: f.slug ?? generateShortSlug(),
+                title: f.title, description: f.description,
+                tags: f.tags, folderPath: f.folderPath,
+                chatId: chatChannel.id,
+              }).onConflictDoNothing();
+            }
+          }
+        }
+      } catch { /* Non-fatal */ }
     }
 
     const conditions = [eq(serverFiles.serverId, request.params.serverId)];
@@ -234,6 +301,27 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Federation: deliver Create(Document) to Group followers.
+      if (request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        if (group) {
+          const doc = { ...serializeFile(created), attributedTo: request.actor.uri, context: group.uri };
+          const proto = cfg.secureCookies ? 'https' : 'http';
+          const actUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
+          if (!group.local && group.inboxUri) {
+            const act = serializeActivity(actUri, 'Create', request.actor.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'File create remote federation failed'));
+          } else {
+            const act = serializeActivity(actUri, 'Create', group.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, act))
+              .catch((err) => fastify.log.error(err, 'File create federation failed'));
+          }
+        }
+      }
+
       return reply.status(201).send(toFileView(created, request.actor));
     },
   );
@@ -299,6 +387,28 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
     const [uploader] = await db.select().from(actors).where(eq(actors.id, updated.uploaderId)).limit(1);
 
+    // Federation: deliver Update(Document).
+    if (request.actor.local) {
+      const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+      if (group) {
+        const cfg = fastify.config;
+        const proto = cfg.secureCookies ? 'https' : 'http';
+        const doc = { ...serializeFile(updated), attributedTo: request.actor.uri, context: group.uri };
+        const actUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
+        if (!group.local && group.inboxUri) {
+          const act = serializeActivity(actUri, 'Update', request.actor.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, request.actor)
+            .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
+            .catch((err) => fastify.log.error(err, 'File update remote federation failed'));
+        } else {
+          const act = serializeActivity(actUri, 'Update', group.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          ensureActorKeys(db, group)
+            .then((k) => enqueueToFollowers(fastify, k, act))
+            .catch((err) => fastify.log.error(err, 'File update federation failed'));
+        }
+      }
+    }
+
     return toFileView(updated, uploader!);
   });
 
@@ -329,6 +439,27 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         await unlink(storagePath);
       } catch {
         // Non-fatal — the DB row is the source of truth.
+      }
+
+      // Federation: deliver Delete(Document).
+      if (request.actor.local) {
+        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        if (group) {
+          const cfg = fastify.config;
+          const proto = cfg.secureCookies ? 'https' : 'http';
+          const actUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
+          if (!group.local && group.inboxUri) {
+            const act = serializeActivity(actUri, 'Delete', request.actor.uri, file.storageUrl, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, request.actor)
+              .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
+              .catch((err) => fastify.log.error(err, 'File delete remote federation failed'));
+          } else {
+            const act = serializeActivity(actUri, 'Delete', group.uri, file.storageUrl, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            ensureActorKeys(db, group)
+              .then((k) => enqueueToFollowers(fastify, k, act))
+              .catch((err) => fastify.log.error(err, 'File delete federation failed'));
+          }
+        }
       }
 
       await db.delete(serverFiles).where(eq(serverFiles.id, file.id));

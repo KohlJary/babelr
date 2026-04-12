@@ -10,6 +10,8 @@ import { friendships } from '../db/schema/friendships.ts';
 import { reactions } from '../db/schema/reactions.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
 import { events } from '../db/schema/events.ts';
+import { serverFiles } from '../db/schema/files.ts';
+import { generateShortSlug } from '@babelr/shared';
 import { toAuthorView } from '../routes/channels.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
 import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
@@ -824,6 +826,51 @@ async function handleCreate(
 
       fastify.log.info({ eventUri }, 'Remote Create(Event) processed');
     }
+  } else if (obj?.type === 'Document' && obj.id) {
+    // Server file — create a shadow server_files row.
+    const objData = obj as Record<string, unknown>;
+    const groupUri = (objData.context as string) ?? '';
+
+    let groupId: string | null = null;
+    if (groupUri) {
+      const [group] = await fastify.db.select({ id: actors.id }).from(actors).where(eq(actors.uri, groupUri)).limit(1);
+      if (group) groupId = group.id;
+    }
+    if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
+
+    if (groupId) {
+      let authorId = remoteActor.id;
+      const attrTo = objData.attributedTo as string | undefined;
+      if (attrTo && attrTo !== remoteActor.uri) {
+        const resolved = await resolveActor(fastify.db, attrTo);
+        if (resolved) authorId = resolved.id;
+      }
+
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
+      const chatUri = `${protocol}://${config.domain}/files/${crypto.randomUUID()}/chat`;
+      const [chatChannel] = await fastify.db.insert(objects).values({
+        uri: chatUri, type: 'OrderedCollection', belongsTo: null,
+        properties: { name: objData.filename ?? 'File', isFileChat: true },
+      }).returning();
+
+      await fastify.db.insert(serverFiles).values({
+        serverId: groupId,
+        uploaderId: authorId,
+        filename: (objData.filename as string) ?? 'unknown',
+        contentType: (objData.contentType as string) ?? 'application/octet-stream',
+        sizeBytes: (objData.sizeBytes as number) ?? 0,
+        storageUrl: (objData.storageUrl as string) ?? obj.id as string,
+        slug: (objData.slug as string) ?? generateShortSlug(),
+        title: (objData.name as string) ?? null,
+        description: (objData.description as string) ?? null,
+        tags: Array.isArray(objData.tags) ? (objData.tags as string[]) : [],
+        folderPath: (objData.folderPath as string) ?? null,
+        chatId: chatChannel.id,
+      }).onConflictDoNothing();
+
+      fastify.log.info({ fileId: obj.id }, 'Remote Create(Document) processed');
+    }
   }
 
   // Log the activity
@@ -1048,6 +1095,19 @@ async function handleDelete(
   const objectUri = typeof activity.object === 'string' ? activity.object : activity.object?.id;
   if (!objectUri) return;
 
+  // Check for file deletion.
+  const [fileRow] = await fastify.db
+    .select({ id: serverFiles.id, chatId: serverFiles.chatId })
+    .from(serverFiles)
+    .where(eq(serverFiles.storageUrl, objectUri))
+    .limit(1);
+  if (fileRow) {
+    await fastify.db.delete(serverFiles).where(eq(serverFiles.id, fileRow.id));
+    await fastify.db.delete(objects).where(eq(objects.id, fileRow.chatId));
+    fastify.log.info({ objectUri }, 'Remote Delete(Document) processed');
+    return;
+  }
+
   // Check for event deletion.
   const [eventRow] = await fastify.db
     .select({ id: events.id, eventChatId: events.eventChatId })
@@ -1231,6 +1291,25 @@ async function handleUpdate(
       { actor: remoteActor.uri, type: innerType },
       'Remote Update(Actor) processed',
     );
+    return;
+  }
+
+  // Document update (file metadata changed).
+  if (innerType === 'Document') {
+    if (!obj.id) return;
+    const objData = obj as Record<string, unknown>;
+    const [existing] = await fastify.db.select().from(serverFiles)
+      .where(eq(serverFiles.storageUrl, obj.id as string)).limit(1);
+    if (existing) {
+      await fastify.db.update(serverFiles).set({
+        title: (objData.name as string) ?? existing.title,
+        description: (objData.description as string) ?? existing.description,
+        tags: Array.isArray(objData.tags) ? (objData.tags as string[]) : existing.tags,
+        folderPath: (objData.folderPath as string) ?? existing.folderPath,
+        updatedAt: new Date(),
+      }).where(eq(serverFiles.id, existing.id));
+      fastify.log.info({ fileId: obj.id }, 'Remote Update(Document) processed');
+    }
     return;
   }
 

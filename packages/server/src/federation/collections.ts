@@ -7,6 +7,7 @@ import { objects } from '../db/schema/objects.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
 import { events } from '../db/schema/events.ts';
+import { serverFiles } from '../db/schema/files.ts';
 import { serializeOrderedCollection } from './jsonld.ts';
 
 async function getActorByUsername(fastify: FastifyInstance, username: string) {
@@ -258,6 +259,47 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
           endAt: e.endAt.toISOString(),
           location: e.location,
           rrule: e.rrule,
+        })),
+      };
+    },
+  );
+
+  // Group files — used by remote instances to populate the file
+  // library for a federated server.
+  fastify.get<{ Params: { slug: string } }>(
+    '/groups/:slug/files',
+    async (request, reply) => {
+      const allGroups = await fastify.db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
+
+      const actor = allGroups.find((g) =>
+        g.preferredUsername === request.params.slug ||
+        g.uri.includes(`/groups/${request.params.slug}`),
+      );
+
+      if (!actor) {
+        return reply.status(404).send({ error: 'Group not found' });
+      }
+
+      const files = await fastify.db
+        .select()
+        .from(serverFiles)
+        .where(eq(serverFiles.serverId, actor.id));
+
+      reply.header('Content-Type', 'application/json; charset=utf-8');
+      return {
+        files: files.map((f) => ({
+          storageUrl: f.storageUrl,
+          filename: f.filename,
+          contentType: f.contentType,
+          sizeBytes: f.sizeBytes,
+          slug: f.slug,
+          title: f.title,
+          description: f.description,
+          tags: f.tags,
+          folderPath: f.folderPath,
         })),
       };
     },
