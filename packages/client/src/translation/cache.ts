@@ -24,7 +24,7 @@ const STORAGE_PREFIX = 'babelr:tx:';
 const MAX_ENTRIES = 2000; // soft cap — evict oldest when exceeded
 const INDEX_KEY = 'babelr:tx:index';
 
-export type ContentKind = 'message' | 'wiki' | 'dm' | 'event';
+export type ContentKind = 'message' | 'wiki' | 'dm' | 'event' | 'file';
 
 interface StoredEntry {
   entry: CachedTranslation;

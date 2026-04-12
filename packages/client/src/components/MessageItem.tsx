@@ -4,7 +4,7 @@ import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/s
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
-import type { MessageEmbedView, EventEmbedView } from '@babelr/shared';
+import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 
@@ -27,6 +27,8 @@ interface MessageItemProps {
   onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
   /** Called when the user clicks an inline event embed to open the event panel. */
   onNavigateEventEmbed?: (embed: EventEmbedView) => void;
+  /** Called when the user clicks an inline file embed to open the files panel. */
+  onNavigateFileEmbed?: (embed: FileEmbedView) => void;
 }
 
 type TFn = (key: UIStringKey, values?: Record<string, string | number>) => string;
@@ -96,6 +98,7 @@ export function MessageItem({
   onConvertToWikiPage,
   onNavigateMessageEmbed,
   onNavigateEventEmbed,
+  onNavigateFileEmbed,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -277,6 +280,7 @@ export function MessageItem({
             variant: 'chat',
             onNavigateMessage: onNavigateMessageEmbed,
             onNavigateEvent: onNavigateEventEmbed,
+            onNavigateFile: onNavigateFileEmbed,
           })}
         </div>
         {attachmentsBlock}

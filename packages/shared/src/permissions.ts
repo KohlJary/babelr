@@ -61,6 +61,12 @@ export const PERMISSIONS = {
   CREATE_EVENTS: 'CREATE_EVENTS',
   /** Edit/delete OTHERS' events. Creator-override is separate. */
   MANAGE_EVENTS: 'MANAGE_EVENTS',
+
+  // ---- Files ----
+  VIEW_FILES: 'VIEW_FILES',
+  UPLOAD_FILES: 'UPLOAD_FILES',
+  /** Delete others' files, edit file metadata. Creator-override is separate. */
+  MANAGE_FILES: 'MANAGE_FILES',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -90,6 +96,8 @@ const EVERYONE_PERMISSIONS: Permission[] = [
   PERMISSIONS.VIEW_WIKI,
   PERMISSIONS.CREATE_WIKI_PAGES,
   PERMISSIONS.CREATE_EVENTS,
+  PERMISSIONS.VIEW_FILES,
+  PERMISSIONS.UPLOAD_FILES,
 ];
 
 const MODERATOR_EXTRA: Permission[] = [
@@ -98,6 +106,7 @@ const MODERATOR_EXTRA: Permission[] = [
   PERMISSIONS.MANAGE_WIKI,
   PERMISSIONS.MANAGE_EVENTS,
   PERMISSIONS.MANAGE_INVITES,
+  PERMISSIONS.MANAGE_FILES,
 ];
 
 const ADMIN_EXTRA: Permission[] = [
@@ -174,6 +183,11 @@ export const PERMISSION_CATEGORIES: ReadonlyArray<{
     label: 'Events',
     permissions: [PERMISSIONS.CREATE_EVENTS, PERMISSIONS.MANAGE_EVENTS],
   },
+  {
+    id: 'files',
+    label: 'Files',
+    permissions: [PERMISSIONS.VIEW_FILES, PERMISSIONS.UPLOAD_FILES, PERMISSIONS.MANAGE_FILES],
+  },
 ];
 
 /**
@@ -203,6 +217,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   MANAGE_WIKI: "Manage wiki (edit/delete others')",
   CREATE_EVENTS: 'Create events',
   MANAGE_EVENTS: "Manage events (edit/delete others')",
+  VIEW_FILES: 'View files',
+  UPLOAD_FILES: 'Upload files',
+  MANAGE_FILES: "Manage files (delete others', edit metadata)",
 };
 
 export const DEFAULT_ROLE_DEFINITIONS = [

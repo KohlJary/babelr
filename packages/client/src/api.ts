@@ -647,4 +647,83 @@ export async function joinViaInvite(code: string): Promise<{ ok: boolean; server
   return apiFetch(`/invites/${code}/join`, { method: 'POST' });
 }
 
+// ---- Server Files ----
+
+export async function listFolders(
+  serverId: string,
+  parent?: string | null,
+): Promise<{ folders: string[] }> {
+  const qs = new URLSearchParams();
+  if (parent) qs.set('parent', parent);
+  const q = qs.toString();
+  return apiFetch(`/servers/${serverId}/folders${q ? `?${q}` : ''}`);
+}
+
+export async function listFiles(
+  serverId: string,
+  params?: { folder?: string; tag?: string; contentType?: string },
+): Promise<import('@babelr/shared').FileListResponse> {
+  const qs = new URLSearchParams();
+  if (params?.folder !== undefined) qs.set('folder', params.folder);
+  if (params?.tag) qs.set('tag', params.tag);
+  if (params?.contentType) qs.set('contentType', params.contentType);
+  const q = qs.toString();
+  return apiFetch(`/servers/${serverId}/files${q ? `?${q}` : ''}`);
+}
+
+export async function uploadFile(
+  serverId: string,
+  file: File,
+  meta?: { title?: string; description?: string; folderPath?: string; tags?: string[] },
+): Promise<import('@babelr/shared').FileView> {
+  const form = new FormData();
+  form.append('file', file);
+  if (meta?.title) form.append('title', meta.title);
+  if (meta?.description) form.append('description', meta.description);
+  if (meta?.folderPath) form.append('folderPath', meta.folderPath);
+  if (meta?.tags?.length) form.append('tags', meta.tags.join(','));
+
+  const res = await fetch(`${API_BASE}/servers/${serverId}/files`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new ApiError(res.status, body.error ?? res.statusText);
+  }
+  return res.json();
+}
+
+export async function getFile(
+  serverId: string,
+  fileId: string,
+): Promise<import('@babelr/shared').FileView> {
+  return apiFetch(`/servers/${serverId}/files/${fileId}`);
+}
+
+export async function updateFile(
+  serverId: string,
+  fileId: string,
+  input: { title?: string; description?: string | null; tags?: string[]; folderPath?: string | null },
+): Promise<import('@babelr/shared').FileView> {
+  return apiFetch(`/servers/${serverId}/files/${fileId}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteFile(
+  serverId: string,
+  fileId: string,
+): Promise<{ ok: boolean }> {
+  return apiFetch(`/servers/${serverId}/files/${fileId}`, { method: 'DELETE' });
+}
+
+export async function getFileBySlug(
+  slug: string,
+): Promise<import('@babelr/shared').FileEmbedView> {
+  return apiFetch(`/files/by-slug/${encodeURIComponent(slug)}`);
+}
+
 export { ApiError };

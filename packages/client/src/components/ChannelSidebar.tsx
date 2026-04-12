@@ -29,6 +29,7 @@ interface ChannelSidebarProps {
   onEditChannel?: (channelId: string) => void;
   onShowCalendar?: () => void;
   onShowWiki?: () => void;
+  onShowFiles?: () => void;
   onJoinVoice?: (channelId: string) => void;
   activeVoiceChannelId?: string | null;
   onLeaveServer?: () => void;
@@ -60,6 +61,7 @@ export function ChannelSidebar({
   onEditChannel,
   onShowCalendar,
   onShowWiki,
+  onShowFiles,
   onJoinVoice,
   activeVoiceChannelId,
   onLeaveServer,
@@ -214,6 +216,11 @@ export function ChannelSidebar({
         {onShowWiki && (
           <button className="sidebar-item add-channel" onClick={onShowWiki}>
             {t('wiki.title')}
+          </button>
+        )}
+        {onShowFiles && (
+          <button className="sidebar-item add-channel" onClick={onShowFiles}>
+            {t('files.title')}
           </button>
         )}
         {onShowServerSettings && (

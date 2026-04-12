@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { MessageWithAuthor, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { MessageItem } from './MessageItem';
-import type { MessageEmbedView, EventEmbedView } from '@babelr/shared';
+import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
 
 interface MessageListProps {
   messages: MessageWithAuthor[];
@@ -21,6 +21,7 @@ interface MessageListProps {
   onConvertToWikiPage?: (message: MessageWithAuthor) => void;
   onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
   onNavigateEventEmbed?: (embed: EventEmbedView) => void;
+  onNavigateFileEmbed?: (embed: FileEmbedView) => void;
   callerRole?: string;
 }
 
@@ -40,6 +41,7 @@ export function MessageList({
   onConvertToWikiPage,
   onNavigateMessageEmbed,
   onNavigateEventEmbed,
+  onNavigateFileEmbed,
   callerRole,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -103,6 +105,7 @@ export function MessageList({
             }
             onNavigateMessageEmbed={onNavigateMessageEmbed}
             onNavigateEventEmbed={onNavigateEventEmbed}
+            onNavigateFileEmbed={onNavigateFileEmbed}
           />
         );
       })}

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { ReactNode } from 'react';
-import type { EventEmbedView, MessageEmbedView } from '@babelr/shared';
+import type { EventEmbedView, FileEmbedView, MessageEmbedView } from '@babelr/shared';
 import { parseWikiRefs } from '@babelr/shared';
 import { MessageEmbed } from '../components/MessageEmbed';
 import { EventEmbed } from '../components/EventEmbed';
+import FileEmbed from '../components/FileEmbed';
 import { renderMarkdown, renderWikiMarkdown } from './markdown';
 
 /**
@@ -32,12 +33,13 @@ interface RenderOptions {
   variant: 'chat' | 'wiki';
   onNavigateMessage?: (embed: MessageEmbedView) => void;
   onNavigateEvent?: (embed: EventEmbedView) => void;
+  onNavigateFile?: (embed: FileEmbedView) => void;
 }
 
 export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode {
   const render = opts.variant === 'wiki' ? renderWikiMarkdown : renderMarkdown;
   const refs = parseWikiRefs(source).filter(
-    (r) => r.kind === 'message' || r.kind === 'event',
+    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file',
   );
 
   if (refs.length === 0) {
@@ -53,7 +55,15 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <span key={`md-${i}`} dangerouslySetInnerHTML={{ __html: render(chunk) }} />,
       );
     }
-    if (ref.kind === 'event') {
+    if (ref.kind === 'file') {
+      segments.push(
+        <FileEmbed
+          key={`file-${i}-${ref.slug}`}
+          slug={ref.slug}
+          onNavigate={opts.onNavigateFile}
+        />,
+      );
+    } else if (ref.kind === 'event') {
       segments.push(
         <EventEmbed
           key={`event-${i}-${ref.slug}`}

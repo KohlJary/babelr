@@ -8,3 +8,4 @@ export * from './friends.js';
 export * from './events.js';
 export * from './wiki.js';
 export * from './roles.js';
+export * from './files.js';

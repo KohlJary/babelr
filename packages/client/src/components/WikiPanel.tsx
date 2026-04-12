@@ -13,7 +13,7 @@ import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
-import type { MessageEmbedView, EventEmbedView } from '@babelr/shared';
+import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
 import * as api from '../api';
 
 interface WikiPanelProps {
@@ -29,6 +29,8 @@ interface WikiPanelProps {
   onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
   /** Called when the user clicks an inline event embed inside a wiki page. */
   onNavigateEventEmbed?: (embed: EventEmbedView) => void;
+  /** Called when the user clicks an inline file embed inside a wiki page. */
+  onNavigateFileEmbed?: (embed: FileEmbedView) => void;
   onClose: () => void;
 }
 
@@ -118,6 +120,7 @@ export function WikiPanel({
   initialDraft,
   onNavigateMessageEmbed,
   onNavigateEventEmbed,
+  onNavigateFileEmbed,
   onClose,
 }: WikiPanelProps) {
   const t = useT();
@@ -644,6 +647,7 @@ export function WikiPanel({
                                 variant: 'wiki',
                                 onNavigateMessage: onNavigateMessageEmbed,
                                 onNavigateEvent: onNavigateEventEmbed,
+                                onNavigateFile: onNavigateFileEmbed,
                               })}
                             </div>
                             <ChunkIndicators chunk={c} t={t} />

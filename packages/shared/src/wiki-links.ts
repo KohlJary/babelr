@@ -19,7 +19,7 @@
  * write about the syntax itself without triggering resolution.
  */
 
-export type WikiRefKind = 'page' | 'message' | 'event';
+export type WikiRefKind = 'page' | 'message' | 'event' | 'file';
 
 export interface WikiRef {
   /** Whether this ref points at a wiki page or a chat message */
@@ -42,6 +42,7 @@ export interface WikiRef {
 
 const MESSAGE_REF_PREFIX = 'msg:';
 const EVENT_REF_PREFIX = 'event:';
+const FILE_REF_PREFIX = 'file:';
 
 /**
  * Turn a title or slug fragment into the canonical slug form we store
@@ -118,6 +119,22 @@ export function parseWikiRefs(source: string): WikiRef[] {
       continue;
     }
 
+    // File refs carry a `file:` prefix. Render as inline file cards
+    // with type icon, name, size, and download button.
+    if (raw.toLowerCase().startsWith(FILE_REF_PREFIX)) {
+      const fileSlug = raw.slice(FILE_REF_PREFIX.length).trim().toLowerCase();
+      if (!fileSlug) continue;
+      refs.push({
+        kind: 'file',
+        slug: fileSlug,
+        raw,
+        display,
+        start: match.index,
+        end: match.index + match[0].length,
+      });
+      continue;
+    }
+
     const slug = slugifyWikiRef(raw);
     if (!slug) continue;
     refs.push({
@@ -174,6 +191,22 @@ export function extractEventSlugs(source: string): string[] {
   const out: string[] = [];
   for (const ref of parseWikiRefs(source)) {
     if (ref.kind !== 'event') continue;
+    if (seen.has(ref.slug)) continue;
+    seen.add(ref.slug);
+    out.push(ref.slug);
+  }
+  return out;
+}
+
+/**
+ * Return the deduplicated set of file slugs referenced in the
+ * source. Other kinds are excluded. Order follows first appearance.
+ */
+export function extractFileSlugs(source: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const ref of parseWikiRefs(source)) {
+    if (ref.kind !== 'file') continue;
     if (seen.has(ref.slug)) continue;
     seen.add(ref.slug);
     out.push(ref.slug);

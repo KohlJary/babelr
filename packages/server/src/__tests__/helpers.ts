@@ -15,6 +15,8 @@ import eventRoutes from '../routes/events.ts';
 import wikiRoutes from '../routes/wiki.ts';
 import roleRoutes from '../routes/roles.ts';
 import translateRoutes from '../routes/translate.ts';
+import fileRoutes from '../routes/files.ts';
+import multipart from '@fastify/multipart';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
 
@@ -82,6 +84,8 @@ export async function createTestApp() {
   await app.register(wikiRoutes);
   await app.register(roleRoutes);
   await app.register(translateRoutes);
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+  await app.register(fileRoutes);
 
   await app.ready();
   return { app, db };

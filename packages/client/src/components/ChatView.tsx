@@ -31,6 +31,7 @@ import { FriendsPanel } from './FriendsPanel';
 import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { EventsPanel } from './EventsPanel';
 import { WikiPanel } from './WikiPanel';
+import FilesPanel from './FilesPanel';
 import { VoicePanel } from './VoicePanel';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
@@ -63,7 +64,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // renders its Events and Server Discovery tabs as primary
   // content rather than modal overlays. Channel selection or DM
   // selection implicitly resets this to 'chat'.
-  const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki'>('chat');
+  const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki' | 'files'>('chat');
   const [wikiInitialSlug, setWikiInitialSlug] = useState<string | null>(null);
   const [wikiInitialDraft, setWikiInitialDraft] = useState<{ title?: string; content?: string } | null>(null);
   // When the user clicks an `[[event:slug]]` embed we need to switch
@@ -71,6 +72,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // event. Tracked here so ChatView can pass the id into EventsPanel
   // after mainView flips to 'calendar'.
   const [calendarInitialEventId, setCalendarInitialEventId] = useState<string | null>(null);
+  const [filesInitialFileId, setFilesInitialFileId] = useState<string | null>(null);
   const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
@@ -277,6 +279,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         }
         onShowCalendar={() => setMainView('calendar')}
         onShowWiki={!dmMode && selectedServer ? () => setMainView('wiki') : undefined}
+        onShowFiles={!dmMode && selectedServer ? () => setMainView('files') : undefined}
         onJoinVoice={(channelId) => {
           if (voice.state.channelId === channelId) return;
           if (voice.state.channelId) voice.leave();
@@ -328,10 +331,26 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               setCalendarInitialEventId(embed.id);
               setMainView('calendar');
             }}
+            onNavigateFileEmbed={() => {
+              setMainView('files');
+            }}
             onClose={() => {
               setMainView('chat');
               setWikiInitialSlug(null);
               setWikiInitialDraft(null);
+            }}
+          />
+        )}
+        {mainView === 'files' && selectedServer && (
+          <FilesPanel
+            serverId={selectedServer.id}
+            serverName={selectedServer.name}
+            callerRole={callerRole}
+            actor={actor}
+            initialFileId={filesInitialFileId}
+            onClose={() => {
+              setMainView('chat');
+              setFilesInitialFileId(null);
             }}
           />
         )}
@@ -387,6 +406,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onNavigateEventEmbed={(embed) => {
             setCalendarInitialEventId(embed.id);
             setMainView('calendar');
+          }}
+          onNavigateFileEmbed={(embed) => {
+            setFilesInitialFileId(embed.id);
+            setMainView('files');
           }}
           callerRole={callerRole}
         />
