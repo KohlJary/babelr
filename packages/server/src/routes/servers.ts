@@ -542,6 +542,42 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'Server not found' });
       }
 
+      // For remote servers, fetch the member list from the origin so
+      // the UI shows all members (not just the local user). Cache
+      // any remote actors we haven't seen before so future lookups
+      // (author views, etc.) resolve correctly.
+      if (!server.local) {
+        try {
+          const origin = new URL(server.uri).origin;
+          const slug = server.preferredUsername;
+          const membersUrl = `${origin}/groups/${encodeURIComponent(slug)}/members`;
+          const res = await fetch(membersUrl, {
+            headers: { Accept: 'application/json', 'User-Agent': 'Babelr/0.1.0' },
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              members: Array<{
+                id: string;
+                preferredUsername: string;
+                displayName: string | null;
+                avatarUrl: string | null;
+              }>;
+            };
+            return (data.members ?? []).map((m) => ({
+              id: m.id,
+              preferredUsername: m.preferredUsername,
+              displayName: m.displayName,
+              role: 'member',
+              roleIds: [],
+              avatarUrl: m.avatarUrl,
+            }));
+          }
+        } catch {
+          // Fall through to local query.
+        }
+      }
+
       const members = await db
         .select({ member: actors, item: collectionItems })
         .from(collectionItems)

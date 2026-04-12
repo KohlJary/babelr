@@ -87,6 +87,47 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Group members — list of actors in the Group's followers collection.
+  // Used by remote instances to populate member lists and channel
+  // invite pickers for federated servers.
+  fastify.get<{ Params: { slug: string } }>(
+    '/groups/:slug/members',
+    async (request, reply) => {
+      const allGroups = await fastify.db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
+
+      const actor = allGroups.find((g) =>
+        g.preferredUsername === request.params.slug ||
+        g.uri.includes(`/groups/${request.params.slug}`),
+      );
+
+      if (!actor?.followersUri) {
+        return reply.status(404).send({ error: 'Group not found' });
+      }
+
+      const members = await fastify.db
+        .select({ member: actors })
+        .from(collectionItems)
+        .innerJoin(actors, eq(collectionItems.itemId, actors.id))
+        .where(eq(collectionItems.collectionUri, actor.followersUri));
+
+      reply.header('Content-Type', 'application/json; charset=utf-8');
+      return {
+        members: members.map((m) => {
+          const props = m.member.properties as Record<string, unknown> | null;
+          return {
+            id: m.member.uri,
+            preferredUsername: m.member.preferredUsername,
+            displayName: m.member.displayName,
+            avatarUrl: (props?.avatarUrl as string | undefined) ?? null,
+          };
+        }),
+      };
+    },
+  );
+
   // Group channels — public (non-private) channels belonging to
   // a Group actor. Used by remote instances during join-remote to
   // discover what channels exist and create local shadow objects.
