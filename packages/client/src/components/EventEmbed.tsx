@@ -25,6 +25,8 @@ import { useTranslationSettings } from '../hooks/useTranslationSettings';
 
 interface EventEmbedProps {
   slug: string;
+  /** Server slug for cross-server same-tower refs. */
+  serverSlug?: string;
   /** Called when the user clicks the card body to navigate to the event. */
   onNavigate?: (embed: EventEmbedView) => void;
 }
@@ -61,28 +63,29 @@ function publish(slug: string, next: EmbedState): void {
   for (const fn of set) fn(next);
 }
 
-function fetchEmbed(slug: string): Promise<EmbedState> {
-  const cached = resolved.get(slug);
+function fetchEmbed(slug: string, serverSlug?: string): Promise<EmbedState> {
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
+  const cached = resolved.get(cacheKey);
   if (cached) return Promise.resolve(cached);
-  const existing = inflight.get(slug);
+  const existing = inflight.get(cacheKey);
   if (existing) return existing;
 
   const promise = api
-    .getEventBySlug(slug)
+    .getEventBySlug(slug, serverSlug)
     .then<EmbedState>((embed) => {
       const next: EmbedState = { status: 'ok', embed };
-      publish(slug, next);
-      inflight.delete(slug);
+      publish(cacheKey, next);
+      inflight.delete(cacheKey);
       return next;
     })
     .catch<EmbedState>(() => {
       const next: EmbedState = { status: 'locked' };
-      publish(slug, next);
-      inflight.delete(slug);
+      publish(cacheKey, next);
+      inflight.delete(cacheKey);
       return next;
     });
 
-  inflight.set(slug, promise);
+  inflight.set(cacheKey, promise);
   return promise;
 }
 
@@ -106,10 +109,11 @@ function formatRange(startIso: string, endIso: string): string {
   return `${startStr} – ${end.toLocaleDateString(undefined, dateFmt)} ${end.toLocaleTimeString(undefined, timeFmt)}`;
 }
 
-export function EventEmbed({ slug, onNavigate }: EventEmbedProps) {
+export function EventEmbed({ slug, serverSlug, onNavigate }: EventEmbedProps) {
   const t = useT();
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
   const [state, setState] = useState<EmbedState>(
-    () => resolved.get(slug) ?? { status: 'loading' },
+    () => resolved.get(cacheKey) ?? { status: 'loading' },
   );
   const [rsvping, setRsvping] = useState(false);
 
@@ -139,11 +143,11 @@ export function EventEmbed({ slug, onNavigate }: EventEmbedProps) {
 
   useEffect(() => {
     let cancelled = false;
-    const unsub = subscribe(slug, (next) => {
+    const unsub = subscribe(cacheKey, (next) => {
       if (!cancelled) setState(next);
     });
     if (state.status === 'loading') {
-      void fetchEmbed(slug).then((next) => {
+      void fetchEmbed(slug, serverSlug).then((next) => {
         if (!cancelled) setState(next);
       });
     }

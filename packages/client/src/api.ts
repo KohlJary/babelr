@@ -426,14 +426,18 @@ export async function getWikiBacklinks(
 
 export async function getMessageBySlug(
   slug: string,
+  serverSlug?: string,
 ): Promise<import('@babelr/shared').MessageEmbedView> {
-  return apiFetch(`/messages/by-slug/${encodeURIComponent(slug)}`);
+  const qs = serverSlug ? `?server=${encodeURIComponent(serverSlug)}` : '';
+  return apiFetch(`/messages/by-slug/${encodeURIComponent(slug)}${qs}`);
 }
 
 export async function getEventBySlug(
   slug: string,
+  serverSlug?: string,
 ): Promise<import('@babelr/shared').EventEmbedView> {
-  return apiFetch(`/events/by-slug/${encodeURIComponent(slug)}`);
+  const qs = serverSlug ? `?server=${encodeURIComponent(serverSlug)}` : '';
+  return apiFetch(`/events/by-slug/${encodeURIComponent(slug)}${qs}`);
 }
 
 export async function rsvpEventBySlug(
@@ -722,8 +726,10 @@ export async function deleteFile(
 
 export async function getFileBySlug(
   slug: string,
+  serverSlug?: string,
 ): Promise<import('@babelr/shared').FileEmbedView> {
-  return apiFetch(`/files/by-slug/${encodeURIComponent(slug)}`);
+  const qs = serverSlug ? `?server=${encodeURIComponent(serverSlug)}` : '';
+  return apiFetch(`/files/by-slug/${encodeURIComponent(slug)}${qs}`);
 }
 
 // Wiki search

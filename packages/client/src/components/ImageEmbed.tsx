@@ -12,6 +12,7 @@ import { TypingIndicator } from './TypingIndicator';
 
 interface ImageEmbedProps {
   slug: string;
+  serverSlug?: string;
   actor?: ActorProfile;
 }
 
@@ -23,35 +24,37 @@ type EmbedState =
 const resolved = new Map<string, EmbedState>();
 const inflight = new Map<string, Promise<EmbedState>>();
 
-function fetchEmbed(slug: string): Promise<EmbedState> {
-  const cached = resolved.get(slug);
+function fetchEmbed(slug: string, serverSlug?: string): Promise<EmbedState> {
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
+  const cached = resolved.get(cacheKey);
   if (cached) return Promise.resolve(cached);
-  const existing = inflight.get(slug);
+  const existing = inflight.get(cacheKey);
   if (existing) return existing;
 
   const promise = api
-    .getFileBySlug(slug)
+    .getFileBySlug(slug, serverSlug)
     .then<EmbedState>((data) => {
       const next: EmbedState = { status: 'ok', data };
-      resolved.set(slug, next);
-      inflight.delete(slug);
+      resolved.set(cacheKey, next);
+      inflight.delete(cacheKey);
       return next;
     })
     .catch<EmbedState>(() => {
       const next: EmbedState = { status: 'locked' };
-      resolved.set(slug, next);
-      inflight.delete(slug);
+      resolved.set(cacheKey, next);
+      inflight.delete(cacheKey);
       return next;
     });
 
-  inflight.set(slug, promise);
+  inflight.set(cacheKey, promise);
   return promise;
 }
 
-export function ImageEmbed({ slug, actor }: ImageEmbedProps) {
+export function ImageEmbed({ slug, serverSlug, actor }: ImageEmbedProps) {
   const t = useT();
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
   const [state, setState] = useState<EmbedState>(
-    () => resolved.get(slug) ?? { status: 'loading' },
+    () => resolved.get(cacheKey) ?? { status: 'loading' },
   );
   const [lightbox, setLightbox] = useState(false);
 
@@ -74,7 +77,7 @@ export function ImageEmbed({ slug, actor }: ImageEmbedProps) {
   useEffect(() => {
     if (state.status !== 'loading') return;
     let cancelled = false;
-    void fetchEmbed(slug).then((next) => {
+    void fetchEmbed(slug, serverSlug).then((next) => {
       if (!cancelled) setState(next);
     });
     return () => { cancelled = true; };

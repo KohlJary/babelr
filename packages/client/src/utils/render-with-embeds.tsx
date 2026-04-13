@@ -48,7 +48,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
   // (which render as markdown links, not embed components). Page
   // refs WITH an origin ARE embeddable (cross-tower wiki embeds).
   const refs = parseWikiRefs(source).filter(
-    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.kind === 'image' || r.kind === 'manual' || r.origin,
+    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.kind === 'image' || r.kind === 'manual' || r.origin || r.server,
   );
 
   if (refs.length === 0) {
@@ -64,8 +64,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <span key={`md-${i}`} dangerouslySetInnerHTML={{ __html: render(chunk) }} />,
       );
     }
-    // Cross-tower refs always use the CrossTowerEmbed component
-    // regardless of kind — it resolves via the federation proxy.
+    // Cross-tower refs resolve via the federation proxy.
     if (ref.origin) {
       segments.push(
         <CrossTowerEmbed
@@ -94,6 +93,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <ImageEmbed
           key={`img-${i}-${ref.slug}`}
           slug={ref.slug}
+          serverSlug={ref.server}
           actor={opts.actor}
         />,
       );
@@ -102,6 +102,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <FileEmbed
           key={`file-${i}-${ref.slug}`}
           slug={ref.slug}
+          serverSlug={ref.server}
           onNavigate={opts.onNavigateFile}
         />,
       );
@@ -110,6 +111,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <EventEmbed
           key={`event-${i}-${ref.slug}`}
           slug={ref.slug}
+          serverSlug={ref.server}
           onNavigate={opts.onNavigateEvent}
         />,
       );
@@ -118,6 +120,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <MessageEmbed
           key={`msg-${i}-${ref.slug}`}
           slug={ref.slug}
+          serverSlug={ref.server}
           onNavigate={opts.onNavigateMessage}
         />,
       );

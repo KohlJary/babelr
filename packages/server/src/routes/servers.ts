@@ -330,7 +330,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
           .catch((err) => fastify.log.error(err, 'Server metadata federation failed'));
       }
 
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: request.params.serverId,
         actorId: request.actor.id,
         category: 'server',
@@ -788,7 +788,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         throw err;
       }
 
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: request.params.serverId,
         actorId: request.actor.id,
         category: 'member',
@@ -885,7 +885,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         throw err;
       }
 
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: request.params.serverId,
         actorId: request.actor.id,
         category: 'member',
@@ -938,7 +938,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       const config = fastify.config;
       const protocol = config.secureCookies ? 'https' : 'http';
 
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: request.params.serverId,
         actorId: request.actor.id,
         category: 'server',

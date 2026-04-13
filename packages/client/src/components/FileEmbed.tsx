@@ -27,47 +27,50 @@ function fileIcon(contentType?: string): string {
 
 interface FileEmbedProps {
   slug: string;
+  serverSlug?: string;
   onNavigate?: (embed: FileEmbedView) => void;
 }
 
-export default function FileEmbed({ slug, onNavigate }: FileEmbedProps) {
+export default function FileEmbed({ slug, serverSlug, onNavigate }: FileEmbedProps) {
   const t = useT();
   const [state, setState] = useState<'loading' | 'ok' | 'locked'>('loading');
   const [data, setData] = useState<FileEmbedView | null>(null);
 
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
+
   useEffect(() => {
-    if (resolved.has(slug)) {
-      setData(resolved.get(slug)!);
+    if (resolved.has(cacheKey)) {
+      setData(resolved.get(cacheKey)!);
       setState('ok');
       return;
     }
 
     let cancelled = false;
 
-    let promise = inflight.get(slug);
+    let promise = inflight.get(cacheKey);
     if (!promise) {
-      promise = api.getFileBySlug(slug);
-      inflight.set(slug, promise);
+      promise = api.getFileBySlug(slug, serverSlug);
+      inflight.set(cacheKey, promise);
     }
 
     promise
       .then((embed) => {
-        resolved.set(slug, embed);
-        inflight.delete(slug);
+        resolved.set(cacheKey, embed);
+        inflight.delete(cacheKey);
         if (!cancelled) {
           setData(embed);
           setState('ok');
         }
       })
       .catch(() => {
-        inflight.delete(slug);
+        inflight.delete(cacheKey);
         if (!cancelled) setState('locked');
       });
 
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [cacheKey]);
 
   // Translate the embed's description through the same pipeline as
   // FilesPanel. The FileEmbedView → FileView cast is minimal — the

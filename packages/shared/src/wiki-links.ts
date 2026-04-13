@@ -56,6 +56,12 @@ export interface WikiRef {
    * remote tower. Absent for local refs.
    */
   origin?: WikiRefOrigin;
+  /**
+   * Cross-server within the same tower. Present when the ref uses
+   * [[server:kind:slug]] syntax to address content in a different
+   * server on the same Tower instance. Absent for same-server refs.
+   */
+  server?: string;
 }
 
 
@@ -110,6 +116,17 @@ const KIND_PREFIXES: Record<string, WikiRefKind> = {
  */
 const CROSS_TOWER_RE = /^([^@\s]+)@([^:\s]+):(\w+:)(.+)$/;
 
+/**
+ * Regex for the cross-server (same tower) addressing syntax:
+ *   server:kind:slug
+ * Captures: [1]=server, [2]=kind (with trailing colon), [3]=slug
+ *
+ * Disambiguated from plain [[kind:slug]] by requiring the server
+ * portion to NOT match a known kind prefix. This means a server
+ * named "msg" would collide — unlikely in practice.
+ */
+const CROSS_SERVER_RE = /^([^:@\s]+):(\w+:)(.+)$/;
+
 export function parseWikiRefs(source: string): WikiRef[] {
   if (!source) return [];
   const masked = maskCode(source);
@@ -145,6 +162,34 @@ export function parseWikiRefs(source: string): WikiRef[] {
         }
       }
       continue;
+    }
+
+    // --- Cross-server refs (same tower): [[server:kind:slug]] ---
+    const serverMatch = CROSS_SERVER_RE.exec(raw);
+    if (serverMatch) {
+      const [, server, kindPrefix, slug] = serverMatch;
+      const kindKey = kindPrefix.toLowerCase() as string;
+      const kind = KIND_PREFIXES[kindKey];
+      // Only treat as cross-server if the first segment isn't itself a
+      // known kind prefix (e.g. [[wiki:slug]] should remain a local ref,
+      // not server="wiki" kind=slug).
+      if (kind && slug.trim() && !KIND_PREFIXES[server.toLowerCase() + ':']) {
+        const resolvedSlug = kind === 'page'
+          ? slugifyWikiRef(slug.trim())
+          : slug.trim().toLowerCase();
+        if (resolvedSlug) {
+          refs.push({
+            kind,
+            slug: resolvedSlug,
+            raw,
+            display,
+            start,
+            end,
+            server: server.toLowerCase(),
+          });
+          continue;
+        }
+      }
     }
 
     // --- Local refs with explicit kind prefix ---

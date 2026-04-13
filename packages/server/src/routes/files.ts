@@ -323,7 +323,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         }
       }
 
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: request.params.serverId,
         actorId: request.actor.id,
         category: 'file',
@@ -476,7 +476,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       // Clean up the chat collection (cascade handles messages)
       await db.delete(objects).where(eq(objects.id, file.chatId));
 
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: request.params.serverId,
         actorId: request.actor.id,
         category: 'file',

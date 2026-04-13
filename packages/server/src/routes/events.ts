@@ -320,7 +320,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
 
     // Audit log for server events
     if (body.ownerType === 'server') {
-      writeAuditLog(db, {
+      await writeAuditLog(db, {
         serverId: ownerId,
         actorId: request.actor.id,
         category: 'event',
@@ -581,7 +581,7 @@ export default async function eventRoutes(fastify: FastifyInstance) {
 
       // Audit log for server events
       if (event.ownerType === 'server') {
-        writeAuditLog(db, {
+        await writeAuditLog(db, {
           serverId: event.ownerId,
           actorId: request.actor.id,
           category: 'event',

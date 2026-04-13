@@ -28,6 +28,8 @@ import { useT } from '../i18n/I18nProvider';
 
 interface MessageEmbedProps {
   slug: string;
+  /** Server slug for cross-server same-tower refs. */
+  serverSlug?: string;
   /** Called when the user clicks the embed to navigate to the message. */
   onNavigate?: (embed: MessageEmbedView) => void;
 }
@@ -43,42 +45,41 @@ type EmbedState =
 const resolved = new Map<string, EmbedState>();
 const inflight = new Map<string, Promise<EmbedState>>();
 
-function fetchEmbed(slug: string): Promise<EmbedState> {
-  const cached = resolved.get(slug);
+function fetchEmbed(slug: string, serverSlug?: string): Promise<EmbedState> {
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
+  const cached = resolved.get(cacheKey);
   if (cached) return Promise.resolve(cached);
-  const existing = inflight.get(slug);
+  const existing = inflight.get(cacheKey);
   if (existing) return existing;
 
   const promise = api
-    .getMessageBySlug(slug)
+    .getMessageBySlug(slug, serverSlug)
     .then<EmbedState>((embed) => {
       const next: EmbedState = { status: 'ok', embed };
-      resolved.set(slug, next);
-      inflight.delete(slug);
+      resolved.set(cacheKey, next);
+      inflight.delete(cacheKey);
       return next;
     })
     .catch<EmbedState>(() => {
-      // Any error — 404, 400, network — surfaces as 'locked' to the
-      // user. The backend intentionally returns 404 for both
-      // not-found and no-access cases.
       const next: EmbedState = { status: 'locked' };
-      resolved.set(slug, next);
-      inflight.delete(slug);
+      resolved.set(cacheKey, next);
+      inflight.delete(cacheKey);
       return next;
     });
 
-  inflight.set(slug, promise);
+  inflight.set(cacheKey, promise);
   return promise;
 }
 
-export function MessageEmbed({ slug, onNavigate }: MessageEmbedProps) {
+export function MessageEmbed({ slug, serverSlug, onNavigate }: MessageEmbedProps) {
   const t = useT();
-  const [state, setState] = useState<EmbedState>(() => resolved.get(slug) ?? { status: 'loading' });
+  const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
+  const [state, setState] = useState<EmbedState>(() => resolved.get(cacheKey) ?? { status: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
     if (state.status !== 'loading') return;
-    void fetchEmbed(slug).then((next) => {
+    void fetchEmbed(slug, serverSlug).then((next) => {
       if (!cancelled) setState(next);
     });
     return () => {
