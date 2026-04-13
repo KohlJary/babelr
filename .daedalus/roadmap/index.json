@@ -781,7 +781,7 @@
       "description": "Pages are currently flat — a list sorted by recency with no structural relationship between them. Mature wikis have nested pages (a page can be a child of another page), which gives the wiki a navigable tree structure.\n\nScope:\n- Add parent_id (nullable FK to wiki_pages.id) column to wiki_pages\n- Sidebar renders as a collapsible tree instead of a flat list\n- Breadcrumb trail shows the page's ancestry (Home > Engineering > API > Rate Limiting)\n- Page ordering within a sibling group (position integer, drag-to-reorder)\n- Table of contents auto-generated from headings within a page\n- 'Move page' action to reparent a page in the tree\n\nCritical for import: Confluence, Notion, BookStack, and Obsidian all have hierarchical page structures. Without parent-child support, imported content loses its organizational structure and becomes a flat soup of pages.\n\nAlso needed for the project wiki dogfooding — architectural docs need to nest (Federation > Delivery Queue > Retry Logic).",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "wiki-page-templates",
