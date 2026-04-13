@@ -725,7 +725,7 @@
       "description": "Now that server-files exists, wiki-attachments becomes: add a file picker to the wiki editor that inserts [[file:slug]] refs, plus drag-and-drop image paste that auto-uploads to the server file library and inserts the embed. The wiki-attachments roadmap item's original scope (separate upload pipeline, per-page storage, orphan cleanup) is no longer needed — everything points at the shared file library.\n\nScope:\n- File picker button in the wiki edit toolbar that opens a modal showing the server's file library (reuse FilesPanel or a stripped-down variant)\n- Selecting a file inserts [[file:slug]] at the cursor\n- Drag-and-drop image onto the editor auto-uploads and inserts the embed\n- Clipboard paste (Ctrl+V with an image) does the same\n- Images from [[file:slug]] embeds render inline in wiki view mode (the FileEmbed already handles this with thumbnails; may want a larger inline render for wiki context)",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "wiki-comments",
