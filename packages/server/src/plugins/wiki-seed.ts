@@ -65,14 +65,6 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
         .returning();
     }
 
-    // Check if manual pages already exist — don't re-seed.
-    const [existing] = await db
-      .select({ id: wikiPages.id })
-      .from(wikiPages)
-      .where(eq(wikiPages.serverId, manual.id))
-      .limit(1);
-    if (existing) return;
-
     // Load the manifest.
     const seedDir = join(__dirname, '../db/seed-data/wiki');
     const manifestPath = join(seedDir, 'manifest.json');
@@ -89,8 +81,13 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       return;
     }
 
-    // First pass: create all pages.
+    // Upsert pages: create new ones, update existing seeded pages
+    // if the source content has changed. Skip pages that have been
+    // edited by a real user (lastEditedById !== manual.id) — those
+    // are user-customized and should not be overwritten.
     const slugToId = new Map<string, string>();
+    let created = 0;
+    let updated = 0;
 
     for (const entry of manifest.pages) {
       const filePath = join(seedDir, entry.file);
@@ -102,7 +99,34 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       const content = readFileSync(filePath, 'utf-8');
       const pageUri = `${protocol}://${config.domain}/manual/wiki/${entry.slug}`;
 
-      // Create chat collection for comments.
+      // Check if page already exists.
+      const [existing] = await db
+        .select()
+        .from(wikiPages)
+        .where(and(eq(wikiPages.serverId, manual.id), eq(wikiPages.slug, entry.slug)))
+        .limit(1);
+
+      if (existing) {
+        slugToId.set(entry.slug, existing.id);
+
+        // Only update if the page was last edited by the system
+        // (not a real user) AND the content has actually changed.
+        if (existing.lastEditedById === manual.id && existing.content !== content) {
+          await db
+            .update(wikiPages)
+            .set({
+              title: entry.title,
+              content,
+              position: entry.position ?? existing.position,
+              updatedAt: new Date(),
+            })
+            .where(eq(wikiPages.id, existing.id));
+          updated++;
+        }
+        continue;
+      }
+
+      // New page — create with chat collection.
       const chatUri = `${protocol}://${config.domain}/wiki/${crypto.randomUUID()}/chat`;
       const [chatChannel] = await db
         .insert(objects)
@@ -140,6 +164,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
         editedById: manual.id,
         summary: 'Initial seed',
       });
+      created++;
     }
 
     // Second pass: set parent references.
@@ -155,10 +180,12 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       }
     }
 
-    fastify.log.info(
-      { count: slugToId.size },
-      'Babelr Manual wiki seeded',
-    );
+    if (created > 0 || updated > 0) {
+      fastify.log.info(
+        { created, updated, total: slugToId.size },
+        'Babelr Manual wiki seeded/updated',
+      );
+    }
   });
 }
 
