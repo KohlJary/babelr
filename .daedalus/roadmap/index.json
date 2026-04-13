@@ -701,7 +701,7 @@
       "description": "File metadata (title, description, tags, slug, storageUrl) should federate via Create/Update/Delete activities to Group followers, same pattern as channel messages. Remote members see the file library via shadow server_files rows. File binaries served from origin via storageUrl (cross-origin, same as avatars). File chat comments federate automatically since they use the message pipeline, but the file metadata itself (create/update/delete) needs explicit activity delivery.\n\nAlso: the GET /files/by-slug/:slug endpoint needs the same origin-proxy fallback as messages/by-slug for cross-instance [[file:slug]] embeds.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "server-files-storage-quotas",
