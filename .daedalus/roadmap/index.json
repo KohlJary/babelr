@@ -774,6 +774,54 @@
       "type": "feature",
       "priority": "P1",
       "status": "backlog"
+    },
+    {
+      "id": "wiki-page-hierarchy",
+      "title": "Wiki page hierarchy — parent-child nesting, sidebar tree, breadcrumbs",
+      "description": "Pages are currently flat — a list sorted by recency with no structural relationship between them. Mature wikis have nested pages (a page can be a child of another page), which gives the wiki a navigable tree structure.\n\nScope:\n- Add parent_id (nullable FK to wiki_pages.id) column to wiki_pages\n- Sidebar renders as a collapsible tree instead of a flat list\n- Breadcrumb trail shows the page's ancestry (Home > Engineering > API > Rate Limiting)\n- Page ordering within a sibling group (position integer, drag-to-reorder)\n- Table of contents auto-generated from headings within a page\n- 'Move page' action to reparent a page in the tree\n\nCritical for import: Confluence, Notion, BookStack, and Obsidian all have hierarchical page structures. Without parent-child support, imported content loses its organizational structure and becomes a flat soup of pages.\n\nAlso needed for the project wiki dogfooding — architectural docs need to nest (Federation > Delivery Queue > Retry Logic).",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-page-templates",
+      "title": "Wiki page templates — meeting notes, decision records, RFCs, runbooks",
+      "description": "No template system exists. When creating a page, the user gets a blank editor. Templates provide starter content for common page types.\n\nScope:\n- Template library per server (stored as wiki_page_templates table or as specially-tagged pages)\n- 'New from template' in the create page flow — shows template picker\n- Built-in templates shipped with every server: Meeting Notes, Decision Record (ADR), RFC, Runbook, Onboarding Guide\n- Custom templates: any page can be saved as a template\n- Templates are just markdown content with placeholder tokens ({{date}}, {{author}}, {{title}})\n- Templates translate — the template content flows through the translation pipeline so a Japanese user sees the Meeting Notes template in Japanese\n\nImportant for adoption — templates reduce the 'blank page' friction that stops people from writing docs.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-full-text-search",
+      "title": "Full-text search across wiki page content",
+      "description": "Currently the sidebar only filters by title/slug substring (client-side). No server-side full-text search of page content exists.\n\nScope:\n- Add a content_search tsvector column to wiki_pages (same pattern as objects.content_search for messages)\n- Populate via trigger or on insert/update\n- GET /servers/:serverId/wiki/search?q=query endpoint with ranked results\n- Search UI in the wiki sidebar with content preview snippets and highlighted matches\n- Tag-based filtering in the search API (q=query&tag=architecture)\n\nNote: the message search infrastructure already exists (objects.content_search with GIN index + to_tsquery). Wiki search can reuse the same pattern.",
+      "type": "feature",
+      "priority": "P1",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-content-enhancements",
+      "title": "Wiki content enhancements — syntax highlighting, callouts, task lists, ToC",
+      "description": "The markdown renderer supports basic formatting but lacks features that make wiki content rich and scannable.\n\nScope:\n- Syntax-highlighted code blocks via highlight.js or Prism (language detection from the fenced block tag)\n- Callout/admonition blocks (> [!NOTE], > [!WARNING], > [!TIP] — GitHub-flavored)\n- Task lists (- [ ] / - [x] checkboxes, interactive toggle)\n- Auto-generated table of contents from headings (insertable via a [[toc]] directive or always-visible sidebar)\n- Footnotes\n- Mermaid diagram rendering (stretch goal — adds a large dependency)\n\nThe syntax highlighting is the most impactful — any engineering wiki without it looks amateur.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-navigation-improvements",
+      "title": "Wiki navigation — recently edited, all pages, orphaned pages, page stats",
+      "description": "The sidebar shows a flat list with tag filter and search. Missing the discovery features that help users find and maintain content.\n\nScope:\n- 'Recently edited' section showing the last N pages modified (with editor name and timestamp)\n- 'All pages' alphabetical index view\n- 'Orphaned pages' — pages with no backlinks (nothing links to them), surfaced so admins can either link them or delete them\n- Page statistics: view count (requires a page_views table), edit count (already available from revisions), last editor\n- 'Related pages' suggestions based on shared tags or backlink graph proximity",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
+    },
+    {
+      "id": "wiki-export",
+      "title": "Wiki export — markdown bundle, PDF, HTML",
+      "description": "No export capability exists. Users need to be able to extract their wiki content in portable formats.\n\nScope:\n- Export single page as markdown (.md file download)\n- Export single page as PDF (server-side rendering via Puppeteer or a lightweight HTML-to-PDF library)\n- Export entire wiki as a zip of markdown files (preserving folder structure from page hierarchy)\n- Export preserves [[wiki:slug]] refs as relative links between files\n- Export includes embedded images as local files with rewritten paths\n\nCritical for enterprise: procurement teams ask 'can we get our data out?' and the answer must be yes.",
+      "type": "feature",
+      "priority": "P2",
+      "status": "backlog"
     }
   ],
   "version": 27
