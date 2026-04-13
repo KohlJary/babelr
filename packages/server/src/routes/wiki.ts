@@ -176,12 +176,29 @@ async function syncPageOutboundLinks(
 export default async function wikiRoutes(fastify: FastifyInstance) {
   const db = fastify.db;
 
+  // The manual is a system wiki accessible to all authenticated
+  // users regardless of server membership. Cache the ID on first
+  // check so we don't query every request.
+  let manualActorId: string | null | undefined;
+  async function isManualServer(serverId: string): Promise<boolean> {
+    if (manualActorId === undefined) {
+      const [manual] = await db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(eq(actors.preferredUsername, '_manual'))
+        .limit(1);
+      manualActorId = manual?.id ?? null;
+    }
+    return manualActorId === serverId;
+  }
+
   // List pages for a server
   fastify.get<{ Params: { serverId: string } }>(
     '/servers/:serverId/wiki/pages',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
+        !(await isManualServer(request.params.serverId)) &&
         !(await hasPermission(
           db,
           request.params.serverId,
@@ -277,6 +294,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
+        !(await isManualServer(request.params.serverId)) &&
         !(await hasPermission(
           db,
           request.params.serverId,
@@ -534,6 +552,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
+        !(await isManualServer(request.params.serverId)) &&
         !(await hasPermission(
           db,
           request.params.serverId,
@@ -716,6 +735,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
+        !(await isManualServer(request.params.serverId)) &&
         !(await hasPermission(
           db,
           request.params.serverId,
@@ -816,7 +836,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug/revisions',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
+      if (!(await isManualServer(request.params.serverId)) && !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -853,7 +873,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug/revisions/:revisionNumber',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
+      if (!(await isManualServer(request.params.serverId)) && !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
