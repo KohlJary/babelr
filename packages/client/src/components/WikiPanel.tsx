@@ -216,6 +216,8 @@ export function WikiPanel({
   const [draftContent, setDraftContent] = useState('');
   const [draftParentId, setDraftParentId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const filePickerRef = useRef<HTMLInputElement>(null);
   const [revisions, setRevisions] = useState<import('@babelr/shared').WikiPageRevisionView[]>([]);
   const [viewingRevision, setViewingRevision] = useState<import('@babelr/shared').WikiPageRevisionView | null>(null);
   const [draftTags, setDraftTags] = useState<string[]>([]);
@@ -331,6 +333,42 @@ export function WikiPanel({
         /* nothing more we can do */
       }
       document.body.removeChild(ta);
+    }
+  };
+
+  // Insert text at the textarea cursor position (or append if no cursor).
+  const insertAtCursor = (text: string) => {
+    const el = editorRef.current;
+    if (!el) {
+      setDraftContent((prev) => prev + text);
+      return;
+    }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const before = draftContent.slice(0, start);
+    const after = draftContent.slice(end);
+    setDraftContent(before + text + after);
+    // Restore cursor after the inserted text.
+    requestAnimationFrame(() => {
+      el.selectionStart = el.selectionEnd = start + text.length;
+      el.focus();
+    });
+  };
+
+  // Upload a File and insert [[file:slug]] at the cursor.
+  const uploadAndInsert = async (file: File) => {
+    try {
+      const uploaded = await api.uploadFile(serverId, file);
+      if (uploaded.slug) {
+        const isImage = uploaded.contentType.startsWith('image/');
+        // Images get markdown image syntax wrapping the embed for nicer rendering.
+        const ref = isImage
+          ? `![${uploaded.filename}](${uploaded.storageUrl})\n`
+          : `[[file:${uploaded.slug}]]\n`;
+        insertAtCursor(ref);
+      }
+    } catch (err) {
+      console.error('Wiki attachment upload failed:', err);
     }
   };
 
@@ -1010,6 +1048,25 @@ export function WikiPanel({
                   >
                     {t('wiki.preview')}
                   </button>
+                  <span className="wiki-toolbar-sep" />
+                  <button
+                    className="voice-control-btn"
+                    onClick={() => filePickerRef.current?.click()}
+                    type="button"
+                    title={t('wiki.attachFile')}
+                  >
+                    {t('wiki.attachFile')}
+                  </button>
+                  <input
+                    ref={filePickerRef}
+                    type="file"
+                    hidden
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) await uploadAndInsert(file);
+                      if (filePickerRef.current) filePickerRef.current.value = '';
+                    }}
+                  />
                 </div>
 
                 {previewOn ? (
@@ -1025,11 +1082,36 @@ export function WikiPanel({
                   </div>
                 ) : (
                   <textarea
+                    ref={editorRef}
                     className="auth-input wiki-content-textarea"
                     value={draftContent}
                     onChange={(e) => setDraftContent(e.target.value)}
                     placeholder={t('wiki.pageContentPlaceholder')}
                     rows={20}
+                    onDrop={async (e) => {
+                      const file = e.dataTransfer?.files?.[0];
+                      if (file) {
+                        e.preventDefault();
+                        await uploadAndInsert(file);
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+                    }}
+                    onPaste={async (e) => {
+                      const items = e.clipboardData?.items;
+                      if (!items) return;
+                      for (const item of items) {
+                        if (item.kind === 'file') {
+                          const file = item.getAsFile();
+                          if (file) {
+                            e.preventDefault();
+                            await uploadAndInsert(file);
+                            return;
+                          }
+                        }
+                      }
+                    }}
                   />
                 )}
 

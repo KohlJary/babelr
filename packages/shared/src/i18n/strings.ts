@@ -381,6 +381,7 @@ export const UI_STRINGS = {
   'wiki.history': 'History',
   'wiki.revisionLabel': 'Revision {num}',
   'wiki.restoreRevision': 'Restore this version',
+  'wiki.attachFile': 'Attach file',
 
   'files.title': 'Files',
   'files.serverFiles': 'Server files',
