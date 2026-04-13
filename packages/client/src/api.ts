@@ -726,4 +726,16 @@ export async function getFileBySlug(
   return apiFetch(`/files/by-slug/${encodeURIComponent(slug)}`);
 }
 
+// ---- Cross-tower embed resolution ----
+
+export async function resolveEmbed(
+  server: string,
+  tower: string,
+  kind: string,
+  slug: string,
+): Promise<Record<string, unknown>> {
+  const qs = new URLSearchParams({ server, tower, kind, slug });
+  return apiFetch(`/embeds/resolve?${qs.toString()}`);
+}
+
 export { ApiError };

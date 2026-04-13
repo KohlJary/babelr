@@ -5,6 +5,7 @@ import { parseWikiRefs } from '@babelr/shared';
 import { MessageEmbed } from '../components/MessageEmbed';
 import { EventEmbed } from '../components/EventEmbed';
 import FileEmbed from '../components/FileEmbed';
+import { CrossTowerEmbed } from '../components/CrossTowerEmbed';
 import { renderMarkdown, renderWikiMarkdown } from './markdown';
 
 /**
@@ -38,8 +39,11 @@ interface RenderOptions {
 
 export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode {
   const render = opts.variant === 'wiki' ? renderWikiMarkdown : renderMarkdown;
+  // Filter to embeddable refs — all kinds except bare page refs
+  // (which render as markdown links, not embed components). Page
+  // refs WITH an origin ARE embeddable (cross-tower wiki embeds).
   const refs = parseWikiRefs(source).filter(
-    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file',
+    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.origin,
   );
 
   if (refs.length === 0) {
@@ -55,7 +59,18 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <span key={`md-${i}`} dangerouslySetInnerHTML={{ __html: render(chunk) }} />,
       );
     }
-    if (ref.kind === 'file') {
+    // Cross-tower refs always use the CrossTowerEmbed component
+    // regardless of kind — it resolves via the federation proxy.
+    if (ref.origin) {
+      segments.push(
+        <CrossTowerEmbed
+          key={`xt-${i}-${ref.slug}`}
+          kind={ref.kind}
+          slug={ref.slug}
+          origin={ref.origin}
+        />,
+      );
+    } else if (ref.kind === 'file') {
       segments.push(
         <FileEmbed
           key={`file-${i}-${ref.slug}`}

@@ -778,4 +778,40 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       return { settings };
     },
   );
+
+  // Wiki page embed lookup by slug. Used by cross-tower embeds
+  // ([[server@tower:wiki:slug]]) and the local embed proxy.
+  // Returns a compact view suitable for inline rendering.
+  fastify.get<{ Params: { slug: string } }>(
+    '/wiki/by-slug/:slug',
+    async (request, reply) => {
+      const { slug } = request.params;
+      if (!slug) return reply.status(400).send({ error: 'slug is required' });
+
+      // Find the page across all servers (for cross-tower resolution,
+      // the server context comes from the request's tower, not from
+      // a specific server parameter).
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(eq(wikiPages.slug, slug))
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      const [server] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, page.serverId))
+        .limit(1);
+
+      return {
+        id: page.id,
+        slug: page.slug,
+        title: page.title,
+        content: page.content.slice(0, 500),
+        serverId: page.serverId,
+        serverName: server?.displayName ?? server?.preferredUsername ?? null,
+      };
+    },
+  );
 }

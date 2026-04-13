@@ -32,6 +32,7 @@ import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
 import uploadRoutes from './routes/uploads.ts';
 import fileRoutes from './routes/files.ts';
+import embedRoutes from './routes/embeds.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -154,6 +155,7 @@ export async function buildApp() {
   await app.register(federationPlugin);
   await app.register(uploadRoutes);
   await app.register(fileRoutes);
+  await app.register(embedRoutes);
 
   // SPA fallback — serve index.html for all non-API paths
   if (existsSync(clientDistDir)) {

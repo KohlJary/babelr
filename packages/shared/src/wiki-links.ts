@@ -21,8 +21,20 @@
 
 export type WikiRefKind = 'page' | 'message' | 'event' | 'file';
 
+/**
+ * Cross-tower origin for [[server@tower:kind:slug]] refs. When
+ * present, the embed resolves via the federation proxy instead
+ * of locally.
+ */
+export interface WikiRefOrigin {
+  /** The server (Group) handle, e.g. "test-server" */
+  server: string;
+  /** The tower hostname, e.g. "partner.com" */
+  tower: string;
+}
+
 export interface WikiRef {
-  /** Whether this ref points at a wiki page or a chat message */
+  /** Whether this ref points at a wiki page, message, event, or file */
   kind: WikiRefKind;
   /**
    * The slugified target. For page refs, lowercase a-z0-9- produced
@@ -38,11 +50,14 @@ export interface WikiRef {
   start: number;
   /** Character offset immediately after the closing `]]` */
   end: number;
+  /**
+   * Cross-tower origin. Present when the ref uses the
+   * [[server@tower:kind:slug]] syntax to address content on a
+   * remote tower. Absent for local refs.
+   */
+  origin?: WikiRefOrigin;
 }
 
-const MESSAGE_REF_PREFIX = 'msg:';
-const EVENT_REF_PREFIX = 'event:';
-const FILE_REF_PREFIX = 'file:';
 
 /**
  * Turn a title or slug fragment into the canonical slug form we store
@@ -75,6 +90,24 @@ function maskCode(source: string): string {
 
 const WIKI_REF_RE = /\[\[([^\]\n|]+)(?:\|([^\]\n]+))?\]\]/g;
 
+/**
+ * Map from prefix string to WikiRefKind. Used for both local refs
+ * ([[kind:slug]]) and cross-tower refs ([[server@tower:kind:slug]]).
+ */
+const KIND_PREFIXES: Record<string, WikiRefKind> = {
+  'msg:': 'message',
+  'event:': 'event',
+  'file:': 'file',
+  'wiki:': 'page',
+};
+
+/**
+ * Regex for the cross-tower addressing syntax:
+ *   server@tower:kind:slug
+ * Captures: [1]=server, [2]=tower, [3]=kind (with trailing colon), [4]=slug
+ */
+const CROSS_TOWER_RE = /^([^@\s]+)@([^:\s]+):(\w+:)(.+)$/;
+
 export function parseWikiRefs(source: string): WikiRef[] {
   if (!source) return [];
   const masked = maskCode(source);
@@ -84,57 +117,51 @@ export function parseWikiRefs(source: string): WikiRef[] {
   while ((match = WIKI_REF_RE.exec(masked)) !== null) {
     const raw = match[1].trim();
     const display = (match[2] ?? match[1]).trim();
+    const start = match.index;
+    const end = match.index + match[0].length;
 
-    // Message refs carry a `msg:` prefix that marks them as a
-    // different kind — they render as inline embeds rather than
-    // navigation links. Strip the prefix from the stored slug so
-    // downstream code just works with the message id.
-    if (raw.toLowerCase().startsWith(MESSAGE_REF_PREFIX)) {
-      const messageSlug = raw.slice(MESSAGE_REF_PREFIX.length).trim().toLowerCase();
-      if (!messageSlug) continue;
-      refs.push({
-        kind: 'message',
-        slug: messageSlug,
-        raw,
-        display,
-        start: match.index,
-        end: match.index + match[0].length,
-      });
+    // --- Cross-tower refs: [[server@tower:kind:slug]] ---
+    const crossMatch = CROSS_TOWER_RE.exec(raw);
+    if (crossMatch) {
+      const [, server, tower, kindPrefix, slug] = crossMatch;
+      const kindKey = kindPrefix.toLowerCase() as string;
+      const kind = KIND_PREFIXES[kindKey];
+      if (kind && slug.trim()) {
+        const resolvedSlug = kind === 'page'
+          ? slugifyWikiRef(slug.trim())
+          : slug.trim().toLowerCase();
+        if (resolvedSlug) {
+          refs.push({
+            kind,
+            slug: resolvedSlug,
+            raw,
+            display,
+            start,
+            end,
+            origin: { server, tower },
+          });
+        }
+      }
       continue;
     }
 
-    // Event refs carry an `event:` prefix. Same substitution model
-    // as message refs — render as an inline invite card component.
-    if (raw.toLowerCase().startsWith(EVENT_REF_PREFIX)) {
-      const eventSlug = raw.slice(EVENT_REF_PREFIX.length).trim().toLowerCase();
-      if (!eventSlug) continue;
-      refs.push({
-        kind: 'event',
-        slug: eventSlug,
-        raw,
-        display,
-        start: match.index,
-        end: match.index + match[0].length,
-      });
-      continue;
+    // --- Local refs with explicit kind prefix ---
+    const lowerRaw = raw.toLowerCase();
+    let handled = false;
+    for (const [prefix, kind] of Object.entries(KIND_PREFIXES)) {
+      if (lowerRaw.startsWith(prefix)) {
+        const slug = raw.slice(prefix.length).trim().toLowerCase();
+        if (!slug) break;
+        const resolvedSlug = kind === 'page' ? slugifyWikiRef(slug) : slug;
+        if (!resolvedSlug) break;
+        refs.push({ kind, slug: resolvedSlug, raw, display, start, end });
+        handled = true;
+        break;
+      }
     }
+    if (handled) continue;
 
-    // File refs carry a `file:` prefix. Render as inline file cards
-    // with type icon, name, size, and download button.
-    if (raw.toLowerCase().startsWith(FILE_REF_PREFIX)) {
-      const fileSlug = raw.slice(FILE_REF_PREFIX.length).trim().toLowerCase();
-      if (!fileSlug) continue;
-      refs.push({
-        kind: 'file',
-        slug: fileSlug,
-        raw,
-        display,
-        start: match.index,
-        end: match.index + match[0].length,
-      });
-      continue;
-    }
-
+    // --- Bare [[slug]] — backwards-compatible wiki page ref ---
     const slug = slugifyWikiRef(raw);
     if (!slug) continue;
     refs.push({

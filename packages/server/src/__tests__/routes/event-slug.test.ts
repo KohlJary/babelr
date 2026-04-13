@@ -347,4 +347,44 @@ describe('wiki-links parser — event refs', () => {
     const refs = parseWikiRefs(src);
     expect(refs).toHaveLength(0);
   });
+
+  it('parses [[wiki:slug]] as a page ref', async () => {
+    const { parseWikiRefs } = await import('@babelr/shared');
+    const refs = parseWikiRefs('See [[wiki:my-page]] for details.');
+    expect(refs).toHaveLength(1);
+    expect(refs[0].kind).toBe('page');
+    expect(refs[0].slug).toBe('my-page');
+    expect(refs[0].origin).toBeUndefined();
+  });
+
+  it('bare [[slug]] still works as backwards-compatible page ref', async () => {
+    const { parseWikiRefs } = await import('@babelr/shared');
+    const refs = parseWikiRefs('Check [[my-page]] for info.');
+    expect(refs).toHaveLength(1);
+    expect(refs[0].kind).toBe('page');
+    expect(refs[0].slug).toBe('my-page');
+  });
+
+  it('parses [[server@tower:kind:slug]] cross-tower refs', async () => {
+    const { parseWikiRefs } = await import('@babelr/shared');
+    const refs = parseWikiRefs('See [[engineering@partner.com:wiki:api-spec]] for the spec.');
+    expect(refs).toHaveLength(1);
+    expect(refs[0].kind).toBe('page');
+    expect(refs[0].slug).toBe('api-spec');
+    expect(refs[0].origin).toEqual({ server: 'engineering', tower: 'partner.com' });
+  });
+
+  it('parses cross-tower refs for all kinds', async () => {
+    const { parseWikiRefs } = await import('@babelr/shared');
+    const src = [
+      '[[ops@acme.com:msg:abcdefghjk]]',
+      '[[ops@acme.com:event:mnpqrstuvw]]',
+      '[[ops@acme.com:file:xyz1234567]]',
+      '[[ops@acme.com:wiki:runbook]]',
+    ].join(' ');
+    const refs = parseWikiRefs(src);
+    expect(refs).toHaveLength(4);
+    expect(refs.map((r) => r.kind)).toEqual(['message', 'event', 'file', 'page']);
+    expect(refs.every((r) => r.origin?.server === 'ops' && r.origin?.tower === 'acme.com')).toBe(true);
+  });
 });

@@ -3994,6 +3994,62 @@ textarea.modal-input {
   cursor: wait;
 }
 
+/* Cross-tower embed — [[server@tower:kind:slug]] refs */
+.cross-tower-embed {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 600px;
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.8rem;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-left: 3px solid #8b5cf6;
+  border-radius: 4px;
+  color: #bbb;
+  font-size: 0.85rem;
+}
+.cross-tower-embed.loading,
+.cross-tower-embed.locked {
+  display: inline-block;
+  color: #777;
+  font-style: italic;
+  border-left-color: #3a3a3a;
+}
+.cross-tower-embed-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.cross-tower-embed-icon {
+  flex-shrink: 0;
+  font-size: 1.2rem;
+}
+.cross-tower-embed-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.cross-tower-embed-title {
+  color: #eee;
+  font-weight: 600;
+}
+.cross-tower-embed-snippet {
+  color: #999;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.cross-tower-embed-origin {
+  color: #8b5cf6;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
 /* Message content wiki refs — [[slug]] rendered as anchors */
 .message-content a[href^="#wiki/"],
 .wiki-content-body a[href^="#wiki/"] {
