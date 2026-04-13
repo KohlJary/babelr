@@ -64,6 +64,13 @@
       "when": 1776086153680,
       "tag": "0008_wiki_hierarchy",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1776087053433,
+      "tag": "0009_wiki_chat",
+      "breakpoints": true
     }
   ]
 }

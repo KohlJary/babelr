@@ -377,6 +377,7 @@ export const UI_STRINGS = {
 
   // Files
   'wiki.tableOfContents': 'Contents',
+  'wiki.comments': 'Discussion',
 
   'files.title': 'Files',
   'files.serverFiles': 'Server files',

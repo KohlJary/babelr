@@ -13,6 +13,8 @@ export interface WikiPageView {
   parentId: string | null;
   /** Sort order within siblings. Lower = first. */
   position: number;
+  /** OrderedCollection id for the page's comment thread. */
+  chatId: string | null;
   createdBy: AuthorView;
   lastEditedBy: AuthorView;
   createdAt: string;

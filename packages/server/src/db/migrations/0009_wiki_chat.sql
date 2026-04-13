@@ -1,0 +1,2 @@
+ALTER TABLE "wiki_pages" ADD COLUMN "chat_id" uuid;--> statement-breakpoint
+ALTER TABLE "wiki_pages" ADD CONSTRAINT "wiki_pages_chat_id_objects_id_fk" FOREIGN KEY ("chat_id") REFERENCES "public"."objects"("id") ON DELETE cascade ON UPDATE no action;

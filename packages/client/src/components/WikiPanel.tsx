@@ -16,14 +16,21 @@ import { renderWithEmbeds } from '../utils/render-with-embeds';
 import { extractHeadings } from '../utils/markdown';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type { WsServerMessage } from '@babelr/shared';
-import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
+import type { MessageEmbedView, EventEmbedView, FileEmbedView, ActorProfile } from '@babelr/shared';
 import * as api from '../api';
+import { useChat } from '../hooks/useChat';
+import { useTranslation } from '../hooks/useTranslation';
+import { MessageList } from './MessageList';
+import { MessageInput } from './MessageInput';
+import { TypingIndicator } from './TypingIndicator';
 
 interface WikiPanelProps {
   serverId: string;
   serverName?: string;
   /** Caller's role on this server — controls access to home-page controls */
   callerRole?: string;
+  /** Current user — needed for the comment thread's useChat. */
+  actor: ActorProfile;
   /** Slug to open on mount, overriding the default "first page" behavior */
   initialSlug?: string | null;
   /** Initial content to seed a new page with (e.g. from a message) */
@@ -124,6 +131,7 @@ export function WikiPanel({
   onNavigateMessageEmbed,
   onNavigateEventEmbed,
   onNavigateFileEmbed,
+  actor,
   onClose,
 }: WikiPanelProps) {
   const t = useT();
@@ -135,6 +143,20 @@ export function WikiPanel({
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<WikiPageView | null>(null);
+
+  // Comment thread via the message pipeline (same as event chat / file comments).
+  const {
+    messages: chatMessages,
+    loading: chatLoading,
+    hasMore: chatHasMore,
+    connected: chatConnected,
+    sendMessage: chatSend,
+    loadMore: chatLoadMore,
+    typingUsers: chatTyping,
+    notifyTyping: chatNotifyTyping,
+  } = useChat(actor, currentPage?.chatId ?? null, false);
+  const { translations: chatTranslations, isTranslating: chatIsTranslating } =
+    useTranslation(chatMessages, translationSettings);
   const [mode, setMode] = useState<Mode>('view');
   const [backlinks, setBacklinks] = useState<WikiBacklinkView[]>([]);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -816,6 +838,30 @@ export function WikiPanel({
                         return null;
                       })}
                     </ul>
+                  </section>
+                )}
+
+                {/* Comment thread */}
+                {currentPage.chatId && (
+                  <section className="wiki-comments">
+                    <h3 className="friends-section-header">{t('wiki.comments')}</h3>
+                    <div className="event-chat-embed">
+                      <MessageList
+                        messages={chatMessages}
+                        loading={chatLoading}
+                        hasMore={chatHasMore}
+                        onLoadMore={chatLoadMore}
+                        translations={chatTranslations}
+                        isTranslating={chatIsTranslating}
+                        actor={actor}
+                      />
+                      <TypingIndicator users={chatTyping} />
+                      <MessageInput
+                        onSend={chatSend}
+                        disabled={!chatConnected}
+                        onTyping={chatNotifyTyping}
+                      />
+                    </div>
                   </section>
                 )}
               </>

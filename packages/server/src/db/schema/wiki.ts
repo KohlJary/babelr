@@ -42,6 +42,8 @@ export const wikiPages = pgTable(
     parentId: uuid('parent_id'),
     /** Sort order within siblings. Lower values sort first. */
     position: integer('position').notNull().default(0),
+    /** OrderedCollection for the page's comment thread. Same pattern as event chat and file comments. */
+    chatId: uuid('chat_id').references(() => objects.id, { onDelete: 'cascade' }),
     createdById: uuid('created_by_id').notNull().references(() => actors.id),
     lastEditedById: uuid('last_edited_by_id').notNull().references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

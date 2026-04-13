@@ -318,6 +318,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             serverId={selectedServer.id}
             serverName={selectedServer.name}
             callerRole={callerRole}
+            actor={actor}
             initialSlug={wikiInitialSlug}
             initialDraft={wikiInitialDraft}
             onNavigateMessageEmbed={(embed) => {

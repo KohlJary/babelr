@@ -94,6 +94,7 @@ async function toWikiPageView(
     tags: page.tags ?? [],
     parentId: page.parentId,
     position: page.position,
+    chatId: page.chatId,
     createdBy: creator ? toAuthorView(creator) : fallback,
     lastEditedBy: editor ? toAuthorView(editor) : fallback,
     createdAt: page.createdAt.toISOString(),
@@ -330,6 +331,18 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       const protocol = config.secureCookies ? 'https' : 'http';
       const pageUri = `${protocol}://${config.domain}/servers/${request.params.serverId}/wiki/${slug}`;
 
+      // Create chat collection for the page's comment thread.
+      const chatUri = `${protocol}://${config.domain}/wiki/${crypto.randomUUID()}/chat`;
+      const [chatChannel] = await db
+        .insert(objects)
+        .values({
+          uri: chatUri,
+          type: 'OrderedCollection',
+          belongsTo: null,
+          properties: { name: body.title.trim(), isWikiChat: true },
+        })
+        .returning();
+
       const [created] = await db
         .insert(wikiPages)
         .values({
@@ -341,6 +354,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           tags: normalizeTags(body.tags),
           parentId: body.parentId ?? null,
           position: body.position ?? 0,
+          chatId: chatChannel.id,
           createdById: request.actor.id,
           lastEditedById: request.actor.id,
         })
@@ -661,6 +675,9 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       }
 
       await db.delete(wikiPages).where(eq(wikiPages.id, page.id));
+      if (page.chatId) {
+        await db.delete(objects).where(eq(objects.id, page.chatId));
+      }
 
       // Federation: deliver Delete(Article).
       if (request.actor.local && page.uri) {
