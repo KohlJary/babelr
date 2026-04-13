@@ -667,6 +667,16 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // ATTACH_FILES permission — only checked when the message includes
+    // attachments. Default role grants this to @everyone.
+    if (hasAttachments && channel.belongsTo) {
+      if (
+        !(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.ATTACH_FILES))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions to attach files' });
+      }
+    }
+
     // Slow mode enforcement — bypassed for users with MANAGE_CHANNELS.
     // We reuse MANAGE_CHANNELS rather than adding a dedicated
     // BYPASS_SLOWMODE permission — anyone who can edit channel

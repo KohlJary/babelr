@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -117,6 +117,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
             .set({
               title: entry.title,
               content,
+              contentSearch: sql`to_tsvector('english', ${entry.title} || ' ' || ${content})`,
               position: entry.position ?? existing.position,
               updatedAt: new Date(),
             })
@@ -149,6 +150,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
           tags: [],
           position: entry.position ?? 0,
           chatId: chatChannel.id,
+          contentSearch: sql`to_tsvector('english', ${entry.title} || ' ' || ${content})`,
           createdById: manual.id,
           lastEditedById: manual.id,
         })

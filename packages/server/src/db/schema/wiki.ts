@@ -4,6 +4,12 @@ import { sql } from 'drizzle-orm';
 import { objects } from './objects.ts';
 import { actors } from './actors.ts';
 
+const tsvector = customType<{ data: string; notNull: true; default: true }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
+
 // text[] column type — drizzle's built-in array helpers still route
 // through jsonb or text in some codepaths, so we declare the raw
 // Postgres type directly to get a real array column with GIN-indexable
@@ -44,6 +50,8 @@ export const wikiPages = pgTable(
     position: integer('position').notNull().default(0),
     /** OrderedCollection for the page's comment thread. Same pattern as event chat and file comments. */
     chatId: uuid('chat_id').references(() => objects.id, { onDelete: 'cascade' }),
+    /** Full-text search vector over title + content. Populated application-side on create/update. */
+    contentSearch: tsvector('content_search'),
     createdById: uuid('created_by_id').notNull().references(() => actors.id),
     lastEditedById: uuid('last_edited_by_id').notNull().references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -56,6 +64,8 @@ export const wikiPages = pgTable(
     index('wiki_pages_updated_idx').on(table.updatedAt),
     // GIN index for tag membership queries (tags @> ARRAY['...'])
     index('wiki_pages_tags_gin_idx').using('gin', table.tags),
+    // GIN index for full-text search across title + content
+    index('wiki_pages_content_search_idx').using('gin', table.contentSearch),
   ],
 );
 

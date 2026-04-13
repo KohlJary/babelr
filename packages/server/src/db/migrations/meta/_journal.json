@@ -71,6 +71,13 @@
       "when": 1776087053433,
       "tag": "0009_wiki_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1776192000000,
+      "tag": "0010_wiki_fulltext_search",
+      "breakpoints": true
     }
   ]
 }

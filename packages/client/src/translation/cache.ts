@@ -157,44 +157,6 @@ export function setCachedByHash(
   persist(k, stored);
 }
 
-/* -------------------------------------------------------------------- *
- * Back-compat API — messages still key by id                           *
- * -------------------------------------------------------------------- */
-
-/**
- * Messages currently key by id because their content is effectively
- * immutable post-send (edits tombstone). We keep the shape stable so
- * `useTranslation.ts` doesn't need to change in this PR — a follow-up
- * can migrate messages onto hashContent once we want edit-aware
- * cache invalidation for chat too.
- */
-function legacyKey(messageId: string, targetLang: string): string {
-  return `${STORAGE_PREFIX}message-id:${messageId}:${targetLang}`;
-}
-
-export function getCached(messageId: string, targetLang: string): CachedTranslation | undefined {
-  const k = legacyKey(messageId, targetLang);
-  const mem = memoryCache.get(k);
-  if (mem) return mem.entry;
-  const loaded = loadFromStorage(k);
-  if (loaded) {
-    memoryCache.set(k, loaded);
-    return loaded.entry;
-  }
-  return undefined;
-}
-
-export function setCached(
-  messageId: string,
-  targetLang: string,
-  entry: CachedTranslation,
-): void {
-  const k = legacyKey(messageId, targetLang);
-  const stored: StoredEntry = { entry, touched: Date.now() };
-  memoryCache.set(k, stored);
-  persist(k, stored);
-}
-
 export function clearCache(): void {
   memoryCache.clear();
   if (typeof localStorage === 'undefined') return;

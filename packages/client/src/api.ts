@@ -726,6 +726,15 @@ export async function getFileBySlug(
   return apiFetch(`/files/by-slug/${encodeURIComponent(slug)}`);
 }
 
+// Wiki search
+export async function searchWikiPages(
+  serverId: string,
+  query: string,
+  limit = 20,
+): Promise<{ results: (import('@babelr/shared').WikiPageSummary & { snippet: string; rank: number })[] }> {
+  return apiFetch(`/servers/${serverId}/wiki/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+}
+
 // Wiki revisions
 export async function listWikiRevisions(
   serverId: string,

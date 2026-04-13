@@ -3,6 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import '../types.ts';
 import type { WsClientMessage, WsServerMessage } from '@babelr/shared';
+import { PERMISSIONS } from '@babelr/shared';
+import { eq } from 'drizzle-orm';
+import { objects } from '../db/schema/objects.ts';
+import { hasPermission } from '../permissions.ts';
 
 export default async function wsRoutes(fastify: FastifyInstance) {
   fastify.get('/ws', { websocket: true }, (socket: WebSocket, request) => {
@@ -28,7 +32,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
     };
     socket.send(JSON.stringify(connected));
 
-    socket.on('message', (raw: Buffer) => {
+    socket.on('message', async (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString()) as WsClientMessage;
 
@@ -68,6 +72,29 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
           case 'voice:join': {
             const channelId = msg.payload.channelId;
+            // CONNECT_VOICE permission check
+            const db = fastify.db;
+            const [voiceCh] = await db
+              .select({ belongsTo: objects.belongsTo })
+              .from(objects)
+              .where(eq(objects.id, channelId))
+              .limit(1);
+            if (voiceCh?.belongsTo) {
+              const allowed = await hasPermission(
+                db,
+                voiceCh.belongsTo,
+                actor.id,
+                PERMISSIONS.CONNECT_VOICE,
+              );
+              if (!allowed) {
+                const errMsg: WsServerMessage = {
+                  type: 'error',
+                  payload: { message: 'Insufficient permissions to join voice' },
+                };
+                socket.send(JSON.stringify(errMsg));
+                break;
+              }
+            }
             const actorProps = (actor.properties as Record<string, unknown> | null) ?? null;
             const participant = {
               actorId: actor.id,

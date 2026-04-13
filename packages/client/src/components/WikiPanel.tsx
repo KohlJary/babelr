@@ -41,6 +41,8 @@ interface WikiPanelProps {
   onNavigateEventEmbed?: (embed: EventEmbedView) => void;
   /** Called when the user clicks an inline file embed inside a wiki page. */
   onNavigateFileEmbed?: (embed: FileEmbedView) => void;
+  /** True when rendering the Babelr Manual (Tower-level wiki). */
+  isManual?: boolean;
   onClose: () => void;
 }
 
@@ -131,6 +133,7 @@ export function WikiPanel({
   onNavigateMessageEmbed,
   onNavigateEventEmbed,
   onNavigateFileEmbed,
+  isManual,
   actor,
   onClose,
 }: WikiPanelProps) {
@@ -210,12 +213,17 @@ export function WikiPanel({
   // filter; `activeTag` is an optional tag filter that narrows further.
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  // Server-side full-text search results (when query >= 2 chars)
+  const [searchResults, setSearchResults] = useState<(WikiPageSummary & { snippet: string })[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Edit form state
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftParentId, setDraftParentId] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  type SidebarTab = 'comments' | 'history' | 'backlinks';
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const filePickerRef = useRef<HTMLInputElement>(null);
   const [revisions, setRevisions] = useState<import('@babelr/shared').WikiPageRevisionView[]>([]);
@@ -315,9 +323,11 @@ export function WikiPanel({
     void loadPage(slug);
   };
 
+  const embedPrefix = isManual ? 'man' : 'wiki';
+
   const handleCopyLink = async () => {
     if (!currentPage) return;
-    const text = `[[${currentPage.slug}]]`;
+    const text = `[[${embedPrefix}:${currentPage.slug}]]`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -488,7 +498,33 @@ export function WikiPanel({
     return counts;
   }, [pages]);
 
+  // Debounced server-side search when query is >= 2 chars
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      api.searchWikiPages(serverId, q).then((res) => {
+        setSearchResults(res.results);
+        setSearching(false);
+      }).catch(() => {
+        setSearchResults(null);
+        setSearching(false);
+      });
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery, serverId]);
+
   const filteredPages = useMemo(() => {
+    // If we have server-side search results, use those
+    if (searchResults) return searchResults;
     const q = searchQuery.trim().toLowerCase();
     return pages.filter((p) => {
       if (q) {
@@ -498,7 +534,7 @@ export function WikiPanel({
       if (activeTag && !(p.tags ?? []).includes(activeTag)) return false;
       return true;
     });
-  }, [pages, searchQuery, activeTag]);
+  }, [pages, searchQuery, activeTag, searchResults]);
 
   const panelTitle = serverName
     ? `${t('wiki.serverWiki')} — ${serverName}`
@@ -537,9 +573,9 @@ export function WikiPanel({
             </button>
 
             <input
-              className="auth-input wiki-search-input"
+              className={`auth-input wiki-search-input ${searching ? 'searching' : ''}`}
               type="search"
-              placeholder={t('wiki.searchPlaceholder')}
+              placeholder={searching ? t('wiki.searching') : t('wiki.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -697,22 +733,6 @@ export function WikiPanel({
                     <button className="voice-control-btn" onClick={beginEdit}>
                       {t('wiki.editPage')}
                     </button>
-                    <button
-                      className={`voice-control-btn ${showHistory ? 'active-on' : ''}`}
-                      onClick={async () => {
-                        if (showHistory) {
-                          setShowHistory(false);
-                          setViewingRevision(null);
-                        } else {
-                          const res = await api.listWikiRevisions(serverId, currentPage.slug);
-                          setRevisions(res.revisions);
-                          setShowHistory(true);
-                          setViewingRevision(null);
-                        }
-                      }}
-                    >
-                      {t('wiki.history')}
-                    </button>
                     <button className="voice-control-btn leave" onClick={handleDelete}>
                       {t('wiki.deletePage')}
                     </button>
@@ -720,7 +740,7 @@ export function WikiPanel({
                 </div>
                 <div className="wiki-content-meta">
                   <span className="wiki-slug-display">
-                    <code>[[{currentPage.slug}]]</code>
+                    <code>[[{embedPrefix}:{currentPage.slug}]]</code>
                     <button
                       type="button"
                       className="wiki-slug-copy"
@@ -821,69 +841,7 @@ export function WikiPanel({
                   );
                 })()}
 
-                {/* Revision history panel */}
-                {showHistory && (
-                  <div className="wiki-revision-panel">
-                    {viewingRevision ? (
-                      <div className="wiki-revision-view">
-                        <div className="wiki-revision-view-header">
-                          <button className="voice-control-btn" onClick={() => setViewingRevision(null)}>
-                            {t('files.backToList')}
-                          </button>
-                          <span className="file-meta">
-                            {t('wiki.revisionLabel', { num: String(viewingRevision.revisionNumber) })}
-                            {' · '}
-                            {viewingRevision.editedBy.displayName ?? viewingRevision.editedBy.preferredUsername}
-                            {' · '}
-                            {new Date(viewingRevision.editedAt).toLocaleString()}
-                          </span>
-                          <button
-                            className="friends-btn accept"
-                            onClick={async () => {
-                              const res = await api.restoreWikiRevision(serverId, currentPage.slug, viewingRevision.revisionNumber);
-                              setCurrentPage(res.page);
-                              setShowHistory(false);
-                              setViewingRevision(null);
-                            }}
-                          >
-                            {t('wiki.restoreRevision')}
-                          </button>
-                        </div>
-                        <div className="wiki-content-body">
-                          {renderWithEmbeds(viewingRevision.content, {
-                            variant: 'wiki',
-                            onNavigateMessage: onNavigateMessageEmbed,
-                            onNavigateEvent: onNavigateEventEmbed,
-                            onNavigateFile: onNavigateFileEmbed,
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <ul className="wiki-revision-list">
-                        {revisions.map((rev) => (
-                          <li key={rev.id} className="wiki-revision-item">
-                            <button
-                              className="wiki-revision-btn"
-                              onClick={async () => {
-                                const res = await api.getWikiRevision(serverId, currentPage.slug, rev.revisionNumber);
-                                setViewingRevision(res.revision);
-                              }}
-                            >
-                              <span className="wiki-revision-num">#{rev.revisionNumber}</span>
-                              <span className="wiki-revision-editor">
-                                {rev.editedBy.displayName ?? rev.editedBy.preferredUsername}
-                              </span>
-                              <span className="file-meta">{new Date(rev.editedAt).toLocaleString()}</span>
-                              {rev.summary && <span className="wiki-revision-summary">{rev.summary}</span>}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {showHistory ? null : currentPage.content.trim() ? (
+                {currentPage.content.trim() ? (
                   !showOriginal && translate.anyTranslated ? (
                     // Chunk-by-chunk render with per-chunk indicators.
                     // Each chunk gets its own rendered markdown block
@@ -920,76 +878,6 @@ export function WikiPanel({
                   <div className="sidebar-empty">{t('wiki.emptyContent')}</div>
                 )}
 
-                {backlinks.length > 0 && (
-                  <section className="wiki-backlinks">
-                    <h3 className="friends-section-header">{t('wiki.backlinks')}</h3>
-                    <ul className="wiki-backlinks-list">
-                      {backlinks.map((bl, idx) => {
-                        if (bl.sourceType === 'page' && bl.page) {
-                          return (
-                            <li key={`p-${bl.page.id}-${idx}`}>
-                              <button
-                                className="wiki-backlink-item"
-                                onClick={() => {
-                                  setSelectedSlug(bl.page!.slug);
-                                  void loadPage(bl.page!.slug);
-                                }}
-                              >
-                                <span className="wiki-backlink-icon">📄</span>
-                                <span className="wiki-backlink-title">{bl.page.title}</span>
-                              </button>
-                            </li>
-                          );
-                        }
-                        if (bl.sourceType === 'message' && bl.message) {
-                          const author =
-                            bl.message.author.displayName ?? bl.message.author.preferredUsername;
-                          const channel = bl.message.channelName ?? '?';
-                          return (
-                            <li key={`m-${bl.message.id}-${idx}`}>
-                              <div className="wiki-backlink-item message">
-                                <span className="wiki-backlink-icon">💬</span>
-                                <div className="wiki-backlink-message">
-                                  <div className="wiki-backlink-meta">
-                                    {author} · #{channel}
-                                  </div>
-                                  <div className="wiki-backlink-snippet">
-                                    {bl.message.content.slice(0, 140)}
-                                  </div>
-                                </div>
-                              </div>
-                            </li>
-                          );
-                        }
-                        return null;
-                      })}
-                    </ul>
-                  </section>
-                )}
-
-                {/* Comment thread */}
-                {currentPage.chatId && (
-                  <section className="wiki-comments">
-                    <h3 className="friends-section-header">{t('wiki.comments')}</h3>
-                    <div className="event-chat-embed">
-                      <MessageList
-                        messages={chatMessages}
-                        loading={chatLoading}
-                        hasMore={chatHasMore}
-                        onLoadMore={chatLoadMore}
-                        translations={chatTranslations}
-                        isTranslating={chatIsTranslating}
-                        actor={actor}
-                      />
-                      <TypingIndicator users={chatTyping} />
-                      <MessageInput
-                        onSend={chatSend}
-                        disabled={!chatConnected}
-                        onTyping={chatNotifyTyping}
-                      />
-                    </div>
-                  </section>
-                )}
               </>
             )}
 
@@ -1152,6 +1040,178 @@ export function WikiPanel({
               </div>
             )}
           </main>
+
+          {/* Right sidebar: tabbed panel for comments, history, backlinks */}
+          {mode === 'view' && currentPage && (
+            <aside className="wiki-right-sidebar">
+              <div className="wiki-right-tabs">
+                <button
+                  className={`wiki-right-tab ${sidebarTab === 'comments' ? 'active' : ''}`}
+                  onClick={() => setSidebarTab(sidebarTab === 'comments' ? null : 'comments')}
+                >
+                  {t('wiki.comments')}
+                </button>
+                <button
+                  className={`wiki-right-tab ${sidebarTab === 'history' ? 'active' : ''}`}
+                  onClick={async () => {
+                    if (sidebarTab === 'history') {
+                      setSidebarTab(null);
+                    } else {
+                      const res = await api.listWikiRevisions(serverId, currentPage.slug);
+                      setRevisions(res.revisions);
+                      setViewingRevision(null);
+                      setSidebarTab('history');
+                    }
+                  }}
+                >
+                  {t('wiki.history')}
+                </button>
+                {backlinks.length > 0 && (
+                  <button
+                    className={`wiki-right-tab ${sidebarTab === 'backlinks' ? 'active' : ''}`}
+                    onClick={() => setSidebarTab(sidebarTab === 'backlinks' ? null : 'backlinks')}
+                  >
+                    {t('wiki.backlinks')} ({backlinks.length})
+                  </button>
+                )}
+              </div>
+
+              <div className="wiki-right-content">
+                {sidebarTab === 'comments' && currentPage.chatId && (
+                  <div className="wiki-right-comments">
+                    <div className="event-chat-embed">
+                      <MessageList
+                        messages={chatMessages}
+                        loading={chatLoading}
+                        hasMore={chatHasMore}
+                        onLoadMore={chatLoadMore}
+                        translations={chatTranslations}
+                        isTranslating={chatIsTranslating}
+                        actor={actor}
+                      />
+                      <TypingIndicator users={chatTyping} />
+                      <MessageInput
+                        onSend={chatSend}
+                        disabled={!chatConnected}
+                        onTyping={chatNotifyTyping}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {sidebarTab === 'history' && (
+                  <div className="wiki-right-history">
+                    {viewingRevision ? (
+                      <div className="wiki-revision-view">
+                        <div className="wiki-revision-view-header">
+                          <button className="voice-control-btn" onClick={() => setViewingRevision(null)}>
+                            {t('files.backToList')}
+                          </button>
+                          <span className="file-meta">
+                            {t('wiki.revisionLabel', { num: String(viewingRevision.revisionNumber) })}
+                            {' · '}
+                            {viewingRevision.editedBy.displayName ?? viewingRevision.editedBy.preferredUsername}
+                            {' · '}
+                            {new Date(viewingRevision.editedAt).toLocaleString()}
+                          </span>
+                          <button
+                            className="friends-btn accept"
+                            onClick={async () => {
+                              const res = await api.restoreWikiRevision(serverId, currentPage.slug, viewingRevision.revisionNumber);
+                              setCurrentPage(res.page);
+                              setSidebarTab(null);
+                              setViewingRevision(null);
+                            }}
+                          >
+                            {t('wiki.restoreRevision')}
+                          </button>
+                        </div>
+                        <div className="wiki-content-body">
+                          {renderWithEmbeds(viewingRevision.content, {
+                            variant: 'wiki',
+                            onNavigateMessage: onNavigateMessageEmbed,
+                            onNavigateEvent: onNavigateEventEmbed,
+                            onNavigateFile: onNavigateFileEmbed,
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <ul className="wiki-revision-list">
+                        {revisions.map((rev) => (
+                          <li key={rev.id} className="wiki-revision-item">
+                            <button
+                              className="wiki-revision-btn"
+                              onClick={async () => {
+                                const res = await api.getWikiRevision(serverId, currentPage.slug, rev.revisionNumber);
+                                setViewingRevision(res.revision);
+                              }}
+                            >
+                              <span className="wiki-revision-num">#{rev.revisionNumber}</span>
+                              <span className="wiki-revision-editor">
+                                {rev.editedBy.displayName ?? rev.editedBy.preferredUsername}
+                              </span>
+                              <span className="file-meta">{new Date(rev.editedAt).toLocaleString()}</span>
+                              {rev.summary && <span className="wiki-revision-summary">{rev.summary}</span>}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {sidebarTab === 'backlinks' && (
+                  <ul className="wiki-backlinks-list">
+                    {backlinks.map((bl, idx) => {
+                      if (bl.sourceType === 'page' && bl.page) {
+                        return (
+                          <li key={`p-${bl.page.id}-${idx}`}>
+                            <button
+                              className="wiki-backlink-item"
+                              onClick={() => {
+                                setSelectedSlug(bl.page!.slug);
+                                void loadPage(bl.page!.slug);
+                              }}
+                            >
+                              <span className="wiki-backlink-icon">📄</span>
+                              <span className="wiki-backlink-title">{bl.page.title}</span>
+                            </button>
+                          </li>
+                        );
+                      }
+                      if (bl.sourceType === 'message' && bl.message) {
+                        const author =
+                          bl.message.author.displayName ?? bl.message.author.preferredUsername;
+                        const channel = bl.message.channelName ?? '?';
+                        return (
+                          <li key={`m-${bl.message.id}-${idx}`}>
+                            <div className="wiki-backlink-item message">
+                              <span className="wiki-backlink-icon">💬</span>
+                              <div className="wiki-backlink-message">
+                                <div className="wiki-backlink-meta">
+                                  {author} · #{channel}
+                                </div>
+                                <div className="wiki-backlink-snippet">
+                                  {bl.message.content.slice(0, 140)}
+                                </div>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      }
+                      return null;
+                    })}
+                  </ul>
+                )}
+
+                {sidebarTab === null && (
+                  <div className="wiki-right-empty">
+                    {t('wiki.sidebarHint')}
+                  </div>
+                )}
+              </div>
+            </aside>
+          )}
         </div>
     </div>
   );

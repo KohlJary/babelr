@@ -371,9 +371,11 @@ body {
 /* Same override for the wiki panel. The inline variant wants to
  * fill the available height instead of honoring the old modal max.
  */
-.wiki-panel {
+.inline-main-view.wiki-panel {
   max-height: none !important;
   height: auto !important;
+  max-width: none;
+  width: 100%;
 }
 .inline-main-view.wiki-panel .wiki-body {
   flex: 1;
@@ -3207,6 +3209,77 @@ textarea.modal-input {
   padding: 1.25rem 1.5rem;
   overflow-y: auto;
   min-width: 0;
+}
+.wiki-right-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid #2a2a2a;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.wiki-right-tabs {
+  display: flex;
+  border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
+}
+.wiki-right-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #888;
+  padding: 0.6rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.wiki-right-tab:hover {
+  color: #ccc;
+}
+.wiki-right-tab.active {
+  color: #7ba6ff;
+  border-bottom-color: #7ba6ff;
+}
+.wiki-right-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wiki-right-comments {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.wiki-right-comments .event-chat-embed {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.wiki-right-history {
+  padding: 0.5rem;
+}
+.wiki-right-history .wiki-revision-list {
+  border: none;
+  padding: 0;
+}
+.wiki-right-history .wiki-revision-view-header {
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.wiki-right-content .wiki-backlinks-list {
+  padding: 0.5rem;
+  border: none;
+}
+.wiki-right-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #555;
+  font-size: 0.85rem;
 }
 .wiki-content-header {
   display: flex;

@@ -6,8 +6,9 @@ import {
   OpenAIProvider,
   OllamaProvider,
   TransformersJsProvider,
-  getCached,
-  setCached,
+  getCachedByHash,
+  setCachedByHash,
+  hashContent,
   type TranslationProvider,
   type CachedTranslation,
   type TranslationSettings,
@@ -56,10 +57,13 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
     if (!settings.enabled || !providerRef.current?.isConfigured()) return;
     if (!settings.preferredLanguage) return;
 
+    const targetLang = settings.preferredLanguage;
+
     const uncached = messages.filter((m) => {
       const id = m.message.id;
       if (inflightRef.current.has(id)) return false;
-      return !getCached(id, settings.preferredLanguage);
+      const hash = hashContent(m.message.content);
+      return !getCachedByHash('message', hash, targetLang);
     });
 
     if (uncached.length === 0) return;
@@ -76,7 +80,6 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
 
     const batch = uncached.map((m) => ({ id: m.message.id, content: m.message.content }));
     const provider = providerRef.current;
-    const targetLang = settings.preferredLanguage;
 
     provider
       .translate(batch, targetLang)
@@ -90,7 +93,12 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
             targetLanguage: targetLang,
             metadata: r.metadata,
           };
-          setCached(r.id, targetLang, entry);
+          // Find the original message content to hash for cache key
+          const msg = uncached.find((m) => m.message.id === r.id);
+          if (msg) {
+            const hash = hashContent(msg.message.content);
+            setCachedByHash('message', hash, targetLang, entry);
+          }
           newTranslations.set(r.id, entry);
         }
         setTranslations((prev) => new Map([...prev, ...newTranslations]));
@@ -130,7 +138,8 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
     const merged = new Map(translations);
     for (const m of messages) {
       if (!merged.has(m.message.id)) {
-        const cached = getCached(m.message.id, settings.preferredLanguage);
+        const hash = hashContent(m.message.content);
+        const cached = getCachedByHash('message', hash, settings.preferredLanguage);
         if (cached) merged.set(m.message.id, cached);
       }
     }

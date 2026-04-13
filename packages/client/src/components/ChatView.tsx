@@ -371,6 +371,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           <WikiPanel
             serverId={manualServerId}
             serverName="Babelr Manual"
+            isManual
             actor={actor}
             onNavigateMessageEmbed={() => {}}
             onNavigateEventEmbed={() => {}}

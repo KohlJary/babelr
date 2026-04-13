@@ -23,6 +23,11 @@ import type {
 
 type Db = ReturnType<typeof import('../db/index.ts').createDb>;
 
+/** Build a to_tsvector SQL expression for a wiki page's title + content. */
+function buildSearchVector(title: string, content: string) {
+  return sql`to_tsvector('english', ${title} || ' ' || ${content})`;
+}
+
 /**
  * Turn a user-supplied title into a URL-safe slug. Lowercased, ASCII
  * letters/digits/hyphens only, collapsed runs of non-alphanumerics to a
@@ -247,7 +252,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
               if (existing) {
                 await db
                   .update(wikiPages)
-                  .set({ title: p.title, content: p.content, tags: p.tags, parentId: p.parentId ?? null, position: p.position ?? 0, updatedAt: new Date() })
+                  .set({ title: p.title, content: p.content, tags: p.tags, parentId: p.parentId ?? null, position: p.position ?? 0, contentSearch: buildSearchVector(p.title, p.content), updatedAt: new Date() })
                   .where(eq(wikiPages.id, existing.id));
               } else {
                 await db.insert(wikiPages).values({
@@ -259,6 +264,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
                   tags: p.tags,
                   parentId: p.parentId ?? null,
                   position: p.position ?? 0,
+                  contentSearch: buildSearchVector(p.title, p.content),
                   createdById: serverActor.id,
                   lastEditedById: serverActor.id,
                 }).onConflictDoNothing();
@@ -285,6 +291,64 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       const pages: WikiPageSummary[] = rows.map((p) => toWikiPageSummary(p, editorMap.get(p.lastEditedById)));
       return { pages };
+    },
+  );
+
+  // Full-text search across wiki page title + content
+  fastify.get<{
+    Params: { serverId: string };
+    Querystring: { q?: string; limit?: string };
+  }>(
+    '/servers/:serverId/wiki/search',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      if (
+        !(await isManualServer(request.params.serverId)) &&
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_WIKI,
+        ))
+      ) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const q = request.query.q?.trim();
+      if (!q) return reply.status(400).send({ error: 'Search query is required' });
+
+      const limit = Math.min(parseInt(request.query.limit ?? '20', 10), 100);
+      const tsquery = q.split(/\s+/).join(' & ');
+
+      const rows = await db
+        .select({
+          page: wikiPages,
+          rank: sql<number>`ts_rank(${wikiPages.contentSearch}, to_tsquery('english', ${tsquery}))`,
+        })
+        .from(wikiPages)
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            sql`${wikiPages.contentSearch} @@ to_tsquery('english', ${tsquery})`,
+          ),
+        )
+        .orderBy(sql`ts_rank DESC`)
+        .limit(limit);
+
+      // Load editors for results
+      const editorIds = Array.from(new Set(rows.map((r) => r.page.lastEditedById)));
+      const editors = editorIds.length
+        ? await db.select().from(actors).where(inArray(actors.id, editorIds))
+        : [];
+      const editorMap = new Map(editors.map((e) => [e.id, e]));
+
+      const results = rows.map((r) => ({
+        ...toWikiPageSummary(r.page, editorMap.get(r.page.lastEditedById)),
+        snippet: r.page.content.slice(0, 200),
+        rank: r.rank,
+      }));
+
+      return { results };
     },
   );
 
@@ -361,18 +425,20 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         })
         .returning();
 
+      const trimmedTitle = body.title.trim();
       const [created] = await db
         .insert(wikiPages)
         .values({
           serverId: request.params.serverId,
           uri: pageUri,
           slug,
-          title: body.title.trim(),
+          title: trimmedTitle,
           content,
           tags: normalizeTags(body.tags),
           parentId: body.parentId ?? null,
           position: body.position ?? 0,
           chatId: chatChannel.id,
+          contentSearch: buildSearchVector(trimmedTitle, content),
           createdById: request.actor.id,
           lastEditedById: request.actor.id,
         })
@@ -485,6 +551,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           title: nextTitle,
           content: nextContent,
           tags: nextTags,
+          contentSearch: buildSearchVector(nextTitle, nextContent),
           ...(body.parentId !== undefined ? { parentId: body.parentId ?? null } : {}),
           ...(body.position !== undefined ? { position: body.position } : {}),
           lastEditedById: request.actor.id,
@@ -946,6 +1013,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .set({
           title: targetRev.title,
           content: targetRev.content,
+          contentSearch: buildSearchVector(targetRev.title, targetRev.content),
           lastEditedById: request.actor.id,
           updatedAt: new Date(),
         })
