@@ -33,6 +33,12 @@ Set these in your `.env` file or as environment variables:
 | `BABELR_PORT` | No | `3000` | Host port to expose (for avoiding conflicts with local dev) |
 | `HOST` | No | `0.0.0.0` | Bind address |
 | `NODE_ENV` | No | `production` | Set to `production` for secure cookies |
+| `FEDERATION_MODE` | No | `open` | Federation policy: `open`, `allowlist`, or `blocklist` |
+| `FEDERATION_DOMAINS` | No | -- | Comma-separated domain list for allowlist/blocklist mode |
+| `OIDC_ISSUER` | No | -- | OIDC provider URL (e.g. `https://accounts.google.com`) |
+| `OIDC_CLIENT_ID` | No | -- | OIDC client ID from your identity provider |
+| `OIDC_CLIENT_SECRET` | No | -- | OIDC client secret |
+| `OIDC_REDIRECT_URI` | No | -- | Callback URL: `https://your-domain/api/auth/oidc/callback` |
 
 *When using `docker compose`, `DATABASE_URL` is set automatically to point at the Postgres container.
 
@@ -78,6 +84,37 @@ Users on other Towers can:
 
 All content is translated through each reader's preferred language automatically.
 
+### Federation Access Control
+
+By default, your Tower federates openly with any other instance. For restricted environments, set a federation policy:
+
+```bash
+# Only federate with specific Towers
+FEDERATION_MODE=allowlist
+FEDERATION_DOMAINS=partner.example.com,hq.example.com
+
+# Or block specific instances
+FEDERATION_MODE=blocklist
+FEDERATION_DOMAINS=spam.example.com
+```
+
+The policy is enforced at all federation checkpoints — inbound activities are rejected, outbound deliveries are skipped, and remote server joins are blocked for disallowed domains.
+
+### Single Sign-On (OIDC)
+
+Babelr supports enterprise SSO via any OpenID Connect provider (Google, Azure AD, Okta, Auth0, Keycloak, etc.). Set all four OIDC variables to enable:
+
+```bash
+OIDC_ISSUER=https://accounts.google.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_REDIRECT_URI=https://chat.example.com/api/auth/oidc/callback
+```
+
+When configured, a "Sign in with SSO" button appears on the login page. Users are redirected to your identity provider, and accounts are auto-provisioned on first login. Existing accounts are linked by email address.
+
+The first user to sign in via SSO becomes the instance admin (same as password registration).
+
 ## Manual Setup
 
 ### Prerequisites
@@ -113,11 +150,16 @@ The server runs on port 3000. In production, build the client (`npm run build -w
 
 Babelr uses PostgreSQL with Drizzle ORM. The schema is ActivityPub-shaped:
 
-- `actors` -- Users (Person) and servers (Group)
-- `objects` -- Messages (Note) and channels (OrderedCollection)
-- `activities` -- ActivityPub audit log (Create, Follow, etc.)
-- `collection_items` -- Server membership, DM participants
-- `sessions` -- Authentication sessions
+- `actors` — Users (Person) and servers (Group)
+- `objects` — Messages (Note) and channels (OrderedCollection)
+- `activities` — ActivityPub activity log (Create, Follow, etc.)
+- `collection_items` — Server membership, DM participants
+- `sessions` — Authentication sessions
+- `wiki_pages`, `wiki_page_revisions`, `wiki_page_links` — Wiki with revision history and backlinks
+- `events`, `event_attendees` — Calendar events with RSVPs
+- `server_files` — Per-server file library
+- `server_roles`, `server_role_assignments` — Granular permissions
+- `audit_logs` — Admin action history
 
 Migrations are plain SQL in `packages/server/src/db/migrations/`. To generate new migrations after schema changes: `npm run db:generate`.
 
