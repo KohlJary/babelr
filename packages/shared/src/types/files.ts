@@ -36,6 +36,7 @@ export interface FileEmbedView {
   serverId: string;
   serverName: string | null;
   uploader: AuthorView;
+  chatId: string;
 }
 
 export interface FileListResponse {

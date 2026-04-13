@@ -4200,6 +4200,18 @@ textarea.modal-input {
   color: #eee;
   font-size: 1rem;
 }
+.image-lightbox-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.image-lightbox-chat .message-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 300px;
+}
 .image-lightbox-description {
   color: #bbb;
   font-size: 0.85rem;

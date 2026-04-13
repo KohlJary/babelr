@@ -516,6 +516,7 @@ export default async function fileRoutes(fastify: FastifyInstance) {
           server?.preferredUsername ??
           null,
         uploader: toAuthorView(row.uploader),
+        chatId: row.file.chatId,
       };
 
       return view;

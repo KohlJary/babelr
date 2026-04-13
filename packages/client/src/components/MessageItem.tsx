@@ -281,6 +281,7 @@ export function MessageItem({
             onNavigateMessage: onNavigateMessageEmbed,
             onNavigateEvent: onNavigateEventEmbed,
             onNavigateFile: onNavigateFileEmbed,
+            actor,
           })}
         </div>
         {attachmentsBlock}

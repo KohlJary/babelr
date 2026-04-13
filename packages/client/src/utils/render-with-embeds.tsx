@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { ReactNode } from 'react';
-import type { EventEmbedView, FileEmbedView, MessageEmbedView } from '@babelr/shared';
+import type { EventEmbedView, FileEmbedView, MessageEmbedView, ActorProfile } from '@babelr/shared';
 import { parseWikiRefs } from '@babelr/shared';
 import { MessageEmbed } from '../components/MessageEmbed';
 import { EventEmbed } from '../components/EventEmbed';
@@ -36,6 +36,8 @@ interface RenderOptions {
   onNavigateMessage?: (embed: MessageEmbedView) => void;
   onNavigateEvent?: (embed: EventEmbedView) => void;
   onNavigateFile?: (embed: FileEmbedView) => void;
+  /** Actor for image lightbox comments. */
+  actor?: ActorProfile;
 }
 
 export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode {
@@ -76,6 +78,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
         <ImageEmbed
           key={`img-${i}-${ref.slug}`}
           slug={ref.slug}
+          actor={opts.actor}
         />,
       );
     } else if (ref.kind === 'file') {

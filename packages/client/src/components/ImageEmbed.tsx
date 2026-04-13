@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useCallback } from 'react';
-import type { FileEmbedView } from '@babelr/shared';
+import type { FileEmbedView, ActorProfile } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { useChat } from '../hooks/useChat';
+import { useTranslation } from '../hooks/useTranslation';
+import { useTranslationSettings } from '../hooks/useTranslationSettings';
+import { MessageList } from './MessageList';
+import { MessageInput } from './MessageInput';
+import { TypingIndicator } from './TypingIndicator';
 
 interface ImageEmbedProps {
   slug: string;
+  actor?: ActorProfile;
 }
 
 type EmbedState =
@@ -41,12 +48,28 @@ function fetchEmbed(slug: string): Promise<EmbedState> {
   return promise;
 }
 
-export function ImageEmbed({ slug }: ImageEmbedProps) {
+export function ImageEmbed({ slug, actor }: ImageEmbedProps) {
   const t = useT();
   const [state, setState] = useState<EmbedState>(
     () => resolved.get(slug) ?? { status: 'loading' },
   );
   const [lightbox, setLightbox] = useState(false);
+
+  // Comment thread for the lightbox sidebar.
+  const chatId = state.status === 'ok' ? state.data.chatId : null;
+  const { settings: translationSettings } = useTranslationSettings();
+  const {
+    messages: chatMessages,
+    loading: chatLoading,
+    hasMore: chatHasMore,
+    connected: chatConnected,
+    sendMessage: chatSend,
+    loadMore: chatLoadMore,
+    typingUsers: chatTyping,
+    notifyTyping: chatNotifyTyping,
+  } = useChat(actor ?? { id: '', uri: '', preferredUsername: '', displayName: null, preferredLanguage: 'en' } as ActorProfile, chatId, false);
+  const { translations: chatTranslations, isTranslating: chatIsTranslating } =
+    useTranslation(chatMessages, translationSettings);
 
   useEffect(() => {
     if (state.status !== 'loading') return;
@@ -115,6 +138,29 @@ export function ImageEmbed({ slug }: ImageEmbedProps) {
               >
                 {t('files.download')}
               </a>
+              {actor && chatId && (
+                <>
+                  <div className="settings-divider" />
+                  <h4>{t('files.comments')}</h4>
+                  <div className="image-lightbox-chat">
+                    <MessageList
+                      messages={chatMessages}
+                      loading={chatLoading}
+                      hasMore={chatHasMore}
+                      onLoadMore={chatLoadMore}
+                      translations={chatTranslations}
+                      isTranslating={chatIsTranslating}
+                      actor={actor}
+                    />
+                    <TypingIndicator users={chatTyping} />
+                    <MessageInput
+                      onSend={chatSend}
+                      disabled={!chatConnected}
+                      onTyping={chatNotifyTyping}
+                    />
+                  </div>
+                </>
+              )}
             </aside>
           </div>
         </div>
