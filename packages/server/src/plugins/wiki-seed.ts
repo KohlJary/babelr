@@ -22,34 +22,54 @@ interface WikiManifestPage {
 }
 
 /**
- * Seed the default Babelr server's wiki with the built-in user
- * manual on first boot. Runs once — if any wiki pages already
- * exist on the default server, the seeder is a no-op.
+ * The Babelr Manual is a Tower-level wiki that lives outside any
+ * server. It's a read-only user guide seeded on first boot,
+ * accessible from the server sidebar via a "Manual" link, and
+ * referenceable from anywhere via `[[man:slug]]` embeds.
  *
- * The manual lives in packages/server/src/db/seed-data/wiki/ as
- * markdown files described by a manifest.json. Each page gets a
- * chat collection for comments and a revision 1 entry.
+ * The manual has its own system Group actor (`_manual`) so wiki
+ * pages have a valid serverId FK. This actor is not discoverable,
+ * not joinable, and not federated — it's purely an ownership
+ * anchor for the manual pages.
  */
 async function wikiSeedPlugin(fastify: FastifyInstance) {
   fastify.addHook('onReady', async () => {
     const db = fastify.db;
     const config = fastify.config;
     const protocol = config.secureCookies ? 'https' : 'http';
+    const manualUri = `${protocol}://${config.domain}/system/manual`;
 
-    // Find the default Babelr server.
-    const serverUri = `${protocol}://${config.domain}/groups/babelr`;
-    const [server] = await db
+    // Upsert the system manual actor.
+    let [manual] = await db
       .select()
       .from(actors)
-      .where(and(eq(actors.uri, serverUri), eq(actors.type, 'Group')))
+      .where(eq(actors.uri, manualUri))
       .limit(1);
-    if (!server) return;
 
-    // Check if wiki pages already exist — don't re-seed.
+    if (!manual) {
+      [manual] = await db
+        .insert(actors)
+        .values({
+          type: 'Group',
+          preferredUsername: '_manual',
+          displayName: 'Babelr Manual',
+          summary: 'Built-in user guide',
+          uri: manualUri,
+          inboxUri: `${manualUri}/inbox`,
+          outboxUri: `${manualUri}/outbox`,
+          followersUri: `${manualUri}/followers`,
+          followingUri: `${manualUri}/following`,
+          local: true,
+          properties: { isManual: true },
+        })
+        .returning();
+    }
+
+    // Check if manual pages already exist — don't re-seed.
     const [existing] = await db
       .select({ id: wikiPages.id })
       .from(wikiPages)
-      .where(eq(wikiPages.serverId, server.id))
+      .where(eq(wikiPages.serverId, manual.id))
       .limit(1);
     if (existing) return;
 
@@ -69,7 +89,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       return;
     }
 
-    // First pass: create all pages (without parent references).
+    // First pass: create all pages.
     const slugToId = new Map<string, string>();
 
     for (const entry of manifest.pages) {
@@ -80,9 +100,9 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       }
 
       const content = readFileSync(filePath, 'utf-8');
-      const pageUri = `${protocol}://${config.domain}/servers/${server.id}/wiki/${entry.slug}`;
+      const pageUri = `${protocol}://${config.domain}/manual/wiki/${entry.slug}`;
 
-      // Create chat collection.
+      // Create chat collection for comments.
       const chatUri = `${protocol}://${config.domain}/wiki/${crypto.randomUUID()}/chat`;
       const [chatChannel] = await db
         .insert(objects)
@@ -97,7 +117,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       const [page] = await db
         .insert(wikiPages)
         .values({
-          serverId: server.id,
+          serverId: manual.id,
           uri: pageUri,
           slug: entry.slug,
           title: entry.title,
@@ -105,20 +125,19 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
           tags: [],
           position: entry.position ?? 0,
           chatId: chatChannel.id,
-          createdById: server.id,
-          lastEditedById: server.id,
+          createdById: manual.id,
+          lastEditedById: manual.id,
         })
         .returning();
 
       slugToId.set(entry.slug, page.id);
 
-      // Create initial revision.
       await db.insert(wikiPageRevisions).values({
         pageId: page.id,
         revisionNumber: 1,
         title: entry.title,
         content,
-        editedById: server.id,
+        editedById: manual.id,
         summary: 'Initial seed',
       });
     }
@@ -138,7 +157,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
 
     fastify.log.info(
       { count: slugToId.size },
-      'Wiki manual seeded on default server',
+      'Babelr Manual wiki seeded',
     );
   });
 }

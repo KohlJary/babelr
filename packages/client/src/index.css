@@ -192,6 +192,26 @@ body {
   background: transparent;
 }
 
+.server-icon.manual-icon {
+  font-size: 1rem;
+  border-color: #a88bff;
+  color: #a88bff;
+  background: transparent;
+}
+.server-icon.manual-icon:hover {
+  border-color: #c3adff;
+  color: #c3adff;
+}
+.manual-embed-link {
+  color: #a88bff;
+  text-decoration: none;
+  border-bottom: 1px dashed #6f5ec9;
+}
+.manual-embed-link:hover {
+  color: #c3adff;
+  border-bottom-style: solid;
+}
+
 .server-divider {
   width: 32px;
   height: 1px;

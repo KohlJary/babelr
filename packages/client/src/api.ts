@@ -752,6 +752,17 @@ export async function restoreWikiRevision(
   });
 }
 
+// Manual
+export async function getManualServerId(): Promise<{ serverId: string }> {
+  return apiFetch('/manual/id');
+}
+
+export async function getManualPageBySlug(
+  slug: string,
+): Promise<{ id: string; slug: string; title: string; content: string; serverId: string; serverName: string }> {
+  return apiFetch(`/manual/by-slug/${encodeURIComponent(slug)}`);
+}
+
 // ---- Cross-tower embed resolution ----
 
 export async function resolveEmbed(

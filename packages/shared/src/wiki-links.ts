@@ -19,7 +19,7 @@
  * write about the syntax itself without triggering resolution.
  */
 
-export type WikiRefKind = 'page' | 'message' | 'event' | 'file' | 'image';
+export type WikiRefKind = 'page' | 'message' | 'event' | 'file' | 'image' | 'manual';
 
 /**
  * Cross-tower origin for [[server@tower:kind:slug]] refs. When
@@ -100,6 +100,7 @@ const KIND_PREFIXES: Record<string, WikiRefKind> = {
   'file:': 'file',
   'img:': 'image',
   'wiki:': 'page',
+  'man:': 'manual',
 };
 
 /**

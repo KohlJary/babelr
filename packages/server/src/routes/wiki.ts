@@ -950,6 +950,53 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Get the manual server ID. Used by the client to open the
+  // manual wiki panel and resolve [[man:slug]] embeds.
+  fastify.get('/manual/id', async (_request, reply) => {
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+    const manualUri = `${protocol}://${config.domain}/system/manual`;
+    const [manual] = await db
+      .select({ id: actors.id })
+      .from(actors)
+      .where(eq(actors.uri, manualUri))
+      .limit(1);
+    if (!manual) return reply.status(404).send({ error: 'Manual not found' });
+    return { serverId: manual.id };
+  });
+
+  // Manual page lookup by slug for [[man:slug]] embeds.
+  fastify.get<{ Params: { slug: string } }>(
+    '/manual/by-slug/:slug',
+    async (request, reply) => {
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
+      const manualUri = `${protocol}://${config.domain}/system/manual`;
+      const [manual] = await db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(eq(actors.uri, manualUri))
+        .limit(1);
+      if (!manual) return reply.status(404).send({ error: 'Manual not found' });
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(and(eq(wikiPages.serverId, manual.id), eq(wikiPages.slug, request.params.slug)))
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      return {
+        id: page.id,
+        slug: page.slug,
+        title: page.title,
+        content: page.content.slice(0, 500),
+        serverId: manual.id,
+        serverName: 'Babelr Manual',
+      };
+    },
+  );
+
   // Wiki page embed lookup by slug. Used by cross-tower embeds
   // ([[server@tower:wiki:slug]]) and the local embed proxy.
   // Returns a compact view suitable for inline rendering.

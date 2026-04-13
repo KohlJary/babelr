@@ -38,6 +38,8 @@ interface RenderOptions {
   onNavigateFile?: (embed: FileEmbedView) => void;
   /** Actor for image lightbox comments. */
   actor?: ActorProfile;
+  /** Called when a [[man:slug]] link is clicked. */
+  onOpenManual?: (slug: string) => void;
 }
 
 export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode {
@@ -46,7 +48,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
   // (which render as markdown links, not embed components). Page
   // refs WITH an origin ARE embeddable (cross-tower wiki embeds).
   const refs = parseWikiRefs(source).filter(
-    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.kind === 'image' || r.origin,
+    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.kind === 'image' || r.kind === 'manual' || r.origin,
   );
 
   if (refs.length === 0) {
@@ -72,6 +74,20 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
           slug={ref.slug}
           origin={ref.origin}
         />,
+      );
+    } else if (ref.kind === 'manual') {
+      segments.push(
+        <a
+          key={`man-${i}-${ref.slug}`}
+          href={`#manual/${ref.slug}`}
+          className="manual-embed-link"
+          onClick={(e) => {
+            e.preventDefault();
+            opts.onOpenManual?.(ref.slug);
+          }}
+        >
+          {ref.display}
+        </a>,
       );
     } else if (ref.kind === 'image') {
       segments.push(

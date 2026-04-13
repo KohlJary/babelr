@@ -64,7 +64,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // renders its Events and Server Discovery tabs as primary
   // content rather than modal overlays. Channel selection or DM
   // selection implicitly resets this to 'chat'.
-  const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki' | 'files'>('chat');
+  const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki' | 'files' | 'manual'>('chat');
+  const [manualServerId, setManualServerId] = useState<string | null>(null);
   const [wikiInitialSlug, setWikiInitialSlug] = useState<string | null>(null);
   const [wikiInitialDraft, setWikiInitialDraft] = useState<{ title?: string; content?: string } | null>(null);
   // When the user clicks an `[[event:slug]]` embed we need to switch
@@ -239,6 +240,17 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         }}
         onSelectDMs={() => setDmMode(true)}
         onCreateServer={() => setShowCreateServer(true)}
+        onOpenManual={async () => {
+          if (!manualServerId) {
+            try {
+              const res = await api.getManualServerId();
+              setManualServerId(res.serverId);
+              setMainView('manual');
+            } catch { /* manual not available */ }
+          } else {
+            setMainView('manual');
+          }
+        }}
       />
       <ChannelSidebar
         mode={dmMode ? 'dms' : 'channels'}
@@ -353,6 +365,17 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               setMainView('chat');
               setFilesInitialFileId(null);
             }}
+          />
+        )}
+        {mainView === 'manual' && manualServerId && (
+          <WikiPanel
+            serverId={manualServerId}
+            serverName="Babelr Manual"
+            actor={actor}
+            onNavigateMessageEmbed={() => {}}
+            onNavigateEventEmbed={() => {}}
+            onNavigateFileEmbed={() => {}}
+            onClose={() => setMainView('chat')}
           />
         )}
         {mainView === 'chat' && (

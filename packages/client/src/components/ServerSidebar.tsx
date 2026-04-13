@@ -9,6 +9,7 @@ interface ServerSidebarProps {
   onSelectServer: (id: string) => void;
   onSelectDMs: () => void;
   onCreateServer: () => void;
+  onOpenManual?: () => void;
 }
 
 export function ServerSidebar({
@@ -18,6 +19,7 @@ export function ServerSidebar({
   onSelectServer,
   onSelectDMs,
   onCreateServer,
+  onOpenManual,
 }: ServerSidebarProps) {
   const t = useT();
   return (
@@ -47,6 +49,18 @@ export function ServerSidebar({
       <button className="server-icon add-server" onClick={onCreateServer} title={t('serverSidebar.createServer')}>
         +
       </button>
+      {onOpenManual && (
+        <>
+          <div className="server-divider" />
+          <button
+            className="server-icon manual-icon"
+            onClick={onOpenManual}
+            title={t('serverSidebar.manual')}
+          >
+            ?
+          </button>
+        </>
+      )}
     </div>
   );
 }

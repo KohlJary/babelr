@@ -44,6 +44,7 @@ export const UI_STRINGS = {
   // Server sidebar
   'serverSidebar.directMessages': 'Direct Messages',
   'serverSidebar.createServer': 'Create server',
+  'serverSidebar.manual': 'Babelr Manual',
 
   // Channel sidebar
   'channelSidebar.directMessages': 'Direct Messages',
