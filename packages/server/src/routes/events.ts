@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, asc } from 'drizzle-orm';
 import rrule from 'rrule';
 const { rrulestr } = rrule;
+import { writeAuditLog } from '../audit.ts';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
@@ -317,6 +318,18 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       }
     }
 
+    // Audit log for server events
+    if (body.ownerType === 'server') {
+      writeAuditLog(db, {
+        serverId: ownerId,
+        actorId: request.actor.id,
+        category: 'event',
+        action: 'event.create',
+        summary: `Created event "${body.title.trim()}"`,
+        details: { eventId: created.id },
+      });
+    }
+
     const view = await toEventView(db, created, request.actor.id);
     return reply.status(201).send(view);
   });
@@ -565,6 +578,19 @@ export default async function eventRoutes(fastify: FastifyInstance) {
       await db.delete(events).where(eq(events.id, event.id));
       // Cascade handles event_attendees; also clean up the event chat collection
       await db.delete(objects).where(eq(objects.id, event.eventChatId));
+
+      // Audit log for server events
+      if (event.ownerType === 'server') {
+        writeAuditLog(db, {
+          serverId: event.ownerId,
+          actorId: request.actor.id,
+          category: 'event',
+          action: 'event.delete',
+          summary: `Deleted event`,
+          details: { eventId: event.id },
+        });
+      }
+
       return { ok: true };
     },
   );

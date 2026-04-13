@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 
+/**
+ * Federation policy mode:
+ * - 'open': accept activities from any instance (default)
+ * - 'allowlist': only accept from domains in the allowlist
+ * - 'blocklist': accept from all except domains in the blocklist
+ */
+export type FederationMode = 'open' | 'allowlist' | 'blocklist';
+
 export interface Config {
   port: number;
   host: string;
@@ -7,6 +15,15 @@ export interface Config {
   domain: string;
   sessionSecret: string;
   secureCookies: boolean;
+  /** Federation access control mode. */
+  federationMode: FederationMode;
+  /** Comma-separated domain list for allowlist/blocklist mode. */
+  federationDomains: string[];
+  /** OIDC SSO configuration. All fields required to enable OIDC. */
+  oidcIssuer?: string;
+  oidcClientId?: string;
+  oidcClientSecret?: string;
+  oidcRedirectUri?: string;
 }
 
 export function loadConfig(): Config {
@@ -27,5 +44,13 @@ export function loadConfig(): Config {
     domain: process.env.BABELR_DOMAIN ?? 'localhost:3000',
     sessionSecret,
     secureCookies: process.env.NODE_ENV === 'production',
+    federationMode: (process.env.FEDERATION_MODE as FederationMode) ?? 'open',
+    federationDomains: process.env.FEDERATION_DOMAINS
+      ? process.env.FEDERATION_DOMAINS.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean)
+      : [],
+    oidcIssuer: process.env.OIDC_ISSUER || undefined,
+    oidcClientId: process.env.OIDC_CLIENT_ID || undefined,
+    oidcClientSecret: process.env.OIDC_CLIENT_SECRET || undefined,
+    oidcRedirectUri: process.env.OIDC_REDIRECT_URI || undefined,
   };
 }

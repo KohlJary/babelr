@@ -28,6 +28,7 @@ import { ServerSettingsPanel } from './ServerSettingsPanel';
 import { MentionsPanel } from './MentionsPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
 import { FriendsPanel } from './FriendsPanel';
+import { AuditLogPanel } from './AuditLogPanel';
 import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { EventsPanel } from './EventsPanel';
 import { WikiPanel } from './WikiPanel';
@@ -54,6 +55,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showGlossary, setShowGlossary] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showServerSettings, setShowServerSettings] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -276,6 +278,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         onShowGlossary={() => setShowGlossary(true)}
         onShowServerSettings={
           ['owner', 'admin'].includes(callerRole) ? () => setShowServerSettings(true) : undefined
+        }
+        onShowAuditLog={
+          ['owner', 'admin'].includes(callerRole) ? () => setShowAuditLog(true) : undefined
         }
         mutedChannels={mutedChannels}
         onToggleMute={handleToggleMute}
@@ -559,6 +564,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             await startDM(actorId);
           }}
           onClose={() => setShowFriends(false)}
+        />
+      )}
+      {showAuditLog && selectedServer && (
+        <AuditLogPanel
+          serverId={selectedServer.id}
+          onClose={() => setShowAuditLog(false)}
         />
       )}
       {editingChannelId && (() => {

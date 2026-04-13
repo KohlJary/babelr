@@ -784,4 +784,17 @@ export async function resolveEmbed(
   return apiFetch(`/embeds/resolve?${qs.toString()}`);
 }
 
+// Audit log
+export async function getAuditLog(
+  serverId: string,
+  category?: string,
+  cursor?: string,
+  limit = 50,
+): Promise<import('@babelr/shared').AuditLogResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (category) params.set('category', category);
+  if (cursor) params.set('cursor', cursor);
+  return apiFetch(`/servers/${serverId}/audit-log?${params.toString()}`);
+}
+
 export { ApiError };

@@ -40,6 +40,8 @@ export const UI_STRINGS = {
   'auth.email': 'Email',
   'auth.password': 'Password',
   'auth.createAccount': 'Create account',
+  'auth.or': 'or',
+  'auth.ssoLogin': 'Sign in with SSO',
 
   // Server sidebar
   'serverSidebar.directMessages': 'Direct Messages',
@@ -509,6 +511,18 @@ export const UI_STRINGS = {
   'language.hi': 'Hindi',
   'language.tr': 'Turkish',
   'language.vi': 'Vietnamese',
+  // Audit log
+  'audit.title': 'Audit Log',
+  'audit.noEntries': 'No audit log entries',
+  'audit.loadMore': 'Load more',
+  'audit.allCategories': 'All categories',
+  'audit.category.server': 'Server',
+  'audit.category.channel': 'Channel',
+  'audit.category.role': 'Role',
+  'audit.category.member': 'Member',
+  'audit.category.wiki': 'Wiki',
+  'audit.category.event': 'Event',
+  'audit.category.file': 'File',
 } as const;
 
 export type UIStringKey = keyof typeof UI_STRINGS;

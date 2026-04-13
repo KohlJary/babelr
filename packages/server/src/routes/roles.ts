@@ -2,6 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, asc, eq } from 'drizzle-orm';
 import '../types.ts';
+import { writeAuditLog } from '../audit.ts';
 import {
   ALL_PERMISSIONS,
   PERMISSIONS,
@@ -194,6 +195,15 @@ export default async function roleRoutes(fastify: FastifyInstance) {
         })
         .returning();
 
+      await writeAuditLog(db, {
+        serverId,
+        actorId: request.actor.id,
+        category: 'role',
+        action: 'role.create',
+        summary: `Created role "${name}"`,
+        details: { roleId: created.id, name },
+      });
+
       return reply.status(201).send({ role: toRoleView(created) });
     },
   );
@@ -268,6 +278,16 @@ export default async function roleRoutes(fastify: FastifyInstance) {
           await ensureManageRolesSurvives(tx, serverId);
           return result;
         });
+        const name = (updates.name as string) ?? role.name;
+        await writeAuditLog(db, {
+          serverId,
+          actorId: request.actor.id,
+          category: 'role',
+          action: 'role.update',
+          summary: `Updated role "${name}"`,
+          details: { roleId },
+        });
+
         return { role: toRoleView(updated) };
       } catch (err) {
         if (err instanceof LockoutError) {
@@ -318,6 +338,15 @@ export default async function roleRoutes(fastify: FastifyInstance) {
         throw err;
       }
 
+      await writeAuditLog(db, {
+        serverId,
+        actorId: request.actor.id,
+        category: 'role',
+        action: 'role.delete',
+        summary: `Deleted role`,
+        details: { roleId },
+      });
+
       return { ok: true };
     },
   );
@@ -351,6 +380,15 @@ export default async function roleRoutes(fastify: FastifyInstance) {
         .insert(serverRoleAssignments)
         .values({ serverId, actorId, roleId })
         .onConflictDoNothing();
+
+      await writeAuditLog(db, {
+        serverId,
+        actorId: request.actor.id,
+        category: 'role',
+        action: 'role.assign',
+        summary: `Assigned role to member`,
+        details: { targetActorId: request.params.actorId, roleId: request.params.roleId },
+      });
 
       return { ok: true };
     },
@@ -387,6 +425,15 @@ export default async function roleRoutes(fastify: FastifyInstance) {
         }
         throw err;
       }
+
+      await writeAuditLog(db, {
+        serverId,
+        actorId: request.actor.id,
+        category: 'role',
+        action: 'role.unassign',
+        summary: `Removed role from member`,
+        details: { targetActorId: request.params.actorId, roleId: request.params.roleId },
+      });
 
       return { ok: true };
     },

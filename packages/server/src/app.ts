@@ -34,6 +34,8 @@ import uploadRoutes from './routes/uploads.ts';
 import fileRoutes from './routes/files.ts';
 import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
+import auditRoutes from './routes/audit.ts';
+import ssoRoutes from './routes/sso.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -157,6 +159,8 @@ export async function buildApp() {
   await app.register(uploadRoutes);
   await app.register(fileRoutes);
   await app.register(embedRoutes);
+  await app.register(auditRoutes);
+  await app.register(ssoRoutes);
   await app.register(wikiSeedPlugin);
 
   // SPA fallback — serve index.html for all non-API paths

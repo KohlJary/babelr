@@ -26,6 +26,7 @@ import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
 import { PERMISSIONS, generateMessageSlug, isValidMessageSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
+import { writeAuditLog } from '../audit.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -532,6 +533,15 @@ export default async function channelRoutes(fastify: FastifyInstance) {
         payload: { serverId: request.params.serverId },
       });
 
+      await writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'channel',
+        action: 'channel.create',
+        summary: `Created channel #${name}`,
+        details: { channelId: channel.id, name, isPrivate },
+      });
+
       return reply.status(201).send(toChannelView(channel));
     },
   );
@@ -609,6 +619,15 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           payload: { serverId: channel.belongsTo },
         });
       }
+
+      await writeAuditLog(db, {
+        serverId: channel.belongsTo,
+        actorId: request.actor.id,
+        category: 'channel',
+        action: 'channel.update',
+        summary: `Updated channel #${name ?? (currentProps.name as string)}`,
+        details: { channelId },
+      });
 
       return toChannelView(updated);
     },

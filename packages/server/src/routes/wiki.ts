@@ -2,6 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, and, asc, desc, inArray, sql } from 'drizzle-orm';
 import '../types.ts';
+import { writeAuditLog } from '../audit.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { wikiPages, wikiPageRevisions, wikiPageLinks } from '../db/schema/wiki.ts';
@@ -494,6 +495,15 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         payload: { serverId: request.params.serverId, action: 'created', slug: created.slug },
       });
 
+      await writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'wiki',
+        action: 'wiki.create',
+        summary: `Created wiki page "${trimmedTitle}"`,
+        details: { pageId: created.id, slug },
+      });
+
       return reply.status(201).send({ page: await toWikiPageView(db, created) });
     },
   );
@@ -607,6 +617,15 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       fastify.broadcastToAllSubscribers({
         type: 'wiki:page-changed',
         payload: { serverId: request.params.serverId, action: 'updated', slug: updated.slug },
+      });
+
+      await writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'wiki',
+        action: 'wiki.update',
+        summary: `Updated wiki page "${nextTitle}"`,
+        details: { pageId: page.id, slug: request.params.slug },
       });
 
       return { page: await toWikiPageView(db, updated) };
@@ -791,6 +810,15 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         payload: { serverId: request.params.serverId, action: 'deleted', slug: page.slug },
       });
 
+      await writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'wiki',
+        action: 'wiki.delete',
+        summary: `Deleted wiki page "${page.slug}"`,
+        details: { slug: page.slug },
+      });
+
       return { ok: true };
     },
   );
@@ -893,6 +921,16 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .where(eq(actors.id, request.params.serverId));
 
       const homeSlug = (nextProps.wikiHomeSlug as string | undefined) ?? null;
+
+      await writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'wiki',
+        action: 'wiki.settings',
+        summary: `Updated wiki settings`,
+        details: { homeSlug },
+      });
+
       const settings: WikiSettingsView = { homeSlug };
       return { settings };
     },
@@ -1032,6 +1070,15 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       fastify.broadcastToAllSubscribers({
         type: 'wiki:page-changed',
         payload: { serverId: request.params.serverId, action: 'updated', slug: page.slug },
+      });
+
+      await writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'wiki',
+        action: 'wiki.restore',
+        summary: `Restored wiki page to revision #${revNum}`,
+        details: { pageId: page.id, slug: page.slug, revisionNumber: revNum },
       });
 
       return { page: await toWikiPageView(db, updated) };

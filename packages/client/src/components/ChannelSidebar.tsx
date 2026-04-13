@@ -33,6 +33,7 @@ interface ChannelSidebarProps {
   onJoinVoice?: (channelId: string) => void;
   activeVoiceChannelId?: string | null;
   onLeaveServer?: () => void;
+  onShowAuditLog?: () => void;
 }
 
 export function ChannelSidebar({
@@ -65,6 +66,7 @@ export function ChannelSidebar({
   onJoinVoice,
   activeVoiceChannelId,
   onLeaveServer,
+  onShowAuditLog,
 }: ChannelSidebarProps) {
   const t = useT();
   if (mode === 'dms') {
@@ -226,6 +228,11 @@ export function ChannelSidebar({
         {onShowServerSettings && (
           <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
             {t('channelSidebar.serverSettings')}
+          </button>
+        )}
+        {onShowAuditLog && (
+          <button className="sidebar-item add-channel" onClick={onShowAuditLog}>
+            {t('audit.title')}
           </button>
         )}
         {onLeaveServer && (

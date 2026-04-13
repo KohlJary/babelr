@@ -78,6 +78,13 @@
       "when": 1776192000000,
       "tag": "0010_wiki_fulltext_search",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776278400000,
+      "tag": "0011_audit_logs",
+      "breakpoints": true
     }
   ]
 }

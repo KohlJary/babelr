@@ -16,6 +16,7 @@ import wikiRoutes from '../routes/wiki.ts';
 import roleRoutes from '../routes/roles.ts';
 import translateRoutes from '../routes/translate.ts';
 import fileRoutes from '../routes/files.ts';
+import auditRoutes from '../routes/audit.ts';
 import multipart from '@fastify/multipart';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
@@ -30,6 +31,8 @@ const testConfig: Config = {
   domain: 'test.babelr.local',
   sessionSecret: 'test-secret-not-for-production',
   secureCookies: false,
+  federationMode: 'open',
+  federationDomains: [],
 };
 
 export async function createTestApp() {
@@ -87,6 +90,7 @@ export async function createTestApp() {
   await app.register(translateRoutes);
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(fileRoutes);
+  await app.register(auditRoutes);
 
   await app.ready();
   return { app, db };

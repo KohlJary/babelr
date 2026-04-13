@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+import { writeAuditLog } from '../audit.ts';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
@@ -322,6 +323,15 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         }
       }
 
+      writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'file',
+        action: 'file.upload',
+        summary: `Uploaded file "${filename}"`,
+        details: { fileId: created.id, filename },
+      });
+
       return reply.status(201).send(toFileView(created, request.actor));
     },
   );
@@ -465,6 +475,15 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       await db.delete(serverFiles).where(eq(serverFiles.id, file.id));
       // Clean up the chat collection (cascade handles messages)
       await db.delete(objects).where(eq(objects.id, file.chatId));
+
+      writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'file',
+        action: 'file.delete',
+        summary: `Deleted file`,
+        details: { fileId: file.id },
+      });
 
       return { ok: true };
     },

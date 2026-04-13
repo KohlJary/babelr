@@ -18,6 +18,7 @@ import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
 import { enqueueDelivery } from './delivery.ts';
 import { serializeActivity } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
+import { isActorAllowed } from './policy.ts';
 
 interface APActivity {
   id?: string;
@@ -150,6 +151,9 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
 
       const remoteActor = await verifyInboxRequest(fastify, request);
       if (!remoteActor) return reply.status(401).send({ error: 'Signature verification failed' });
+      if (!isActorAllowed(fastify.config, remoteActor.uri)) {
+        return reply.status(403).send({ error: 'Federation policy: domain not allowed' });
+      }
 
       const config = fastify.config;
       const protocol = config.secureCookies ? 'https' : 'http';
@@ -179,6 +183,9 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
 
       const remoteActor = await verifyInboxRequest(fastify, request);
       if (!remoteActor) return reply.status(401).send({ error: 'Signature verification failed' });
+      if (!isActorAllowed(fastify.config, remoteActor.uri)) {
+        return reply.status(403).send({ error: 'Federation policy: domain not allowed' });
+      }
 
       const config = fastify.config;
       const protocol = config.secureCookies ? 'https' : 'http';
@@ -192,6 +199,9 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: APActivity }>('/inbox', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
     const remoteActor = await verifyInboxRequest(fastify, request);
     if (!remoteActor) return reply.status(401).send({ error: 'Signature verification failed' });
+    if (!isActorAllowed(fastify.config, remoteActor.uri)) {
+      return reply.status(403).send({ error: 'Federation policy: domain not allowed' });
+    }
 
     const config = fastify.config;
     const protocol = config.secureCookies ? 'https' : 'http';

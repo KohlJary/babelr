@@ -12,10 +12,12 @@ import { DEFAULT_ROLE_DEFINITIONS, PERMISSIONS } from '@babelr/shared';
 import type { CreateServerInput, ServerView, UpdateServerInput } from '@babelr/shared';
 import { hasPermission, ensureManageRolesSurvives, LockoutError } from '../permissions.ts';
 import { lookupActorByHandle } from '../federation/resolve.ts';
+import { isActorAllowed } from '../federation/policy.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { enqueueDelivery } from '../federation/delivery.ts';
 import { serializeActivity, serializeActor } from '../federation/jsonld.ts';
 import { enqueueToFollowers } from '../federation/delivery.ts';
+import { writeAuditLog } from '../audit.ts';
 
 function slugify(name: string): string {
   return name
@@ -328,6 +330,15 @@ export default async function serverRoutes(fastify: FastifyInstance) {
           .catch((err) => fastify.log.error(err, 'Server metadata federation failed'));
       }
 
+      writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'server',
+        action: 'server.update',
+        summary: 'Updated server settings',
+        details: { serverId: request.params.serverId },
+      });
+
       return toServerView(updated, count?.count ?? 0);
     },
   );
@@ -464,6 +475,10 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       const remoteGroup = await lookupActorByHandle(db, raw);
       if (!remoteGroup || remoteGroup.type !== 'Group') {
         return reply.status(404).send({ error: 'Server not found' });
+      }
+
+      if (!isActorAllowed(fastify.config, remoteGroup.uri)) {
+        return reply.status(403).send({ error: 'Federation policy: remote instance not allowed' });
       }
 
       if (!remoteGroup.followersUri) {
@@ -773,6 +788,15 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         throw err;
       }
 
+      writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'member',
+        action: 'member.role_assign',
+        summary: 'Assigned role to member',
+        details: { targetActorId: userId, roleId: role },
+      });
+
       return { ok: true };
     },
   );
@@ -861,6 +885,15 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         throw err;
       }
 
+      writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'member',
+        action: 'member.kick',
+        summary: 'Kicked member from server',
+        details: { targetActorId: userId },
+      });
+
       return { ok: true };
     },
   );
@@ -904,6 +937,15 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
       const config = fastify.config;
       const protocol = config.secureCookies ? 'https' : 'http';
+
+      writeAuditLog(db, {
+        serverId: request.params.serverId,
+        actorId: request.actor.id,
+        category: 'server',
+        action: 'server.invite_create',
+        summary: 'Created invite code',
+        details: { code },
+      });
 
       return reply.status(201).send({
         code: invite.code,

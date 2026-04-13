@@ -15,3 +15,4 @@ export { events, eventAttendees } from './events.ts';
 export { wikiPages, wikiPageRevisions, wikiPageLinks } from './wiki.ts';
 export { serverRoles, serverRoleAssignments } from './roles.ts';
 export { serverFiles } from './files.ts';
+export { auditLogs } from './audit-logs.ts';

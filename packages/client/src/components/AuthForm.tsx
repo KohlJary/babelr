@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { RegisterInput, LoginInput } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 
@@ -16,6 +16,14 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/sso-config')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.oidcEnabled) setSsoEnabled(true); })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +97,17 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
         <button type="submit" className="auth-submit" disabled={submitting}>
           {submitting ? '...' : mode === 'login' ? t('auth.login') : t('auth.createAccount')}
         </button>
+
+        {ssoEnabled && (
+          <>
+            <div className="auth-divider">
+              <span>{t('auth.or')}</span>
+            </div>
+            <a href="/api/auth/oidc/authorize" className="auth-submit auth-sso-btn">
+              {t('auth.ssoLogin')}
+            </a>
+          </>
+        )}
       </form>
     </div>
   );

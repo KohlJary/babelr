@@ -11,6 +11,7 @@ import { serializeNote, serializeActivity, serializeActor } from './jsonld.ts';
 import { objects } from '../db/schema/objects.ts';
 import { ensureActorKeys } from './keys.ts';
 import type { Database } from '../db/index.ts';
+import { extractDomain, isDomainAllowed } from './policy.ts';
 
 const DELIVERY_TIMEOUT = 10_000;
 
@@ -119,6 +120,16 @@ export async function processQueue(fastify: FastifyInstance) {
       .from(actors)
       .where(eq(actors.id, item.senderActorId))
       .limit(1);
+
+    // Federation policy: skip delivery to blocked domains
+    const recipientDomain = extractDomain(item.recipientInboxUri);
+    if (recipientDomain && !isDomainAllowed(fastify.config, recipientDomain)) {
+      await db
+        .update(deliveryQueue)
+        .set({ status: 'failed', lastError: 'Federation policy: domain not allowed' })
+        .where(eq(deliveryQueue.id, item.id));
+      continue;
+    }
 
     if (!sender?.privateKeyPem) {
       await db
