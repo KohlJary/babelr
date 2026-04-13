@@ -733,7 +733,7 @@
       "description": "Wiki pages should have comment threads, same pattern as event chat and file comments — each page gets an OrderedCollection on creation, and the comment thread uses useChat + MessageList + MessageInput. Reactions, threads, typing indicators, translation, and federation all come for free.\n\nScope:\n- Add chat_id column to wiki_pages (FK to objects, same as events.event_chat_id and server_files.chat_id)\n- Create the OrderedCollection on page creation\n- WikiPanel renders the comment thread alongside the page content (below the content or in a side panel)\n- Delete cleans up the chat collection (cascade handles messages)\n- Migration + backfill for existing pages (create empty collections)\n\nThis is a well-proven pattern at this point — events and files both use it. The implementation is mostly copy-paste from the file comments refactor.",
       "type": "feature",
       "priority": "P1",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "wiki-revision-history",
