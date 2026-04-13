@@ -1,8 +1,10 @@
-# Self-Hosting Babelr
+# Self-Hosting Your Tower
+
+A Babelr deployment is called a **Tower**. Each organization runs their own Tower, and Towers federate with each other via ActivityPub.
 
 ## Docker (Recommended)
 
-The fastest way to run Babelr:
+The fastest way to stand up a Tower:
 
 ```bash
 # Clone the repo
@@ -16,7 +18,7 @@ echo "SESSION_SECRET=$(openssl rand -hex 32)" > .env
 docker compose up -d
 ```
 
-Babelr is now running at `http://localhost:3000`.
+Your Tower is now running at `http://localhost:3000`.
 
 ### Configuration
 
@@ -66,9 +68,9 @@ Set `BABELR_DOMAIN=chat.example.com` and `NODE_ENV=production` in your `.env`.
 
 ### Federation
 
-To federate with other Babelr instances, `BABELR_DOMAIN` must be the publicly-reachable hostname of your instance (e.g. `chat.example.com`). This value is baked into every ActivityPub URI your instance generates — changing it after the fact breaks existing federation relationships.
+To federate with other Towers, `BABELR_DOMAIN` must be the publicly-reachable hostname of your Tower (e.g. `chat.example.com`). This value is baked into every ActivityPub URI your Tower generates — changing it after the fact breaks existing federation relationships.
 
-Users on other instances can:
+Users on other Towers can:
 - Add your users as friends via `username@chat.example.com`
 - Join your servers via the remote join dialog
 - See your channels, wiki pages, calendar events, and files

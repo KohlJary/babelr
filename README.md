@@ -4,9 +4,11 @@
 
 Babelr is a federated workspace — chat, wiki, and calendar — built around a tone-preserving LLM translation layer. Users write in their native language and recipients read in theirs, but translation is the thread rather than the destination. What makes Babelr cohere is the substrate underneath it: messages, wiki pages, and calendar events all reference each other through a single `[[kind:slug]]` embed fabric. A wiki page can cite the chat message where a decision was made. A calendar event can link to the runbook it's briefing. A chat thread can invite readers directly into an event's RSVP list with a single click. The surfaces stop feeling like separate tools and start behaving like one connected space.
 
-The translation pipeline treats register, idiom, humor, and intent shape as first-class concerns across every surface — the runbook you wrote in English and the meeting invite your colleague wrote in Japanese both land in each reader's preferred language with their voice intact. Federation is ActivityPub-shaped from day one, so a partner company on their own Babelr instance can follow a channel, read a wiki page, or RSVP to a calendar event without leaving their home server. Very few workspaces can offer even two of those three at once.
+The translation pipeline treats register, idiom, humor, and intent shape as first-class concerns across every surface — the runbook you wrote in English and the meeting invite your colleague wrote in Japanese both land in each reader's preferred language with their voice intact. Federation is ActivityPub-shaped from day one, so a partner company on their own **Tower** can follow a channel, read a wiki page, or RSVP to a calendar event without leaving home. Very few workspaces can offer even two of those three at once.
 
-The name is a statement. The Tower of Babel story is usually read as punishment for human hubris, but structurally it is a story about power fragmenting a communication layer that threatened incumbents. Babelr is infrastructure that makes linguistic difference navigable without erasing it.
+A Babelr deployment is called a **Tower** — each organization runs their own, and Towers federate with each other. "Server" is reserved for the communities within a Tower (like Discord servers — groups with channels, wikis, calendars, and files). Your company's Tower at `chat.example.com` can federate with your partner's Tower at `collab.partner.org`, and every piece of content that crosses between them translates automatically.
+
+The name is a statement. The Tower of Babel story is usually read as punishment for human hubris, but structurally it is a story about power fragmenting a communication layer that threatened incumbents. Babelr is infrastructure that makes linguistic difference navigable without erasing it — and each Tower is a node in that infrastructure.
 
 Structurally closer to Pentecost than to Esperanto: everyone hearing in their own native tongue.
 
@@ -24,7 +26,7 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 
 **Choice of translation backend** -- Four options, grouped into two tiers. **Tone-preserving**: Anthropic Claude, OpenAI GPT, or self-hosted Ollama, each running the same three-stage classify/translate/idiom-check pipeline. **Translation-only**: browser-local Transformers.js with Helsinki-NLP OPUS models for users who want zero external dependencies and will trade tone analysis for full offline operation. See [Translation Pipeline](#translation-pipeline) for details.
 
-**ActivityPub-shaped from day one** -- The data model uses ActivityPub primitives (Actors, Objects, Activities, Collections) even though federation is not yet active. When it activates, it is a flip, not a rewrite.
+**ActivityPub federation** -- Towers federate via ActivityPub. Friends, DMs, server membership, channel messages, reactions, wiki pages, calendar events, files, profile updates, and server metadata all cross Tower boundaries with HTTP-signed delivery and automatic retry. Deploy your own Tower and federate with partners — or run closed with zero external access.
 
 **Discord-shaped UX** -- Servers, channels, DMs, real-time WebSocket messaging. Three-panel layout with server sidebar, channel list, and chat area.
 
