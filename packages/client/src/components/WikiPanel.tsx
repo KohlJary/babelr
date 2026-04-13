@@ -794,9 +794,17 @@ export function WikiPanel({
                   </div>
                 )}
 
-                {/* Table of contents — auto-generated from headings */}
+                {/* Table of contents — auto-generated from headings.
+                    Uses translated content when available so the ToC
+                    matches what the reader actually sees. */}
                 {(() => {
-                  const headings = extractHeadings(currentPage.content);
+                  const tocSource = !showOriginal && translate.anyTranslated
+                    ? translate.chunks
+                        .filter((c) => c.kind !== 'blank')
+                        .map((c) => c.translated ?? c.original)
+                        .join('\n\n')
+                    : currentPage.content;
+                  const headings = extractHeadings(tocSource);
                   if (headings.length < 2) return null;
                   const minLevel = Math.min(...headings.map((h) => h.level));
                   return (
