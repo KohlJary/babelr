@@ -1,0 +1,13 @@
+{
+  "pages": [
+    { "slug": "welcome", "title": "Welcome to Babelr", "file": "welcome.md", "position": 0 },
+    { "slug": "getting-started", "title": "Getting Started", "file": "getting-started.md", "position": 1 },
+    { "slug": "channels", "title": "Channels & Messaging", "file": "channels.md", "parent": "getting-started", "position": 0 },
+    { "slug": "wiki-guide", "title": "Using the Wiki", "file": "wiki-guide.md", "parent": "getting-started", "position": 1 },
+    { "slug": "calendar", "title": "Calendar & Events", "file": "calendar.md", "parent": "getting-started", "position": 2 },
+    { "slug": "files", "title": "Server Files", "file": "files.md", "parent": "getting-started", "position": 3 },
+    { "slug": "embedding", "title": "The Embed System", "file": "embedding.md", "position": 2 },
+    { "slug": "translation", "title": "Translation", "file": "translation.md", "position": 3 },
+    { "slug": "federation", "title": "Federation & Towers", "file": "federation.md", "position": 4 }
+  ]
+}

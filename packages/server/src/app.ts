@@ -32,6 +32,7 @@ import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
 import uploadRoutes from './routes/uploads.ts';
 import fileRoutes from './routes/files.ts';
+import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
 
 export async function buildApp() {
@@ -156,6 +157,7 @@ export async function buildApp() {
   await app.register(uploadRoutes);
   await app.register(fileRoutes);
   await app.register(embedRoutes);
+  await app.register(wikiSeedPlugin);
 
   // SPA fallback — serve index.html for all non-API paths
   if (existsSync(clientDistDir)) {

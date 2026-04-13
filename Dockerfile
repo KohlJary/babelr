@@ -52,7 +52,7 @@ EXPOSE 3000
 # Run migrations then start server. Use the locally installed
 # drizzle-kit binary (not npx, which downloads a separate copy
 # that can't resolve the config's import).
-# Copy seed data to dist so the compiled i18n-seed plugin can find it.
+# Copy seed data to dist so compiled plugins can find it.
 RUN cp -r packages/server/src/db/seed-data packages/server/dist/db/seed-data 2>/dev/null || true
 
 # Run from packages/server so relative paths for client dist
