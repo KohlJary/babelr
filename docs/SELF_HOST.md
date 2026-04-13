@@ -26,8 +26,9 @@ Set these in your `.env` file or as environment variables:
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes* | Set by compose | PostgreSQL connection string |
 | `SESSION_SECRET` | Yes | -- | Random string for signing cookies. Generate with `openssl rand -hex 32` |
-| `BABELR_DOMAIN` | No | `localhost:3000` | Public domain for ActivityPub URIs |
-| `PORT` | No | `3000` | Server port |
+| `BABELR_DOMAIN` | Yes* | `localhost:3000` | Public domain for ActivityPub URIs. **Must be set correctly for federation.** |
+| `PORT` | No | `3000` | Server port inside the container |
+| `BABELR_PORT` | No | `3000` | Host port to expose (for avoiding conflicts with local dev) |
 | `HOST` | No | `0.0.0.0` | Bind address |
 | `NODE_ENV` | No | `production` | Set to `production` for secure cookies |
 
@@ -62,6 +63,18 @@ server {
 ```
 
 Set `BABELR_DOMAIN=chat.example.com` and `NODE_ENV=production` in your `.env`.
+
+### Federation
+
+To federate with other Babelr instances, `BABELR_DOMAIN` must be the publicly-reachable hostname of your instance (e.g. `chat.example.com`). This value is baked into every ActivityPub URI your instance generates — changing it after the fact breaks existing federation relationships.
+
+Users on other instances can:
+- Add your users as friends via `username@chat.example.com`
+- Join your servers via the remote join dialog
+- See your channels, wiki pages, calendar events, and files
+- Chat, react, and collaborate across instances in real time
+
+All content is translated through each reader's preferred language automatically.
 
 ## Manual Setup
 
