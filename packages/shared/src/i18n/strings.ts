@@ -378,6 +378,9 @@ export const UI_STRINGS = {
   // Files
   'wiki.tableOfContents': 'Contents',
   'wiki.comments': 'Discussion',
+  'wiki.history': 'History',
+  'wiki.revisionLabel': 'Revision {num}',
+  'wiki.restoreRevision': 'Restore this version',
 
   'files.title': 'Files',
   'files.serverFiles': 'Server files',

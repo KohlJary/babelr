@@ -726,6 +726,32 @@ export async function getFileBySlug(
   return apiFetch(`/files/by-slug/${encodeURIComponent(slug)}`);
 }
 
+// Wiki revisions
+export async function listWikiRevisions(
+  serverId: string,
+  slug: string,
+): Promise<{ revisions: import('@babelr/shared').WikiPageRevisionView[] }> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/revisions`);
+}
+
+export async function getWikiRevision(
+  serverId: string,
+  slug: string,
+  revisionNumber: number,
+): Promise<{ revision: import('@babelr/shared').WikiPageRevisionView }> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/revisions/${revisionNumber}`);
+}
+
+export async function restoreWikiRevision(
+  serverId: string,
+  slug: string,
+  revisionNumber: number,
+): Promise<import('@babelr/shared').WikiPageResponse> {
+  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/restore/${revisionNumber}`, {
+    method: 'POST',
+  });
+}
+
 // ---- Cross-tower embed resolution ----
 
 export async function resolveEmbed(

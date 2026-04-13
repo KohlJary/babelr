@@ -811,6 +811,145 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // List revisions for a page.
+  fastify.get<{ Params: { serverId: string; slug: string } }>(
+    '/servers/:serverId/wiki/pages/:slug/revisions',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, request.params.slug)))
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      const rows = await db
+        .select({ rev: wikiPageRevisions, editor: actors })
+        .from(wikiPageRevisions)
+        .innerJoin(actors, eq(wikiPageRevisions.editedById, actors.id))
+        .where(eq(wikiPageRevisions.pageId, page.id))
+        .orderBy(desc(wikiPageRevisions.revisionNumber));
+
+      return {
+        revisions: rows.map((r) => ({
+          id: r.rev.id,
+          pageId: r.rev.pageId,
+          revisionNumber: r.rev.revisionNumber,
+          title: r.rev.title,
+          editedBy: toAuthorView(r.editor),
+          editedAt: r.rev.editedAt.toISOString(),
+          summary: r.rev.summary,
+        })),
+      };
+    },
+  );
+
+  // Get a single revision's content.
+  fastify.get<{ Params: { serverId: string; slug: string; revisionNumber: string } }>(
+    '/servers/:serverId/wiki/pages/:slug/revisions/:revisionNumber',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, request.params.slug)))
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      const revNum = parseInt(request.params.revisionNumber, 10);
+      const [rev] = await db
+        .select({ rev: wikiPageRevisions, editor: actors })
+        .from(wikiPageRevisions)
+        .innerJoin(actors, eq(wikiPageRevisions.editedById, actors.id))
+        .where(and(eq(wikiPageRevisions.pageId, page.id), eq(wikiPageRevisions.revisionNumber, revNum)))
+        .limit(1);
+      if (!rev) return reply.status(404).send({ error: 'Revision not found' });
+
+      return {
+        revision: {
+          id: rev.rev.id,
+          pageId: rev.rev.pageId,
+          revisionNumber: rev.rev.revisionNumber,
+          title: rev.rev.title,
+          content: rev.rev.content,
+          editedBy: toAuthorView(rev.editor),
+          editedAt: rev.rev.editedAt.toISOString(),
+          summary: rev.rev.summary,
+        },
+      };
+    },
+  );
+
+  // Restore a page to a previous revision. Creates a new revision
+  // with the old content, preserving full history.
+  fastify.post<{ Params: { serverId: string; slug: string; revisionNumber: string } }>(
+    '/servers/:serverId/wiki/pages/:slug/restore/:revisionNumber',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const [page] = await db
+        .select()
+        .from(wikiPages)
+        .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, request.params.slug)))
+        .limit(1);
+      if (!page) return reply.status(404).send({ error: 'Page not found' });
+
+      const isCreator = page.createdById === request.actor.id;
+      const canEdit = isCreator || (await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.MANAGE_WIKI));
+      if (!canEdit) return reply.status(403).send({ error: 'Insufficient permissions' });
+
+      const revNum = parseInt(request.params.revisionNumber, 10);
+      const [targetRev] = await db
+        .select()
+        .from(wikiPageRevisions)
+        .where(and(eq(wikiPageRevisions.pageId, page.id), eq(wikiPageRevisions.revisionNumber, revNum)))
+        .limit(1);
+      if (!targetRev) return reply.status(404).send({ error: 'Revision not found' });
+
+      // Determine next revision number
+      const [{ max }] = await db
+        .select({ max: sql<number>`COALESCE(MAX(${wikiPageRevisions.revisionNumber}), 0)` })
+        .from(wikiPageRevisions)
+        .where(eq(wikiPageRevisions.pageId, page.id));
+      const nextRevision = Number(max) + 1;
+
+      const [updated] = await db
+        .update(wikiPages)
+        .set({
+          title: targetRev.title,
+          content: targetRev.content,
+          lastEditedById: request.actor.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(wikiPages.id, page.id))
+        .returning();
+
+      await db.insert(wikiPageRevisions).values({
+        pageId: page.id,
+        revisionNumber: nextRevision,
+        title: targetRev.title,
+        content: targetRev.content,
+        editedById: request.actor.id,
+        summary: `Restored from revision ${revNum}`,
+      });
+
+      fastify.broadcastToAllSubscribers({
+        type: 'wiki:page-changed',
+        payload: { serverId: request.params.serverId, action: 'updated', slug: page.slug },
+      });
+
+      return { page: await toWikiPageView(db, updated) };
+    },
+  );
+
   // Wiki page embed lookup by slug. Used by cross-tower embeds
   // ([[server@tower:wiki:slug]]) and the local embed proxy.
   // Returns a compact view suitable for inline rendering.

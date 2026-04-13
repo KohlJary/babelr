@@ -3094,6 +3094,64 @@ textarea.modal-input {
 .wiki-breadcrumb-current {
   color: #ccc;
 }
+.wiki-revision-panel {
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+.wiki-revision-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.wiki-revision-item {
+  border-bottom: 1px solid #1a1a1a;
+}
+.wiki-revision-item:last-child {
+  border-bottom: none;
+}
+.wiki-revision-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  color: #ccc;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.wiki-revision-btn:hover {
+  background: #1e1e1e;
+}
+.wiki-revision-num {
+  color: #a88bff;
+  font-weight: 600;
+  min-width: 2rem;
+}
+.wiki-revision-editor {
+  color: #ddd;
+}
+.wiki-revision-summary {
+  color: #888;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+.wiki-revision-view {
+  padding: 0.75rem;
+}
+.wiki-revision-view-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
 .wiki-toc {
   background: #1a1a1a;
   border: 1px solid #2a2a2a;

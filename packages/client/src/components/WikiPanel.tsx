@@ -215,6 +215,9 @@ export function WikiPanel({
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftParentId, setDraftParentId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [revisions, setRevisions] = useState<import('@babelr/shared').WikiPageRevisionView[]>([]);
+  const [viewingRevision, setViewingRevision] = useState<import('@babelr/shared').WikiPageRevisionView | null>(null);
   const [draftTags, setDraftTags] = useState<string[]>([]);
   const [draftTagInput, setDraftTagInput] = useState('');
   const [draftSummary, setDraftSummary] = useState('');
@@ -657,6 +660,22 @@ export function WikiPanel({
                     <button className="voice-control-btn" onClick={beginEdit}>
                       {t('wiki.editPage')}
                     </button>
+                    <button
+                      className={`voice-control-btn ${showHistory ? 'active-on' : ''}`}
+                      onClick={async () => {
+                        if (showHistory) {
+                          setShowHistory(false);
+                          setViewingRevision(null);
+                        } else {
+                          const res = await api.listWikiRevisions(serverId, currentPage.slug);
+                          setRevisions(res.revisions);
+                          setShowHistory(true);
+                          setViewingRevision(null);
+                        }
+                      }}
+                    >
+                      {t('wiki.history')}
+                    </button>
                     <button className="voice-control-btn leave" onClick={handleDelete}>
                       {t('wiki.deletePage')}
                     </button>
@@ -757,7 +776,69 @@ export function WikiPanel({
                   );
                 })()}
 
-                {currentPage.content.trim() ? (
+                {/* Revision history panel */}
+                {showHistory && (
+                  <div className="wiki-revision-panel">
+                    {viewingRevision ? (
+                      <div className="wiki-revision-view">
+                        <div className="wiki-revision-view-header">
+                          <button className="voice-control-btn" onClick={() => setViewingRevision(null)}>
+                            {t('files.backToList')}
+                          </button>
+                          <span className="file-meta">
+                            {t('wiki.revisionLabel', { num: String(viewingRevision.revisionNumber) })}
+                            {' · '}
+                            {viewingRevision.editedBy.displayName ?? viewingRevision.editedBy.preferredUsername}
+                            {' · '}
+                            {new Date(viewingRevision.editedAt).toLocaleString()}
+                          </span>
+                          <button
+                            className="friends-btn accept"
+                            onClick={async () => {
+                              const res = await api.restoreWikiRevision(serverId, currentPage.slug, viewingRevision.revisionNumber);
+                              setCurrentPage(res.page);
+                              setShowHistory(false);
+                              setViewingRevision(null);
+                            }}
+                          >
+                            {t('wiki.restoreRevision')}
+                          </button>
+                        </div>
+                        <div className="wiki-content-body">
+                          {renderWithEmbeds(viewingRevision.content, {
+                            variant: 'wiki',
+                            onNavigateMessage: onNavigateMessageEmbed,
+                            onNavigateEvent: onNavigateEventEmbed,
+                            onNavigateFile: onNavigateFileEmbed,
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <ul className="wiki-revision-list">
+                        {revisions.map((rev) => (
+                          <li key={rev.id} className="wiki-revision-item">
+                            <button
+                              className="wiki-revision-btn"
+                              onClick={async () => {
+                                const res = await api.getWikiRevision(serverId, currentPage.slug, rev.revisionNumber);
+                                setViewingRevision(res.revision);
+                              }}
+                            >
+                              <span className="wiki-revision-num">#{rev.revisionNumber}</span>
+                              <span className="wiki-revision-editor">
+                                {rev.editedBy.displayName ?? rev.editedBy.preferredUsername}
+                              </span>
+                              <span className="file-meta">{new Date(rev.editedAt).toLocaleString()}</span>
+                              {rev.summary && <span className="wiki-revision-summary">{rev.summary}</span>}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                {showHistory ? null : currentPage.content.trim() ? (
                   !showOriginal && translate.anyTranslated ? (
                     // Chunk-by-chunk render with per-chunk indicators.
                     // Each chunk gets its own rendered markdown block
