@@ -1,0 +1,6 @@
+- [Babelr Project Overview](project_babelr_overview.md) — Federated chat with tone-preserving translation; architecture, stack, build plan, non-negotiables
+- [Federation Status](project_federation_status.md) — What federates today, key patterns, what's next (signed proxy → deployment package)
+- [Plugin via PM](feedback_plugin_via_pm.md) — Build project-management as the first plugin to validate the embed-plugin-system API
+- [Tower terminology](feedback_tower_terminology.md) — Babelr instances are called Towers (not "servers" — that term is reserved for in-app Groups)
+- [Manual maintenance](feedback_manual_maintenance.md) — Keep the built-in wiki manual updated with new features; seeder must apply updates on Tower upgrade
+- [Mirror memory](feedback_mirror_memory.md) — Always mirror .claude memory into .daedalus/memory/ for portability and contributor access
