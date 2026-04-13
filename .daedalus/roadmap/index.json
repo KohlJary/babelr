@@ -565,7 +565,7 @@
       "description": "Many regulated industries (healthcare, finance, defense, government) will not put chat in any vendor's SaaS at any price. They need to deploy inside their own firewall.\n\nScope:\n- Single-binary or single-container deployment with PostgreSQL bundled or pluggable\n- Air-gap support: nothing phones home, no telemetry, optional Anthropic translation but works without any external API calls if local translation is configured\n- License key system if commercial — gate enterprise features (SSO, audit logs, retention) behind a license check\n- Documented installation guide for common platforms (Docker Compose, Kubernetes Helm chart, bare-metal systemd)\n- Update mechanism that doesn't require internet access\n- Backup/restore CLI for snapshotting database + uploads\n- Hardening guide: TLS termination, reverse proxy, firewall rules, log aggregation hooks\n\nThis is also where the federation story becomes a real selling point — 'self-host inside your firewall and still federate with partner companies who have their own deployment' is something Slack and Teams literally cannot offer.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "done"
     },
     {
       "id": "trust-signals-soc2",
