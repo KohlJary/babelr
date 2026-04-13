@@ -6,6 +6,7 @@ import { MessageEmbed } from '../components/MessageEmbed';
 import { EventEmbed } from '../components/EventEmbed';
 import FileEmbed from '../components/FileEmbed';
 import { CrossTowerEmbed } from '../components/CrossTowerEmbed';
+import { ImageEmbed } from '../components/ImageEmbed';
 import { renderMarkdown, renderWikiMarkdown } from './markdown';
 
 /**
@@ -43,7 +44,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
   // (which render as markdown links, not embed components). Page
   // refs WITH an origin ARE embeddable (cross-tower wiki embeds).
   const refs = parseWikiRefs(source).filter(
-    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.origin,
+    (r) => r.kind === 'message' || r.kind === 'event' || r.kind === 'file' || r.kind === 'image' || r.origin,
   );
 
   if (refs.length === 0) {
@@ -68,6 +69,13 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
           kind={ref.kind}
           slug={ref.slug}
           origin={ref.origin}
+        />,
+      );
+    } else if (ref.kind === 'image') {
+      segments.push(
+        <ImageEmbed
+          key={`img-${i}-${ref.slug}`}
+          slug={ref.slug}
         />,
       );
     } else if (ref.kind === 'file') {

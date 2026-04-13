@@ -361,9 +361,8 @@ export function WikiPanel({
       const uploaded = await api.uploadFile(serverId, file);
       if (uploaded.slug) {
         const isImage = uploaded.contentType.startsWith('image/');
-        // Images get markdown image syntax wrapping the embed for nicer rendering.
         const ref = isImage
-          ? `![${uploaded.filename}](${uploaded.storageUrl})\n`
+          ? `[[img:${uploaded.slug}]]\n`
           : `[[file:${uploaded.slug}]]\n`;
         insertAtCursor(ref);
       }

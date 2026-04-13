@@ -4121,6 +4121,92 @@ textarea.modal-input {
   cursor: wait;
 }
 
+/* Image embed — [[img:slug]] refs */
+.image-embed {
+  display: block;
+  margin: 0.5rem 0;
+  max-width: 100%;
+  cursor: pointer;
+}
+.image-embed.loading,
+.image-embed.locked {
+  display: inline-block;
+  color: #777;
+  font-style: italic;
+}
+.image-embed-img {
+  max-width: 100%;
+  max-height: 500px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #111;
+  display: block;
+}
+.image-embed-caption {
+  color: #999;
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  font-style: italic;
+}
+
+/* Image lightbox */
+.image-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.image-lightbox {
+  display: flex;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.image-lightbox-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  background: #000;
+}
+.image-lightbox-img {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+}
+.image-lightbox-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow-y: auto;
+  border-left: 1px solid #2a2a2a;
+}
+.image-lightbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.image-lightbox-header h3 {
+  margin: 0;
+  color: #eee;
+  font-size: 1rem;
+}
+.image-lightbox-description {
+  color: #bbb;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* Cross-tower embed — [[server@tower:kind:slug]] refs */
 .cross-tower-embed {
   display: flex;
