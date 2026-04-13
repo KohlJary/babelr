@@ -756,6 +756,8 @@ async function handleCreate(
           title: pageTitle,
           content: pageContent,
           tags: pageTags,
+          parentId: (objData.parentId as string) ?? null,
+          position: (objData.position as number) ?? 0,
           createdById: authorId,
           lastEditedById: authorId,
         })

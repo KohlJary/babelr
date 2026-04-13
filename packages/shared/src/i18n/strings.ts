@@ -376,6 +376,8 @@ export const UI_STRINGS = {
   'events.referenceCopied': 'Reference copied to clipboard.',
 
   // Files
+  'wiki.tableOfContents': 'Contents',
+
   'files.title': 'Files',
   'files.serverFiles': 'Server files',
   'files.noFiles': 'No files yet. Upload the first one.',

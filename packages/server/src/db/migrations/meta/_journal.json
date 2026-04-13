@@ -57,6 +57,13 @@
       "when": 1776030525937,
       "tag": "0007_wiki_uri",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776086153680,
+      "tag": "0008_wiki_hierarchy",
+      "breakpoints": true
     }
   ]
 }

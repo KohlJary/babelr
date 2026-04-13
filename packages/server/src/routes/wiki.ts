@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, sql } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
@@ -92,6 +92,8 @@ async function toWikiPageView(
     title: page.title,
     content: page.content,
     tags: page.tags ?? [],
+    parentId: page.parentId,
+    position: page.position,
     createdBy: creator ? toAuthorView(creator) : fallback,
     lastEditedBy: editor ? toAuthorView(editor) : fallback,
     createdAt: page.createdAt.toISOString(),
@@ -110,6 +112,8 @@ function toWikiPageSummary(
     slug: page.slug,
     title: page.title,
     tags: page.tags ?? [],
+    parentId: page.parentId,
+    position: page.position,
     lastEditedBy: editor ? toAuthorView(editor) : fallback,
     updatedAt: page.updatedAt.toISOString(),
   };
@@ -211,6 +215,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
                 title: string;
                 content: string;
                 tags: string[];
+                parentId?: string | null;
+                position?: number;
               }>;
             };
             for (const p of data.pages ?? []) {
@@ -221,10 +227,9 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
                 .where(eq(wikiPages.uri, p.uri))
                 .limit(1);
               if (existing) {
-                // Update content if changed.
                 await db
                   .update(wikiPages)
-                  .set({ title: p.title, content: p.content, tags: p.tags, updatedAt: new Date() })
+                  .set({ title: p.title, content: p.content, tags: p.tags, parentId: p.parentId ?? null, position: p.position ?? 0, updatedAt: new Date() })
                   .where(eq(wikiPages.id, existing.id));
               } else {
                 await db.insert(wikiPages).values({
@@ -234,6 +239,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
                   title: p.title,
                   content: p.content,
                   tags: p.tags,
+                  parentId: p.parentId ?? null,
+                  position: p.position ?? 0,
                   createdById: serverActor.id,
                   lastEditedById: serverActor.id,
                 }).onConflictDoNothing();
@@ -249,7 +256,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .select()
         .from(wikiPages)
         .where(eq(wikiPages.serverId, request.params.serverId))
-        .orderBy(desc(wikiPages.updatedAt));
+        .orderBy(asc(wikiPages.position), desc(wikiPages.updatedAt));
 
       // Batch-load editors to avoid N+1
       const editorIds = Array.from(new Set(rows.map((r) => r.lastEditedById)));
@@ -332,6 +339,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           title: body.title.trim(),
           content,
           tags: normalizeTags(body.tags),
+          parentId: body.parentId ?? null,
+          position: body.position ?? 0,
           createdById: request.actor.id,
           lastEditedById: request.actor.id,
         })
@@ -359,6 +368,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
             content: created.content,
             slug: created.slug,
             tags: created.tags,
+            parentId: created.parentId,
+            position: created.position,
             attributedTo: request.actor.uri,
             context: group.uri,
           };
@@ -442,6 +453,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           title: nextTitle,
           content: nextContent,
           tags: nextTags,
+          ...(body.parentId !== undefined ? { parentId: body.parentId ?? null } : {}),
+          ...(body.position !== undefined ? { position: body.position } : {}),
           lastEditedById: request.actor.id,
           updatedAt: new Date(),
         })
@@ -472,6 +485,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
             content: updated.content,
             slug: updated.slug,
             tags: updated.tags,
+            parentId: updated.parentId,
+            position: updated.position,
             attributedTo: request.actor.uri,
             context: group.uri,
           };

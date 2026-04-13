@@ -217,6 +217,8 @@ export default async function collectionRoutes(fastify: FastifyInstance) {
           title: p.title,
           content: p.content,
           tags: p.tags,
+          parentId: p.parentId,
+          position: p.position,
           createdAt: p.createdAt.toISOString(),
           updatedAt: p.updatedAt.toISOString(),
         })),

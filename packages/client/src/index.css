@@ -3062,6 +3062,68 @@ textarea.modal-input {
   background: #2a3b5f;
   color: #fff;
 }
+.wiki-tree-arrow {
+  font-size: 0.65rem;
+  margin-right: 0.3rem;
+  color: #666;
+}
+.wiki-page-subtree {
+  margin-left: 0;
+  padding-left: 0;
+}
+.wiki-breadcrumb {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  color: #888;
+}
+.wiki-breadcrumb-link {
+  background: none;
+  border: none;
+  color: #a88bff;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+.wiki-breadcrumb-link:hover {
+  color: #c3adff;
+  text-decoration: underline;
+}
+.wiki-breadcrumb-sep {
+  color: #555;
+}
+.wiki-breadcrumb-current {
+  color: #ccc;
+}
+.wiki-toc {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+.wiki-toc-title {
+  color: #aaa;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.wiki-toc ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0 0;
+}
+.wiki-toc li {
+  padding: 0.15rem 0;
+}
+.wiki-toc-link {
+  color: #a88bff;
+  text-decoration: none;
+}
+.wiki-toc-link:hover {
+  color: #c3adff;
+  text-decoration: underline;
+}
 .wiki-content {
   flex: 1;
   padding: 1.25rem 1.5rem;

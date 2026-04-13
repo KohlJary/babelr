@@ -13,6 +13,7 @@ import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
+import { extractHeadings } from '../utils/markdown';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type { WsServerMessage } from '@babelr/shared';
 import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
@@ -191,6 +192,7 @@ export function WikiPanel({
   // Edit form state
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
+  const [draftParentId, setDraftParentId] = useState<string | null>(null);
   const [draftTags, setDraftTags] = useState<string[]>([]);
   const [draftTagInput, setDraftTagInput] = useState('');
   const [draftSummary, setDraftSummary] = useState('');
@@ -307,12 +309,13 @@ export function WikiPanel({
     }
   };
 
-  const beginCreate = () => {
+  const beginCreate = (parentId?: string | null) => {
     setDraftTitle('');
     setDraftContent('');
     setDraftTags([]);
     setDraftTagInput('');
     setDraftSummary('');
+    setDraftParentId(parentId ?? null);
     setPreviewOn(false);
     setSaveError(null);
     setMode('create');
@@ -362,6 +365,7 @@ export function WikiPanel({
           title: draftTitle.trim(),
           content: draftContent,
           tags: draftTags,
+          parentId: draftParentId,
         });
         if (created) {
           setSelectedSlug(created.slug);
@@ -466,7 +470,7 @@ export function WikiPanel({
 
       <div className="wiki-body">
           <aside className="wiki-sidebar">
-            <button className="auth-submit wiki-new-btn" onClick={beginCreate}>
+            <button className="auth-submit wiki-new-btn" onClick={() => beginCreate()}>
               + {t('wiki.createPage')}
             </button>
 
@@ -518,24 +522,55 @@ export function WikiPanel({
               <div className="sidebar-empty">{t('wiki.noSearchResults')}</div>
             )}
             <ul className="wiki-page-list">
-              {filteredPages.map((p) => {
-                const isHome = wikiSettings?.homeSlug === p.slug;
-                return (
-                  <li key={p.id}>
-                    <button
-                      className={`wiki-page-item ${selectedSlug === p.slug ? 'selected' : ''}`}
-                      onClick={() => handleSelect(p)}
-                    >
-                      {isHome && (
-                        <span className="wiki-home-indicator" title={t('wiki.home')}>
-                          {t('wiki.homePageBadge')}
-                        </span>
-                      )}
-                      {p.title || t('wiki.untitled')}
-                    </button>
-                  </li>
-                );
-              })}
+              {(() => {
+                // Build tree from flat list. Group by parentId, then
+                // render recursively. Pages without a parent (or whose
+                // parent isn't in filteredPages) are roots.
+                const byParent = new Map<string | null, typeof filteredPages>();
+                const idSet = new Set(filteredPages.map((p) => p.id));
+                for (const p of filteredPages) {
+                  // If the parent isn't in the filtered set, treat as root.
+                  const key = p.parentId && idSet.has(p.parentId) ? p.parentId : null;
+                  const group = byParent.get(key) ?? [];
+                  group.push(p);
+                  byParent.set(key, group);
+                }
+
+                function renderTree(parentId: string | null, depth: number): React.ReactNode[] {
+                  const children = byParent.get(parentId);
+                  if (!children) return [];
+                  return children
+                    .sort((a, b) => a.position - b.position)
+                    .map((p) => {
+                      const isHome = wikiSettings?.homeSlug === p.slug;
+                      const hasChildren = byParent.has(p.id);
+                      return (
+                        <li key={p.id}>
+                          <button
+                            className={`wiki-page-item ${selectedSlug === p.slug ? 'selected' : ''}`}
+                            style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
+                            onClick={() => handleSelect(p)}
+                          >
+                            {hasChildren && <span className="wiki-tree-arrow">&#9662;</span>}
+                            {isHome && (
+                              <span className="wiki-home-indicator" title={t('wiki.home')}>
+                                {t('wiki.homePageBadge')}
+                              </span>
+                            )}
+                            {p.title || t('wiki.untitled')}
+                          </button>
+                          {hasChildren && (
+                            <ul className="wiki-page-list wiki-page-subtree">
+                              {renderTree(p.id, depth + 1)}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    });
+                }
+
+                return renderTree(null, 0);
+              })()}
             </ul>
           </aside>
 
@@ -546,6 +581,34 @@ export function WikiPanel({
 
             {mode === 'view' && currentPage && (
               <>
+                {/* Breadcrumb trail from root to current page */}
+                {currentPage.parentId && (
+                  <div className="wiki-breadcrumb">
+                    {(() => {
+                      const trail: { slug: string; title: string }[] = [];
+                      let pid: string | null = currentPage.parentId;
+                      while (pid) {
+                        const parent = pages.find((p) => p.id === pid);
+                        if (!parent) break;
+                        trail.unshift({ slug: parent.slug, title: parent.title });
+                        pid = parent.parentId;
+                      }
+                      return trail.map((crumb, i) => (
+                        <span key={crumb.slug}>
+                          {i > 0 && <span className="wiki-breadcrumb-sep"> / </span>}
+                          <button
+                            className="wiki-breadcrumb-link"
+                            onClick={() => handleSelect(pages.find((p) => p.slug === crumb.slug)!)}
+                          >
+                            {crumb.title}
+                          </button>
+                        </span>
+                      ));
+                    })()}
+                    <span className="wiki-breadcrumb-sep"> / </span>
+                    <span className="wiki-breadcrumb-current">{currentPage.title}</span>
+                  </div>
+                )}
                 <div className="wiki-content-header">
                   <h1 className="wiki-page-title">
                     {isCurrentPageHome && (
@@ -652,6 +715,25 @@ export function WikiPanel({
                     ))}
                   </div>
                 )}
+
+                {/* Table of contents — auto-generated from headings */}
+                {(() => {
+                  const headings = extractHeadings(currentPage.content);
+                  if (headings.length < 2) return null;
+                  const minLevel = Math.min(...headings.map((h) => h.level));
+                  return (
+                    <nav className="wiki-toc">
+                      <strong className="wiki-toc-title">{t('wiki.tableOfContents')}</strong>
+                      <ul>
+                        {headings.map((h, i) => (
+                          <li key={i} style={{ marginLeft: `${(h.level - minLevel) * 0.8}rem` }}>
+                            <a href={`#${h.id}`} className="wiki-toc-link">{h.text}</a>
+                          </li>
+                        ))}
+                      </ul>
+                    </nav>
+                  );
+                })()}
 
                 {currentPage.content.trim() ? (
                   !showOriginal && translate.anyTranslated ? (

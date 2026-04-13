@@ -38,6 +38,10 @@ export const wikiPages = pgTable(
     title: varchar('title', { length: 256 }).notNull(),
     content: text('content').notNull().default(''),
     tags: textArray('tags').notNull().default(sql`ARRAY[]::text[]`),
+    /** Parent page for nesting. NULL = root-level page. */
+    parentId: uuid('parent_id'),
+    /** Sort order within siblings. Lower values sort first. */
+    position: integer('position').notNull().default(0),
     createdById: uuid('created_by_id').notNull().references(() => actors.id),
     lastEditedById: uuid('last_edited_by_id').notNull().references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -46,6 +50,7 @@ export const wikiPages = pgTable(
   (table) => [
     uniqueIndex('wiki_pages_server_slug_idx').on(table.serverId, table.slug),
     index('wiki_pages_server_idx').on(table.serverId),
+    index('wiki_pages_parent_idx').on(table.parentId),
     index('wiki_pages_updated_idx').on(table.updatedAt),
     // GIN index for tag membership queries (tags @> ARRAY['...'])
     index('wiki_pages_tags_gin_idx').using('gin', table.tags),

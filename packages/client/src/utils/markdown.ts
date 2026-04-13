@@ -63,8 +63,28 @@ export function renderMarkdown(content: string): string {
  * needs: headings, tables, horizontal rules, and images. Still sanitized
  * through DOMPurify with an explicit allowlist.
  */
+/**
+ * Slugify a heading text into an anchor ID. Lowercase, strip
+ * non-alphanumeric, collapse to hyphens.
+ */
+function headingId(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/<[^>]*>/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 export function renderWikiMarkdown(content: string): string {
-  const raw = marked.parse(preprocessWikiRefs(content), { async: false }) as string;
+  // Create a custom renderer that adds id attributes to headings
+  // for table-of-contents anchor linking.
+  const renderer = new marked.Renderer();
+  renderer.heading = ({ text, depth }: { text: string; depth: number }) => {
+    const id = headingId(text);
+    return `<h${depth} id="${id}">${text}</h${depth}>`;
+  };
+
+  const raw = marked.parse(preprocessWikiRefs(content), { async: false, renderer }) as string;
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
       'p', 'br', 'hr', 'strong', 'em', 'del', 'code', 'pre',
@@ -73,6 +93,28 @@ export function renderWikiMarkdown(content: string): string {
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'img',
     ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'src', 'alt', 'title'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'src', 'alt', 'title', 'id'],
   });
+}
+
+/**
+ * Extract heading structure from markdown source for rendering
+ * a table of contents. Returns an array of { level, text, id }
+ * objects in document order.
+ */
+export function extractHeadings(
+  markdown: string,
+): Array<{ level: number; text: string; id: string }> {
+  const headings: Array<{ level: number; text: string; id: string }> = [];
+  const re = /^(#{1,6})\s+(.+)$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    const text = m[2].trim();
+    headings.push({
+      level: m[1].length,
+      text,
+      id: headingId(text),
+    });
+  }
+  return headings;
 }

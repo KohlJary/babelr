@@ -9,6 +9,10 @@ export interface WikiPageView {
   /** Markdown source */
   content: string;
   tags: string[];
+  /** Parent page id for nesting. Null = root-level page. */
+  parentId: string | null;
+  /** Sort order within siblings. Lower = first. */
+  position: number;
   createdBy: AuthorView;
   lastEditedBy: AuthorView;
   createdAt: string;
@@ -26,6 +30,8 @@ export interface WikiPageSummary {
   slug: string;
   title: string;
   tags: string[];
+  parentId: string | null;
+  position: number;
   lastEditedBy: AuthorView;
   updatedAt: string;
 }
@@ -47,6 +53,10 @@ export interface CreateWikiPageInput {
   title: string;
   content?: string;
   tags?: string[];
+  /** Parent page id for nesting. Omit or null for root-level. */
+  parentId?: string | null;
+  /** Sort position among siblings. Defaults to 0. */
+  position?: number;
 }
 
 export interface UpdateWikiPageInput {
@@ -55,6 +65,10 @@ export interface UpdateWikiPageInput {
   tags?: string[];
   /** Short message describing the change, stored on the revision row */
   summary?: string;
+  /** Move the page to a new parent (null = root). */
+  parentId?: string | null;
+  /** Reorder within siblings. */
+  position?: number;
 }
 
 /**
