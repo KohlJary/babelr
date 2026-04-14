@@ -56,6 +56,7 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
     ...(typeof props?.slowMode === 'number' && props.slowMode > 0
       ? { slowMode: props.slowMode as number }
       : {}),
+    ...(obj.uri ? { uri: obj.uri } : {}),
   };
 }
 

@@ -36,6 +36,8 @@ import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
 import auditRoutes from './routes/audit.ts';
 import ssoRoutes from './routes/sso.ts';
+import voiceRoutes from './routes/voice.ts';
+import { initSfu, shutdownSfu } from './voice/sfu.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -161,6 +163,7 @@ export async function buildApp() {
   await app.register(embedRoutes);
   await app.register(auditRoutes);
   await app.register(ssoRoutes);
+  await app.register(voiceRoutes);
   await app.register(wikiSeedPlugin);
 
   // SPA fallback — serve index.html for all non-API paths
@@ -191,6 +194,11 @@ export async function buildApp() {
       return reply.sendFile('index.html', clientDistDir);
     });
   }
+
+  await initSfu(config);
+  app.addHook('onClose', async () => {
+    await shutdownSfu();
+  });
 
   return app;
 }

@@ -117,6 +117,11 @@ echo ""
 # of its values (Node's --env-file behavior). That's why we can set
 # per-instance DB and port inline without touching .env.
 
+# mediasoup port ranges must be disjoint so the two SFU workers don't
+# compete for the same UDP ports. announcedIp = 127.0.0.1 so federated
+# voice candidates work between babelr-a.local and babelr-b.local on
+# the same machine.
+
 (
   DATABASE_URL="$DATABASE_URL_A" \
   PORT="$SERVER_PORT_A" \
@@ -124,6 +129,10 @@ echo ""
   BABELR_DOMAIN="$HOST_A:$SERVER_PORT_A" \
   SESSION_SECRET="$SESSION_SECRET_A" \
   NODE_ENV=development \
+  MEDIASOUP_LISTEN_IP=127.0.0.1 \
+  MEDIASOUP_ANNOUNCED_IP=127.0.0.1 \
+  MEDIASOUP_RTC_MIN_PORT=40000 \
+  MEDIASOUP_RTC_MAX_PORT=40099 \
   npm run dev -w packages/server 2>&1 | prefix "server-a" "34"
 ) &
 PIDS+=($!)
@@ -135,6 +144,10 @@ PIDS+=($!)
   BABELR_DOMAIN="$HOST_B:$SERVER_PORT_B" \
   SESSION_SECRET="$SESSION_SECRET_B" \
   NODE_ENV=development \
+  MEDIASOUP_LISTEN_IP=127.0.0.1 \
+  MEDIASOUP_ANNOUNCED_IP=127.0.0.1 \
+  MEDIASOUP_RTC_MIN_PORT=40100 \
+  MEDIASOUP_RTC_MAX_PORT=40199 \
   npm run dev -w packages/server 2>&1 | prefix "server-b" "35"
 ) &
 PIDS+=($!)

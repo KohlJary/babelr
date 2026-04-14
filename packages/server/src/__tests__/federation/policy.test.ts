@@ -13,6 +13,9 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     secureCookies: false,
     federationMode: 'open',
     federationDomains: [],
+    mediasoupListenIp: '127.0.0.1',
+    mediasoupRtcMinPort: 40000,
+    mediasoupRtcMaxPort: 40099,
     ...overrides,
   };
 }

@@ -7,10 +7,68 @@ import { PERMISSIONS } from '@babelr/shared';
 import { eq } from 'drizzle-orm';
 import { objects } from '../db/schema/objects.ts';
 import { hasPermission } from '../permissions.ts';
+import { verifyVoiceFederationToken } from '../voice/federation-jwt.ts';
+import { actors } from '../db/schema/actors.ts';
+import {
+  joinRoom as sfuJoinRoom,
+  createTransport as sfuCreateTransport,
+  connectTransport as sfuConnectTransport,
+  produce as sfuProduce,
+  consume as sfuConsume,
+  resumeConsumer as sfuResumeConsumer,
+  closeProducer as sfuCloseProducer,
+} from '../voice/sfu.ts';
+import type {
+  SfuRtpCapabilities,
+  SfuTransportParams,
+  SfuProducerInfo,
+} from '@babelr/shared';
+import type {
+  DtlsParameters,
+  RtpCapabilities,
+  RtpParameters,
+} from 'mediasoup/types';
+
+function sendRequestError(
+  socket: WebSocket,
+  requestId: string,
+  message: string,
+) {
+  const err: WsServerMessage = {
+    type: 'voice:request-error',
+    payload: { requestId, message },
+  };
+  socket.send(JSON.stringify(err));
+}
+
+// Per-socket federation scope: when the WS was authenticated via a
+// voice federation JWT, the socket may only operate on the scoped
+// channel (voice:join must match this channelId). Map keyed by socket
+// so we can look up scope on each message and clean up on close.
+const socketFederationScope = new Map<WebSocket, { channelId: string }>();
 
 export default async function wsRoutes(fastify: FastifyInstance) {
-  fastify.get('/ws', { websocket: true }, (socket: WebSocket, request) => {
-    if (!request.actor) {
+  fastify.get('/ws', { websocket: true }, async (socket: WebSocket, request) => {
+    let actor = request.actor;
+    let federationScope: { channelId: string } | null = null;
+    if (!actor) {
+      const token = (request.query as { token?: string } | undefined)?.token;
+      if (token) {
+        const claims = verifyVoiceFederationToken(token, fastify.config.sessionSecret);
+        if (claims) {
+          const [remoteActor] = await fastify.db
+            .select()
+            .from(actors)
+            .where(eq(actors.uri, claims.sub))
+            .limit(1);
+          if (remoteActor) {
+            actor = remoteActor;
+            federationScope = { channelId: claims.channelId };
+          }
+        }
+      }
+    }
+    if (!actor) {
       const error: WsServerMessage = {
         type: 'error',
         payload: { message: 'Not authenticated' },
@@ -19,8 +77,9 @@ export default async function wsRoutes(fastify: FastifyInstance) {
       socket.close(4001, 'Not authenticated');
       return;
     }
-
-    const actor = request.actor;
+    if (federationScope) {
+      socketFederationScope.set(socket, federationScope);
+    }
 
     // Register the connection for presence tracking
     fastify.wsRegisterActorConnection(socket, actor.id);
@@ -72,6 +131,16 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
           case 'voice:join': {
             const channelId = msg.payload.channelId;
+            // If this socket was authed via a federation JWT, the JWT
+            // scopes it to a single channel — reject any other channel.
+            if (federationScope && federationScope.channelId !== channelId) {
+              const errMsg: WsServerMessage = {
+                type: 'error',
+                payload: { message: 'Federation token scope mismatch' },
+              };
+              socket.send(JSON.stringify(errMsg));
+              break;
+            }
             // CONNECT_VOICE permission check
             const db = fastify.db;
             const [voiceCh] = await db
@@ -128,6 +197,29 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               },
             };
             socket.send(JSON.stringify(stateMsg));
+            // SFU: create router on first join, return router caps + existing producers
+            try {
+              const { rtpCapabilities, peers } = await sfuJoinRoom(channelId, actor.id);
+              const joinedSfuMsg: WsServerMessage = {
+                type: 'voice:joined',
+                payload: {
+                  channelId,
+                  routerRtpCapabilities: rtpCapabilities as SfuRtpCapabilities,
+                  peers: peers.map((p) => ({
+                    actorId: p.actorId,
+                    producers: p.producers.map<SfuProducerInfo>((pr) => ({
+                      peerActorId: p.actorId,
+                      producerId: pr.producerId,
+                      kind: pr.kind,
+                      slot: pr.slot,
+                    })),
+                  })),
+                },
+              };
+              socket.send(JSON.stringify(joinedSfuMsg));
+            } catch (err) {
+              fastify.log.error({ err, channelId }, 'sfu join failed');
+            }
             // Broadcast participant-joined to existing peers
             const joinedMsg: WsServerMessage = {
               type: 'voice:participant-joined',
@@ -147,52 +239,168 @@ export default async function wsRoutes(fastify: FastifyInstance) {
           }
           case 'voice:leave': {
             const channelId = msg.payload.channelId;
-            if (fastify.voiceLeave(channelId, actor.id)) {
+            const result = fastify.voiceLeave(channelId, actor.id);
+            if (result) {
               const leftMsg: WsServerMessage = {
                 type: 'voice:participant-left',
                 payload: { channelId, actorId: actor.id },
               };
               fastify.voiceBroadcastToRoom(channelId, leftMsg);
+              for (const producerId of result.closedProducerIds) {
+                const closed: WsServerMessage = {
+                  type: 'voice:producer-closed',
+                  payload: { channelId, peerActorId: actor.id, producerId },
+                };
+                fastify.voiceBroadcastToRoom(channelId, closed);
+              }
             }
             break;
           }
-          case 'voice:offer': {
-            const relay: WsServerMessage = {
-              type: 'voice:offer',
-              payload: {
-                channelId: msg.payload.channelId,
-                fromActorId: actor.id,
-                toActorId: msg.payload.toActorId,
-                sdp: msg.payload.sdp,
-              },
-            };
-            fastify.voiceRelayToActor(msg.payload.channelId, msg.payload.toActorId, relay);
+          case 'voice:create-transport': {
+            const { requestId, channelId, direction } = msg.payload;
+            try {
+              const params = await sfuCreateTransport(channelId, actor.id, direction);
+              const reply: WsServerMessage = {
+                type: 'voice:transport-created',
+                payload: {
+                  requestId,
+                  direction,
+                  params: params as unknown as SfuTransportParams,
+                },
+              };
+              socket.send(JSON.stringify(reply));
+            } catch (err) {
+              sendRequestError(socket, requestId, (err as Error).message);
+            }
             break;
           }
-          case 'voice:answer': {
-            const relay: WsServerMessage = {
-              type: 'voice:answer',
-              payload: {
-                channelId: msg.payload.channelId,
-                fromActorId: actor.id,
-                toActorId: msg.payload.toActorId,
-                sdp: msg.payload.sdp,
-              },
-            };
-            fastify.voiceRelayToActor(msg.payload.channelId, msg.payload.toActorId, relay);
+          case 'voice:connect-transport': {
+            const { requestId, channelId, transportId, dtlsParameters } = msg.payload;
+            try {
+              await sfuConnectTransport(
+                channelId,
+                actor.id,
+                transportId,
+                dtlsParameters as DtlsParameters,
+              );
+              const reply: WsServerMessage = {
+                type: 'voice:transport-connected',
+                payload: { requestId },
+              };
+              socket.send(JSON.stringify(reply));
+            } catch (err) {
+              sendRequestError(socket, requestId, (err as Error).message);
+            }
             break;
           }
-          case 'voice:ice': {
-            const relay: WsServerMessage = {
-              type: 'voice:ice',
-              payload: {
-                channelId: msg.payload.channelId,
-                fromActorId: actor.id,
-                toActorId: msg.payload.toActorId,
-                candidate: msg.payload.candidate,
-              },
-            };
-            fastify.voiceRelayToActor(msg.payload.channelId, msg.payload.toActorId, relay);
+          case 'voice:produce': {
+            const { requestId, channelId, transportId, kind, rtpParameters, slot } =
+              msg.payload;
+            try {
+              const { producerId } = await sfuProduce(
+                channelId,
+                actor.id,
+                transportId,
+                kind,
+                rtpParameters as RtpParameters,
+                slot,
+              );
+              const reply: WsServerMessage = {
+                type: 'voice:produced',
+                payload: { requestId, producerId },
+              };
+              socket.send(JSON.stringify(reply));
+              const newProducer: WsServerMessage = {
+                type: 'voice:new-producer',
+                payload: {
+                  channelId,
+                  producer: {
+                    peerActorId: actor.id,
+                    producerId,
+                    kind,
+                    slot,
+                  },
+                },
+              };
+              fastify.voiceBroadcastToRoom(channelId, newProducer, actor.id);
+            } catch (err) {
+              sendRequestError(socket, requestId, (err as Error).message);
+            }
+            break;
+          }
+          case 'voice:consume': {
+            const {
+              requestId,
+              channelId,
+              transportId,
+              producerId,
+              rtpCapabilities,
+            } = msg.payload;
+            try {
+              const result = await sfuConsume(
+                channelId,
+                actor.id,
+                transportId,
+                producerId,
+                rtpCapabilities as RtpCapabilities,
+              );
+              const reply: WsServerMessage = {
+                type: 'voice:consumed',
+                payload: {
+                  requestId,
+                  consumer: {
+                    id: result.consumerId,
+                    producerId,
+                    kind: result.kind,
+                    rtpParameters: result.rtpParameters,
+                    peerActorId: result.peerActorId,
+                    slot: result.slot,
+                  },
+                },
+              };
+              socket.send(JSON.stringify(reply));
+            } catch (err) {
+              sendRequestError(socket, requestId, (err as Error).message);
+            }
+            break;
+          }
+          case 'voice:resume-consumer': {
+            const { requestId, channelId, consumerId } = msg.payload;
+            try {
+              await sfuResumeConsumer(channelId, actor.id, consumerId);
+              const reply: WsServerMessage = {
+                type: 'voice:consumer-resumed',
+                payload: { requestId },
+              };
+              socket.send(JSON.stringify(reply));
+            } catch (err) {
+              sendRequestError(socket, requestId, (err as Error).message);
+            }
+            break;
+          }
+          case 'voice:close-producer': {
+            const { requestId, channelId, producerId } = msg.payload;
+            try {
+              const closed = sfuCloseProducer(channelId, actor.id, producerId);
+              const reply: WsServerMessage = {
+                type: 'voice:producer-closed-ack',
+                payload: { requestId },
+              };
+              socket.send(JSON.stringify(reply));
+              if (closed) {
+                const broadcast: WsServerMessage = {
+                  type: 'voice:producer-closed',
+                  payload: {
+                    channelId,
+                    peerActorId: actor.id,
+                    producerId: closed.producerId,
+                  },
+                };
+                fastify.voiceBroadcastToRoom(channelId, broadcast, actor.id);
+              }
+            } catch (err) {
+              sendRequestError(socket, requestId, (err as Error).message);
+            }
             break;
           }
         }
@@ -202,6 +410,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
     });
 
     socket.on('close', () => {
+      socketFederationScope.delete(socket);
       fastify.wsRemoveClient(socket);
     });
   });

@@ -74,6 +74,12 @@ export interface ChannelView {
   description?: string | null;
   /** Minimum seconds between messages per user (0 = off) */
   slowMode?: number;
+  /**
+   * ActivityPub URI for this channel. Present for federated voice
+   * channels so the client can detect remote ownership and route the
+   * federation handshake. Local channels usually omit this.
+   */
+  uri?: string;
 }
 
 export interface UpdateChannelInput {

@@ -317,7 +317,7 @@
       "description": "SUPERSEDED BY voice-channels-sfu. After 11 shipped attempts in the P2P mesh, we concluded the topology is the root cause: transceiver state management across N peer connections is where the bug lives. The SFU refactor (voice-channels-sfu, promoted to P1) collapses each client to a single PC against the server, eliminating the class of bug.\n\nClose this item only after SFU parity testing confirms enable/disable cycles work reliably under the new topology.\n\n--- ORIGINAL ---\n\nAfter toggling webcam or screen share off then on again, the receiver doesn't see the re-enabled stream even though the sender's self-view works correctly. First enable works; second enable doesn't. See `.daedalus/open-issues/voice-video-reenable.md` for the full troubleshooting history — 11 shipped attempts across `6d94834..7c4da1b` trying different routing, reconcile, and renegotiation strategies.\n\nLatest attempt (`7c4da1b`) removed renegotiation from the disable path — theory is that disable-time renegotiation was driving the receiver's transceiver into `readyState === 'ended'` or a stuck direction that no subsequent enable could recover from. Untested as of pause.\n\nNext steps:\n1. Test the latest commit cold tomorrow\n2. If still broken, read `voice: reconcile scan` logs to see what receiver.track.readyState and muted actually report during the failing re-enable\n3. Fall back to alternative strategies: `addTrack`/`removeTrack` instead of pre-allocated transceivers + replaceTrack, or PC recreation on toggle\n4. Test in Firefox vs Chrome to rule out browser-specific quirks\n\nBlocker-class for the voice channels launch story. Polish pass, group-video, and screen-share all depend on reliable enable/disable.",
       "type": "bug",
       "priority": "P1",
-      "status": "blocked"
+      "status": "review"
     },
     {
       "id": "server-wikis",
@@ -477,7 +477,7 @@
       "description": "Refactor voice channels from P2P mesh to an SFU (Selective Forwarding Unit) topology. Promoted from P3 to P1: after 11 attempts at fixing voice-video-reenable-bug in the mesh, the topology itself is the problem — transceiver state management across N peer connections is where the bug lives. An SFU gives each client a single PC to the server, and track add/remove is handled by the SFU internally.\n\nChoice: **mediasoup embedded** (Node worker, in-process). Fits the self-hostable one-container story. LiveKit was considered but rejected for now — separate Go service adds ops burden that runs against the self-host ethos. Can revisit if scale demands it.\n\nWhat this unblocks (for free, same work):\n- voice-video-reenable-bug: class of bug disappears with the topology change\n- voice-channels-video (webcam): SFU forwards whatever tracks you publish\n- screen-sharing: same\n- Scale beyond 8 participants (original motivation)\n\nWhat this does NOT unblock:\n- Federated voice (voice-channels-federated) — separate gating\n\nOperational adds:\n- mediasoup Node workers (C++ bindings — builds cleanly on Linux/macOS, Windows via WSL)\n- TURN server for NAT traversal (coturn in docker-compose for self-hosters)\n- Media port range configuration\n- Observability: active producer/consumer counts, bandwidth per room\n\nShipping order:\n1. mediasoup worker wired up in the server process, room/router lifecycle\n2. Client signaling refactor: publish tracks to SFU, subscribe to remote producers\n3. Replace mesh PC management with single-PC-to-SFU\n4. Parity testing: audio, mute, join/leave, enable/disable cycles (this is where the bug either dies or resurfaces)\n5. Webcam video + screen-share as validation surfaces for the new pipeline\n6. coturn docker-compose addition for self-host\n7. Observability hooks\n\nValidation gate: voice-video-reenable-bug must be verified dead under the SFU before closing that item.",
       "type": "feature",
       "priority": "P1",
-      "status": "ready"
+      "status": "review"
     },
     {
       "id": "voice-channels-federation",
@@ -517,7 +517,7 @@
       "description": "Webcam video in voice channels. Folded into voice-channels-sfu as a validation surface — once the SFU is forwarding arbitrary track types, webcam video lands with minimal additional work. Track this item as the UI + product polish (video tile layout, active-speaker highlight, mirror-self-view) that ships on top of the SFU plumbing.\n\n--- ORIGINAL ---\n\nAdd optional per-participant camera streams to voice channels. Discord-style model: a voice channel is the 'room' and each participant has three independent streams — audio (on when joined), webcam video (optional toggle), screen share (optional toggle). Not a separate 'video call' feature.\n\nScope:\n- 'Turn on camera' button in VoicePanel that calls getUserMedia({ video: true, audio: false }) and addTrack()s the video track to every existing RTCPeerConnection\n- Per-peer RTCRtpSender.replaceTrack when toggling, NOT renegotiation — avoids an offer/answer round trip for a local state change\n- Client renders remote video tracks in a grid layout (replacing or augmenting the current avatar-only tiles) with each peer's tile showing their video when active, fallback to avatar when off\n- Local self-view preview\n- Handle track ended events (user disabled via OS/browser controls)\n- Bandwidth considerations: at 8 peers × 720p each, mesh topology gets heavy fast; document practical limit of ~4 peers with video, gate the rest behind the SFU roadmap item\n- Mobile-friendly fallback: on narrow viewports, grid collapses to a single large tile with swipeable peer selection\n\n## Shared infrastructure with screen-sharing\n\nThis feature and `screen-sharing` share about 60% of implementation:\n- Both add a video track to existing peer connections via addTrack/replaceTrack\n- Both need an ontrack handler extension for kind='video'\n- Both need receiving-side <video> element rendering\n- Both need cleanup on track.ended and peer-left\n\nThe differences are:\n- Acquisition: getUserMedia({ video }) vs getDisplayMedia()\n- UX: grid of equal video tiles (webcam) vs one focused big view + small peer strip (screen share)\n- Toggle UI: camera-on/off button vs share-screen button\n\nRecommended implementation order: ship whichever is needed first, then the second gets ~40% additional work. Building them in the same sitting is ideal — the shared video-track machinery only needs to be written once.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "review"
     },
     {
       "id": "screen-sharing",
@@ -525,7 +525,7 @@
       "description": "Screen sharing in voice channels. Folded into voice-channels-sfu as a validation surface — the SFU forwards display tracks the same way it forwards webcam tracks. Track this item as the UX polish (screen picker, viewer layout, stop-sharing affordance) that ships on top of the SFU plumbing.\n\n--- ORIGINAL ---\n\nStandard for any business meeting tool. WebRTC's `getDisplayMedia` is one extra track on the existing peer connection — simple to implement once voice-channels-mvp ships.\n\nScope:\n- 'Share screen' button in the voice panel UI, prompts native browser screen picker\n- New media track added to existing RTCPeerConnections (no new signaling shape needed beyond existing voice signaling)\n- Receiver renders the screen track in a larger video element distinct from the voice avatars\n- Only one participant sharing at a time in the MVP (lock + handoff)\n- Audio capture from the shared tab/window optional via getDisplayMedia constraints\n- Works on Chrome, Firefox, Edge, Safari (with Safari quirks for window-only sharing)\n\n## Shared infrastructure with voice-channels-video\n\nThis feature and `voice-channels-video` share about 60% of implementation — see the webcam item's description for the split. Building them in the same sitting is ideal; the shared video-track machinery only needs to be written once. If shipping them separately, do webcam first since it's the higher-visibility feature (enterprise video call parity), then screen share becomes a ~1-sitting add-on.",
       "type": "feature",
       "priority": "P2",
-      "status": "backlog"
+      "status": "review"
     },
     {
       "id": "scim-provisioning",
@@ -839,6 +839,26 @@
       "item_type": "feature",
       "status": "backlog",
       "created_at": "2026-04-14T14:12:30.552014",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "764a297b-cbf5-402f-90b1-a093269eb4b8",
+      "title": "Firefox voice/video parity test on staging deployment",
+      "description": "Firefox fails ICE when joining a voice channel against a mediasoup SFU running on localhost loopback (same-machine dev). Chromium works end-to-end under identical configuration. We tried the usual mitigations (MEDIASOUP_ANNOUNCED_IP=127.0.0.1, UDP-only transports, STUN servers, FF about:config privacy flags including obfuscate_host_addresses and ice.loopback); none helped.\n\nHypothesis: Firefox's WebRTC stack on Linux rejects loopback/private-network candidates from an ICE-Lite remote more aggressively than Chromium, even with the privacy flags disabled. In production, mediasoup announces a real public IP via MEDIASOUP_ANNOUNCED_IP, so Firefox should accept those candidates normally.\n\nFull writeup: .daedalus/open-issues/firefox-sfu-loopback.md\n\nTest plan (run on first staging deploy with a public IP):\n1. FF + FF, 2 participants, audio\n2. FF + Chrome, 2 participants, audio\n3. FF webcam enable/disable/re-enable (the original voice-video-reenable-bug — should be dead under SFU topology regardless of browser)\n4. FF screen-share enable/disable\n5. FF 3+ participants\n\nIf FF still fails on a real public IP, the issue is in our mediasoup setup, not localhost — open a deeper investigation. Mediasoup's GitHub issues have several FF-specific handler threads worth consulting if we reach that branch.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-14T13:51:06.854536",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "b53f3374-b053-4180-98cd-5f35e766678c",
+      "title": "Live federated voice end-to-end test (real Tower deployments)",
+      "description": "Federated voice channels (cross-Tower join via signed JWT handshake) ship in the SFU branch with full unit + integration test coverage of the auth path. The end-to-end browser flow is verified for SAME-TOWER voice on Chromium, but federated voice across two Towers in dev (the dev-two-instance.sh harness) hits a wall of dev-environment issues that don't apply in production:\n\n1. babelr-a.local / babelr-b.local over plain HTTP isn't a 'secure context' in the browser, so crypto.subtle is undefined — blocks E2E key gen before voice can even run. Workaround: chromium --unsafely-treat-insecure-origin-as-secure=...\n2. Even with that bypassed, mediasoup ICE candidates and cross-Tower WS dial in dev have several moving pieces (vite proxy port vs API port, etc.) that don't reflect any real deployment shape.\n\nValidation should run against TWO REAL Tower deployments with public DNS, valid TLS, and proper MEDIASOUP_ANNOUNCED_IP. Test matrix:\n- Tower B user joins a voice channel on Tower A (must already be a federated member of Tower A's owning Group). Audio flows.\n- Same with webcam, then screen-share\n- Federation policy on Tower A blocks Tower B's domain → token issuance returns 403\n- Tower B user is removed from the Group → next token issuance returns 403\n- Token expiry: held WS keeps working (session is bound to the WS, not the JWT TTL); fresh WS attempt past the JWT exp gets 401\n- Firefox parity per the firefox-staging-voice-parity-test item\n\nIf the dev rig becomes worth fixing later, the right move is: run vite over HTTPS via mkcert, treat babelr-a.local / babelr-b.local as trusted origins, and add the cert chain installation to docs/FEDERATION_TESTING.md. Tracked separately if desired.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-14T15:01:10.218890",
       "created_by": "daedalus"
     }
   ],

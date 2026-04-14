@@ -300,7 +300,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         onJoinVoice={(channelId) => {
           if (voice.state.channelId === channelId) return;
           if (voice.state.channelId) voice.leave();
-          void voice.join(channelId);
+          const ch = channels.find((c) => c.id === channelId);
+          void voice.join(channelId, ch?.uri);
         }}
         activeVoiceChannelId={voice.state.channelId}
       />

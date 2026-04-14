@@ -27,18 +27,16 @@ declare module 'fastify' {
       channelId: string,
       participant: VoiceParticipant,
     ) => VoiceParticipant[] | null;
-    voiceLeave: (channelId: string, actorId: string) => boolean;
+    voiceLeave: (
+      channelId: string,
+      actorId: string,
+    ) => { closedProducerIds: string[] } | null;
     voiceGetRoom: (channelId: string) => VoiceParticipant[];
     voiceBroadcastToRoom: (
       channelId: string,
       message: WsServerMessage,
       excludeActorId?: string,
     ) => void;
-    voiceRelayToActor: (
-      channelId: string,
-      toActorId: string,
-      message: WsServerMessage,
-    ) => boolean;
   }
 
   interface FastifyRequest {

@@ -29,6 +29,7 @@ import wikiRoutes from '../../routes/wiki.ts';
 import roleRoutes from '../../routes/roles.ts';
 import fileRoutes from '../../routes/files.ts';
 import auditRoutes from '../../routes/audit.ts';
+import voiceRoutes from '../../routes/voice.ts';
 
 // Federation route imports
 import webfingerRoute from '../../federation/webfinger.ts';
@@ -48,6 +49,9 @@ export const testConfig: Config = {
   secureCookies: false,
   federationMode: 'open',
   federationDomains: [],
+  mediasoupListenIp: '127.0.0.1',
+  mediasoupRtcMinPort: 40000,
+  mediasoupRtcMaxPort: 40099,
 };
 
 /**
@@ -82,10 +86,9 @@ export async function createFederationTestApp() {
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});
         fastify.decorate('voiceJoin', () => null);
-        fastify.decorate('voiceLeave', () => false);
+        fastify.decorate('voiceLeave', () => null);
         fastify.decorate('voiceGetRoom', () => []);
         fastify.decorate('voiceBroadcastToRoom', () => {});
-        fastify.decorate('voiceRelayToActor', () => false);
       },
       { name: 'ws', dependencies: ['db', 'config-plugin'] },
     ),
@@ -114,6 +117,7 @@ export async function createFederationTestApp() {
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(fileRoutes);
   await app.register(auditRoutes);
+  await app.register(voiceRoutes);
 
   // Federation routes (the key difference from the basic test app)
   await app.register(webfingerRoute);

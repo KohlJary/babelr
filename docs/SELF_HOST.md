@@ -39,8 +39,40 @@ Set these in your `.env` file or as environment variables:
 | `OIDC_CLIENT_ID` | No | -- | OIDC client ID from your identity provider |
 | `OIDC_CLIENT_SECRET` | No | -- | OIDC client secret |
 | `OIDC_REDIRECT_URI` | No | -- | Callback URL: `https://your-domain/api/auth/oidc/callback` |
+| `MEDIASOUP_ANNOUNCED_IP` | Yes for voice | -- | Public IP advertised to browsers for WebRTC. See [Voice channels](#voice-channels) below. |
+| `MEDIASOUP_LISTEN_IP` | No | `0.0.0.0` in prod, `127.0.0.1` in dev | Bind address for RTC sockets. Leave as default unless you know why you're changing it. |
+| `MEDIASOUP_RTC_MIN_PORT` | No | `40000` | Low end of the UDP port range used for voice media. |
+| `MEDIASOUP_RTC_MAX_PORT` | No | `40099` | High end of the UDP port range. |
 
 *When using `docker compose`, `DATABASE_URL` is set automatically to point at the Postgres container.
+
+### Voice channels
+
+Voice (and webcam / screen-share) use a mediasoup SFU embedded in the Babelr server process. Browsers connect directly to the server over UDP on the RTC port range — this media traffic does **not** go through your reverse proxy, only the WebSocket signaling does.
+
+**Required setup for voice to work in production:**
+
+1. Set `MEDIASOUP_ANNOUNCED_IP` to the public IP address that browsers will use to reach your server. This is almost always the same IP your DNS record resolves to. If you skip this, browsers will receive undialable ICE candidates and every voice join will fail.
+2. Open UDP ports `40000–40099` (or your configured range) on your firewall. These are per-participant — each transport uses one UDP port, so ~2 ports per active voice participant. The 100-port default handles ~50 concurrent voice users per Tower; raise the range if you expect more.
+3. If you're behind NAT (home lab, cloud with a private-IP VM), port-forward the UDP range to your Babelr host and set `MEDIASOUP_ANNOUNCED_IP` to the outside IP.
+
+**Known limitation:** Firefox fails ICE when both browser and server are on the same machine via localhost loopback. Deployments with a real public `MEDIASOUP_ANNOUNCED_IP` don't hit this. If you're developing locally and need to test Firefox, use two machines on a LAN rather than two tabs on localhost.
+
+### Federated voice channels
+
+A user on Tower B can join a voice channel that lives on Tower A. The flow:
+
+1. Browser asks its home Tower (B) for a voice federation token, identifying the remote channel by URI.
+2. Home Tower B HTTP-signs a request to Tower A's `/api/voice/federation-token` on the user's behalf.
+3. Tower A verifies the signature, checks the user is a member of the owning Group, checks federation policy, and issues a 5-minute JWT scoped to that one channel.
+4. Browser opens its WebSocket directly to **Tower A** (`wss://tower-a/ws?token=…`) and joins the SFU there. Voice / video / screen-share RTP all flows browser ↔ Tower A's SFU; Tower B is not in the media path.
+
+For this to work end-to-end:
+- Both Towers' `MEDIASOUP_ANNOUNCED_IP` values must be reachable from the federating browsers (they are dialed directly).
+- Both Towers' RTC port ranges must be open at their respective firewalls.
+- Federation policy (`FEDERATION_MODE` + `FEDERATION_DOMAINS`) on Tower A must allow Tower B's domain.
+
+Privacy note: with the default direct-signaling flow, Tower A learns the joining user's browser IP. A future config toggle (`VOICE_FEDERATION_PROXY`, on the roadmap) will let self-hosters proxy signaling through the home Tower to hide member IPs from remote Towers.
 
 ### Production Deployment
 

@@ -52,6 +52,52 @@ export async function signedGet<T = unknown>(
     return null;
   }
 }
+/**
+ * Signed POST as a local actor against a remote URL. Returns the parsed
+ * JSON body and HTTP status. Used for synchronous federation RPCs (e.g.
+ * the federated voice-token handshake) where we need a structured reply
+ * — distinct from the fire-and-forget inbox delivery queue.
+ */
+export async function signedPost<T = unknown>(
+  db: Database,
+  actorId: string,
+  url: string,
+  body: unknown,
+): Promise<{ status: number; data: T | null }> {
+  const [actor] = await db.select().from(actors).where(eq(actors.id, actorId)).limit(1);
+  if (!actor?.local) return { status: 0, data: null };
+
+  const actorWithKeys = await ensureActorKeys(db, actor);
+  if (!actorWithKeys.privateKeyPem) return { status: 0, data: null };
+
+  const keyId = `${actor.uri}#main-key`;
+  const bodyStr = JSON.stringify(body);
+  const { headers } = signRequest(actorWithKeys.privateKeyPem, keyId, 'POST', url, bodyStr);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': 'Babelr/0.1.0',
+      },
+      body: bodyStr,
+      signal: AbortSignal.timeout(DELIVERY_TIMEOUT),
+    });
+    let data: T | null = null;
+    try {
+      data = (await res.json()) as T;
+    } catch {
+      // empty / non-json body is fine
+    }
+    return { status: res.status, data };
+  } catch {
+    return { status: 0, data: null };
+  }
+}
+
 const QUEUE_INTERVAL = 5_000;
 const BATCH_SIZE = 10;
 
