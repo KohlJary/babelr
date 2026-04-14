@@ -911,6 +911,26 @@
       "status": "backlog",
       "created_at": "2026-04-14T16:58:43.200674",
       "created_by": "daedalus"
+    },
+    {
+      "id": "c1fbaa2a-3996-41a4-b7c5-abe7c87a84b7",
+      "title": "DM voice calls — 1:1 + group DM voice with incoming-call notifications",
+      "description": "Voice/video/screen-share between DM participants — 1:1 and group DMs both. The CallView we shipped is already generic over chatId, so the rendering side is free; the work is on auth/routing and the call-initiation UX.\n\nServer:\n- Extend the SFU room model to accept ad-hoc rooms keyed by DM id rather than channel id. The room ID space becomes 'channel:<id>' | 'dm:<id>' | 'event:<id>' (the last one for the event-calls follow-up).\n- Permission check: any participant of the DM (via the dm_participants table) can join.\n- New WS message (or reuse voice:join with a room-type hint): 'voice:invite' fans an incoming-call notification to other DM participants.\n\nClient:\n- 'Call' button in the DM header (audio-only / video / screen-share variants).\n- Incoming-call modal/toast for invitees, with accept/decline. Ringer sound. Auto-decline after a timeout if all invitees are away/offline.\n- CallView used as-is, with chatId = the DM id, so the right-sidebar text chat shows the DM history alongside the call.\n\nE2E caveat (must surface in UI): mediasoup SFU sees plaintext RTP. Voice in E2E DMs is NOT end-to-end encrypted today even though messages are. Show a 'voice not E2E' indicator during DM calls. Real fix is later (group MLS already on the roadmap; voice-MLS is a separate research item).\n\nFederation: a DM call between actors on different Towers needs the federated-voice JWT handshake the same way a federated channel call does. The DM's owning Tower (whoever created the DM, or a deterministic rule based on actor URIs) hosts the SFU room; the remote actor's home Tower issues a token via the existing endpoint.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T17:01:59.788869",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "cc9224c4-07e5-45cf-9bdb-67b56a0b8af2",
+      "title": "Event voice calls — built on DM call infrastructure, scoped to attendees",
+      "description": "Voice/video/screen-share for calendar events — essentially DM calls with a different permission scope. Reuses the SFU ad-hoc room infrastructure from the dm-voice-calls item.\n\nBuilt on top of dm-voice-calls — implement that first; this is then ~a day of work:\n\n- SFU room keyed as 'event:<id>'\n- Permission: anyone who can RSVP to the event can join (effectively: the event's audience). For server-scoped events that's CONNECT_VOICE on the owning Group; for user-scoped events it's the event owner's friends/invitees.\n- 'Join voice' button on the event detail panel and the event embed card. Optional auto-popup of an incoming-call notification on event start time for RSVPs marked Going.\n- CallView with chatId = the event's eventChatId so the right-sidebar text chat is the event discussion thread (which already exists).\n- Recurring events: each occurrence gets its own SFU room scoped by occurrence start time. Don't carry call history across recurrences.\n\nFederation: event calls follow the federated-voice path the same way DM calls and channel calls do. Remote attendees' home Tower issues the JWT; browser dials origin Tower's SFU.\n\nThis closes the loop on the connected-workspace pitch — every surface that has a 'people' component (channel, DM, event) supports voice. The wiki and files don't, on purpose: those are knowledge surfaces, not synchronous-presence surfaces.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T17:01:59.868003",
+      "created_by": "daedalus"
     }
   ],
   "version": 27
