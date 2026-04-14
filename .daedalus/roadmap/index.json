@@ -252,8 +252,9 @@
       "id": "2fa",
       "title": "Two-factor authentication",
       "type": "feature",
-      "priority": "P3",
-      "status": "backlog"
+      "priority": "P2",
+      "status": "backlog",
+      "description": "\n\nPriority bumped from P3 to P2: 2FA is a discrete checkbox that gates serious adoption. Anyone evaluating Babelr for a team where security matters at all bounces on its absence. Small feature, big adoption blast radius.\n\nScope: TOTP (authenticator app) is enough for v1. WebAuthn / passkeys are a follow-up. Recovery codes mandatory."
     },
     {
       "id": "federation-interop-test",
@@ -889,6 +890,26 @@
       "item_type": "feature",
       "status": "backlog",
       "created_at": "2026-04-14T16:12:43.069822",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "ac2cbf30-685d-4125-b887-3f50d491a15b",
+      "title": "First-run onboarding flow — guided server creation + language preference",
+      "description": "Today's first-run is 'register, log in, see an empty Discord-shaped UI'. That's fine for builders evaluating the project; it's friction for friend groups, hobbyist communities, and small teams who haven't seen ActivityPub before and don't know what a Tower is.\n\nAdd a guided onboarding sequence after first registration:\n1. Welcome + 30-second pitch (the connected-workspace thesis, one screen)\n2. Language preference picker (was a hidden setting; now in the path)\n3. Choose: create your own server, accept an invite link, or browse the manual\n4. If create-server: name + tagline + first channel, with sensible defaults pre-filled\n5. 'You're done' state with one-click hooks: invite a friend, write your first wiki page, schedule an event\n\nSkippable for power users; persists 'completed onboarding' on the actor profile so it doesn't fire again. Self-host operators may want to customize the welcome message and default-server template — make those Tower-config-driven so admin Towers can present a coherent landing for their own user base.\n\nThis is the conversion line between 'beautifully architected platform' and 'something a non-builder will actually adopt'. Without it the rest of the work mostly serves people who would have figured it out anyway.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T16:58:43.121680",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "02a7ec6d-80aa-48b6-b89d-510e685a3a4b",
+      "title": "PWA support — installable web app + offline shell as a quick mobile path",
+      "description": "Capacitor (mobile-apps-capacitor) is the proper native mobile path but it's a bigger lift — code-signing, store submission, device APIs, iOS review queue, etc. PWA support is the quick win that gets us most of the way there:\n\n- Web App Manifest (icon, name, theme color, display: standalone)\n- Service worker for offline shell + cached assets\n- 'Add to Home Screen' prompt on supported browsers\n- Push notifications via the Push API (web push / VAPID)\n\nTrade-offs vs Capacitor:\n- iOS PWA support is real but limited (no background sync, no push until iOS 16.4+, limited storage). Acceptable for a v1 mobile experience; not acceptable as a final answer.\n- Android PWA is excellent and basically reaches feature parity for chat use cases.\n- Distribution is easier (no app stores) but discoverability is worse.\n\nLand PWA first as the bridge; ship Capacitor when the native-only features (background audio for voice channels, system-level notifications, file pickers, camera/mic on iOS) matter enough to justify the operational overhead.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T16:58:43.200674",
       "created_by": "daedalus"
     }
   ],
