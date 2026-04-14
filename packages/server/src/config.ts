@@ -24,6 +24,12 @@ export interface Config {
   oidcClientId?: string;
   oidcClientSecret?: string;
   oidcRedirectUri?: string;
+  /** Bind address for mediasoup RTC sockets (UDP/TCP for DTLS+RTP). */
+  mediasoupListenIp: string;
+  /** Public IP advertised in ICE candidates. Required behind NAT. */
+  mediasoupAnnouncedIp?: string;
+  mediasoupRtcMinPort: number;
+  mediasoupRtcMaxPort: number;
 }
 
 export function loadConfig(): Config {
@@ -52,5 +58,11 @@ export function loadConfig(): Config {
     oidcClientId: process.env.OIDC_CLIENT_ID || undefined,
     oidcClientSecret: process.env.OIDC_CLIENT_SECRET || undefined,
     oidcRedirectUri: process.env.OIDC_REDIRECT_URI || undefined,
+    mediasoupListenIp:
+      process.env.MEDIASOUP_LISTEN_IP ??
+      (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'),
+    mediasoupAnnouncedIp: process.env.MEDIASOUP_ANNOUNCED_IP || undefined,
+    mediasoupRtcMinPort: parseInt(process.env.MEDIASOUP_RTC_MIN_PORT ?? '40000', 10),
+    mediasoupRtcMaxPort: parseInt(process.env.MEDIASOUP_RTC_MAX_PORT ?? '40099', 10),
   };
 }

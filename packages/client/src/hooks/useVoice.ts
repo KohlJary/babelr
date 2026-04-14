@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { AuthorView, WsServerMessage, WsClientMessage } from '@babelr/shared';
-
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
+import * as mediasoupClient from 'mediasoup-client';
+import type {
+  AuthorView,
+  WsServerMessage,
+  WsClientMessage,
+  VoiceSlot,
+  SfuConsumerParams,
+} from '@babelr/shared';
 
 export interface VoicePeerState {
   actorId: string;
@@ -32,32 +34,22 @@ export interface UseVoiceState {
 
 interface PeerEntry {
   actor: AuthorView;
-  pc: RTCPeerConnection;
-  audio: HTMLAudioElement;
-  // Webcam: first video transceiver added to the PC
-  videoSender: RTCRtpSender | null;
-  videoTransceiver: RTCRtpTransceiver | null;
+  audioConsumer: mediasoupClient.types.Consumer | null;
+  audioElement: HTMLAudioElement;
+  audioStream: MediaStream | null;
+  videoConsumer: mediasoupClient.types.Consumer | null;
   videoStream: MediaStream | null;
-  // Screen share: second video transceiver added to the PC
-  screenSender: RTCRtpSender | null;
-  screenTransceiver: RTCRtpTransceiver | null;
+  screenConsumer: mediasoupClient.types.Consumer | null;
   screenStream: MediaStream | null;
-  connected: boolean;
   analyser: AnalyserNode | null;
   analyserBuf: Uint8Array<ArrayBuffer> | null;
   speaking: boolean;
   volume: number;
-  // Glare guard: true between createOffer() and receiving the matching
-  // voice:answer (or rolling back on a remote offer arriving during the
-  // window). Prevents two simultaneous renegotiations from corrupting
-  // the peer connection's signaling state.
-  makingOffer: boolean;
 }
 
-/** Signal-strength threshold (0–255) above which we consider a track "speaking". */
 const SPEAKING_THRESHOLD = 18;
-/** Key that gates voice transmission when push-to-talk mode is enabled. */
 const PTT_KEY = '`';
+const REQUEST_TIMEOUT_MS = 10_000;
 
 const IDLE_STATE: UseVoiceState = {
   status: 'idle',
@@ -72,61 +64,93 @@ const IDLE_STATE: UseVoiceState = {
   screenShareEnabled: false,
 };
 
+interface PendingRequest {
+  resolve: (msg: WsServerMessage) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 /**
- * WebRTC mesh voice channel hook.
- *
- * Flow:
- * 1. join(channelId) — opens a dedicated WebSocket, requests mic access,
- *    sends voice:join, waits for voice:room-state listing existing peers
- * 2. For each existing peer in the room state, create an RTCPeerConnection,
- *    attach local audio tracks, create an offer, send voice:offer via WS
- * 3. On incoming voice:offer (for new peers joining after us), create a
- *    peer connection, set remote, create answer, send voice:answer
- * 4. On incoming voice:answer, set remote description
- * 5. On incoming voice:ice, add candidate
- * 6. On voice:participant-left, close that connection
- * 7. leave() — tears down peers, releases mic, closes WS
+ * Voice channel hook backed by a mediasoup SFU. Each client maintains
+ * exactly one PeerConnection-equivalent pair (send + recv WebRtcTransport)
+ * with the server; the server forwards RTP between participants. Track
+ * lifecycle is producer-per-slot (mic / cam / screen): closing a producer
+ * tears down delivery to every consumer in the room without renegotiation
+ * gymnastics on this side.
  */
 export function useVoice(selfActorId: string) {
   const [state, setState] = useState<UseVoiceState>(IDLE_STATE);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const deviceRef = useRef<mediasoupClient.Device | null>(null);
+  const sendTransportRef = useRef<mediasoupClient.types.Transport | null>(null);
+  const recvTransportRef = useRef<mediasoupClient.types.Transport | null>(null);
+  const micProducerRef = useRef<mediasoupClient.types.Producer | null>(null);
+  const camProducerRef = useRef<mediasoupClient.types.Producer | null>(null);
+  const screenProducerRef = useRef<mediasoupClient.types.Producer | null>(null);
+
   const localStreamRef = useRef<MediaStream | null>(null);
-  // Separate MediaStream for the user's webcam — acquired lazily the first
-  // time they turn video on, released when they turn it off. Kept distinct
-  // from the mic stream so stopping one doesn't affect the other.
   const localVideoStreamRef = useRef<MediaStream | null>(null);
-  // Separate MediaStream for screen share (getDisplayMedia). Completely
-  // independent of the webcam — a user can have both active at once.
   const localScreenStreamRef = useRef<MediaStream | null>(null);
-  // Shared AudioContext for all analyser nodes (local mic + each peer).
-  // Created lazily on join() so we don't spin up audio machinery for
-  // users who never enter a voice channel.
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const localAnalyserRef = useRef<{
     analyser: AnalyserNode;
     source: MediaStreamAudioSourceNode;
     buf: Uint8Array<ArrayBuffer>;
   } | null>(null);
-  const localMicLogIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const speakingRafRef = useRef<number | null>(null);
-  const lastReconcileRef = useRef(0);
-  // Push-to-talk runtime state. When `pushToTalk` is true in state, the
-  // mic is muted by default and only un-muted while PTT_KEY is held down.
-  // These refs let the keydown/keyup listeners read the latest values
-  // without re-binding on every state change.
+
   const pttEnabledRef = useRef(false);
   const pttKeyHeldRef = useRef(false);
   const micMutedRef = useRef(false);
   const deafenedRef = useRef(false);
+
   const peersRef = useRef<Map<string, PeerEntry>>(new Map());
-  // Actor metadata for participants we know about — populated from
-  // voice:room-state (existing participants at join time) and
-  // voice:participant-joined (peers joining after us). Consulted when a
-  // voice:offer arrives so we can attach the correct display name to
-  // the peer connection instead of falling back to "unknown".
   const knownActorsRef = useRef<Map<string, AuthorView>>(new Map());
   const channelIdRef = useRef<string | null>(null);
+
+  const pendingRef = useRef<Map<string, PendingRequest>>(new Map());
+  const requestSeqRef = useRef(0);
+
+  const sendWs = useCallback((msg: WsClientMessage) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  const newRequestId = useCallback(() => {
+    requestSeqRef.current += 1;
+    return `r${requestSeqRef.current}`;
+  }, []);
+
+  /**
+   * Send a WS request and resolve when the matching response (or
+   * voice:request-error with the same requestId) arrives. The handlers
+   * for transport-created / transport-connected / produced / consumed /
+   * consumer-resumed / producer-closed-ack all dispatch through this map.
+   */
+  const rpc = useCallback(
+    <T extends WsServerMessage>(
+      build: (requestId: string) => WsClientMessage,
+    ): Promise<T> => {
+      const requestId = newRequestId();
+      const msg = build(requestId);
+      return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pendingRef.current.delete(requestId);
+          reject(new Error(`voice rpc timeout: ${msg.type}`));
+        }, REQUEST_TIMEOUT_MS);
+        pendingRef.current.set(requestId, {
+          resolve: (m) => resolve(m as T),
+          reject,
+          timer,
+        });
+        sendWs(msg);
+      });
+    },
+    [newRequestId, sendWs],
+  );
 
   const syncPeersToState = useCallback(() => {
     const arr: VoicePeerState[] = [];
@@ -134,7 +158,7 @@ export function useVoice(selfActorId: string) {
       arr.push({
         actorId,
         actor: entry.actor,
-        connected: entry.connected,
+        connected: entry.audioConsumer !== null,
         speaking: entry.speaking,
         volume: entry.volume,
         hasVideo: entry.videoStream !== null,
@@ -144,444 +168,136 @@ export function useVoice(selfActorId: string) {
     setState((s) => ({ ...s, peers: arr }));
   }, []);
 
-  /** Compute whether the local mic track should currently be enabled. */
   const applyMicEnabled = useCallback(() => {
-    const stream = localStreamRef.current;
-    if (!stream) return;
+    const producer = micProducerRef.current;
+    if (!producer) return;
     const allowed =
       !micMutedRef.current &&
       !deafenedRef.current &&
       (!pttEnabledRef.current || pttKeyHeldRef.current);
-    for (const track of stream.getAudioTracks()) {
-      track.enabled = allowed;
-    }
+    // Pause vs resume on the producer is the SFU equivalent of
+    // track.enabled: it stops RTP from being forwarded server-side.
+    if (allowed && producer.paused) producer.resume();
+    else if (!allowed && !producer.paused) producer.pause();
   }, []);
 
-  /** Apply the deafened state to every remote audio element. */
   const applyDeafened = useCallback(() => {
     for (const entry of peersRef.current.values()) {
-      entry.audio.muted = deafenedRef.current;
+      entry.audioElement.muted = deafenedRef.current;
     }
   }, []);
 
+  const ensureAudioContext = useCallback((): AudioContext => {
+    if (!audioCtxRef.current) {
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      audioCtxRef.current = new Ctor();
+    }
+    // Browsers suspend AudioContexts created without a recent user gesture.
+    // join() runs inside a click handler so this resume should succeed.
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {
+        // ignore — analyser will silently no-op until user interacts
+      });
+    }
+    return audioCtxRef.current;
+  }, []);
 
-  const sendWs = useCallback((msg: WsClientMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
+  const startSpeakingLoop = useCallback(() => {
+    if (speakingRafRef.current !== null) return;
+    const tick = () => {
+      let stateDirty = false;
+      // Local mic
+      const local = localAnalyserRef.current;
+      if (local) {
+        local.analyser.getByteFrequencyData(local.buf);
+        let sum = 0;
+        for (let i = 0; i < local.buf.length; i++) sum += local.buf[i];
+        const avg = sum / local.buf.length;
+        const speakingNow = avg > SPEAKING_THRESHOLD;
+        setState((s) =>
+          s.localSpeaking === speakingNow ? s : { ...s, localSpeaking: speakingNow },
+        );
+      }
+      // Remote peers
+      for (const entry of peersRef.current.values()) {
+        if (!entry.analyser || !entry.analyserBuf) continue;
+        entry.analyser.getByteFrequencyData(entry.analyserBuf);
+        let sum = 0;
+        for (let i = 0; i < entry.analyserBuf.length; i++) sum += entry.analyserBuf[i];
+        const avg = sum / entry.analyserBuf.length;
+        const speakingNow = avg > SPEAKING_THRESHOLD;
+        if (speakingNow !== entry.speaking) {
+          entry.speaking = speakingNow;
+          stateDirty = true;
+        }
+      }
+      if (stateDirty) syncPeersToState();
+      speakingRafRef.current = requestAnimationFrame(tick);
+    };
+    speakingRafRef.current = requestAnimationFrame(tick);
+  }, [syncPeersToState]);
+
+  const stopSpeakingLoop = useCallback(() => {
+    if (speakingRafRef.current !== null) {
+      cancelAnimationFrame(speakingRafRef.current);
+      speakingRafRef.current = null;
     }
   }, []);
 
-  /**
-   * Trigger a renegotiation on a single peer by creating a fresh offer
-   * and sending it over the signaling channel. Needed after replaceTrack
-   * on a video/screen transceiver because — in practice, despite what the
-   * spec says — adding a track to a transceiver that was negotiated with
-   * no track leaves the effective SDP direction in a state where the new
-   * track doesn't actually flow until a new offer/answer exchange.
-   *
-   * Glare handling: we mark makingOffer = true before creating the offer
-   * and clear it when the matching answer arrives. If the signaling state
-   * transitions out of 'stable' mid-call (e.g. because a remote offer
-   * arrived during our createOffer await), we skip sending to avoid
-   * corrupting the PC's state.
-   */
-  const renegotiatePeer = useCallback(
-    async (entry: PeerEntry, channelId: string) => {
-      try {
-        entry.makingOffer = true;
-        const offer = await entry.pc.createOffer();
-        if (entry.pc.signalingState !== 'stable') {
-          console.warn(
-            'voice: skipping renegotiation, signalingState =',
-            entry.pc.signalingState,
-          );
-          return;
-        }
-        await entry.pc.setLocalDescription(offer);
-        sendWs({
-          type: 'voice:offer',
-          payload: {
-            channelId,
-            toActorId: entry.actor.id,
-            sdp: offer.sdp ?? '',
-          },
-        });
-      } catch (err) {
-        console.warn('voice: renegotiation failed for', entry.actor.id, err);
-      } finally {
-        entry.makingOffer = false;
-      }
-    },
-    [sendWs],
-  );
-
-  /** Renegotiate every connected peer. Called after local toggles. */
-  const renegotiateAllPeers = useCallback(async () => {
-    const channel = channelIdRef.current;
-    if (!channel) return;
-    const jobs: Promise<void>[] = [];
-    for (const entry of peersRef.current.values()) {
-      jobs.push(renegotiatePeer(entry, channel));
-    }
-    await Promise.all(jobs);
-  }, [renegotiatePeer]);
-
-  /**
-   * Reconcile peer slot state from the current RTCPeerConnection receivers.
-   * Called after renegotiation completes AND from the periodic rAF tick.
-   *
-   * Uses pc.getTransceivers() ORDER as the source of truth for which
-   * transceiver is the webcam slot vs the screen slot — not stored
-   * transceiver references, which can become ambiguous across
-   * renegotiations. Index 0 among video transceivers = webcam,
-   * index 1 = screen.
-   *
-   * `canClear`: when true (the post-renegotiation path), an empty-looking
-   * track causes the slot to be cleared. When false (the periodic rAF
-   * path), we ONLY populate empty slots from live tracks. The periodic
-   * path can't clear because polling `track.muted` / `track.readyState`
-   * from a rAF loop produces false negatives during normal operation —
-   * a transient "muted" reading would oscillate the slot state. The
-   * onmute/onended handlers plus the post-renegotiation reconcile are
-   * responsible for teardown.
-   */
-  const reconcilePeerSlots = useCallback(
-    (entry: PeerEntry, canClear = true) => {
-      const videoTxs = entry.pc
-        .getTransceivers()
-        .filter((t) => t.receiver.track?.kind === 'video');
-      for (let i = 0; i < videoTxs.length && i < 2; i++) {
-        const tx = videoTxs[i];
-        const slot: 'video' | 'screen' = i === 0 ? 'video' : 'screen';
-        const track = tx.receiver.track;
-        if (!track) continue;
-        const live = track.readyState === 'live' && !track.muted;
-        const currentSlot = slot === 'video' ? entry.videoStream : entry.screenStream;
-        if (live && !currentSlot) {
-          const stream = new MediaStream([track]);
-          if (slot === 'video') entry.videoStream = stream;
-          else entry.screenStream = stream;
-          console.log('voice: reconcile populate', {
-            from: entry.actor.id,
-            slot,
-            direction: tx.currentDirection,
-          });
-          syncPeersToState();
-        } else if (canClear && !live && currentSlot) {
-          if (slot === 'video') entry.videoStream = null;
-          else entry.screenStream = null;
-          console.log('voice: reconcile clear', {
-            from: entry.actor.id,
-            slot,
-            direction: tx.currentDirection,
-            muted: track.muted,
-            readyState: track.readyState,
-          });
-          syncPeersToState();
-        }
-      }
-    },
-    [syncPeersToState],
-  );
-
-  const createPeerConnection = useCallback(
-    (actor: AuthorView, channelId: string): PeerEntry => {
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-
-      // Add local mic tracks
-      if (localStreamRef.current) {
-        for (const track of localStreamRef.current.getTracks()) {
-          pc.addTrack(track, localStreamRef.current);
-        }
-      }
-
-      // Pre-add TWO sendrecv video transceivers so both webcam and screen
-      // share can be toggled later via replaceTrack WITHOUT SDP
-      // renegotiation. Order is significant — the receiver uses the
-      // transceiver's position in the SDP (via getTransceivers() order) to
-      // route incoming tracks to the correct slot. Webcam is always added
-      // FIRST, screen share SECOND.
-      let videoSender: RTCRtpSender | null = null;
-      let videoTransceiver: RTCRtpTransceiver | null = null;
-      let screenSender: RTCRtpSender | null = null;
-      let screenTransceiver: RTCRtpTransceiver | null = null;
-      try {
-        videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
-        videoSender = videoTransceiver.sender;
-        if (localVideoStreamRef.current) {
-          const videoTrack = localVideoStreamRef.current.getVideoTracks()[0];
-          if (videoTrack) {
-            void videoSender.replaceTrack(videoTrack);
-          }
-        }
-      } catch (err) {
-        console.warn('voice: failed to add video transceiver', err);
-      }
-      try {
-        screenTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' });
-        screenSender = screenTransceiver.sender;
-        if (localScreenStreamRef.current) {
-          const screenTrack = localScreenStreamRef.current.getVideoTracks()[0];
-          if (screenTrack) {
-            void screenSender.replaceTrack(screenTrack);
-          }
-        }
-      } catch (err) {
-        console.warn('voice: failed to add screen share transceiver', err);
-      }
-
-      // Remote audio sink. The element MUST be attached to the DOM for
-      // reliable playback — detached HTMLAudioElement instances will set
-      // srcObject without error but produce no audible output in Safari
-      // and some Chrome versions. We mount invisibly and remove on
-      // closePeer to keep the DOM clean.
-      const audio = document.createElement('audio');
-      audio.autoplay = true;
-      audio.setAttribute('playsinline', 'true');
-      audio.style.display = 'none';
-      audio.dataset.voicePeerId = actor.id;
-      document.body.appendChild(audio);
-
-      pc.ontrack = (ev) => {
-        // Video track handling: determine which slot (webcam vs screen)
-        // using a combination of identity check and index fallback, both
-        // wrapped in a try/catch so a routing failure can't wedge the
-        // whole ontrack handler.
-        //
-        // Ordering rule: we always addTransceiver('video') twice — webcam
-        // first, screen second — so the two video transceivers on the PC
-        // correspond to slots 'video' and 'screen' in that order.
-        if (ev.track.kind === 'video') {
-          const pe = peersRef.current.get(actor.id);
-          if (!pe) return;
-
-          let slot: 'video' | 'screen' = 'video';
-          try {
-            // Primary: identity match against stored transceiver refs
-            if (ev.transceiver === pe.videoTransceiver) {
-              slot = 'video';
-            } else if (ev.transceiver === pe.screenTransceiver) {
-              slot = 'screen';
-            } else {
-              // Fallback: find the transceiver's position in the PC's
-              // video-track transceivers. Use optional chaining on
-              // receiver.track in case any transceiver lacks one.
-              const videoTxs = pc
-                .getTransceivers()
-                .filter((t) => t.receiver.track?.kind === 'video');
-              const index = videoTxs.indexOf(ev.transceiver);
-              if (index === 1) slot = 'screen';
-              else if (index === 0) slot = 'video';
-              // If index is -1 (not found), last-ditch: use whichever
-              // slot is currently empty (webcam first). Keeps legacy
-              // behavior for the case where nothing else matches.
-              else if (pe.videoStream === null) slot = 'video';
-              else slot = 'screen';
-            }
-          } catch (err) {
-            console.warn('voice: ontrack routing failed, defaulting to video', err);
-            slot = 'video';
-          }
-
-          // A track arriving from a transceiver whose remote side has no
-          // real track attached (e.g. because we pre-allocate both video
-          // transceivers but the remote user only enabled one) comes in
-          // muted. We must NOT populate the slot in that case or the UI
-          // will render an empty tile forever. Wait for the onunmute
-          // event, which fires when the remote actually attaches a track.
-          const populateSlot = (reason: string) => {
-            const p = peersRef.current.get(actor.id);
-            if (!p) return;
-            const stream = new MediaStream([ev.track]);
-            if (slot === 'video') p.videoStream = stream;
-            else p.screenStream = stream;
-            console.log('voice: populate', {
-              from: actor.id,
-              slot,
-              reason,
-            });
-            syncPeersToState();
-          };
-          const clearSlot = (reason: string) => {
-            const p = peersRef.current.get(actor.id);
-            if (!p) return;
-            if (slot === 'video') p.videoStream = null;
-            else p.screenStream = null;
-            console.log('voice: clear', { from: actor.id, slot, reason });
-            syncPeersToState();
-          };
-
-          if (!ev.track.muted) {
-            populateSlot('initial ontrack, not muted');
-          }
-          ev.track.onended = () => {
-            console.log('voice: track onended', { from: actor.id, slot });
-            clearSlot('onended');
-          };
-          ev.track.onmute = () => {
-            console.log('voice: track onmute', { from: actor.id, slot });
-            clearSlot('onmute');
-          };
-          ev.track.onunmute = () => {
-            console.log('voice: track onunmute', { from: actor.id, slot });
-            populateSlot('onunmute');
-          };
-
-          console.log('voice: ontrack video', {
-            from: actor.id,
-            slot,
-            muted: ev.track.muted,
-            populated: !ev.track.muted,
-          });
-          return;
-        }
-        // Prefer the provided stream, but fall back to wrapping the track
-        // if the negotiated SDP didn't include a stream id on the remote side.
-        const stream =
-          ev.streams && ev.streams.length > 0 ? ev.streams[0] : new MediaStream([ev.track]);
-        audio.srcObject = stream;
-        audio.volume = 1.0;
-        audio.muted = deafenedRef.current;
-        // Attach an AnalyserNode to this remote stream for the speaking
-        // indicator. Uses the shared AudioContext created in join().
-        const ctx = audioCtxRef.current;
-        if (ctx) {
-          try {
-            const src = ctx.createMediaStreamSource(stream);
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 512;
-            src.connect(analyser);
-            const e = peersRef.current.get(actor.id);
-            if (e) {
-              e.analyser = analyser;
-              e.analyserBuf = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
-            }
-          } catch (err) {
-            console.warn('voice: failed to attach peer analyser', err);
-          }
-        }
-        console.log('voice: ontrack', {
-          from: actor.id,
-          kind: ev.track.kind,
-          enabled: ev.track.enabled,
-          muted: ev.track.muted,
-          readyState: ev.track.readyState,
-          label: ev.track.label,
-          streamTracks: stream.getTracks().map((t) => ({
-            kind: t.kind,
-            enabled: t.enabled,
-            muted: t.muted,
-          })),
-        });
-        void audio.play().catch((err) => {
-          console.warn('voice: audio.play() rejected', err);
-        });
-        // Sanity-check the element state a moment later — if volume is
-        // right, paused is false, and currentTime is advancing but we
-        // still hear nothing, the issue is routing/OS/AEC rather than
-        // the element itself.
-        setTimeout(() => {
-          console.log('voice: audio element state', {
-            from: actor.id,
-            volume: audio.volume,
-            muted: audio.muted,
-            paused: audio.paused,
-            currentTime: audio.currentTime,
-            readyState: audio.readyState,
-            ended: audio.ended,
-          });
-        }, 1500);
-        // And log WebRTC inbound stats — bytesReceived > 0 means media is
-        // flowing at the protocol level.
-        setTimeout(async () => {
-          try {
-            const stats = await pc.getStats();
-            stats.forEach((report) => {
-              if (report.type === 'inbound-rtp' && report.kind === 'audio') {
-                console.log('voice: inbound-rtp audio', {
-                  from: actor.id,
-                  bytesReceived: report.bytesReceived,
-                  packetsReceived: report.packetsReceived,
-                  audioLevel: report.audioLevel,
-                });
-              }
-              if (report.type === 'outbound-rtp' && report.kind === 'audio') {
-                console.log('voice: outbound-rtp audio', {
-                  to: actor.id,
-                  bytesSent: report.bytesSent,
-                  packetsSent: report.packetsSent,
-                });
-              }
-              if (report.type === 'media-source' && report.kind === 'audio') {
-                console.log('voice: media-source audio (our mic)', {
-                  audioLevel: report.audioLevel,
-                  totalAudioEnergy: report.totalAudioEnergy,
-                });
-              }
-            });
-          } catch (err) {
-            console.warn('voice: getStats failed', err);
-          }
-        }, 2500);
-      };
-
-      pc.onicecandidate = (ev) => {
-        if (ev.candidate) {
-          sendWs({
-            type: 'voice:ice',
-            payload: {
-              channelId,
-              toActorId: actor.id,
-              candidate: ev.candidate.toJSON(),
-            },
-          });
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        const entry = peersRef.current.get(actor.id);
-        if (!entry) return;
-        entry.connected = pc.connectionState === 'connected';
-        syncPeersToState();
-      };
-
-      const entry: PeerEntry = {
+  const ensurePeer = useCallback(
+    (actorId: string, hint?: AuthorView): PeerEntry => {
+      let entry = peersRef.current.get(actorId);
+      if (entry) return entry;
+      const actor: AuthorView =
+        hint ??
+        knownActorsRef.current.get(actorId) ?? {
+          id: actorId,
+          preferredUsername: actorId,
+          displayName: null,
+        };
+      const audioElement = new Audio();
+      audioElement.autoplay = true;
+      audioElement.muted = deafenedRef.current;
+      // Detached <audio> elements get stricter autoplay treatment in
+      // some browsers. Attach hidden to keep playback reliable.
+      audioElement.style.display = 'none';
+      document.body.appendChild(audioElement);
+      entry = {
         actor,
-        pc,
-        audio,
-        videoSender,
-        videoTransceiver,
+        audioConsumer: null,
+        audioElement,
+        audioStream: null,
+        videoConsumer: null,
         videoStream: null,
-        screenSender,
-        screenTransceiver,
+        screenConsumer: null,
         screenStream: null,
-        connected: false,
         analyser: null,
         analyserBuf: null,
         speaking: false,
-        volume: 1.0,
-        makingOffer: false,
+        volume: 1,
       };
-      peersRef.current.set(actor.id, entry);
-      syncPeersToState();
+      peersRef.current.set(actorId, entry);
       return entry;
     },
-    [sendWs, syncPeersToState],
+    [],
   );
 
-  const closePeer = useCallback(
+  const removePeer = useCallback(
     (actorId: string) => {
       const entry = peersRef.current.get(actorId);
       if (!entry) return;
+      entry.audioConsumer?.close();
+      entry.videoConsumer?.close();
+      entry.screenConsumer?.close();
       try {
-        entry.pc.close();
+        entry.audioElement.pause();
+        entry.audioElement.srcObject = null;
+        entry.audioElement.remove();
       } catch {
-        /* ignore */
-      }
-      entry.audio.pause();
-      entry.audio.srcObject = null;
-      if (entry.audio.parentNode) {
-        entry.audio.parentNode.removeChild(entry.audio);
+        // ignore
       }
       peersRef.current.delete(actorId);
       syncPeersToState();
@@ -589,702 +305,619 @@ export function useVoice(selfActorId: string) {
     [syncPeersToState],
   );
 
-  const handleMessage = useCallback(
-    async (msg: WsServerMessage) => {
-      const currentChannel = channelIdRef.current;
-      if (!currentChannel) return;
+  const consumeProducer = useCallback(
+    async (
+      channelId: string,
+      peerActorId: string,
+      producerId: string,
+      slot: VoiceSlot,
+    ) => {
+      const device = deviceRef.current;
+      const recvTransport = recvTransportRef.current;
+      if (!device || !recvTransport) return;
+      try {
+        const reply = await rpc<Extract<WsServerMessage, { type: 'voice:consumed' }>>(
+          (requestId) => ({
+            type: 'voice:consume',
+            payload: {
+              requestId,
+              channelId,
+              transportId: recvTransport.id,
+              producerId,
+              rtpCapabilities: device.recvRtpCapabilities,
+            },
+          }),
+        );
+        const params: SfuConsumerParams = reply.payload.consumer;
+        const consumer = await recvTransport.consume({
+          id: params.id,
+          producerId: params.producerId,
+          kind: params.kind,
+          rtpParameters: params.rtpParameters as mediasoupClient.types.RtpParameters,
+        });
+        // Server creates the consumer paused; resume after the client side
+        // is wired up so we don't drop the first packets.
+        await rpc<Extract<WsServerMessage, { type: 'voice:consumer-resumed' }>>(
+          (requestId) => ({
+            type: 'voice:resume-consumer',
+            payload: { requestId, channelId, consumerId: consumer.id },
+          }),
+        );
 
-      switch (msg.type) {
-        case 'voice:room-state': {
-          if (msg.payload.channelId !== currentChannel) return;
-          // Record the existing participants so their metadata is available
-          // if anything in this handler (or a later voice:offer) looks them up.
-          for (const participant of msg.payload.participants) {
-            knownActorsRef.current.set(participant.id, participant);
-          }
-          // Create an RTCPeerConnection and offer for each existing peer
-          for (const participant of msg.payload.participants) {
-            if (peersRef.current.has(participant.id)) continue;
-            const entry = createPeerConnection(participant, currentChannel);
-            try {
-              const offer = await entry.pc.createOffer();
-              await entry.pc.setLocalDescription(offer);
-              sendWs({
-                type: 'voice:offer',
-                payload: {
-                  channelId: currentChannel,
-                  toActorId: participant.id,
-                  sdp: offer.sdp ?? '',
-                },
-              });
-            } catch (err) {
-              console.error('offer failed', err);
-            }
-          }
-          setState((s) => ({ ...s, status: 'connected' }));
-          break;
-        }
-
-        case 'voice:participant-joined': {
-          // We don't create the peer connection yet — the new joiner will
-          // send us an offer. But we DO record their actor metadata so
-          // that when their offer arrives, we can attach the right name
-          // to the peer entry instead of the "unknown" fallback.
-          if (msg.payload.channelId !== currentChannel) return;
-          knownActorsRef.current.set(msg.payload.participant.id, msg.payload.participant);
-          break;
-        }
-
-        case 'voice:participant-left': {
-          if (msg.payload.channelId !== currentChannel) return;
-          knownActorsRef.current.delete(msg.payload.actorId);
-          closePeer(msg.payload.actorId);
-          break;
-        }
-
-        case 'voice:offer': {
-          if (msg.payload.channelId !== currentChannel) return;
-          const fromId = msg.payload.fromActorId;
-          // Ensure we have a peer entry (create if new). Prefer the actor
-          // metadata we cached from voice:participant-joined or
-          // voice:room-state; fall back to a minimal placeholder only if
-          // the offer somehow arrives before either of those.
-          let entry = peersRef.current.get(fromId);
-          if (!entry) {
-            const known = knownActorsRef.current.get(fromId);
-            const actor: AuthorView = known ?? {
-              id: fromId,
-              preferredUsername: 'unknown',
-              displayName: null,
-              avatarUrl: null,
-            };
-            entry = createPeerConnection(actor, currentChannel);
-          }
-          // Perfect-negotiation-lite glare handling. If we're also making
-          // an offer right now, both sides need to resolve the collision.
-          // The peer with the lower actor id is "polite" and rolls back
-          // their local offer to accept the remote; the impolite peer
-          // ignores the remote offer and expects the polite one to retry.
-          const isPolite = selfActorId < fromId;
-          const offerCollision =
-            entry.makingOffer || entry.pc.signalingState !== 'stable';
-          if (offerCollision && !isPolite) {
-            console.log('voice: offer collision, impolite — ignoring remote offer');
-            break;
-          }
+        const entry = ensurePeer(peerActorId);
+        const stream = new MediaStream([consumer.track]);
+        if (slot === 'mic') {
+          entry.audioConsumer?.close();
+          entry.audioConsumer = consumer;
+          entry.audioStream = stream;
+          entry.audioElement.srcObject = stream;
+          entry.audioElement.play().catch((err) => {
+            console.warn('[voice] audio.play rejected (autoplay policy?):', err);
+          });
+          // Wire up speaking analyser
           try {
-            if (offerCollision && isPolite) {
-              console.log('voice: offer collision, polite — rolling back');
-              // Roll our local offer back by setting an answer-style
-              // "rollback" description, then accept the remote offer.
-              await entry.pc.setLocalDescription({ type: 'rollback' });
-            }
-            await entry.pc.setRemoteDescription({ type: 'offer', sdp: msg.payload.sdp });
-            const answer = await entry.pc.createAnswer();
-            await entry.pc.setLocalDescription(answer);
-            sendWs({
-              type: 'voice:answer',
-              payload: {
-                channelId: currentChannel,
-                toActorId: fromId,
-                sdp: answer.sdp ?? '',
-              },
-            });
-            // Reconcile slot state after the answer is set up — covers
-            // cases where onunmute doesn't fire reliably.
-            reconcilePeerSlots(entry);
-          } catch (err) {
-            console.error('answer failed', err);
+            const ctx = ensureAudioContext();
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            entry.analyser = analyser;
+            entry.analyserBuf = new Uint8Array(analyser.frequencyBinCount);
+          } catch {
+            // analyser failure shouldn't break audio
           }
-          break;
+        } else if (slot === 'cam') {
+          entry.videoConsumer?.close();
+          entry.videoConsumer = consumer;
+          entry.videoStream = stream;
+        } else if (slot === 'screen') {
+          entry.screenConsumer?.close();
+          entry.screenConsumer = consumer;
+          entry.screenStream = stream;
         }
-
-        case 'voice:answer': {
-          if (msg.payload.channelId !== currentChannel) return;
-          const entry = peersRef.current.get(msg.payload.fromActorId);
-          if (!entry) return;
-          try {
-            await entry.pc.setRemoteDescription({ type: 'answer', sdp: msg.payload.sdp });
-            // Reconcile slot state on the initiating side too — covers
-            // the case where the remote end attached a new track and the
-            // answer is completing our renegotiation. onunmute on the
-            // receivers here is unreliable for the same reason.
-            reconcilePeerSlots(entry);
-          } catch (err) {
-            console.error('setRemoteDescription answer failed', err);
+        consumer.on('transportclose', () => {
+          if (slot === 'mic') entry.audioConsumer = null;
+          else if (slot === 'cam') {
+            entry.videoConsumer = null;
+            entry.videoStream = null;
+          } else {
+            entry.screenConsumer = null;
+            entry.screenStream = null;
           }
-          break;
-        }
-
-        case 'voice:ice': {
-          if (msg.payload.channelId !== currentChannel) return;
-          const entry = peersRef.current.get(msg.payload.fromActorId);
-          if (!entry) return;
-          try {
-            await entry.pc.addIceCandidate(msg.payload.candidate);
-          } catch (err) {
-            console.error('addIceCandidate failed', err);
-          }
-          break;
-        }
-
-        case 'voice:full': {
-          if (msg.payload.channelId !== currentChannel) return;
-          setState((s) => ({
-            ...s,
-            status: 'error',
-            error: `Voice channel is full (max ${msg.payload.max}).`,
-          }));
-          break;
-        }
+          syncPeersToState();
+        });
+        syncPeersToState();
+      } catch (err) {
+        console.warn('voice: consume failed', { peerActorId, producerId, slot, err });
       }
     },
-    [createPeerConnection, closePeer, sendWs],
+    [ensurePeer, ensureAudioContext, rpc, syncPeersToState],
+  );
+
+  const handleProducerClosed = useCallback(
+    (peerActorId: string, producerId: string) => {
+      const entry = peersRef.current.get(peerActorId);
+      if (!entry) return;
+      let dirty = false;
+      if (entry.audioConsumer?.producerId === producerId) {
+        entry.audioConsumer.close();
+        entry.audioConsumer = null;
+        entry.audioStream = null;
+        try {
+          entry.audioElement.srcObject = null;
+        } catch {
+          // ignore
+        }
+        entry.analyser = null;
+        entry.analyserBuf = null;
+        dirty = true;
+      }
+      if (entry.videoConsumer?.producerId === producerId) {
+        entry.videoConsumer.close();
+        entry.videoConsumer = null;
+        entry.videoStream = null;
+        dirty = true;
+      }
+      if (entry.screenConsumer?.producerId === producerId) {
+        entry.screenConsumer.close();
+        entry.screenConsumer = null;
+        entry.screenStream = null;
+        dirty = true;
+      }
+      if (dirty) syncPeersToState();
+    },
+    [syncPeersToState],
   );
 
   const join = useCallback(
     async (channelId: string) => {
+      if (channelIdRef.current === channelId) return;
       if (channelIdRef.current) {
-        console.warn('Already in a voice channel');
-        return;
+        // Switching channels: leave the previous one cleanly first.
+        sendWs({ type: 'voice:leave', payload: { channelId: channelIdRef.current } });
       }
       setState({ ...IDLE_STATE, status: 'connecting', channelId });
       channelIdRef.current = channelId;
+      peersRef.current.clear();
+      knownActorsRef.current.clear();
 
-      // Environment capability checks before attempting anything
-      if (typeof RTCPeerConnection === 'undefined') {
-        setState({
-          ...IDLE_STATE,
-          status: 'error',
-          error:
-            'Voice channels require WebRTC, which is not available in this webview. On Linux, Arch and some other distributions ship webkit2gtk without WebRTC — open Babelr in Firefox or Chromium to join voice.',
-        });
-        channelIdRef.current = null;
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setState({
-          ...IDLE_STATE,
-          status: 'error',
-          error: 'Media capture is not available in this webview. Open Babelr in a browser to join voice.',
-        });
-        channelIdRef.current = null;
-        return;
-      }
+      // 1) Mic
+      let stream: MediaStream;
       try {
-        localStreamRef.current = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-          video: false,
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
-        console.log(
-          'voice: local mic acquired',
-          localStreamRef.current.getAudioTracks().map((t) => ({
-            label: t.label,
-            enabled: t.enabled,
-            readyState: t.readyState,
-          })),
-        );
-
-        // Shared AudioContext + local analyser for both the diagnostic
-        // level log and the speaking indicator loop.
-        try {
-          const AudioCtx =
-            window.AudioContext ||
-            (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-          audioCtxRef.current = new AudioCtx();
-          const source = audioCtxRef.current.createMediaStreamSource(localStreamRef.current);
-          const analyser = audioCtxRef.current.createAnalyser();
-          analyser.fftSize = 512;
-          source.connect(analyser);
-          const buf = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
-          localAnalyserRef.current = { analyser, source, buf };
-          // Diagnostic log every 2s for "silent mic" troubleshooting.
-          // Still useful even with the speaking indicator in place.
-          localMicLogIntervalRef.current = setInterval(() => {
-            analyser.getByteFrequencyData(buf);
-            let sum = 0;
-            let peak = 0;
-            for (const v of buf) {
-              sum += v;
-              if (v > peak) peak = v;
-            }
-            const avg = sum / buf.length;
-            console.log(`voice: local mic level avg=${avg.toFixed(1)} peak=${peak}`);
-          }, 2000);
-        } catch (err) {
-          console.warn('voice: failed to start audio analyser', err);
-        }
       } catch (err) {
-        const message =
-          err instanceof Error && err.name === 'NotAllowedError'
-            ? 'Microphone permission denied. Enable it in your system settings.'
-            : err instanceof Error
-              ? `Microphone error: ${err.message}`
-              : 'Microphone access failed.';
         setState({
           ...IDLE_STATE,
           status: 'error',
-          error: message,
+          channelId: null,
+          error: (err as Error).message,
         });
         channelIdRef.current = null;
         return;
       }
+      localStreamRef.current = stream;
 
-      // Open dedicated WS for voice signaling
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${location.host}/ws`);
+      // Local analyser for speaking indicator.
+      try {
+        const ctx = ensureAudioContext();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        localAnalyserRef.current = {
+          analyser,
+          source,
+          buf: new Uint8Array(analyser.frequencyBinCount),
+        };
+      } catch {
+        // ignore
+      }
+
+      // 2) Open WS
+      const ws = new WebSocket(
+        `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`,
+      );
       wsRef.current = ws;
 
-      ws.onopen = () => {
-        sendWs({ type: 'voice:join', payload: { channelId } });
-      };
-
-      ws.onmessage = (ev) => {
+      // Routing of all incoming messages happens here. Request/response
+      // pairs match by requestId; the rest are broadcasts.
+      ws.addEventListener('message', (ev) => {
+        let msg: WsServerMessage;
         try {
-          const msg = JSON.parse(ev.data) as WsServerMessage;
-          void handleMessage(msg);
+          msg = JSON.parse(ev.data) as WsServerMessage;
         } catch {
-          /* ignore */
+          return;
         }
-      };
+        // Resolve pending RPCs first
+        const payload = (msg as { payload?: { requestId?: string } }).payload;
+        const requestId = payload?.requestId;
+        if (requestId) {
+          const pending = pendingRef.current.get(requestId);
+          if (pending) {
+            clearTimeout(pending.timer);
+            pendingRef.current.delete(requestId);
+            if (msg.type === 'voice:request-error') {
+              pending.reject(new Error(msg.payload.message));
+            } else {
+              pending.resolve(msg);
+            }
+            return;
+          }
+        }
+        switch (msg.type) {
+          case 'voice:joined':
+            // Handled inline below — kept here so the route doesn't fall
+            // through to the participant handlers.
+            break;
+          case 'voice:room-state':
+            for (const p of msg.payload.participants) {
+              knownActorsRef.current.set(p.id, p);
+              ensurePeer(p.id, p);
+            }
+            syncPeersToState();
+            break;
+          case 'voice:participant-joined': {
+            knownActorsRef.current.set(msg.payload.participant.id, msg.payload.participant);
+            ensurePeer(msg.payload.participant.id, msg.payload.participant);
+            syncPeersToState();
+            break;
+          }
+          case 'voice:participant-left':
+            removePeer(msg.payload.actorId);
+            break;
+          case 'voice:new-producer': {
+            const { producer } = msg.payload;
+            if (producer.peerActorId === selfActorId) break;
+            const ch = channelIdRef.current;
+            if (!ch) break;
+            void consumeProducer(ch, producer.peerActorId, producer.producerId, producer.slot);
+            break;
+          }
+          case 'voice:producer-closed':
+            handleProducerClosed(msg.payload.peerActorId, msg.payload.producerId);
+            break;
+          case 'voice:full':
+            setState((s) => ({
+              ...s,
+              status: 'error',
+              error: `Voice channel is full (max ${msg.payload.max})`,
+            }));
+            break;
+          case 'error':
+            setState((s) => ({ ...s, status: 'error', error: msg.payload.message }));
+            break;
+        }
+      });
 
-      ws.onclose = () => {
-        // If the socket closes while we think we're connected, reset state
-        if (channelIdRef.current === channelId) {
-          // Tear down without sending voice:leave (socket is already closed)
-          for (const actorId of Array.from(peersRef.current.keys())) {
-            closePeer(actorId);
+      const waitForOpen = new Promise<void>((resolve) => {
+        if (ws.readyState === WebSocket.OPEN) resolve();
+        else ws.addEventListener('open', () => resolve(), { once: true });
+      });
+      await waitForOpen;
+
+      // Wait for the SFU bootstrap (router caps + existing producers).
+      const joinedMsg = await new Promise<
+        Extract<WsServerMessage, { type: 'voice:joined' }>
+      >((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ws.removeEventListener('message', onMsg);
+          reject(new Error('voice:joined timeout'));
+        }, REQUEST_TIMEOUT_MS);
+        const onMsg = (ev: MessageEvent) => {
+          try {
+            const m = JSON.parse(ev.data) as WsServerMessage;
+            if (m.type === 'voice:joined') {
+              clearTimeout(timer);
+              ws.removeEventListener('message', onMsg);
+              resolve(m);
+            }
+          } catch {
+            // ignore
           }
-          knownActorsRef.current.clear();
-          teardownAudioRuntime();
-          if (localStreamRef.current) {
-            for (const track of localStreamRef.current.getTracks()) track.stop();
-            localStreamRef.current = null;
-          }
-          channelIdRef.current = null;
-          wsRef.current = null;
-          setState(IDLE_STATE);
+        };
+        ws.addEventListener('message', onMsg);
+        sendWs({ type: 'voice:join', payload: { channelId } });
+      });
+
+      // 3) Device + transports
+      const device = new mediasoupClient.Device();
+      await device.load({
+        routerRtpCapabilities:
+          joinedMsg.payload.routerRtpCapabilities as mediasoupClient.types.RtpCapabilities,
+      });
+      deviceRef.current = device;
+
+      const sendParams = await rpc<
+        Extract<WsServerMessage, { type: 'voice:transport-created' }>
+      >((requestId) => ({
+        type: 'voice:create-transport',
+        payload: { requestId, channelId, direction: 'send' },
+      }));
+      const sendTransport = device.createSendTransport({
+        ...(sendParams.payload.params as unknown as mediasoupClient.types.TransportOptions),
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      sendTransportRef.current = sendTransport;
+      sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+        rpc<Extract<WsServerMessage, { type: 'voice:transport-connected' }>>(
+          (requestId) => ({
+            type: 'voice:connect-transport',
+            payload: {
+              requestId,
+              channelId,
+              transportId: sendTransport.id,
+              dtlsParameters,
+            },
+          }),
+        )
+          .then(() => callback())
+          .catch((err: Error) => errback(err));
+      });
+      sendTransport.on('produce', ({ kind, rtpParameters, appData }, callback, errback) => {
+        const slot = (appData as { slot?: VoiceSlot }).slot ?? 'mic';
+        rpc<Extract<WsServerMessage, { type: 'voice:produced' }>>((requestId) => ({
+          type: 'voice:produce',
+          payload: {
+            requestId,
+            channelId,
+            transportId: sendTransport.id,
+            kind,
+            rtpParameters,
+            slot,
+          },
+        }))
+          .then((reply) => callback({ id: reply.payload.producerId }))
+          .catch((err: Error) => errback(err));
+      });
+
+      const recvParams = await rpc<
+        Extract<WsServerMessage, { type: 'voice:transport-created' }>
+      >((requestId) => ({
+        type: 'voice:create-transport',
+        payload: { requestId, channelId, direction: 'recv' },
+      }));
+      const recvTransport = device.createRecvTransport({
+        ...(recvParams.payload.params as unknown as mediasoupClient.types.TransportOptions),
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      recvTransportRef.current = recvTransport;
+      recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
+        rpc<Extract<WsServerMessage, { type: 'voice:transport-connected' }>>(
+          (requestId) => ({
+            type: 'voice:connect-transport',
+            payload: {
+              requestId,
+              channelId,
+              transportId: recvTransport.id,
+              dtlsParameters,
+            },
+          }),
+        )
+          .then(() => callback())
+          .catch((err: Error) => errback(err));
+      });
+
+      // 4) Produce mic
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        const micProducer = await sendTransport.produce({
+          track: audioTrack,
+          appData: { slot: 'mic' as VoiceSlot },
+        });
+        micProducerRef.current = micProducer;
+      }
+
+      // 5) Subscribe to existing producers
+      for (const peer of joinedMsg.payload.peers) {
+        ensurePeer(peer.actorId);
+        for (const prod of peer.producers) {
+          await consumeProducer(channelId, peer.actorId, prod.producerId, prod.slot);
         }
-      };
+      }
+
+      startSpeakingLoop();
+      setState((s) => ({ ...s, status: 'connected' }));
+      applyMicEnabled();
     },
-    [sendWs, handleMessage, closePeer],
+    [
+      applyMicEnabled,
+      consumeProducer,
+      ensureAudioContext,
+      ensurePeer,
+      handleProducerClosed,
+      removePeer,
+      rpc,
+      selfActorId,
+      sendWs,
+      startSpeakingLoop,
+      syncPeersToState,
+    ],
   );
 
-  /**
-   * Tear down the AudioContext, analyser nodes, mic level interval, and
-   * speaking rAF loop. Safe to call multiple times.
-   */
-  const teardownAudioRuntime = useCallback(() => {
-    if (localMicLogIntervalRef.current) {
-      clearInterval(localMicLogIntervalRef.current);
-      localMicLogIntervalRef.current = null;
+  const teardown = useCallback(() => {
+    stopSpeakingLoop();
+    micProducerRef.current?.close();
+    camProducerRef.current?.close();
+    screenProducerRef.current?.close();
+    micProducerRef.current = null;
+    camProducerRef.current = null;
+    screenProducerRef.current = null;
+    sendTransportRef.current?.close();
+    recvTransportRef.current?.close();
+    sendTransportRef.current = null;
+    recvTransportRef.current = null;
+    deviceRef.current = null;
+
+    for (const entry of peersRef.current.values()) {
+      entry.audioConsumer?.close();
+      entry.videoConsumer?.close();
+      entry.screenConsumer?.close();
+      try {
+        entry.audioElement.pause();
+        entry.audioElement.srcObject = null;
+        entry.audioElement.remove();
+      } catch {
+        // ignore
+      }
     }
-    if (speakingRafRef.current) {
-      cancelAnimationFrame(speakingRafRef.current);
-      speakingRafRef.current = null;
-    }
+    peersRef.current.clear();
+    knownActorsRef.current.clear();
+
     if (localAnalyserRef.current) {
       try {
         localAnalyserRef.current.source.disconnect();
       } catch {
-        /* ignore */
+        // ignore
       }
       localAnalyserRef.current = null;
     }
     if (audioCtxRef.current) {
-      try {
-        void audioCtxRef.current.close();
-      } catch {
-        /* ignore */
-      }
+      audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
     }
-  }, []);
+
+    for (const stream of [
+      localStreamRef.current,
+      localVideoStreamRef.current,
+      localScreenStreamRef.current,
+    ]) {
+      if (stream) for (const t of stream.getTracks()) t.stop();
+    }
+    localStreamRef.current = null;
+    localVideoStreamRef.current = null;
+    localScreenStreamRef.current = null;
+
+    for (const pending of pendingRef.current.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('voice teardown'));
+    }
+    pendingRef.current.clear();
+  }, [stopSpeakingLoop]);
 
   const leave = useCallback(() => {
-    const current = channelIdRef.current;
-    if (!current) return;
-    sendWs({ type: 'voice:leave', payload: { channelId: current } });
-    for (const actorId of Array.from(peersRef.current.keys())) {
-      closePeer(actorId);
+    const ch = channelIdRef.current;
+    if (ch) {
+      sendWs({ type: 'voice:leave', payload: { channelId: ch } });
     }
-    knownActorsRef.current.clear();
-    teardownAudioRuntime();
-    if (localStreamRef.current) {
-      for (const track of localStreamRef.current.getTracks()) track.stop();
-      localStreamRef.current = null;
-    }
-    if (localVideoStreamRef.current) {
-      for (const track of localVideoStreamRef.current.getTracks()) track.stop();
-      localVideoStreamRef.current = null;
-    }
-    if (localScreenStreamRef.current) {
-      for (const track of localScreenStreamRef.current.getTracks()) track.stop();
-      localScreenStreamRef.current = null;
-    }
+    teardown();
     wsRef.current?.close();
     wsRef.current = null;
     channelIdRef.current = null;
-    pttEnabledRef.current = false;
-    pttKeyHeldRef.current = false;
-    micMutedRef.current = false;
-    deafenedRef.current = false;
     setState(IDLE_STATE);
-  }, [sendWs, closePeer, teardownAudioRuntime]);
+  }, [sendWs, teardown]);
 
   const toggleMute = useCallback(() => {
-    if (!localStreamRef.current) return;
-    const nextMuted = !micMutedRef.current;
-    micMutedRef.current = nextMuted;
+    micMutedRef.current = !micMutedRef.current;
+    setState((s) => ({ ...s, micMuted: micMutedRef.current }));
     applyMicEnabled();
-    setState((s) => ({ ...s, micMuted: nextMuted }));
   }, [applyMicEnabled]);
 
   const toggleDeafen = useCallback(() => {
-    const next = !deafenedRef.current;
-    deafenedRef.current = next;
+    deafenedRef.current = !deafenedRef.current;
+    setState((s) => ({ ...s, deafened: deafenedRef.current }));
     applyDeafened();
     applyMicEnabled();
-    setState((s) => ({ ...s, deafened: next }));
   }, [applyDeafened, applyMicEnabled]);
 
   const togglePushToTalk = useCallback(() => {
-    const next = !pttEnabledRef.current;
-    pttEnabledRef.current = next;
-    pttKeyHeldRef.current = false;
+    pttEnabledRef.current = !pttEnabledRef.current;
+    setState((s) => ({ ...s, pushToTalk: pttEnabledRef.current }));
     applyMicEnabled();
-    setState((s) => ({ ...s, pushToTalk: next }));
   }, [applyMicEnabled]);
 
   const setPeerVolume = useCallback(
     (actorId: string, volume: number) => {
-      const clamped = Math.max(0, Math.min(1, volume));
       const entry = peersRef.current.get(actorId);
       if (!entry) return;
-      entry.audio.volume = clamped;
-      entry.volume = clamped;
+      entry.volume = Math.max(0, Math.min(1, volume));
+      entry.audioElement.volume = entry.volume;
       syncPeersToState();
     },
     [syncPeersToState],
   );
 
-  /**
-   * Toggle the local webcam. Acquires a separate video MediaStream via
-   * getUserMedia on first enable, swaps the track into every peer's
-   * pre-allocated video sender, and releases the stream on disable. No
-   * SDP renegotiation happens — the transceivers were set up for video
-   * at peer-connection creation time.
-   */
   const toggleVideo = useCallback(async () => {
-    // Currently off → turn on
-    if (!localVideoStreamRef.current) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-        localVideoStreamRef.current = stream;
-        const track = stream.getVideoTracks()[0];
-        if (!track) throw new Error('No video track in acquired stream');
-        // Attach to every peer's video sender, then renegotiate so the
-        // effective SDP direction becomes sendrecv-active.
-        for (const entry of peersRef.current.values()) {
-          if (entry.videoSender) {
-            try {
-              await entry.videoSender.replaceTrack(track);
-            } catch (err) {
-              console.warn('voice: failed to replaceTrack(video) on peer', entry.actor.id, err);
-            }
-          }
-        }
-        await renegotiateAllPeers();
-        // If the track ends unexpectedly (user revoked permission, camera
-        // unplugged), mirror that into state and release the stream.
-        track.onended = () => {
-          if (localVideoStreamRef.current) {
-            for (const t of localVideoStreamRef.current.getTracks()) t.stop();
-            localVideoStreamRef.current = null;
-          }
-          for (const entry of peersRef.current.values()) {
-            if (entry.videoSender) {
-              void entry.videoSender.replaceTrack(null).catch(() => {});
-            }
-          }
-          setState((s) => ({ ...s, videoEnabled: false }));
-        };
-        setState((s) => ({ ...s, videoEnabled: true }));
-      } catch (err) {
-        console.warn('voice: getUserMedia video failed', err);
-        setState((s) => ({
-          ...s,
-          error:
-            err instanceof Error && err.name === 'NotAllowedError'
-              ? 'Camera permission denied.'
-              : err instanceof Error
-                ? `Camera error: ${err.message}`
-                : 'Failed to start camera.',
-        }));
+    const sendTransport = sendTransportRef.current;
+    const channelId = channelIdRef.current;
+    if (!sendTransport || !channelId) return;
+    const existing = camProducerRef.current;
+    if (existing) {
+      const id = existing.id;
+      existing.close();
+      camProducerRef.current = null;
+      if (localVideoStreamRef.current) {
+        for (const t of localVideoStreamRef.current.getTracks()) t.stop();
+        localVideoStreamRef.current = null;
       }
+      // Server cleans up the producer when its transport sees the close
+      // through the standard lifecycle, but we explicitly close-broadcast
+      // so peers drop the consumer immediately rather than waiting for
+      // SCTP-level signaling.
+      await rpc<Extract<WsServerMessage, { type: 'voice:producer-closed-ack' }>>(
+        (requestId) => ({
+          type: 'voice:close-producer',
+          payload: { requestId, channelId, producerId: id },
+        }),
+      ).catch(() => {
+        // best-effort
+      });
+      setState((s) => ({ ...s, videoEnabled: false }));
       return;
     }
-    // Currently on → turn off. Crucially, we do NOT renegotiate on
-    // disable. replaceTrack(null) stops transmission; the receiver's
-    // track goes muted and onmute clears their slot. Triggering a
-    // renegotiation here was causing the receiver's transceiver to
-    // transition into a state that the subsequent re-enable could not
-    // recover from — the track would stay muted forever on re-enable,
-    // which is exactly the "second toggle" bug.
-    for (const entry of peersRef.current.values()) {
-      if (entry.videoSender) {
-        try {
-          await entry.videoSender.replaceTrack(null);
-        } catch (err) {
-          console.warn('voice: failed to clear video track on peer', entry.actor.id, err);
-        }
-      }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      localVideoStreamRef.current = stream;
+      const track = stream.getVideoTracks()[0];
+      if (!track) throw new Error('no video track');
+      const producer = await sendTransport.produce({
+        track,
+        encodings: [
+          { maxBitrate: 100_000 },
+          { maxBitrate: 300_000 },
+          { maxBitrate: 900_000 },
+        ],
+        codecOptions: { videoGoogleStartBitrate: 1000 },
+        appData: { slot: 'cam' as VoiceSlot },
+      });
+      camProducerRef.current = producer;
+      setState((s) => ({ ...s, videoEnabled: true }));
+    } catch (err) {
+      setState((s) => ({ ...s, error: (err as Error).message }));
     }
-    for (const track of localVideoStreamRef.current.getTracks()) track.stop();
-    localVideoStreamRef.current = null;
-    setState((s) => ({ ...s, videoEnabled: false }));
-  }, []);
+  }, [rpc]);
 
-  /** Imperative accessor so VoicePanel can attach the local stream to a <video>. */
-  const getLocalVideoStream = useCallback((): MediaStream | null => {
-    return localVideoStreamRef.current;
-  }, []);
+  const toggleScreenShare = useCallback(async () => {
+    const sendTransport = sendTransportRef.current;
+    const channelId = channelIdRef.current;
+    if (!sendTransport || !channelId) return;
+    const existing = screenProducerRef.current;
+    if (existing) {
+      const id = existing.id;
+      existing.close();
+      screenProducerRef.current = null;
+      if (localScreenStreamRef.current) {
+        for (const t of localScreenStreamRef.current.getTracks()) t.stop();
+        localScreenStreamRef.current = null;
+      }
+      await rpc<Extract<WsServerMessage, { type: 'voice:producer-closed-ack' }>>(
+        (requestId) => ({
+          type: 'voice:close-producer',
+          payload: { requestId, channelId, producerId: id },
+        }),
+      ).catch(() => {});
+      setState((s) => ({ ...s, screenShareEnabled: false }));
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+      localScreenStreamRef.current = stream;
+      const track = stream.getVideoTracks()[0];
+      if (!track) throw new Error('no screen track');
+      const producer = await sendTransport.produce({
+        track,
+        encodings: [{ maxBitrate: 1_500_000 }],
+        appData: { slot: 'screen' as VoiceSlot },
+      });
+      screenProducerRef.current = producer;
+      // If the user picks "Stop sharing" via the browser UI, the track ends.
+      track.addEventListener('ended', () => {
+        if (screenProducerRef.current?.id === producer.id) {
+          void toggleScreenShare();
+        }
+      });
+      setState((s) => ({ ...s, screenShareEnabled: true }));
+    } catch (err) {
+      setState((s) => ({ ...s, error: (err as Error).message }));
+    }
+  }, [rpc]);
 
-  /** Imperative accessor for a peer's current video stream. */
-  const getPeerVideoStream = useCallback((actorId: string): MediaStream | null => {
+  const getLocalVideoStream = useCallback(() => localVideoStreamRef.current, []);
+  const getLocalScreenStream = useCallback(() => localScreenStreamRef.current, []);
+  const getPeerVideoStream = useCallback((actorId: string) => {
     return peersRef.current.get(actorId)?.videoStream ?? null;
   }, []);
-
-  /**
-   * Toggle screen sharing. Completely independent of webcam — the user
-   * can have both active simultaneously. Uses the second video transceiver
-   * pre-allocated in createPeerConnection, so no SDP renegotiation.
-   */
-  const toggleScreenShare = useCallback(async () => {
-    // Currently off → start sharing
-    if (!localScreenStreamRef.current) {
-      if (!navigator.mediaDevices?.getDisplayMedia) {
-        setState((s) => ({
-          ...s,
-          error: 'Screen sharing is not available in this browser.',
-        }));
-        return;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-        localScreenStreamRef.current = stream;
-        const track = stream.getVideoTracks()[0];
-        if (!track) throw new Error('No video track in display media stream');
-
-        // Attach the screen track to every peer's screen sender, then
-        // renegotiate for the same reason as webcam.
-        for (const entry of peersRef.current.values()) {
-          if (entry.screenSender) {
-            try {
-              await entry.screenSender.replaceTrack(track);
-            } catch (err) {
-              console.warn(
-                'voice: failed to replaceTrack(screen) on peer',
-                entry.actor.id,
-                err,
-              );
-            }
-          }
-        }
-        await renegotiateAllPeers();
-
-        // The browser's native "Stop sharing" bar fires track.onended
-        // when the user clicks it. Mirror that into state.
-        track.onended = () => {
-          if (localScreenStreamRef.current) {
-            for (const t of localScreenStreamRef.current.getTracks()) t.stop();
-            localScreenStreamRef.current = null;
-          }
-          for (const entry of peersRef.current.values()) {
-            if (entry.screenSender) {
-              void entry.screenSender.replaceTrack(null).catch(() => {});
-            }
-          }
-          setState((s) => ({ ...s, screenShareEnabled: false }));
-        };
-        setState((s) => ({ ...s, screenShareEnabled: true }));
-      } catch (err) {
-        // User cancelling the screen picker throws NotAllowedError; don't
-        // treat that as an error the user needs to see.
-        if (err instanceof Error && err.name !== 'NotAllowedError') {
-          console.warn('voice: getDisplayMedia failed', err);
-          setState((s) => ({
-            ...s,
-            error: `Screen share error: ${err.message}`,
-          }));
-        }
-      }
-      return;
-    }
-    // Currently on → stop sharing. Same reasoning as toggleVideo off:
-    // don't renegotiate here. replaceTrack(null) plus the natural
-    // onmute transition handles the teardown; renegotiating leaves
-    // the receiver's transceiver in a state that re-enable can't
-    // recover from.
-    for (const entry of peersRef.current.values()) {
-      if (entry.screenSender) {
-        try {
-          await entry.screenSender.replaceTrack(null);
-        } catch (err) {
-          console.warn('voice: failed to clear screen track on peer', entry.actor.id, err);
-        }
-      }
-    }
-    for (const track of localScreenStreamRef.current.getTracks()) track.stop();
-    localScreenStreamRef.current = null;
-    setState((s) => ({ ...s, screenShareEnabled: false }));
-  }, []);
-
-  const getLocalScreenStream = useCallback((): MediaStream | null => {
-    return localScreenStreamRef.current;
-  }, []);
-
-  const getPeerScreenStream = useCallback((actorId: string): MediaStream | null => {
+  const getPeerScreenStream = useCallback((actorId: string) => {
     return peersRef.current.get(actorId)?.screenStream ?? null;
   }, []);
 
-  // Speaking-indicator rAF loop. Runs whenever we're in a voice channel.
-  // Reads the frequency data from the local and peer analysers and flips
-  // `speaking` state when a participant crosses the threshold. State is
-  // only setState'd when at least one speaking boolean actually changed,
-  // so the render churn is limited to speech onsets/offsets.
+  // Push-to-talk key listeners.
   useEffect(() => {
-    if (state.status !== 'connected' && state.status !== 'connecting') return;
-
-    const tick = () => {
-      let changed = false;
-
-      // Local (me)
-      let nextLocalSpeaking = false;
-      const la = localAnalyserRef.current;
-      if (la) {
-        la.analyser.getByteFrequencyData(la.buf);
-        let peak = 0;
-        for (const v of la.buf) if (v > peak) peak = v;
-        // Only count as speaking if the mic is actually hot (not muted/deafened/PTT-off)
-        const micHot =
-          !micMutedRef.current &&
-          !deafenedRef.current &&
-          (!pttEnabledRef.current || pttKeyHeldRef.current);
-        nextLocalSpeaking = micHot && peak > SPEAKING_THRESHOLD;
-      }
-
-      // Each peer
-      for (const entry of peersRef.current.values()) {
-        if (!entry.analyser || !entry.analyserBuf) continue;
-        entry.analyser.getByteFrequencyData(entry.analyserBuf);
-        let peak = 0;
-        for (const v of entry.analyserBuf) if (v > peak) peak = v;
-        const nextSpeaking = peak > SPEAKING_THRESHOLD;
-        if (nextSpeaking !== entry.speaking) {
-          entry.speaking = nextSpeaking;
-          changed = true;
-        }
-      }
-
-      setState((s) => {
-        const localChanged = nextLocalSpeaking !== s.localSpeaking;
-        if (!changed && !localChanged) return s;
-        return {
-          ...s,
-          localSpeaking: nextLocalSpeaking,
-          peers: Array.from(peersRef.current.values()).map((e) => ({
-            actorId: e.actor.id,
-            actor: e.actor,
-            connected: e.connected,
-            speaking: e.speaking,
-            volume: e.volume,
-            hasVideo: e.videoStream !== null,
-            hasScreen: e.screenStream !== null,
-          })),
-        };
-      });
-
-      // Throttled populate-only reconcile. Catches muted→unmuted
-      // transitions that onunmute misses (notably the "second toggle"
-      // case). IMPORTANT: this path passes canClear=false because
-      // polling track.muted from rAF produces false-negative clears —
-      // transient readings would oscillate the slot state. Teardown
-      // is handled exclusively by onmute/onended and the explicit
-      // post-renegotiation reconcile, both of which see stable
-      // transitions rather than polled snapshots.
-      const now = performance.now();
-      if (now - lastReconcileRef.current > 500) {
-        lastReconcileRef.current = now;
-        // Verbose scan log: dump the state of every peer's video/screen
-        // transceivers so we can see exactly what's happening during a
-        // re-enable cycle.
-        for (const entry of peersRef.current.values()) {
-          const txs = entry.pc
-            .getTransceivers()
-            .filter((t) => t.receiver.track?.kind === 'video');
-          console.log('voice: reconcile scan', {
-            peer: entry.actor.id,
-            slotVideo: entry.videoStream !== null,
-            slotScreen: entry.screenStream !== null,
-            txs: txs.map((t, i) => ({
-              i,
-              currentDirection: t.currentDirection,
-              trackReadyState: t.receiver.track?.readyState,
-              trackMuted: t.receiver.track?.muted,
-              trackId: t.receiver.track?.id,
-            })),
-          });
-          reconcilePeerSlots(entry, false);
-        }
-      }
-
-      speakingRafRef.current = requestAnimationFrame(tick);
-    };
-
-    speakingRafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (speakingRafRef.current) {
-        cancelAnimationFrame(speakingRafRef.current);
-        speakingRafRef.current = null;
-      }
-    };
-  }, [state.status]);
-
-  // Push-to-talk global key listener. Active whenever PTT mode is on.
-  // Ignores keydown/keyup while the user is typing into an input or
-  // contenteditable element so the key doesn't eat intended input.
-  useEffect(() => {
-    if (!state.pushToTalk) return;
-
-    const isEditable = (el: EventTarget | null): boolean => {
-      if (!(el instanceof HTMLElement)) return false;
-      const tag = el.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-      if (el.isContentEditable) return true;
-      return false;
-    };
-
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== PTT_KEY) return;
-      if (isEditable(e.target)) return;
-      if (pttKeyHeldRef.current) return;
+      if (!pttEnabledRef.current) return;
       pttKeyHeldRef.current = true;
       applyMicEnabled();
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== PTT_KEY) return;
-      if (!pttKeyHeldRef.current) return;
+      if (!pttEnabledRef.current) return;
       pttKeyHeldRef.current = false;
       applyMicEnabled();
     };
@@ -1294,28 +927,18 @@ export function useVoice(selfActorId: string) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [state.pushToTalk, applyMicEnabled]);
+  }, [applyMicEnabled]);
 
-  // Tear down on unmount
+  // Hook unmount cleanup.
   useEffect(() => {
     return () => {
       if (channelIdRef.current) {
         sendWs({ type: 'voice:leave', payload: { channelId: channelIdRef.current } });
       }
-      for (const actorId of Array.from(peersRef.current.keys())) {
-        closePeer(actorId);
-      }
-      teardownAudioRuntime();
-      if (localStreamRef.current) {
-        for (const track of localStreamRef.current.getTracks()) track.stop();
-      }
-      if (localVideoStreamRef.current) {
-        for (const track of localVideoStreamRef.current.getTracks()) track.stop();
-      }
-      if (localScreenStreamRef.current) {
-        for (const track of localScreenStreamRef.current.getTracks()) track.stop();
-      }
+      teardown();
       wsRef.current?.close();
+      wsRef.current = null;
+      channelIdRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

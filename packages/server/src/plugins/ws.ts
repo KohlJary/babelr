@@ -5,6 +5,7 @@ import websocket from '@fastify/websocket';
 import type { WebSocket } from 'ws';
 import '../types.ts';
 import type { WsServerMessage } from '@babelr/shared';
+import { leaveRoom as sfuLeaveRoom } from '../voice/sfu.ts';
 
 // channelId -> set of subscribed sockets
 const channelSubscriptions = new Map<string, Set<WebSocket>>();
@@ -76,7 +77,10 @@ function removeClient(ws: WebSocket, fastify?: FastifyInstance) {
       for (const [actorId, participant] of room.entries()) {
         if (participant.ws === ws) {
           room.delete(actorId);
-          // Broadcast participant-left to remaining peers
+          // SFU side: close transports/producers/consumers, return any
+          // producers that were active so we can notify other peers.
+          const closedProducerIds = sfuLeaveRoom(channelId, actorId);
+          // Broadcast participant-left + producer-closed to remaining peers
           if (fastify) {
             const leftMsg = {
               type: 'voice:participant-left' as const,
@@ -85,6 +89,16 @@ function removeClient(ws: WebSocket, fastify?: FastifyInstance) {
             const data = JSON.stringify(leftMsg);
             for (const p of room.values()) {
               if (p.ws.readyState === p.ws.OPEN) p.ws.send(data);
+            }
+            for (const producerId of closedProducerIds) {
+              const closedMsg: WsServerMessage = {
+                type: 'voice:producer-closed',
+                payload: { channelId, peerActorId: actorId, producerId },
+              };
+              const cdata = JSON.stringify(closedMsg);
+              for (const p of room.values()) {
+                if (p.ws.readyState === p.ws.OPEN) p.ws.send(cdata);
+              }
             }
           }
           break;
@@ -169,15 +183,16 @@ function voiceJoin(
   return Array.from(room.values()).filter((p) => p.actorId !== participant.actorId);
 }
 
-function voiceLeave(channelId: string, actorId: string): boolean {
+function voiceLeave(channelId: string, actorId: string): { closedProducerIds: string[] } | null {
   const room = voiceRooms.get(channelId);
-  if (!room) return false;
+  if (!room) return null;
   const p = room.get(actorId);
-  if (!p) return false;
+  if (!p) return null;
   room.delete(actorId);
   socketVoiceRooms.get(p.ws)?.delete(channelId);
+  const closedProducerIds = sfuLeaveRoom(channelId, actorId);
   if (room.size === 0) voiceRooms.delete(channelId);
-  return true;
+  return { closedProducerIds };
 }
 
 function voiceGetRoom(channelId: string): VoiceParticipant[] {
@@ -198,20 +213,6 @@ function voiceBroadcastToRoom(
     if (excludeActorId && p.actorId === excludeActorId) continue;
     if (p.ws.readyState === p.ws.OPEN) p.ws.send(data);
   }
-}
-
-function voiceRelayToActor(
-  channelId: string,
-  toActorId: string,
-  message: WsServerMessage,
-): boolean {
-  const room = voiceRooms.get(channelId);
-  if (!room) return false;
-  const target = room.get(toActorId);
-  if (!target) return false;
-  if (target.ws.readyState !== target.ws.OPEN) return false;
-  target.ws.send(JSON.stringify(message));
-  return true;
 }
 
 function registerActorConnection(ws: WebSocket, actorId: string, fastify: FastifyInstance) {
@@ -304,7 +305,6 @@ async function wsPlugin(fastify: FastifyInstance) {
   fastify.decorate('voiceLeave', voiceLeave);
   fastify.decorate('voiceGetRoom', voiceGetRoom);
   fastify.decorate('voiceBroadcastToRoom', voiceBroadcastToRoom);
-  fastify.decorate('voiceRelayToActor', voiceRelayToActor);
 }
 
 export default fp(wsPlugin, {

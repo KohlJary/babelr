@@ -16,6 +16,7 @@
     "dompurify": "^3.3.3",
     "franc-min": "^6.2.0",
     "marked": "^18.0.0",
+    "mediasoup-client": "^3.18.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "rrule": "^2.8.1"

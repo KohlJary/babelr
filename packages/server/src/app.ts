@@ -36,6 +36,7 @@ import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
 import auditRoutes from './routes/audit.ts';
 import ssoRoutes from './routes/sso.ts';
+import { initSfu, shutdownSfu } from './voice/sfu.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -191,6 +192,11 @@ export async function buildApp() {
       return reply.sendFile('index.html', clientDistDir);
     });
   }
+
+  await initSfu(config);
+  app.addHook('onClose', async () => {
+    await shutdownSfu();
+  });
 
   return app;
 }

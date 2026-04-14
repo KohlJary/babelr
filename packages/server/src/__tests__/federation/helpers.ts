@@ -48,6 +48,9 @@ export const testConfig: Config = {
   secureCookies: false,
   federationMode: 'open',
   federationDomains: [],
+  mediasoupListenIp: '127.0.0.1',
+  mediasoupRtcMinPort: 40000,
+  mediasoupRtcMaxPort: 40099,
 };
 
 /**
@@ -82,10 +85,9 @@ export async function createFederationTestApp() {
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});
         fastify.decorate('voiceJoin', () => null);
-        fastify.decorate('voiceLeave', () => false);
+        fastify.decorate('voiceLeave', () => null);
         fastify.decorate('voiceGetRoom', () => []);
         fastify.decorate('voiceBroadcastToRoom', () => {});
-        fastify.decorate('voiceRelayToActor', () => false);
       },
       { name: 'ws', dependencies: ['db', 'config-plugin'] },
     ),

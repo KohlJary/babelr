@@ -39,8 +39,24 @@ Set these in your `.env` file or as environment variables:
 | `OIDC_CLIENT_ID` | No | -- | OIDC client ID from your identity provider |
 | `OIDC_CLIENT_SECRET` | No | -- | OIDC client secret |
 | `OIDC_REDIRECT_URI` | No | -- | Callback URL: `https://your-domain/api/auth/oidc/callback` |
+| `MEDIASOUP_ANNOUNCED_IP` | Yes for voice | -- | Public IP advertised to browsers for WebRTC. See [Voice channels](#voice-channels) below. |
+| `MEDIASOUP_LISTEN_IP` | No | `0.0.0.0` in prod, `127.0.0.1` in dev | Bind address for RTC sockets. Leave as default unless you know why you're changing it. |
+| `MEDIASOUP_RTC_MIN_PORT` | No | `40000` | Low end of the UDP port range used for voice media. |
+| `MEDIASOUP_RTC_MAX_PORT` | No | `40099` | High end of the UDP port range. |
 
 *When using `docker compose`, `DATABASE_URL` is set automatically to point at the Postgres container.
+
+### Voice channels
+
+Voice (and webcam / screen-share) use a mediasoup SFU embedded in the Babelr server process. Browsers connect directly to the server over UDP on the RTC port range — this media traffic does **not** go through your reverse proxy, only the WebSocket signaling does.
+
+**Required setup for voice to work in production:**
+
+1. Set `MEDIASOUP_ANNOUNCED_IP` to the public IP address that browsers will use to reach your server. This is almost always the same IP your DNS record resolves to. If you skip this, browsers will receive undialable ICE candidates and every voice join will fail.
+2. Open UDP ports `40000–40099` (or your configured range) on your firewall. These are per-participant — each transport uses one UDP port, so ~2 ports per active voice participant. The 100-port default handles ~50 concurrent voice users per Tower; raise the range if you expect more.
+3. If you're behind NAT (home lab, cloud with a private-IP VM), port-forward the UDP range to your Babelr host and set `MEDIASOUP_ANNOUNCED_IP` to the outside IP.
+
+**Known limitation:** Firefox fails ICE when both browser and server are on the same machine via localhost loopback. Deployments with a real public `MEDIASOUP_ANNOUNCED_IP` don't hit this. If you're developing locally and need to test Firefox, use two machines on a LAN rather than two tabs on localhost.
 
 ### Production Deployment
 
