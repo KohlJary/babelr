@@ -6,7 +6,7 @@ import type {
   TranslateProxyResponse,
   ProxyProviderKind,
 } from '@babelr/shared';
-import { buildPrompt, parseResponse } from '@babelr/shared';
+import { buildPrompt, parseResponse, maskEmbeds, restoreEmbeds } from '@babelr/shared';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
@@ -136,7 +136,16 @@ export default async function translateRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: `Unsupported proxy provider: ${provider}` });
     }
 
-    const prompt = buildPrompt(messages, targetLanguage, sourceLanguage, glossary);
+    // Mask [[kind:slug]] embed refs before translation so the LLM
+    // doesn't translate slugs or rewrite bracket syntax. Restored on
+    // the response side keyed by message id.
+    const maskedById = new Map<string, string[]>();
+    const maskedMessages = messages.map((m) => {
+      const { masked, tokens } = maskEmbeds(m.content);
+      maskedById.set(m.id, tokens);
+      return { id: m.id, content: masked };
+    });
+    const prompt = buildPrompt(maskedMessages, targetLanguage, sourceLanguage, glossary);
     const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
 
     try {
@@ -152,7 +161,12 @@ export default async function translateRoutes(fastify: FastifyInstance) {
         return reply.status(result.status).send({ error: result.error });
       }
 
-      const results = parseResponse(result.text);
+      const results = parseResponse(result.text).map((r) => {
+        const tokens = maskedById.get(r.id);
+        return tokens && tokens.length > 0
+          ? { ...r, translatedContent: restoreEmbeds(r.translatedContent, tokens) }
+          : r;
+      });
       const response: TranslateProxyResponse = { results };
       return response;
     } catch (err) {

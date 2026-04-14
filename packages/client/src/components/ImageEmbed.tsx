@@ -14,6 +14,10 @@ interface ImageEmbedProps {
   slug: string;
   serverSlug?: string;
   actor?: ActorProfile;
+  /** When provided, a click on the inline image fires this instead of
+   *  opening the built-in lightbox. The embed registry uses this to
+   *  open the image in the unified sidebar preview. */
+  onClick?: () => void;
 }
 
 type EmbedState =
@@ -50,7 +54,7 @@ function fetchEmbed(slug: string, serverSlug?: string): Promise<EmbedState> {
   return promise;
 }
 
-export function ImageEmbed({ slug, serverSlug, actor }: ImageEmbedProps) {
+export function ImageEmbed({ slug, serverSlug, actor, onClick }: ImageEmbedProps) {
   const t = useT();
   const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
   const [state, setState] = useState<EmbedState>(
@@ -97,7 +101,10 @@ export function ImageEmbed({ slug, serverSlug, actor }: ImageEmbedProps) {
 
   return (
     <>
-      <figure className="image-embed ok" onClick={() => setLightbox(true)}>
+      <figure
+        className="image-embed ok"
+        onClick={() => (onClick ? onClick() : setLightbox(true))}
+      >
         <img
           src={data.storageUrl}
           alt={data.title ?? data.filename}

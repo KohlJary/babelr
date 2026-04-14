@@ -35,6 +35,9 @@ import { WikiPanel } from './WikiPanel';
 import FilesPanel from './FilesPanel';
 import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
+import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
+import type { EmbedNavCtx } from '../embeds/registry';
+import type { WikiRefKind } from '@babelr/shared';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
@@ -79,6 +82,36 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [filesInitialFileId, setFilesInitialFileId] = useState<string | null>(null);
   const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
+  const [embedSidebar, setEmbedSidebar] = useState<EmbedSidebarTarget | null>(null);
+  const openEmbedPreview = (kind: WikiRefKind, slug: string, serverSlug?: string) => {
+    setEmbedSidebar({ kind, slug, serverSlug });
+  };
+  const openManualSlug = async (slug?: string) => {
+    let serverId = manualServerId;
+    if (!serverId) {
+      try {
+        const res = await api.getManualServerId();
+        serverId = res.serverId;
+        setManualServerId(serverId);
+      } catch {
+        return;
+      }
+    }
+    if (slug) setWikiInitialSlug(slug);
+    setMainView('manual');
+  };
+  const navCtx: EmbedNavCtx = {
+    selectChannel: (id) => {
+      setDmMode(false);
+      selectChannel(id);
+      setMainView('chat');
+    },
+    setMainView,
+    setCalendarInitialEventId,
+    setFilesInitialFileId,
+    setWikiInitialSlug,
+    openManualSlug: (slug) => void openManualSlug(slug),
+  };
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -97,6 +130,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
   const activeChannelId = dmMode ? selectedDM?.id ?? null : selectedChannel?.id ?? null;
+
+  // Close the embed sidebar whenever the user switches channels or
+  // servers — embed previews are contextual to where the user is.
+  useEffect(() => {
+    setEmbedSidebar(null);
+  }, [selectedChannel?.id, selectedServer?.id, dmMode]);
 
   // Derive the DM recipient ID for E2E encryption
   const recipientId = dmMode && selectedDM
@@ -213,8 +252,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
 
   // Intercept clicks on in-app wiki refs rendered as `<a href="#wiki/slug">`
   // so the browser doesn't try to navigate to a fragment, and instead
-  // opens the WikiPanel at the referenced page. Only active when a
-  // server is selected — wiki pages are server-scoped.
+  // opens the embed sidebar with a wiki page preview. Only active when
+  // a server is selected — wiki pages are server-scoped.
   useEffect(() => {
     if (!selectedServer || dmMode) return;
     const handler = (e: MouseEvent) => {
@@ -223,9 +262,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       if (!anchor) return;
       e.preventDefault();
       const slug = decodeURIComponent(anchor.getAttribute('href')!.slice('#wiki/'.length));
-      setWikiInitialDraft(null);
-      setWikiInitialSlug(slug);
-      setMainView('wiki');
+      setEmbedSidebar({ kind: 'page', slug });
     };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
@@ -243,17 +280,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         }}
         onSelectDMs={() => setDmMode(true)}
         onCreateServer={() => setShowCreateServer(true)}
-        onOpenManual={async () => {
-          if (!manualServerId) {
-            try {
-              const res = await api.getManualServerId();
-              setManualServerId(res.serverId);
-              setMainView('manual');
-            } catch { /* manual not available */ }
-          } else {
-            setMainView('manual');
-          }
-        }}
+        onOpenManual={() => void openManualSlug()}
       />
       <ChannelSidebar
         mode={dmMode ? 'dms' : 'channels'}
@@ -340,20 +367,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             actor={actor}
             initialSlug={wikiInitialSlug}
             initialDraft={wikiInitialDraft}
-            onNavigateMessageEmbed={(embed) => {
-              if (embed.channelId) {
-                setDmMode(false);
-                selectChannel(embed.channelId);
-                setMainView('chat');
-              }
-            }}
-            onNavigateEventEmbed={(embed) => {
-              setCalendarInitialEventId(embed.id);
-              setMainView('calendar');
-            }}
-            onNavigateFileEmbed={() => {
-              setMainView('files');
-            }}
+            onPreviewEmbed={openEmbedPreview}
             onClose={() => {
               setMainView('chat');
               setWikiInitialSlug(null);
@@ -380,9 +394,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             serverName="Babelr Manual"
             isManual
             actor={actor}
-            onNavigateMessageEmbed={() => {}}
-            onNavigateEventEmbed={() => {}}
-            onNavigateFileEmbed={() => {}}
+            onPreviewEmbed={openEmbedPreview}
             onClose={() => setMainView('chat')}
           />
         )}
@@ -449,23 +461,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 }
               : undefined
           }
-          onNavigateMessageEmbed={(embed) => {
-            // Clicking a message embed navigates to the source.
-            // Scrolling to the specific message is a follow-up — for
-            // now we just switch to the channel containing it.
-            if (embed.channelId) {
-              setDmMode(false);
-              selectChannel(embed.channelId);
-            }
-          }}
-          onNavigateEventEmbed={(embed) => {
-            setCalendarInitialEventId(embed.id);
-            setMainView('calendar');
-          }}
-          onNavigateFileEmbed={(embed) => {
-            setFilesInitialFileId(embed.id);
-            setMainView('files');
-          }}
+          onPreviewEmbed={openEmbedPreview}
           callerRole={callerRole}
         />
         <TypingIndicator users={typingUsers} />
@@ -485,6 +481,16 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           </>
         )}
       </div>
+
+      {embedSidebar && (
+        <EmbedSidebar
+          target={embedSidebar}
+          actor={actor}
+          serverId={selectedServer?.id ?? null}
+          navCtx={navCtx}
+          onClose={() => setEmbedSidebar(null)}
+        />
+      )}
 
       {showSettings && (
         <SettingsPanel

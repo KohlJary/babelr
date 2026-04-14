@@ -6,3 +6,4 @@ export * from './wiki-chunker.js';
 export * from './translation-prompt.js';
 export * from './permissions.js';
 export * from './message-slug.js';
+export * from './mask-embeds.js';

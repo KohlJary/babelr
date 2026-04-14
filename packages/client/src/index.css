@@ -2960,6 +2960,200 @@ textarea.modal-input {
   flex-direction: column;
 }
 
+/* Embed sidebar (clicked-embed previews in ChatView) -------------------- */
+.embed-sidebar {
+  width: 360px;
+  flex-shrink: 0;
+  border-left: 1px solid #1f2937;
+  background: #0a0e13;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.embed-sidebar-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #1f2937;
+  flex-shrink: 0;
+  gap: 0.5rem;
+}
+.embed-sidebar-title {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.embed-sidebar-actions {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.embed-sidebar-open {
+  background: #1e40af;
+  border: 1px solid #2563eb;
+  color: #dbeafe;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.embed-sidebar-open:hover {
+  background: #2563eb;
+}
+.embed-sidebar-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.4rem;
+}
+.embed-sidebar-close:hover {
+  color: #e2e8f0;
+}
+.embed-sidebar-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem;
+}
+.embed-preview-loading,
+.embed-preview-locked {
+  color: #6b7280;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+/* Per-kind preview styles --------------------------------------------- */
+.message-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-bottom: 0.25rem;
+}
+.message-preview-channel {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.message-preview-server {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+.message-preview-time {
+  color: #6b7280;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+.message-preview-body {
+  white-space: pre-wrap;
+  color: #e2e8f0;
+}
+
+.event-preview-title {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  color: #e2e8f0;
+}
+.event-preview-when,
+.event-preview-location {
+  color: #94a3b8;
+  margin-bottom: 0.4rem;
+}
+.event-preview-description {
+  margin: 0.75rem 0;
+  white-space: pre-wrap;
+  color: #cbd5e1;
+}
+.event-preview-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  border-top: 1px solid #1f2937;
+  padding-top: 0.5rem;
+}
+.event-preview-myrsvp {
+  color: #4ade80;
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+
+.file-preview-image,
+.image-preview-image {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 4px;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+.image-preview-image {
+  max-height: 480px;
+}
+.file-preview-title,
+.image-preview-name {
+  color: #e2e8f0;
+  margin-top: 0.25rem;
+  margin-bottom: 0.4rem;
+  font-size: 1rem;
+}
+.file-preview-meta,
+.image-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+.file-preview-description,
+.image-preview-description {
+  color: #cbd5e1;
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+}
+.file-preview-download {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  background: #1e3a8a;
+  color: #dbeafe;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.file-preview-download:hover {
+  background: #1e40af;
+}
+
+.wiki-page-preview-title {
+  margin-top: 0;
+  color: #e2e8f0;
+}
+.wiki-page-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+.wiki-page-preview-tag {
+  background: #1e293b;
+  color: #94a3b8;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+.wiki-page-preview-body {
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 /* Role management panel ----------------------------------------------- */
 .roles-panel {
   display: flex;

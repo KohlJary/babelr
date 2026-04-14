@@ -16,7 +16,7 @@ import { renderWithEmbeds } from '../utils/render-with-embeds';
 import { extractHeadings } from '../utils/markdown';
 import { useWebSocket } from '../hooks/useWebSocket';
 import type { WsServerMessage } from '@babelr/shared';
-import type { MessageEmbedView, EventEmbedView, FileEmbedView, ActorProfile } from '@babelr/shared';
+import type { ActorProfile } from '@babelr/shared';
 import * as api from '../api';
 import { useChat } from '../hooks/useChat';
 import { useTranslation } from '../hooks/useTranslation';
@@ -35,12 +35,13 @@ interface WikiPanelProps {
   initialSlug?: string | null;
   /** Initial content to seed a new page with (e.g. from a message) */
   initialDraft?: { title?: string; content?: string } | null;
-  /** Called when the user clicks an inline message embed inside a wiki page. */
-  onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
-  /** Called when the user clicks an inline event embed inside a wiki page. */
-  onNavigateEventEmbed?: (embed: EventEmbedView) => void;
-  /** Called when the user clicks an inline file embed inside a wiki page. */
-  onNavigateFileEmbed?: (embed: FileEmbedView) => void;
+  /** Called when the user clicks any inline embed inside a wiki page —
+   *  the host opens its embed sidebar. */
+  onPreviewEmbed?: (
+    kind: import('@babelr/shared').WikiRefKind,
+    slug: string,
+    serverSlug?: string,
+  ) => void;
   /** True when rendering the Babelr Manual (Tower-level wiki). */
   isManual?: boolean;
   onClose: () => void;
@@ -130,9 +131,7 @@ export function WikiPanel({
   callerRole,
   initialSlug,
   initialDraft,
-  onNavigateMessageEmbed,
-  onNavigateEventEmbed,
-  onNavigateFileEmbed,
+  onPreviewEmbed,
   isManual,
   actor,
   onClose,
@@ -855,9 +854,7 @@ export function WikiPanel({
                             <div className="wiki-chunk-body">
                               {renderWithEmbeds(body, {
                                 variant: 'wiki',
-                                onNavigateMessage: onNavigateMessageEmbed,
-                                onNavigateEvent: onNavigateEventEmbed,
-                                onNavigateFile: onNavigateFileEmbed,
+                                onPreviewEmbed,
                               })}
                             </div>
                             <ChunkIndicators chunk={c} t={t} />
@@ -869,8 +866,7 @@ export function WikiPanel({
                     <div className="wiki-content-body" onClick={handleContentClick}>
                       {renderWithEmbeds(currentPage.content, {
                         variant: 'wiki',
-                        onNavigateMessage: onNavigateMessageEmbed,
-                        onNavigateEvent: onNavigateEventEmbed,
+                        onPreviewEmbed,
                       })}
                     </div>
                   )
@@ -971,8 +967,7 @@ export function WikiPanel({
                   >
                     {renderWithEmbeds(draftContent, {
                       variant: 'wiki',
-                      onNavigateMessage: onNavigateMessageEmbed,
-                      onNavigateEvent: onNavigateEventEmbed,
+                      onPreviewEmbed,
                     })}
                   </div>
                 ) : (
@@ -1129,9 +1124,7 @@ export function WikiPanel({
                         <div className="wiki-content-body">
                           {renderWithEmbeds(viewingRevision.content, {
                             variant: 'wiki',
-                            onNavigateMessage: onNavigateMessageEmbed,
-                            onNavigateEvent: onNavigateEventEmbed,
-                            onNavigateFile: onNavigateFileEmbed,
+                            onPreviewEmbed,
                           })}
                         </div>
                       </div>

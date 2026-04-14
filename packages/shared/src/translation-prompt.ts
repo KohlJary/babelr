@@ -57,6 +57,7 @@ STAGE 2 - TRANSLATE: Translate to ${targetLanguage} using the classified registe
 - If the source is sarcastic, the translation must read as sarcastic in ${targetLanguage}.
 - If the source is affectionate, preserve the warmth and intimacy level.
 - Do NOT flatten casual speech into formal language or vice versa.
+- Tokens that look like ⟦E0⟧, ⟦E1⟧, etc. are placeholders for embedded references. Copy them through verbatim — do NOT translate, modify, or reorder them.
 
 STAGE 3 - IDIOM CHECK: Identify idioms, slang, cultural references, or expressions that lack direct equivalents in ${targetLanguage}.
 - For each flagged expression: provide the original text, an explanation of its meaning, and a target-language equivalent if one exists.

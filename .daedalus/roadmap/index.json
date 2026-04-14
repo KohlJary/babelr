@@ -870,6 +870,16 @@
       "status": "backlog",
       "created_at": "2026-04-14T15:11:48.823304",
       "created_by": "daedalus"
+    },
+    {
+      "id": "4a5372c1-f22a-4f6e-a105-7906e60c17b4",
+      "title": "Embed sidebar previews + plugin-extensible embed registry",
+      "description": "Replace the click-to-navigate behavior on inline message embeds with click-to-preview-in-sidebar behavior. Reuses the RightSidebar component from CallView. The previewed content gets a header with a close button + 'Open in [X]' navigation button so the existing full-view destinations (WikiPanel, EventsPanel, FilesPanel, etc.) remain reachable.\n\nThe lift that matters: introduce an EmbedRegistry abstraction that maps `kind → { renderInline, renderPreview, navigate, label }`. Today the inline rendering and click navigation are hardcoded across MessageList / ChatView / individual embed components. The registry collapses all that into one extensible table that core kinds populate at app boot. Plugins (via the future embed-plugin-system) register against the same API, so plugin authors get full parity with first-party embed kinds — including their own sidebar preview UI alongside their main view.\n\nExisting kinds covered:\n- wiki (full page markdown render in sidebar)\n- man (wiki variant — same renderer, different navigate target)\n- event (title + description + when + attendees + RSVP)\n- file (metadata card + comments preview)\n- img (file variant — image-focused preview)\n- message (message body + author + small surrounding context)\n\nCross-server embeds ([[server@tower:kind:slug]]) use the existing federation proxy to fetch, then dispatch to the same renderPreview for the resolved kind.\n\nSidebar behavior:\n- Close on channel switch (sidebar is per-channel context)\n- Single-tab for now; future could add tabs for additional context\n- Desktop-first layout; responsive narrow-width is a follow-up\n\nFollow-ups (separate items):\n- Wire the registry into the actual embed-plugin-system manifest (when that lands)\n- Mobile / narrow-width responsive sidebar",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T15:33:08.491828",
+      "created_by": "daedalus"
     }
   ],
   "version": 27

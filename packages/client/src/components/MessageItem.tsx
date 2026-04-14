@@ -4,7 +4,6 @@ import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/s
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
-import type { MessageEmbedView, EventEmbedView, FileEmbedView } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
 
@@ -23,12 +22,13 @@ interface MessageItemProps {
   canDelete?: boolean;
   /** Seed a new wiki page from this message's content */
   onConvertToWikiPage?: () => void;
-  /** Called when the user clicks an inline message embed to navigate to the source. */
-  onNavigateMessageEmbed?: (embed: MessageEmbedView) => void;
-  /** Called when the user clicks an inline event embed to open the event panel. */
-  onNavigateEventEmbed?: (embed: EventEmbedView) => void;
-  /** Called when the user clicks an inline file embed to open the files panel. */
-  onNavigateFileEmbed?: (embed: FileEmbedView) => void;
+  /** Called when the user clicks any inline embed — the host opens
+   *  its embed sidebar with kind + slug. */
+  onPreviewEmbed?: (
+    kind: import('@babelr/shared').WikiRefKind,
+    slug: string,
+    serverSlug?: string,
+  ) => void;
 }
 
 type TFn = (key: UIStringKey, values?: Record<string, string | number>) => string;
@@ -96,9 +96,7 @@ export function MessageItem({
   onDelete,
   canDelete,
   onConvertToWikiPage,
-  onNavigateMessageEmbed,
-  onNavigateEventEmbed,
-  onNavigateFileEmbed,
+  onPreviewEmbed,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -278,9 +276,7 @@ export function MessageItem({
         <div className={contentClass}>
           {renderWithEmbeds(displayContent, {
             variant: 'chat',
-            onNavigateMessage: onNavigateMessageEmbed,
-            onNavigateEvent: onNavigateEventEmbed,
-            onNavigateFile: onNavigateFileEmbed,
+            onPreviewEmbed,
             actor,
           })}
         </div>
@@ -322,8 +318,7 @@ export function MessageItem({
       <div className={contentClass}>
         {renderWithEmbeds(displayContent, {
           variant: 'chat',
-          onNavigateMessage: onNavigateMessageEmbed,
-          onNavigateEvent: onNavigateEventEmbed,
+          onPreviewEmbed,
         })}
       </div>
       {attachmentsBlock}
