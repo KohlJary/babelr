@@ -47,3 +47,40 @@ export function maskEmbeds(content: string): MaskedEmbeds {
 export function restoreEmbeds(content: string, tokens: string[]): string {
   return content.replace(RESTORE_RE, (_, n) => tokens[Number(n)] ?? '');
 }
+
+/**
+ * Split `[[...]]`-aware translation for NMT models (transformers.js,
+ * any model not robust enough to preserve placeholder tokens). Splits
+ * the content into text + embed alternating segments, runs the
+ * translator on each text segment only, and reassembles with the
+ * original embed substrings spliced back in.
+ *
+ * Use this for any provider that doesn't reliably copy ⟦E*⟧ tokens
+ * verbatim — small NMT models in particular have no concept of
+ * "preserve this token" and will happily mangle the unicode brackets.
+ *
+ * Empty / whitespace-only segments skip the translator call to avoid
+ * wasting model time on nothing.
+ */
+export async function translatePreservingEmbeds(
+  content: string,
+  translate: (text: string) => Promise<string>,
+): Promise<string> {
+  const refs = parseWikiRefs(content);
+  if (refs.length === 0) return translate(content);
+  let cursor = 0;
+  const parts: string[] = [];
+  for (const ref of refs) {
+    if (ref.start > cursor) {
+      const segment = content.slice(cursor, ref.start);
+      parts.push(segment.trim() ? await translate(segment) : segment);
+    }
+    parts.push(content.slice(ref.start, ref.end));
+    cursor = ref.end;
+  }
+  if (cursor < content.length) {
+    const tail = content.slice(cursor);
+    parts.push(tail.trim() ? await translate(tail) : tail);
+  }
+  return parts.join('');
+}

@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { buildPrompt, parseResponse, type TranslationResult } from '@babelr/shared';
+import {
+  buildPrompt,
+  maskEmbeds,
+  parseResponse,
+  restoreEmbeds,
+  type TranslationResult,
+} from '@babelr/shared';
 import type { TranslationProvider, TranslationProgressCallback } from './types';
 
 const DEFAULT_MODEL = 'llama3.1:8b';
@@ -73,7 +79,15 @@ export class OllamaProvider implements TranslationProvider {
     const results: TranslationResult[] = [];
 
     for (const msg of messages) {
-      const prompt = buildPrompt([msg], targetLanguage, sourceLanguage);
+      // Mask [[kind:slug]] refs before sending to the model and restore
+      // them on the way back. Same strategy the /api/translate proxy
+      // uses for Anthropic/OpenAI calls.
+      const { masked, tokens } = maskEmbeds(msg.content);
+      const prompt = buildPrompt(
+        [{ id: msg.id, content: masked }],
+        targetLanguage,
+        sourceLanguage,
+      );
 
       let res: Response;
       try {
@@ -119,7 +133,14 @@ export class OllamaProvider implements TranslationProvider {
       // If the model somehow emitted multiple entries, keep only the
       // first and force its id back to the source id we asked for —
       // some small models rewrite the id field to arbitrary strings.
-      const result = { ...parsed[0], id: msg.id };
+      const result = {
+        ...parsed[0],
+        id: msg.id,
+        translatedContent:
+          tokens.length > 0
+            ? restoreEmbeds(parsed[0].translatedContent, tokens)
+            : parsed[0].translatedContent,
+      };
       results.push(result);
       onProgress?.(result);
     }

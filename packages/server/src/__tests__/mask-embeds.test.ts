@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { describe, it, expect } from 'vitest';
-import { maskEmbeds, restoreEmbeds } from '@babelr/shared';
+import { maskEmbeds, restoreEmbeds, translatePreservingEmbeds } from '@babelr/shared';
 
 describe('maskEmbeds + restoreEmbeds', () => {
   it('round-trips a string with no embed refs unchanged', () => {
@@ -47,5 +47,40 @@ describe('maskEmbeds + restoreEmbeds', () => {
     expect(masked).toBe('Reference \u27E6E0\u27E7 inline.');
     expect(tokens[0]).toBe('[[partner@partner.example.com:wiki:onboarding]]');
     expect(restoreEmbeds(masked, tokens)).toBe(src);
+  });
+});
+
+describe('translatePreservingEmbeds', () => {
+  it('runs the translator on text segments only and splices embeds back', async () => {
+    const src = 'Read [[wiki:onboarding]] before [[event:kickoff]] starts.';
+    const calls: string[] = [];
+    const out = await translatePreservingEmbeds(src, async (text) => {
+      calls.push(text);
+      // Fake translator: uppercase
+      return text.toUpperCase();
+    });
+    expect(out).toBe('READ [[wiki:onboarding]] BEFORE [[event:kickoff]] STARTS.');
+    // Three text segments, embeds untouched
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).toBe('Read ');
+    expect(calls[1]).toBe(' before ');
+    expect(calls[2]).toBe(' starts.');
+  });
+
+  it('skips the translator entirely when there are no embeds', async () => {
+    const src = 'Just regular prose with no refs.';
+    let called = 0;
+    const out = await translatePreservingEmbeds(src, async (t) => {
+      called++;
+      return t.toUpperCase();
+    });
+    expect(out).toBe(src.toUpperCase());
+    expect(called).toBe(1);
+  });
+
+  it('handles content that starts and ends with an embed', async () => {
+    const src = '[[msg:abc]] middle text [[event:xyz]]';
+    const out = await translatePreservingEmbeds(src, async (t) => `(${t})`);
+    expect(out).toBe('[[msg:abc]]( middle text )[[event:xyz]]');
   });
 });

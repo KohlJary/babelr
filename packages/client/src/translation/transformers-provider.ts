@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { TranslationResult } from '@babelr/shared';
+import { translatePreservingEmbeds } from '@babelr/shared';
 import type { TranslationProvider, TranslationProgressCallback } from './types';
 import { getModelId, FRANC_TO_OPUS, FRANC_TO_ISO1, OPUS_CODES } from './opus-models';
 
@@ -99,10 +100,15 @@ export class TransformersJsProvider implements TranslationProvider {
 
       try {
         const pipe = await loadPipeline(modelId);
-        const output = await (pipe as CallableFunction)(msg.content);
-        const translated = Array.isArray(output)
-          ? (output[0] as { translation_text: string }).translation_text
-          : (output as { translation_text: string }).translation_text;
+        // NMT models can't be instructed to preserve placeholder tokens.
+        // Split the content on [[kind:slug]] embed boundaries, translate
+        // only the text segments, and splice the original embeds back.
+        const translated = await translatePreservingEmbeds(msg.content, async (text) => {
+          const output = await (pipe as CallableFunction)(text);
+          return Array.isArray(output)
+            ? (output[0] as { translation_text: string }).translation_text
+            : (output as { translation_text: string }).translation_text;
+        });
 
         const result: TranslationResult = {
           id: msg.id,

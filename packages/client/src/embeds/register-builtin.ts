@@ -31,15 +31,12 @@ export function registerBuiltinEmbeds(): void {
     renderPreview: (props) =>
       createElement(MessagePreview, { slug: props.slug, serverSlug: props.serverSlug }),
     navigate: (args, ctx) => {
-      // Resolve message → channel by re-fetching, then navigate to its
-      // channel. The inline embed has a channelId in its view; we rely
-      // on the same fetch path. Falls back to no-op if locked.
       void import('../api').then(async (api) => {
         try {
           const embed = await api.getMessageBySlug(args.slug, args.serverSlug);
           if (embed.channelId) {
             ctx.selectChannel(embed.channelId);
-            ctx.setMainView('chat');
+            ctx.closeView();
           }
         } catch {
           // ignore
@@ -64,8 +61,7 @@ export function registerBuiltinEmbeds(): void {
       void import('../api').then(async (api) => {
         try {
           const embed = await api.getEventBySlug(args.slug, args.serverSlug);
-          ctx.setCalendarInitialEventId(embed.id);
-          ctx.setMainView('calendar');
+          ctx.openView('calendar', { eventId: embed.id });
         } catch {
           // ignore
         }
@@ -89,8 +85,7 @@ export function registerBuiltinEmbeds(): void {
       void import('../api').then(async (api) => {
         try {
           const embed = await api.getFileBySlug(args.slug, args.serverSlug);
-          ctx.setFilesInitialFileId(embed.id);
-          ctx.setMainView('files');
+          ctx.openView('files', { fileId: embed.id });
         } catch {
           // ignore
         }
@@ -115,8 +110,7 @@ export function registerBuiltinEmbeds(): void {
       void import('../api').then(async (api) => {
         try {
           const embed = await api.getFileBySlug(args.slug, args.serverSlug);
-          ctx.setFilesInitialFileId(embed.id);
-          ctx.setMainView('files');
+          ctx.openView('files', { fileId: embed.id });
         } catch {
           // ignore
         }
@@ -154,8 +148,7 @@ export function registerBuiltinEmbeds(): void {
       return createElement(WikiPagePreview, { slug: props.slug, serverId: props.serverId });
     },
     navigate: (args, ctx) => {
-      ctx.setWikiInitialSlug(args.slug);
-      ctx.setMainView('wiki');
+      ctx.openView('wiki', { slug: args.slug });
     },
   });
 
@@ -178,7 +171,7 @@ export function registerBuiltinEmbeds(): void {
       ),
     renderPreview: (props) => createElement(ManualPreview, { slug: props.slug }),
     navigate: (args, ctx) => {
-      ctx.openManualSlug(args.slug);
+      ctx.openView('manual', { slug: args.slug });
     },
   });
 }

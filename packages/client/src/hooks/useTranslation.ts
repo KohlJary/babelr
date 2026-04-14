@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { MessageWithAuthor } from '@babelr/shared';
-import { maskEmbeds, restoreEmbeds } from '@babelr/shared';
 import {
   AnthropicProvider,
   OpenAIProvider,
@@ -79,26 +78,17 @@ export function useTranslation(messages: MessageWithAuthor[], settings: Translat
       return next;
     });
 
-    // Mask [[kind:slug]] embed refs in each message before sending to
-    // the provider — slugs aren't natural language and LLMs sometimes
-    // rewrite the bracket syntax. Restored on the way back.
-    const maskedById = new Map<string, string[]>();
-    const batch = uncached.map((m) => {
-      const { masked, tokens } = maskEmbeds(m.message.content);
-      maskedById.set(m.message.id, tokens);
-      return { id: m.message.id, content: masked };
-    });
+    // Each provider handles its own [[kind:slug]] preservation strategy:
+    // - Anthropic/OpenAI go through /api/translate which masks server-side
+    // - Ollama masks inline (instruction-based, like the proxy)
+    // - Transformers.js uses split-translate-rejoin (NMT models can't
+    //   reliably preserve placeholder tokens via prompt instruction)
+    const batch = uncached.map((m) => ({ id: m.message.id, content: m.message.content }));
     const provider = providerRef.current;
 
     provider
       .translate(batch, targetLang)
-      .then((rawResults) => {
-        const results = rawResults.map((r) => {
-          const tokens = maskedById.get(r.id);
-          return tokens && tokens.length > 0
-            ? { ...r, translatedContent: restoreEmbeds(r.translatedContent, tokens) }
-            : r;
-        });
+      .then((results) => {
         const newTranslations = new Map<string, CachedTranslation>();
         for (const r of results) {
           const entry: CachedTranslation = {

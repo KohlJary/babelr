@@ -30,14 +30,12 @@ import { ChannelInviteModal } from './ChannelInviteModal';
 import { FriendsPanel } from './FriendsPanel';
 import { AuditLogPanel } from './AuditLogPanel';
 import { ChannelSettingsPanel } from './ChannelSettingsPanel';
-import { EventsPanel } from './EventsPanel';
-import { WikiPanel } from './WikiPanel';
-import FilesPanel from './FilesPanel';
 import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
 import type { EmbedNavCtx } from '../embeds/registry';
 import type { WikiRefKind } from '@babelr/shared';
+import { getView, type ViewHostContext, type ViewState } from '../views/registry';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
@@ -70,47 +68,34 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // renders its Events and Server Discovery tabs as primary
   // content rather than modal overlays. Channel selection or DM
   // selection implicitly resets this to 'chat'.
-  const [mainView, setMainView] = useState<'chat' | 'calendar' | 'wiki' | 'files' | 'manual'>('chat');
-  const [manualServerId, setManualServerId] = useState<string | null>(null);
-  const [wikiInitialSlug, setWikiInitialSlug] = useState<string | null>(null);
-  const [wikiInitialDraft, setWikiInitialDraft] = useState<{ title?: string; content?: string } | null>(null);
-  // When the user clicks an `[[event:slug]]` embed we need to switch
-  // to the calendar view and auto-open the detail panel for that
-  // event. Tracked here so ChatView can pass the id into EventsPanel
-  // after mainView flips to 'calendar'.
-  const [calendarInitialEventId, setCalendarInitialEventId] = useState<string | null>(null);
-  const [filesInitialFileId, setFilesInitialFileId] = useState<string | null>(null);
+  // Main-panel view routing. Null = the chat default (channel header +
+  // message list + input). Otherwise the host dispatches to whichever
+  // view is registered with this id; per-view scratch state goes in
+  // `viewState` (free-form so plugin authors can store anything).
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [viewState, setViewState] = useState<ViewState>({});
+  const openView = (id: string, state: ViewState = {}) => {
+    setActiveViewId(id);
+    setViewState(state);
+  };
+  const closeView = () => {
+    setActiveViewId(null);
+    setViewState({});
+  };
   const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [embedSidebar, setEmbedSidebar] = useState<EmbedSidebarTarget | null>(null);
   const openEmbedPreview = (kind: WikiRefKind, slug: string, serverSlug?: string) => {
     setEmbedSidebar({ kind, slug, serverSlug });
   };
-  const openManualSlug = async (slug?: string) => {
-    let serverId = manualServerId;
-    if (!serverId) {
-      try {
-        const res = await api.getManualServerId();
-        serverId = res.serverId;
-        setManualServerId(serverId);
-      } catch {
-        return;
-      }
-    }
-    if (slug) setWikiInitialSlug(slug);
-    setMainView('manual');
-  };
   const navCtx: EmbedNavCtx = {
     selectChannel: (id) => {
       setDmMode(false);
       selectChannel(id);
-      setMainView('chat');
+      closeView();
     },
-    setMainView,
-    setCalendarInitialEventId,
-    setFilesInitialFileId,
-    setWikiInitialSlug,
-    openManualSlug: (slug) => void openManualSlug(slug),
+    openView,
+    closeView,
   };
   const [threadMessageId, setThreadMessageId] = useState<string | null>(null);
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
@@ -280,7 +265,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         }}
         onSelectDMs={() => setDmMode(true)}
         onCreateServer={() => setShowCreateServer(true)}
-        onOpenManual={() => void openManualSlug()}
+        onOpenManual={() => openView('manual')}
       />
       <ChannelSidebar
         mode={dmMode ? 'dms' : 'channels'}
@@ -294,11 +279,11 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         unreadCounts={unreadCounts}
         onSelectChannel={(id) => {
           selectChannel(id);
-          setMainView('chat');
+          closeView();
         }}
         onSelectDM={(id) => {
           selectDM(id);
-          setMainView('chat');
+          closeView();
         }}
         onCreateChannel={() => setShowCreateChannel(true)}
         onNewDM={() => setShowNewDM(true)}
@@ -322,9 +307,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             ? () => void leaveServer(selectedServer.id)
             : undefined
         }
-        onShowCalendar={() => setMainView('calendar')}
-        onShowWiki={!dmMode && selectedServer ? () => setMainView('wiki') : undefined}
-        onShowFiles={!dmMode && selectedServer ? () => setMainView('files') : undefined}
+        onShowCalendar={() => openView('calendar')}
+        onShowWiki={!dmMode && selectedServer ? () => openView('wiki') : undefined}
+        onShowFiles={!dmMode && selectedServer ? () => openView('files') : undefined}
         onJoinVoice={(channelId) => {
           if (voice.state.channelId === channelId) return;
           if (voice.state.channelId) voice.leave();
@@ -334,71 +319,24 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         activeVoiceChannelId={voice.state.channelId}
       />
       <div className="chat-panel">
-        {mainView === 'calendar' && (
-          <EventsPanel
-            scope={dmMode || !selectedServer ? 'user' : 'server'}
-            ownerId={dmMode || !selectedServer ? actor.id : selectedServer.id}
-            ownerName={dmMode || !selectedServer ? undefined : selectedServer.name}
-            actor={actor}
-            channels={!dmMode ? channels : undefined}
-            canCreate={
-              dmMode || !selectedServer
-                ? true
-                : ['owner', 'admin', 'moderator'].includes(callerRole)
-            }
-            initialEventId={calendarInitialEventId}
-            onClose={() => {
-              setMainView('chat');
-              setCalendarInitialEventId(null);
-            }}
-            onGoToChannel={(channelId) => {
-              setDmMode(false);
-              selectChannel(channelId);
-              setMainView('chat');
-              setCalendarInitialEventId(null);
-            }}
-          />
-        )}
-        {mainView === 'wiki' && selectedServer && (
-          <WikiPanel
-            serverId={selectedServer.id}
-            serverName={selectedServer.name}
-            callerRole={callerRole}
-            actor={actor}
-            initialSlug={wikiInitialSlug}
-            initialDraft={wikiInitialDraft}
-            onPreviewEmbed={openEmbedPreview}
-            onClose={() => {
-              setMainView('chat');
-              setWikiInitialSlug(null);
-              setWikiInitialDraft(null);
-            }}
-          />
-        )}
-        {mainView === 'files' && selectedServer && (
-          <FilesPanel
-            serverId={selectedServer.id}
-            serverName={selectedServer.name}
-            callerRole={callerRole}
-            actor={actor}
-            initialFileId={filesInitialFileId}
-            onClose={() => {
-              setMainView('chat');
-              setFilesInitialFileId(null);
-            }}
-          />
-        )}
-        {mainView === 'manual' && manualServerId && (
-          <WikiPanel
-            serverId={manualServerId}
-            serverName="Babelr Manual"
-            isManual
-            actor={actor}
-            onPreviewEmbed={openEmbedPreview}
-            onClose={() => setMainView('chat')}
-          />
-        )}
-        {mainView === 'chat' && (
+        {(() => {
+          if (!activeViewId) return null;
+          const def = getView(activeViewId);
+          if (!def) return null;
+          const hostCtx: ViewHostContext = {
+            actor,
+            selectedServer: selectedServer
+              ? { id: selectedServer.id, name: selectedServer.name }
+              : null,
+            callerRole,
+            channels,
+            navCtx,
+            openEmbedPreview,
+            closeView,
+          };
+          return def.render(hostCtx, viewState);
+        })()}
+        {!activeViewId && (
           <>
         <ChannelHeader
           channelName={headerName}
@@ -455,9 +393,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                   const firstBreak = content.indexOf('\n');
                   const title =
                     firstBreak === -1 ? content.slice(0, 120) : content.slice(0, firstBreak).slice(0, 120);
-                  setWikiInitialSlug(null);
-                  setWikiInitialDraft({ title, content });
-                  setMainView('wiki');
+                  openView('wiki', { draft: { title, content } });
                 }
               : undefined
           }
@@ -620,7 +556,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         // Hide the floating widget when the user is already viewing the
         // full-size CallView for this same channel.
         !(
-          mainView === 'chat' &&
+          activeViewId === null &&
           selectedChannel?.id === voice.state.channelId &&
           selectedChannel?.channelType === 'voice'
         ) &&

@@ -880,6 +880,16 @@
       "status": "backlog",
       "created_at": "2026-04-14T15:33:08.491828",
       "created_by": "daedalus"
+    },
+    {
+      "id": "553f040f-88cb-4997-b783-077f69423a5c",
+      "title": "View registry — universal primitive for plugin-extensible main panels",
+      "description": "Mirror the embed registry pattern for main-panel views. The current mainView switch in ChatView ('chat' | 'calendar' | 'wiki' | 'files' | 'manual') becomes registry-driven: each first-party view registers itself at boot with `{ id, label, icon, isAvailable, render }`, and ChatView's chat-panel slot dispatches to whichever view is active.\n\nPlugin authors then register against the same API to ship their own panels — the project-management plugin, polls dashboard, third-party integrations, etc. all work the same way the wiki/calendar do today.\n\nScope:\n- ViewRegistry types + singleton (registry.ts pattern matching embeds)\n- Builtin registrations: calendar, wiki, files, manual\n- Chat stays as the always-on default background (not in registry; rendered when no active view)\n- ViewHostContext bag bundles cross-cutting primitives (actor, selectedServer, callerRole, channels, navCtx, openEmbedPreview, closeView) so registrations don't need to wire 30 props\n- Sidebar entry buttons iterate the registry (server toolbar)\n- Per-view deep-link state held generically on ChatView and exposed to render(host, viewState)\n\nOut of scope (separate items):\n- CallView stays inline-conditional (it's context-triggered, not entry-point-driven)\n- Channel-type plugin support (separate concern from main-panel views)\n- Embed-plugin-system manifest format (this just builds the API; manifest + lazy loading is the next item)",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T16:12:43.069822",
+      "created_by": "daedalus"
     }
   ],
   "version": 27

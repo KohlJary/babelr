@@ -38,18 +38,18 @@ export interface EmbedPreviewProps {
 }
 
 /**
- * Navigation context provided by ChatView (or any host). Exposes the
- * primitives a navigate handler needs to switch views / set initial
- * state. Each registered kind picks the fields it needs.
+ * Navigation context provided by the host (ChatView). Compact surface
+ * — embed navigate handlers either jump to another channel or open a
+ * registered view with some initial state. The view registry handles
+ * per-view setup.
  */
 export interface EmbedNavCtx {
   selectChannel: (channelId: string) => void;
-  setMainView: (view: 'chat' | 'calendar' | 'wiki' | 'files' | 'manual') => void;
-  setCalendarInitialEventId: (id: string | null) => void;
-  setFilesInitialFileId: (id: string | null) => void;
-  setWikiInitialSlug: (slug: string | null) => void;
-  /** Open the manual view at the given slug. */
-  openManualSlug: (slug: string) => void;
+  /** Open a registered view in the main panel with optional initial
+   *  state (deep-link slug, eventId, fileId, etc.). */
+  openView: (id: string, state?: Record<string, unknown>) => void;
+  /** Close any active view (return to the chat default). */
+  closeView: () => void;
 }
 
 /** Data the navigate handler needs (kind-specific). Slug is always
