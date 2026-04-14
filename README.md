@@ -1,12 +1,16 @@
 # Babelr
 
-**Keep your language. The routing layer handles the rest.**
+**A federated workspace where knowledge actually persists.**
 
-Babelr is a federated workspace — chat, wiki, and calendar — built around a tone-preserving LLM translation layer. Users write in their native language and recipients read in theirs, but translation is the thread rather than the destination. What makes Babelr cohere is the substrate underneath it: messages, wiki pages, and calendar events all reference each other through a single `[[kind:slug]]` embed fabric. A wiki page can cite the chat message where a decision was made. A calendar event can link to the runbook it's briefing. A chat thread can invite readers directly into an event's RSVP list with a single click. The surfaces stop feeling like separate tools and start behaving like one connected space.
+Chat platforms are structurally hostile to knowledge. Threads scroll away. Pins get buried. Search finds fragments without context. Every long-lived community ends up with "the one person who remembers how X works" and a quiet dread of what happens when they leave. Slack, Discord, Teams, and Matrix have had a decade to solve this and none of them have — the standard escape hatch is to bolt on Notion or Confluence, which is to say, to admit chat can't hold knowledge and hand the problem to a separate tool.
 
-The translation pipeline treats register, idiom, humor, and intent shape as first-class concerns across every surface — the runbook you wrote in English and the meeting invite your colleague wrote in Japanese both land in each reader's preferred language with their voice intact. Federation is ActivityPub-shaped from day one, so a partner company on their own **Tower** can follow a channel, read a wiki page, or RSVP to a calendar event without leaving home. Very few workspaces can offer even two of those three at once.
+Babelr's thesis is that the missing primitive is a **unified embed fabric**: messages, wiki pages, calendar events, files, and (soon) plugin-provided surfaces all reference each other through a single `[[kind:slug]]` syntax. A wiki page can cite the chat message where a decision was made. A calendar event can link to the runbook it's briefing. A chat thread can invite readers directly into an event's RSVP list with one click. Right-click a useful explanation in chat, "New wiki page from message" — durable knowledge in two clicks, and the new page shows the source message in its backlinks. The surfaces stop feeling like separate tools and start behaving like one connected space.
 
-A Babelr deployment is called a **Tower** — each organization runs their own, and Towers federate with each other. "Server" is reserved for the communities within a Tower (like Discord servers — groups with channels, wikis, calendars, and files). Your company's Tower at `chat.example.com` can federate with your partner's Tower at `collab.partner.org`, and every piece of content that crosses between them translates automatically.
+On top of that fabric, a **tone-preserving LLM translation layer** runs across every surface. Users write in their native language and recipients read in theirs — and "translate" means register-aware, idiom-flagging, intent-classifying translation, not the lossy word-for-word substitution that breaks jokes and sarcasm. The runbook you wrote in English and the meeting invite your colleague wrote in Japanese both land in each reader's preferred language with their voice intact. The translation pipeline knows about embeds — `[[kind:slug]]` references survive translation untouched, so cross-language workspaces don't fragment their knowledge graph at the language boundary.
+
+Federation is ActivityPub-shaped from day one. A partner company on their own **Tower** can follow a channel, read a wiki page, RSVP to a calendar event, or join a voice channel without leaving home. Voice / video / screen-share run through an embedded mediasoup SFU — single-container self-host, no separate infrastructure — and federate cleanly via signed JWT handshake.
+
+A Babelr deployment is called a **Tower** — each organization runs their own, and Towers federate with each other. "Server" is reserved for the communities within a Tower (like Discord servers — groups with channels, wikis, calendars, files, and voice rooms). Your company's Tower at `chat.example.com` can federate with your partner's Tower at `collab.partner.org`, and every piece of content that crosses between them translates automatically.
 
 The name is a statement. The Tower of Babel story is usually read as punishment for human hubris, but structurally it is a story about power fragmenting a communication layer that threatened incumbents. Babelr is infrastructure that makes linguistic difference navigable without erasing it — and each Tower is a node in that infrastructure.
 
@@ -14,23 +18,27 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 
 ## Features
 
-**Tone-preserving translation** -- Not "translate X to French" but "translate X to French preserving the casual-affectionate register and the self-deprecating joke structure." Every translation carries a metadata envelope: detected register, intent classification, confidence score, and flagged idioms with hover-gloss explanations.
+**`[[kind:slug]]` embed fabric** -- One unified addressing scheme across every surface: messages, wiki pages, calendar events, files, images, and (via plugins) anything else. `[[wiki:design-doc]]` renders as a clickable wiki link; `[[msg:abc1234xyz]]` renders as an inline message preview with author and channel context; `[[event:weekly-sync]]` renders as an invite card with RSVP buttons you click without leaving the page; `[[file:onboarding-deck]]` renders as a file card with download. Click any embed and the full content opens in a right sidebar — close it or "Open in [X]" to navigate to the source. A weekly standup embedded on a wiki page lets readers join the invite list in one click. A runbook linked from a chat message opens the wiki at that section. Each embed translates through the same pipeline as everything else, and the syntax federates cross-Tower (`[[partner@partner.org:wiki:onboarding]]`).
 
-**Server wikis with mixed-language translation** -- Long-form knowledge that persists outside the chat stream, and the first wiki system in any chat platform where a single page can be authored in five languages and read natively in any sixth. Bidirectional links between wiki pages and chat messages, click-to-navigate `[[slug]]` refs, and a backlinks panel showing every page and message that references the current page. See [Wikis](#wikis) below for why this matters.
+**Server wikis with mixed-language translation** -- Long-form knowledge that persists outside the chat stream, and the first wiki system in any chat platform where a single page can be authored in five languages and read natively in any sixth. Bidirectional links between wiki pages and chat messages — every page has a "Linked from" panel listing every other page and every chat message that references it. Right-click any message → "New wiki page from message" promotes ephemeral chat into durable knowledge in two clicks. See [Wikis](#wikis) below for why this matters.
 
-**Calendars and events with embedded chat** -- Every event carries its own message channel that inherits the full chat pipeline (reactions, threads, attachments, translation). Recurring events via RFC 5545 RRULE, agenda/week/month views, RSVP tracking, and owner-scoping to either a user or a server. Event titles and descriptions translate through the same tone-preserving pipeline as everything else, so a Spanish-language standup invite lands natively in every reader's preferred language.
+**Voice / video / screen-share** -- Voice channels via mediasoup SFU embedded in the server process — single-container self-host, no separate media service to operate. Webcam and screen-share work as direct extensions of the same flow. Federated: a user on one Tower can join a voice channel on another Tower via signed JWT handshake (browser ↔ origin SFU directly; the home Tower only proxies the auth handshake). When you're in a call and viewing the voice channel, the right sidebar shows the channel's text chat alongside the participant grid.
 
-**Connected surfaces via `[[kind:slug]]` embeds** -- Messages, wiki pages, and events all share a single embed fabric. `[[page-slug]]` renders as a clickable wiki link; `[[msg:slug]]` renders as an inline message preview with author and channel context; `[[event:slug]]` renders as an inline invite card with RSVP buttons you can click without leaving the page you're reading. A weekly standup embedded on a wiki page lets readers join the invite list in one click. A runbook linked from a chat message opens the wiki panel at that section. Each surface's content keeps flowing through the translation pipeline whether it's viewed directly or as an embed.
+**Calendars and events with embedded chat** -- Every event carries its own message channel that inherits the full chat pipeline (reactions, threads, attachments, translation). Recurring events via RFC 5545 RRULE, agenda/week/month views, RSVP tracking, and owner-scoping to either a user or a server. Event titles and descriptions translate through the same tone-preserving pipeline as everything else.
 
-**End-to-end encrypted DMs** -- Client-side ECDH P-256 key exchange with AES-256-GCM encryption. The server never sees DM plaintext. Translation runs after local decryption.
+**Tone-preserving translation** -- Not "translate X to French" but "translate X to French preserving the casual-affectionate register and the self-deprecating joke structure." Every translation carries a metadata envelope: detected register, intent classification, confidence score, and flagged idioms with hover-gloss explanations. Embeds survive translation untouched — `[[wiki:design-doc]]` stays `[[wiki:design-doc]]` so cross-language workspaces don't fragment their knowledge graph at the language boundary.
 
 **Choice of translation backend** -- Four options, grouped into two tiers. **Tone-preserving**: Anthropic Claude, OpenAI GPT, or self-hosted Ollama, each running the same three-stage classify/translate/idiom-check pipeline. **Translation-only**: browser-local Transformers.js with Helsinki-NLP OPUS models for users who want zero external dependencies and will trade tone analysis for full offline operation. See [Translation Pipeline](#translation-pipeline) for details.
 
-**ActivityPub federation** -- Towers federate via ActivityPub. Friends, DMs, server membership, channel messages, reactions, wiki pages, calendar events, files, profile updates, and server metadata all cross Tower boundaries with HTTP-signed delivery and automatic retry. Deploy your own Tower and federate with partners — or run closed with zero external access.
+**ActivityPub federation** -- Towers federate via ActivityPub. Friends, DMs, server membership, channel messages, reactions, wiki pages, calendar events, files, voice channels, profile updates, and server metadata all cross Tower boundaries with HTTP-signed delivery and automatic retry. Deploy your own Tower and federate with partners — or run closed with zero external access.
+
+**Plugin-extensible** -- Both the embed system and the main-panel view system are built around explicit registries (`registerEmbed`, `registerView`). First-party kinds and views (wiki, calendar, files, voice CallView) register against the same API plugin authors will use, so plugins ship with parity rather than second-class status. The embed-plugin-system manifest format and lazy loading is the next item on the roadmap.
+
+**End-to-end encrypted DMs** -- Client-side ECDH P-256 key exchange with AES-256-GCM encryption. The server never sees DM plaintext. Translation runs after local decryption.
 
 **Discord-shaped UX** -- Servers, channels, DMs, real-time WebSocket messaging. Three-panel layout with server sidebar, channel list, and chat area.
 
-**Hippocratic License** -- Universal translation is infrastructure for human flourishing, not a commodity to be metered. The [Hippocratic License 3.0](LICENSE.md) structurally excludes surveillance and human-rights-violating deployments.
+**Hippocratic License** -- Universal translation and federated workspaces are infrastructure for human flourishing, not commodities to be metered. The [Hippocratic License 3.0](LICENSE.md) structurally excludes surveillance and human-rights-violating deployments.
 
 ## Quick Start
 
@@ -126,35 +134,53 @@ Transformers.js is the "no setup, no API key, works offline" option. It uses pur
 
 ## The `[[kind:slug]]` Embed System
 
-Every piece of content in Babelr — messages, wiki pages, calendar events, files (coming soon), work items (via plugin) — carries a short, copy-paste-friendly slug. Type `[[kind:slug]]` anywhere that accepts text and it renders as a live, interactive embed of the referenced content. This is the connective tissue that makes Babelr feel like one workspace instead of five separate tools.
+Every piece of content in Babelr — messages, wiki pages, calendar events, files, images — carries a short, copy-paste-friendly slug. Type `[[kind:slug]]` anywhere that accepts text and it renders as a live, interactive embed of the referenced content. This is the connective tissue that makes Babelr feel like one workspace instead of five separate tools.
 
 ### Built-in embed kinds
 
-| Syntax | Renders as | Interactive? |
-|--------|-----------|-------------|
-| `[[page-slug]]` | Clickable wiki link | Opens wiki panel at that page |
-| `[[msg:abc1234xyz]]` | Inline message preview with author, channel, and content snippet | Click navigates to the source channel |
-| `[[event:abc1234xyz]]` | Inline invite card with date/time, location, and attendee counts | RSVP buttons (Going / Interested / Decline) work directly from the card |
+| Syntax | Renders as | Click behavior |
+|--------|-----------|----------------|
+| `[[page-slug]]` or `[[wiki:page-slug]]` | Clickable wiki link | Opens page preview in right sidebar; "Open in Wiki" navigates to the full panel |
+| `[[msg:abc1234xyz]]` | Inline message preview with author, channel, and content snippet | Sidebar preview with full message + context; "Go to message" jumps to source |
+| `[[event:weekly-sync]]` | Inline invite card with date/time, location, and attendee counts | Sidebar preview with description + RSVP; "Open in Calendar" navigates |
+| `[[file:onboarding-deck]]` | File card with type icon, name, size | Sidebar preview with metadata + download |
+| `[[img:diagram]]` | Inline image | Large image preview in sidebar |
+| `[[man:wiki-syntax]]` | Manual link | Sidebar preview of the manual page |
+| `[[partner@partner.org:wiki:onboarding]]` | Cross-Tower embed (federation proxy) | Same shape as local; fetched via signed GET |
 
 ### How it works
 
 The parser (`parseWikiRefs` in `@babelr/shared`) is pure and synchronous — it scans text for `[[...]]` refs, classifies each by prefix, and returns typed ref objects with slug, kind, display text, and character offsets. Refs inside fenced or inline code blocks are ignored so people can write about the syntax without triggering resolution.
 
-On the client, `renderWithEmbeds` splits markdown content on embed refs and interleaves the corresponding React components (`MessageEmbed`, `EventEmbed`, and soon `FileEmbed`, `TaskEmbed`) between the rendered markdown chunks. Each embed component fetches its data independently with a module-level cache that dedupes concurrent requests and keeps every mounted instance of the same slug in sync — change your RSVP on one event embed and every other embed of the same event on the page updates instantly.
+On the client, every kind is registered in an `EmbedRegistry` with three things: a `renderInline` (the in-message card), a `renderPreview` (the right-sidebar full view), and a `navigate` (what "Open in [X]" does). The renderer dispatches by kind; nothing is hardcoded. Each embed component fetches its data independently with a module-level cache that dedupes concurrent requests and keeps every mounted instance of the same slug in sync — change your RSVP on one event embed and every other embed of the same event on the page updates instantly.
 
-Embeds translate. If the referenced content is in a different language, the embed runs through the same translation pipeline as everything else. A Spanish wiki page can embed a Japanese meeting invite and an English chat message, and a French reader sees all three in French.
+**Embeds translate.** If the referenced content is in a different language, the embed runs through the same translation pipeline as everything else. The translation layer knows about embed syntax — `[[kind:slug]]` references survive translation untouched (placeholder masking for instruction-tuned LLMs, split-translate-rejoin for NMT models), so a Spanish wiki page can embed a Japanese meeting invite and an English chat message, and a French reader sees all three in French without the slug graph fragmenting.
 
 ### Plugin extensibility
 
-The embed system is designed to be extended. The built-in kinds (page, msg, event) are the foundation; the plugin system (in development) allows third parties to register new `[[kind:slug]]` prefixes that render real content from external services inside Babelr:
+The embed system is built around two registries with the same shape: `EmbedRegistry` for `[[kind:slug]]` content and `ViewRegistry` for main-panel views. First-party kinds (page, msg, event, file, img, manual) and first-party views (calendar, wiki, files, manual) register against the same API a plugin will use:
+
+```ts
+registerEmbed({
+  kind: 'jira',
+  label: 'Jira ticket',
+  navigateLabel: 'Open in Jira',
+  renderInline: (props) => <JiraInline ... />,
+  renderPreview: (props) => <JiraPreview ... />,
+  navigate: (args, ctx) => window.open(`https://jira.example.com/browse/${args.slug}`),
+});
+```
+
+Once the manifest format and lazy loading land, plugins ship like:
 
 - `[[jira:PROJ-456]]` → inline Jira ticket with status, assignee, and priority
 - `[[gh:owner/repo#123]]` → GitHub PR with file list and review status
-- `[[ado:pr-1234]]` → Azure DevOps pull request with diff viewer
+- `[[poll:retro-vote]]` → inline poll with click-to-vote
+- `[[task:board-2-card-15]]` → kanban card with drag-and-drop status
 
-Plugins export a React component with the same `{ slug, onNavigate }` contract as the built-in embeds, register their kind prefix in a manifest, and optionally provide server-side routes for data fetching and credential storage. The project management surface is being built as the first plugin — a full-featured kanban board and sprint planner implemented entirely through the plugin API — to validate that the API is expressive enough for real workloads before third parties build on it.
+The project management surface and the polls/quizzes plugin are queued as the validating first plugins — built entirely through the plugin API to prove the contract is expressive enough for real workloads before third parties build on it.
 
-The parser stays pure. All dynamic behavior lives in the component registry above it. An unrecognized prefix falls through to a generic placeholder, so a broken or missing plugin never crashes the page.
+The parser stays pure. All dynamic behavior lives in the registries above it. An unrecognized prefix falls through to a generic placeholder, so a broken or missing plugin never crashes the page.
 
 ## Wikis
 
