@@ -830,6 +830,16 @@
       "priority": "P2",
       "status": "backlog",
       "description": "Extract the wiki tabbed right sidebar into a reusable component for all views. Chat could show threads/embed previews, files could show metadata, and plugins could register their own interactive panes via the plugin API."
+    },
+    {
+      "id": "02f678fb-7750-423c-bd6c-bac0f89a15f6",
+      "title": "Voice federation: optional proxied signaling toggle",
+      "description": "Default federated voice signaling is direct: the remote user's browser opens a WS straight to the origin Tower (the one that owns the voice channel) using a federation JWT issued by their home Tower. This is simple, low-latency, and lets the origin Tower see the user's browser IP.\n\nSome self-hosters will want privacy-preserving signaling that hides member IPs from remote Towers. Add a config toggle (per-Tower) that enables proxied signaling: the browser only ever talks to its home Tower, which relays every voice WS frame to the origin Tower. The origin Tower sees the home Tower's IP, never the user's.\n\nScope:\n- Per-Tower config: VOICE_FEDERATION_PROXY=on|off (default off)\n- Home Tower opens an outbound WS to origin Tower; multiplex per-user voice signaling over it\n- Add latency budget instrumentation so admins can see the cost\n- The WebRTC media itself still flows browser ↔ origin SFU — proxy mode does NOT relay RTP\n  (that would require SFU-to-SFU cascading, see voice-channels-sfu cascading)\n\nTrade-off worth surfacing in docs: with proxied signaling on, an origin Tower can still infer approximate user identity from the home Tower's announce IP if the WebRTC media flows direct. True browser-IP hiding requires both proxied signaling AND SFU-to-SFU cascading.",
+      "priority": "P3",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T14:12:30.552014",
+      "created_by": "daedalus"
     }
   ],
   "version": 27
