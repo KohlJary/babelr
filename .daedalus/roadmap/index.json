@@ -860,6 +860,16 @@
       "status": "backlog",
       "created_at": "2026-04-14T15:01:10.218890",
       "created_by": "daedalus"
+    },
+    {
+      "id": "ea58ef7b-c6e8-4a0c-81fd-640dd14939c2",
+      "title": "Full-size CallView for active voice channels (Discord-style call surface)",
+      "description": "When a user is in a voice call AND has the voice channel selected, replace the (empty) message-list panel with a full-size call surface (Discord-style):\n\n- Participant grid when nobody is screen-sharing — responsive auto-fit, square-ish tiles, scales to count\n- When someone IS screen-sharing: large 16:9 screen pane on top, horizontal strip of small participant tiles below\n- Right sidebar with tabbed UI; default tab is the channel's own text chat (voice channels accept text messages alongside voice). Same useChat / MessageList / MessageInput composition the wiki/event/file panels use.\n- Fuller channel header (topic, member count, settings gear) — matches the text-view header for consistency\n- Control bar (mute / cam / screen / deafen / leave) extracted into a shared component used by both CallView and the floating VoicePanel\n\nFloating VoicePanel widget still shows when call is active but the user navigated to a different channel; hidden when CallView is the visible surface.\n\nBuilt generic: `chatId` is the only chat-source prop, so DM calls and event calls can later reuse the same surface by passing dmChatId / eventChatId.\n\nSide benefit: extract the right-sidebar tab pattern (currently inline-duplicated in WikiPanel, EventDetailPanel, FilesPanel) into a reusable RightSidebar component. Don't retrofit existing consumers in this PR — just have them available for future consolidation.\n\nFollow-ups (separate roadmap items):\n- Wire CallView for DM calls (needs DM voice gating)\n- Wire CallView for event calls (needs event voice gating)\n- Retrofit WikiPanel / EventDetailPanel / FilesPanel onto RightSidebar",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-14T15:11:48.823304",
+      "created_by": "daedalus"
     }
   ],
   "version": 27

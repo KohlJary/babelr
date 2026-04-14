@@ -2817,6 +2817,149 @@ textarea.modal-input {
   box-shadow: none;
 }
 
+/* Full-size CallView ---------------------------------------------------
+ * Replaces the message list when the user is in a call AND has the
+ * voice channel selected. ChannelHeader still renders above. Layout
+ * is two columns: stage (grid or screen-share + tile-strip) on the
+ * left, RightSidebar on the right. */
+.call-view {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.call-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #0f1419;
+}
+.call-stage {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+.call-stage.grid {
+  align-content: start;
+}
+.call-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+  align-content: start;
+}
+.call-grid .voice-tile {
+  aspect-ratio: 4 / 3;
+  width: 100%;
+}
+.call-screen-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+.call-screen-pane .voice-tile.screen {
+  flex: 1;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+.call-tile-strip {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.25rem 0;
+  flex-shrink: 0;
+}
+.call-tile-strip .voice-tile {
+  width: 160px;
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
+}
+.call-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #6b7280;
+  padding: 2rem;
+}
+.call-controls-area {
+  border-top: 1px solid #1f2937;
+  padding: 0.75rem;
+  background: #0a0e13;
+}
+.call-right-sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid #1f2937;
+  display: flex;
+  flex-direction: column;
+  background: #0a0e13;
+  min-height: 0;
+}
+.call-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.call-chat .message-list {
+  flex: 1;
+  min-height: 0;
+}
+.call-chat-empty {
+  padding: 1rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* Generic right-sidebar shell shared with CallView (and eventually
+ * WikiPanel / EventDetailPanel / FilesPanel — those still inline-render
+ * their own tab strips for now). */
+.right-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.right-sidebar-tabs {
+  display: flex;
+  flex-direction: row;
+  border-bottom: 1px solid #1f2937;
+  flex-shrink: 0;
+}
+.right-sidebar-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 0.75rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 2px solid transparent;
+}
+.right-sidebar-tab:hover {
+  color: #e2e8f0;
+}
+.right-sidebar-tab.active {
+  color: #e2e8f0;
+  border-bottom-color: #4b6cb7;
+}
+.right-sidebar-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Role management panel ----------------------------------------------- */
 .roles-panel {
   display: flex;

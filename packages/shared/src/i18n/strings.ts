@@ -492,6 +492,8 @@ export const UI_STRINGS = {
   'voice.disableVideo': 'Turn off camera',
   'voice.enableScreenShare': 'Share your screen',
   'voice.disableScreenShare': 'Stop sharing screen',
+  'voice.chatTab': 'Chat',
+  'voice.chatUnavailable': 'No text chat for this call.',
 
   // Languages
   'language.en': 'English',

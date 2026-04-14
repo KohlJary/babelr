@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useEffect, useState } from 'react';
 import type { UseVoiceState } from '../hooks/useVoice';
 import type { ActorProfile } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 import { VoiceTile } from './VoiceTile';
+import { VoiceControls } from './VoiceControls';
+import { useVoiceStreams } from '../hooks/useVoiceStreams';
 
 interface VoicePanelProps {
   channelName: string;
@@ -22,6 +23,11 @@ interface VoicePanelProps {
   getPeerScreenStream: (actorId: string) => MediaStream | null;
 }
 
+/**
+ * Floating-widget call surface, shown when the user is in a call but
+ * NOT viewing the corresponding voice channel. When the channel is
+ * selected the full-size CallView replaces this widget.
+ */
 export function VoicePanel({
   channelName,
   actor,
@@ -39,38 +45,13 @@ export function VoicePanel({
   getPeerScreenStream,
 }: VoicePanelProps) {
   const t = useT();
-
-  // We poll the imperative stream getters into a state snapshot so React
-  // re-renders VoiceTile when streams change. useVoice's state has
-  // `hasVideo`/`hasScreen` booleans per peer and `videoEnabled`/
-  // `screenShareEnabled` flags for self, which are the refresh triggers.
-  const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
-  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
-  const [peerVideoStreams, setPeerVideoStreams] = useState<Map<string, MediaStream | null>>(
-    new Map(),
-  );
-  const [peerScreenStreams, setPeerScreenStreams] = useState<Map<string, MediaStream | null>>(
-    new Map(),
-  );
-
-  useEffect(() => {
-    setLocalVideoStream(getLocalVideoStream());
-  }, [voice.videoEnabled, getLocalVideoStream]);
-
-  useEffect(() => {
-    setLocalScreenStream(getLocalScreenStream());
-  }, [voice.screenShareEnabled, getLocalScreenStream]);
-
-  useEffect(() => {
-    const vNext = new Map<string, MediaStream | null>();
-    const sNext = new Map<string, MediaStream | null>();
-    for (const peer of voice.peers) {
-      vNext.set(peer.actorId, peer.hasVideo ? getPeerVideoStream(peer.actorId) : null);
-      sNext.set(peer.actorId, peer.hasScreen ? getPeerScreenStream(peer.actorId) : null);
-    }
-    setPeerVideoStreams(vNext);
-    setPeerScreenStreams(sNext);
-  }, [voice.peers, getPeerVideoStream, getPeerScreenStream]);
+  const { localVideoStream, localScreenStream, peerVideoStreams, peerScreenStreams } =
+    useVoiceStreams(voice, {
+      getLocalVideoStream,
+      getLocalScreenStream,
+      getPeerVideoStream,
+      getPeerScreenStream,
+    });
 
   const selfActor = {
     id: actor.id,
@@ -93,7 +74,6 @@ export function VoicePanel({
         </span>
       </div>
 
-      {/* Webcam/avatar tiles — compact 4:3 grid. */}
       <div className="voice-tiles">
         <VoiceTile
           actor={selfActor}
@@ -118,11 +98,7 @@ export function VoicePanel({
         )}
       </div>
 
-      {/* Screen share tiles — separate stacked section, each tile is
-          full-width at 16:9 so presentation content is readable. Only
-          rendered when at least one participant is actually sharing. */}
-      {(localScreenStream ||
-        voice.peers.some((p) => p.hasScreen)) && (
+      {(localScreenStream || voice.peers.some((p) => p.hasScreen)) && (
         <div className="voice-screen-tiles">
           {localScreenStream && (
             <VoiceTile
@@ -148,50 +124,15 @@ export function VoicePanel({
         </div>
       )}
 
-      <div className="voice-controls">
-        <button
-          className={`voice-control-btn ${voice.micMuted ? 'active' : ''}`}
-          onClick={onToggleMute}
-          title={voice.micMuted ? t('voice.unmuteMic') : t('voice.muteMic')}
-        >
-          {voice.micMuted ? '🔇' : '🎤'}
-        </button>
-        <button
-          className={`voice-control-btn ${voice.videoEnabled ? 'active-on' : ''}`}
-          onClick={() => void onToggleVideo()}
-          title={voice.videoEnabled ? t('voice.disableVideo') : t('voice.enableVideo')}
-        >
-          {voice.videoEnabled ? '📹' : '📷'}
-        </button>
-        <button
-          className={`voice-control-btn ${voice.screenShareEnabled ? 'active-on' : ''}`}
-          onClick={() => void onToggleScreenShare()}
-          title={
-            voice.screenShareEnabled
-              ? t('voice.disableScreenShare')
-              : t('voice.enableScreenShare')
-          }
-        >
-          🖥️
-        </button>
-        <button
-          className={`voice-control-btn ${voice.deafened ? 'active' : ''}`}
-          onClick={onToggleDeafen}
-          title={voice.deafened ? t('voice.undeafen') : t('voice.deafen')}
-        >
-          {voice.deafened ? '🙉' : '🔈'}
-        </button>
-        <button
-          className={`voice-control-btn ${voice.pushToTalk ? 'active' : ''}`}
-          onClick={onTogglePushToTalk}
-          title={voice.pushToTalk ? t('voice.pttOff') : t('voice.pttOnTitle')}
-        >
-          PTT
-        </button>
-        <button className="voice-control-btn leave" onClick={onLeave}>
-          {t('voice.leave')}
-        </button>
-      </div>
+      <VoiceControls
+        voice={voice}
+        onLeave={onLeave}
+        onToggleMute={onToggleMute}
+        onToggleDeafen={onToggleDeafen}
+        onTogglePushToTalk={onTogglePushToTalk}
+        onToggleVideo={onToggleVideo}
+        onToggleScreenShare={onToggleScreenShare}
+      />
       {voice.pushToTalk && <div className="voice-ptt-hint">{t('voice.pttHint')}</div>}
     </div>
   );

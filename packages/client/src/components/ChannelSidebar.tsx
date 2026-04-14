@@ -150,8 +150,11 @@ export function ChannelSidebar({
         <button
           className={`sidebar-item ${selectedChannelId === ch.id ? 'active' : ''} ${isActiveVoice ? 'voice-active' : ''}`}
           onClick={() => {
+            // Voice channels: select AND join. Selecting is what makes
+            // ChatView render the full-size CallView; joining is the
+            // actual mediasoup entry. Both happen on the same click.
+            onSelectChannel(ch.id);
             if (isVoice && onJoinVoice) onJoinVoice(ch.id);
-            else onSelectChannel(ch.id);
           }}
         >
           <span className="sidebar-item-name">{icon}{ch.name}</span>

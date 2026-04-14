@@ -34,6 +34,7 @@ import { EventsPanel } from './EventsPanel';
 import { WikiPanel } from './WikiPanel';
 import FilesPanel from './FilesPanel';
 import { VoicePanel } from './VoicePanel';
+import { CallView } from './CallView';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
@@ -398,6 +399,29 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onOpenProfile={() => setShowProfile(true)}
           onOpenMentions={() => setShowMentions(true)}
         />
+        {voice.state.channelId &&
+        selectedChannel?.id === voice.state.channelId &&
+        selectedChannel?.channelType === 'voice' ? (
+          <CallView
+            channelName={headerName}
+            actor={actor}
+            voice={voice.state}
+            chatId={selectedChannel.id}
+            translationSettings={settings}
+            onLeave={voice.leave}
+            onToggleMute={voice.toggleMute}
+            onToggleDeafen={voice.toggleDeafen}
+            onTogglePushToTalk={voice.togglePushToTalk}
+            onToggleVideo={voice.toggleVideo}
+            onToggleScreenShare={voice.toggleScreenShare}
+            onPeerVolume={voice.setPeerVolume}
+            getLocalVideoStream={voice.getLocalVideoStream}
+            getPeerVideoStream={voice.getPeerVideoStream}
+            getLocalScreenStream={voice.getLocalScreenStream}
+            getPeerScreenStream={voice.getPeerScreenStream}
+          />
+        ) : (
+          <>
         <MessageList
           messages={messages}
           loading={loading}
@@ -456,6 +480,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           return <div className="dm-seen-indicator">Seen by {name}</div>;
         })()}
         <MessageInput onSend={sendMessage} disabled={!activeChannelId || !connected} onTyping={notifyTyping} />
+          </>
+        )}
           </>
         )}
       </div>
@@ -584,7 +610,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           />
         );
       })()}
-      {voice.state.channelId && (() => {
+      {voice.state.channelId &&
+        // Hide the floating widget when the user is already viewing the
+        // full-size CallView for this same channel.
+        !(
+          mainView === 'chat' &&
+          selectedChannel?.id === voice.state.channelId &&
+          selectedChannel?.channelType === 'voice'
+        ) &&
+        (() => {
         const vCh = channels.find((c) => c.id === voice.state.channelId);
         return (
           <VoicePanel
