@@ -26,7 +26,7 @@
       "roadmapItems": [
         "Translation as default for plugin content — zero-config primitive"
       ],
-      "notes": "All four in-scope tasks shipped: component ergonomics (ComponentType + createElement), translation-by-default (<T>), WS helper (onWsMessage), and documented the server-safe/client-only file-split convention. Plugin authors now have one-liners for the friction points polls exposed. Phase 4 (project management) starts on a smoother SDK."
+      "notes": "All four in-scope tasks shipped: component ergonomics (ComponentType + createElement), translation-by-default (<T>), WS helper (onWsMessage), and documented the server-safe/client-only file-split convention. Plugin authors now have one-liners for the friction points polls exposed. Phase 4 (project management) starts on a smoother SDK. Deferred items persisted to roadmap: 'Plugin SDK — stable re-exports of @babelr/client utilities' (P2, ships with Phase 5), 'Plugin DB abstraction — helper over drizzle for plugin tables' (P3, revisit after PM), 'Plugin test harness — standard pattern for plugin unit + integration tests' (P2, builds alongside PM), and cross-Tower voting is already covered by 'Validate polls federation across two-Tower staging' (P2)."
     },
     {
       "id": "plugin-phase-4",
@@ -48,60 +48,82 @@
     }
   ],
   "activePhase": {
-    "id": "plugin-phase-3",
-    "title": "SDK gap-closure based on polls implementation",
-    "started": "2026-04-15",
-    "goal": "Make the frictions every plugin will hit into one-liners, not boilerplate — so PM (Phase 4) starts on a smoother SDK.",
+    "id": "plugin-phase-4",
+    "title": "Project management — complex SDK consumer",
+    "started": null,
+    "goal": "Build PM as the second first-party plugin, validating the SDK at complex scale. Multiple embed kinds, plugin-provided view, drag-and-drop UI, AS2 federation of custom objects, comment threads via useChat. Prove the Phase 3 primitives (<T>, onWsMessage, ComponentType registries, split-file pattern) scale before Phase 5 freezes the manifest.",
+    "sequencing": "Build bottom-up: schema first, then server routes, then kanban UI, then embed/comments, then federation. Each step leaves the plugin runnable — no half-built half-broken state.",
     "tasks": [
       {
-        "id": "task-4",
-        "title": "Component ergonomics — accept ComponentType directly",
-        "status": "done",
-        "details": "registerEmbed / registerView / registerSidebarSlot currently expect render functions that return ReactNode. Plugin authors hit hook-rule violations if they call components directly. SDK should accept ComponentType and wrap with createElement internally. Smallest, unblocks #1. Do this first.",
-        "resolution": "EmbedDefinition.{Inline,Preview} and ViewDefinition.View are now ComponentType<Props>. Every callsite (render-with-embeds, EmbedSidebar, ChatView's view dispatch) goes through createElement, so hooks inside plugin components are tracked against the component instance rather than leaking into the caller's render cycle. Built-ins retrofit; SidebarSlot already used this shape."
+        "id": "task-pm-1",
+        "title": "Schema + migrations + basic server CRUD",
+        "status": "pending",
+        "details": "Migrations: plugin_pm_boards (id, slug, server_id, name, description, created_at), plugin_pm_columns (board_id, position, name, wip_limit?), plugin_pm_work_items (board_id, column_id, slug, title, description, priority, item_type, reporter_id, assignee_id?, story_points?, due_date?, position, created_at, updated_at), plugin_pm_work_item_comments (work_item_id, author_id, content, created_at), plugin_pm_sprints (board_id, name, goal, start_date, end_date, status) — sprints optional for v1. Server routes: POST /boards, GET /boards (server-scoped), GET /boards/:slug with columns + items, POST /boards/:slug/work-items, PATCH /work-items/:slug (move/edit), POST /work-items/:slug/comments. All namespaced table prefixes. Drizzle sql template tags through fastify.db.execute (same pattern as polls)."
       },
       {
-        "id": "task-1",
-        "title": "Translation-by-default — <T> component wraps useTranslateStrings",
-        "status": "done",
-        "details": "Add <T>{text}</T> component that auto-translates via the shared useTranslateStrings cache. Plugins wrap user-facing strings instead of manually wiring the hook.",
-        "resolution": "Shipped @babelr/client/components/T. Polls refactored from ~20 lines of manual useTranslateStrings/useMemo bookkeeping to <T>{value}</T> wrapping at each render site. Translation behavior identical (same cache, same pipeline). The declarative-manifest-fields option was considered but set aside — <T> covers the 95% case, and manifest-declared paths over fetched-data would require centralizing data fetching which plugins don't today. Revisit if <T> proves insufficient when PM lands."
+        "id": "task-pm-2",
+        "title": "Board list view — ListDetailView + empty kanban on select",
+        "status": "pending",
+        "details": "Register a 'pm' view with ListDetailView: left rail = boards for the current server (search, create, select), right = selected board's columns as empty lanes. Sidebar slot button '📋 Boards' opens the view. Columns render as fixed named lanes per board row (Todo / In Progress / Done as seed defaults); custom columns come in task-pm-3. At this point plugin runs end-to-end: user creates a board, sees columns, nothing in them yet."
       },
       {
-        "id": "task-6",
-        "title": "WS helper — onWsMessage(type, handler)",
-        "status": "done",
-        "details": "Every plugin that needs real-time sync duplicates the window.addEventListener('babelr:ws', ...) + type-filter + detail-extract dance. Add a single helper.",
-        "resolution": "Shipped @babelr/client/plugins/ws-helper. Plugins subscribe via onWsMessage<TPayload>(type, handler) which returns an unsubscribe function. Polls replaced its two inline WS listeners (one module-level, one useEffect) with one-line subscriptions. Namespacing convention documented: plugin:<id>:<event>."
+        "id": "task-pm-3",
+        "title": "Work item CRUD in the kanban UI",
+        "status": "pending",
+        "details": "Create work item inline in a column (+ button → compact form). Click card to open detail — reuse the right-sidebar preview pattern via embed registry OR open an inline modal; evaluate which feels better. Detail shows title, description (markdown), priority, item_type, assignee picker, comment thread (task-pm-5). Edit in place. Delete. Translation via <T> on title / description."
       },
       {
-        "id": "task-3",
-        "title": "Formalize server-safe / client-only file split",
-        "status": "done",
-        "details": "Polls needed manifest.ts (server-safe) + client-entry.ts (client-only) + client.tsx (React components) to avoid server tsc tracing into JSX. Formalize the pattern.",
-        "resolution": "The split is already working: client-side RegisteredPlugin pairs a manifest with an optional setupClient imported from the plugin's `/client-entry` subpath. Documented the pattern in the plugins.md wiki seed page including recommended directory layout, package.json exports, and tsconfig.json. Kept the hello plugin as the single-file example; polls as the split-file example. Considered adding a `client?: string` field to PluginManifest for automatic loader resolution but decided against — the current explicit pairing in registered.ts is more readable and Phase 5 distribution will rework this layer anyway."
+        "id": "task-pm-4",
+        "title": "Drag-and-drop reordering + cross-column moves",
+        "status": "pending",
+        "details": "HTML5 drag-and-drop API (no deps). Drop on a column triggers PATCH /work-items/:slug with new column_id + position. Optimistic UI update with rollback on server error. Real-time sync via plugin:pm:updated WS broadcast so other viewers see the move. Handles the N+1 reorder problem with a position-rebalance on the server when positions get tight."
+      },
+      {
+        "id": "task-pm-5",
+        "title": "Work item comments thread",
+        "status": "pending",
+        "details": "Each work item has a chatId (OrderedCollection) on creation — mirrors how events / files / wiki pages handle their comment threads. Use useChat(actor, chatId) in the detail view; get reactions + translations + threading for free. Comment content goes through the existing translation pipeline. Zero new chat code."
+      },
+      {
+        "id": "task-pm-6",
+        "title": "[[task:slug]] + [[board:slug]] embeds",
+        "status": "pending",
+        "details": "Register two embed kinds. [[task:slug]] inline card: title + status badge + assignee avatar + priority indicator. Preview: full detail with comments. [[board:slug]] inline: board name + work-item count + top-3 columns. Preview: mini read-only kanban. Federation handlers resolveBySlug auto-wired via the plugin loader. Validates multiple-embed-kinds-per-plugin for the first time."
+      },
+      {
+        "id": "task-pm-7",
+        "title": "Real-time sync across all PM mutations",
+        "status": "pending",
+        "details": "plugin:pm:updated WS events on work item create/move/edit/delete and on comment create. Client-side cache invalidation + optimistic-update reconciliation. Follow the polls pattern (module-level onWsMessage subscription that publishes into a cache map)."
+      },
+      {
+        "id": "task-pm-8",
+        "title": "Federation — AS2 custom objects for work items + boards",
+        "status": "pending",
+        "details": "Work items federate as AS2 Note variants with type: 'WorkItem' + custom fields. Board metadata as Group properties. Inbox handler accepts remote Create/Update/Delete of work items from federated members. Cross-Tower [[server@tower:task:slug]] works through the proxy. Remote members can comment; comment federation reuses the existing Group-followers delivery pattern. This is the biggest chunk — validates AS2 custom object handling for the plugin system, not just message-shaped data."
+      },
+      {
+        "id": "task-pm-9",
+        "title": "Polish: translation coverage, edge cases, empty states",
+        "status": "pending",
+        "details": "Sweep all user-facing strings through <T>. Validate translation works for work item titles + descriptions + comments end-to-end. Empty states for no-boards / no-work-items / no-comments. Error handling for deleted / moved items. Accessibility pass on drag-and-drop. Loading states for slow federation fetches. This is the sign-off pass before declaring PM done."
       }
     ],
     "deferred": [
       {
-        "id": "task-2",
-        "title": "Stable SDK re-exports for translation / hooks / UI primitives",
-        "reason": "Bigger design discussion — ties into Phase 5 distribution packaging. Decide then whether @babelr/plugin-sdk grows a /react subpath or a separate @babelr/plugin-ui package ships."
+        "id": "task-pm-sprints",
+        "title": "Sprint planning + sprint view",
+        "reason": "Useful but not required for validating the SDK. Ship core kanban first; sprints are additive once work item primitives exist."
       },
       {
-        "id": "task-5",
-        "title": "SQL abstraction — plugin-friendly DB helper over drizzle",
-        "reason": "Big API design call. Drizzle coupling isn't pure yet (plugins still see sql template tag). Revisit once PM proves what the second real plugin actually needs."
+        "id": "task-pm-permissions",
+        "title": "Per-board permissions (viewers / editors / admins)",
+        "reason": "Core PM inherits server-level CONNECT_VOICE / VIEW_CHANNELS style permissions for v1. Board-scoped roles are a polish item if there's demand."
       },
       {
-        "id": "task-7",
-        "title": "Plugin test harness",
-        "reason": "No urgent blocker. Build alongside Phase 4 when PM is complex enough to need tests."
-      },
-      {
-        "id": "task-8",
-        "title": "Cross-Tower voting — federated vote JWT handshake",
-        "reason": "Federation design task; batch with the live-federated-voice-end-to-end-test staging deploy when those Towers are up."
+        "id": "task-pm-imports",
+        "title": "Import from Jira / Linear / GitHub Issues",
+        "reason": "The slack-teams-import roadmap item already covers this pattern for chat; extend when PM is stable. Not blocking the SDK validation goal."
       }
     ]
   }

@@ -971,6 +971,36 @@
       "status": "backlog",
       "created_at": "2026-04-15T15:49:44.918219",
       "created_by": "daedalus"
+    },
+    {
+      "id": "1d44ce20-e99b-4ca2-8b16-b84425ddc047",
+      "title": "Plugin SDK — stable re-exports of @babelr/client utilities",
+      "description": "In-tree plugins today reach into client internals via relative paths like `../../client/src/hooks/useTranslateStrings.js`, `../../client/src/components/T.js`, and `../../client/src/plugins/ws-helper.js`. That's fine while plugins live in the monorepo but breaks the moment a plugin ships as an npm package (Phase 5).\n\nFormalize stable re-exports so plugin authors import from a durable public surface:\n- `@babelr/plugin-sdk/react` (or a separate `@babelr/plugin-ui` package) re-exports <T>, useTranslateStrings, ListDetailView, onWsMessage, and other primitives that polls + PM proved plugin authors want\n- Semver-versioned: breaking changes bump the SDK major; plugins declare the range they need via dependencies.babelr-sdk\n- Keeps React as a peer-dep on the SDK, not a direct dep — plugin authors bring their own React\n\nDecision: subpath inside @babelr/plugin-sdk vs a separate @babelr/plugin-ui package. Subpath is simpler; separate package lets us update UI primitives independently of the manifest/runtime. Lean toward subpath until the split buys something concrete.\n\nShips with Phase 5 distribution freeze. Until then, the relative-path imports inside the monorepo are the documented pattern.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-15T16:29:58.863346",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "a020bb18-cbc5-427e-95f0-1f888dd01821",
+      "title": "Plugin DB abstraction — helper over drizzle for plugin tables",
+      "description": "Plugins today write raw `sql\\`...\\`` template tags against fastify.db.execute(), with drizzle-orm as a direct dependency of each plugin package. This leaks the DB layer and couples plugins to a specific ORM version. If we swap drizzle out (or even bump a major version), every plugin breaks.\n\nPossible abstractions:\n- A plugin-scoped DB helper exposed on fastify via a plugin-sdk decorator: `fastify.pluginDb('polls').query('SELECT ...')` returns rows. Plugin never touches drizzle.\n- A typed query builder scoped to the plugin's namespaced tables: `fastify.pluginDb.table('polls').where({ slug: ... }).first()`. Nicer DX, more to build.\n- A migration DSL so plugins describe schemas declaratively rather than as raw SQL (closer to drizzle-kit's introspection but plugin-scoped).\n\nRevisit after PM lands — we'll know what shapes of query plugins actually need and can design against real requirements instead of speculation. Polls' queries are simple enough that raw SQL works fine; PM's cross-table joins (work items with assignees + comments + sprints) may prove the raw-SQL pattern insufficient.",
+      "priority": "P3",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-15T16:29:58.942606",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "ff3a4a93-e9b8-450b-a1e3-21c8afe7f705",
+      "title": "Plugin test harness — standard pattern for plugin unit + integration tests",
+      "description": "No story today for how plugin authors test their plugins. Polls has no tests. PM will be too large to ship without tests.\n\nScope:\n- Server-side: a test helper that spins up a Fastify instance with the plugin registered, runs its migrations against a test DB, and injects HTTP requests. Pattern mirrors the existing `createTestApp` helper but scoped per-plugin.\n- Client-side: vitest + React Testing Library with mocked translation settings and WS events. Plugin authors test their embed components and sidebar slots in isolation.\n- Federation tests: reuse the createFederationTestApp pattern. Plugin-registered federation handlers get tested the same way first-party inbox handlers do.\n- Example tests alongside each first-party plugin as reference implementations.\n\nShips alongside PM (Phase 4) when there's enough plugin code to need tests. The helper design emerges from what PM's tests actually want rather than being designed in isolation.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-15T16:29:59.022991",
+      "created_by": "daedalus"
     }
   ],
   "version": 27
