@@ -30,6 +30,10 @@ interface ChannelSidebarProps {
   onShowCalendar?: () => void;
   onShowWiki?: () => void;
   onShowFiles?: () => void;
+  /** Rendered content from the plugin sidebar-slot registry. ChatView
+   *  builds this; the sidebar just slots it in below the built-in
+   *  buttons so plugin entries appear in the same toolbar stack. */
+  pluginSlots?: import('react').ReactNode;
   onJoinVoice?: (channelId: string) => void;
   activeVoiceChannelId?: string | null;
   onLeaveServer?: () => void;
@@ -63,6 +67,7 @@ export function ChannelSidebar({
   onShowCalendar,
   onShowWiki,
   onShowFiles,
+  pluginSlots,
   onJoinVoice,
   activeVoiceChannelId,
   onLeaveServer,
@@ -228,6 +233,7 @@ export function ChannelSidebar({
             {t('files.title')}
           </button>
         )}
+        {pluginSlots}
         {onShowServerSettings && (
           <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
             {t('channelSidebar.serverSettings')}

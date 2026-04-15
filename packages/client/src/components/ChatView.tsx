@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createElement } from 'react';
 import type { ActorProfile, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
 import { useServers } from '../hooks/useServers';
@@ -12,6 +12,8 @@ import { useE2E } from '../hooks/useE2E';
 import { useUnreadBadges } from '../hooks/useUnreadBadges';
 import { ServerSidebar } from './ServerSidebar';
 import { ChannelSidebar } from './ChannelSidebar';
+import { PluginSidebarSlots } from '../plugins/PluginSidebarSlots';
+import type { SidebarSlotHostContext } from '../plugins/sidebar-registry';
 import { ChannelHeader } from './ChannelHeader';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
@@ -317,6 +319,17 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           void voice.join(channelId, ch?.uri);
         }}
         activeVoiceChannelId={voice.state.channelId}
+        pluginSlots={(() => {
+          const sidebarHost: SidebarSlotHostContext = {
+            actor,
+            selectedServerId: selectedServer?.id ?? null,
+            selectedServerName: selectedServer?.name ?? null,
+            channels,
+            routeBase: '/api',
+            openView,
+          };
+          return <PluginSidebarSlots host={sidebarHost} />;
+        })()}
       />
       <div className="chat-panel">
         {(() => {
@@ -334,7 +347,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             openEmbedPreview,
             closeView,
           };
-          return def.render(hostCtx, viewState);
+          return createElement(def.View, { host: hostCtx, viewState });
         })()}
         {!activeViewId && (
           <>

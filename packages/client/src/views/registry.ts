@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ActorProfile, ChannelView, WikiRefKind } from '@babelr/shared';
 import type { EmbedNavCtx } from '../embeds/registry';
 
@@ -51,6 +51,11 @@ export interface ViewHostContext {
  */
 export type ViewState = Record<string, unknown>;
 
+export interface ViewProps {
+  host: ViewHostContext;
+  viewState: ViewState;
+}
+
 export interface ViewDefinition {
   id: string;
   label: string;
@@ -61,8 +66,10 @@ export interface ViewDefinition {
   /** When does this view's entry button appear? Common predicate:
    *  "needs a selected server" for server-scoped views. */
   isAvailable?: (host: ViewHostContext) => boolean;
-  /** Render the view's main-panel content. */
-  render: (host: ViewHostContext, viewState: ViewState) => ReactNode;
+  /** React component that renders the view's main-panel content. Hosts
+   *  mount it via createElement so hooks inside are tracked against
+   *  this component, not the host's render cycle. */
+  View: ComponentType<ViewProps>;
 }
 
 const registry = new Map<string, ViewDefinition>();

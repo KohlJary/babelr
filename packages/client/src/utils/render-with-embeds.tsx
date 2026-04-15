@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { ReactNode } from 'react';
+import { createElement, type ReactNode } from 'react';
 import type { ActorProfile, WikiRefKind } from '@babelr/shared';
 import { parseWikiRefs } from '@babelr/shared';
 import { CrossTowerEmbed } from '../components/CrossTowerEmbed';
@@ -53,7 +53,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
       if (def) {
         segments.push(
           <span key={`embed-${i}-${ref.kind}-${ref.slug}`}>
-            {def.renderInline({
+            {createElement(def.Inline, {
               slug: ref.slug,
               serverSlug: ref.server,
               onClick: () =>

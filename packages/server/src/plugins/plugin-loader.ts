@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
+import { sql } from 'drizzle-orm';
 import type { PluginManifest, FederationHandler } from '@babelr/plugin-sdk';
 import { registeredPlugins } from './registered.ts';
 import '../types.ts';
@@ -35,7 +36,7 @@ export function getPluginFederationHandler(
 }
 
 async function ensureMigrationsTable(fastify: FastifyInstance): Promise<void> {
-  await fastify.db.execute(`
+  await fastify.db.execute(sql`
     CREATE TABLE IF NOT EXISTS plugin_migrations (
       plugin_id TEXT NOT NULL,
       migration_id INTEGER NOT NULL,
@@ -43,19 +44,17 @@ async function ensureMigrationsTable(fastify: FastifyInstance): Promise<void> {
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (plugin_id, migration_id)
     )
-  ` as unknown as string);
+  `);
 }
 
 async function appliedMigrationIds(
   fastify: FastifyInstance,
   pluginId: string,
 ): Promise<Set<number>> {
-  // Plugin ids are validated against /^[a-z][a-z0-9-]*$/ at registration,
-  // so the escaped string inlined below cannot contain SQL meta-chars.
   const res = await fastify.db.execute(
-    `SELECT migration_id FROM plugin_migrations WHERE plugin_id = ${escapeSql(pluginId)}` as unknown as string,
+    sql`SELECT migration_id FROM plugin_migrations WHERE plugin_id = ${pluginId}`,
   );
-  const rows = (res as unknown as { rows?: { migration_id: number }[] }).rows ?? [];
+  const rows = (res as unknown as Array<{ migration_id: number }>) ?? [];
   return new Set(rows.map((r) => r.migration_id));
 }
 
@@ -73,29 +72,29 @@ async function runPluginMigrations(
       'applying plugin migration',
     );
     if (typeof m.up === 'string') {
-      await fastify.db.execute(m.up as unknown as string);
+      // Split on semicolons at end-of-line so multi-statement migrations
+      // run as separate queries (postgres-js's extended-query mode can't
+      // handle multi-statement bodies in a single .execute call).
+      const statements = m.up
+        .split(/;\s*(?:\n|$)/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      for (const stmt of statements) {
+        await fastify.db.execute(sql.raw(stmt));
+      }
     } else {
       await m.up(async (q, _params) => {
-        // Minimal shim — real plugins are expected to use string SQL
-        // or call fastify.db themselves via a fastify-plugin. The
-        // functional form is a safety valve, not the primary path.
-        const r = await fastify.db.execute(q as unknown as string);
-        const rows = (r as unknown as { rows?: unknown[] }).rows ?? [];
+        // Functional form is a safety valve for plugins that need
+        // procedural migrations; most plugins pass a SQL string.
+        const r = await fastify.db.execute(sql.raw(q));
+        const rows = (r as unknown as unknown[]) ?? [];
         return { rows };
       });
     }
     await fastify.db.execute(
-      `INSERT INTO plugin_migrations (plugin_id, migration_id, name) VALUES (${escapeSql(manifest.id)}, ${m.id}, ${escapeSql(m.name)})` as unknown as string,
+      sql`INSERT INTO plugin_migrations (plugin_id, migration_id, name) VALUES (${manifest.id}, ${m.id}, ${m.name})`,
     );
   }
-}
-
-// Phase 1 keeps migration bookkeeping simple — all string interpolation
-// happens only on manifest-controlled values (id, name, integer id),
-// not on user input. Stricter parameterized execute would need direct
-// driver access that drizzle.execute doesn't expose uniformly.
-function escapeSql(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function isCompatible(range: string, version: string): boolean {
@@ -136,9 +135,12 @@ async function pluginLoader(fastify: FastifyInstance): Promise<void> {
       await runPluginMigrations(fastify, manifest);
     } catch (err) {
       fastify.log.error(
-        { err, plugin: manifest.id },
+        { err: String(err), plugin: manifest.id },
         'plugin migration failed — skipping plugin',
       );
+      // Also log to console in dev so the message is visible even if
+      // the structured logger is quieter than expected.
+      console.error(`[plugin:${manifest.id}] migration error:`, err);
       continue;
     }
 

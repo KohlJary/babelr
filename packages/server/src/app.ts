@@ -173,6 +173,7 @@ export async function buildApp() {
     app.setNotFoundHandler((request, reply) => {
       // Don't serve HTML for API/federation/upload paths
       const path = request.url;
+      app.log.warn({ path, method: request.method }, 'notFound handler hit');
       if (
         path.startsWith('/auth/') ||
         path.startsWith('/servers') ||
@@ -189,8 +190,22 @@ export async function buildApp() {
         path.startsWith('/search') ||
         path.startsWith('/notifications') ||
         path.startsWith('/mentions') ||
-        path.startsWith('/.well-known')
+        path.startsWith('/.well-known') ||
+        path.startsWith('/plugins/') ||
+        path.startsWith('/voice/') ||
+        path.startsWith('/embeds/')
       ) {
+        return reply.status(404).send({ error: 'Not found' });
+      }
+      // Anything matching a route-like path (POST, or a prefix that
+      // looks like an endpoint) also returns JSON rather than HTML.
+      // Catches plugin routes, federation paths we forgot to list, etc.
+      if (request.method !== 'GET' || path.includes('?') || path.startsWith('/api')) {
+        return reply.status(404).send({ error: 'Not found', path });
+      }
+      // Safety: if sendFile isn't decorated (dev without static plugin),
+      // fall back to JSON 404 rather than crashing the request.
+      if (typeof (reply as unknown as { sendFile?: unknown }).sendFile !== 'function') {
         return reply.status(404).send({ error: 'Not found' });
       }
       return reply.sendFile('index.html', clientDistDir);

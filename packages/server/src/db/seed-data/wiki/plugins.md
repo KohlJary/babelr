@@ -71,6 +71,32 @@ Until Phase 5 freezes the manifest and ships npm-based distribution, plugins liv
 
 Reference implementation: `packages/plugins/hello/` — a minimal plugin that registers `[[hello:name]]` to produce "Hello, name!" embeds, demonstrates all four surfaces (server route, federation handler, client embed, migrations), and stays in-tree as a template plugin authors can copy from.
 
+## Recommended file layout
+
+For plugins that ship React components (anything non-trivial), use the split-file pattern:
+
+```
+packages/plugins/<id>/
+  package.json           # { main: "./manifest.ts", exports: { ".", "./client-entry", "./client" } }
+  manifest.ts            # server-safe: migrations, serverRoutes, federationHandlers, NO JSX
+  client-entry.ts        # exports setupClient — dynamic-imports the component bundle
+  client.tsx             # React components (Inline, Preview, View, SidebarSlot)
+  tsconfig.json          # { "extends": "../../../tsconfig.base.json", "compilerOptions": { "jsx": "react-jsx" } }
+```
+
+Why the split: server's `tsc` runs in `NodeNext` module resolution and doesn't enable JSX. If `setupClient` lives on the manifest and dynamically imports React code, tsc traces into the JSX files and chokes on the bundler-style imports they use. Splitting `setupClient` into its own file, imported only by `packages/client/src/plugins/registered.ts`, keeps the server's type-check pass clean.
+
+The polls plugin (`packages/plugins/polls/`) is the reference for this pattern. Simple plugins without JSX (like `hello`) can keep `setupClient` inline on the manifest.
+
+## Ergonomic primitives plugin authors should reach for
+
+Don't roll your own:
+
+- **Translation**: wrap user-facing strings with `<T>{text}</T>` from `@babelr/client/components/T`. It reads the active translation settings, pipes through the shared cache, and renders the translated output. Plugins that forget to wrap break Babelr's multilingual-by-default promise.
+- **Real-time sync**: subscribe to plugin-namespaced WS messages with `onWsMessage(type, handler)` from `@babelr/client/plugins/ws-helper`. Returns an unsubscribe function. Plugin authors should namespace message types as `plugin:<id>:<event>`.
+- **List+detail UI**: use `<ListDetailView>` from `@babelr/client/components/ListDetailView` for any "searchable list + main detail" surface. Used by polls today; patterns like kanban boards and document collections fit naturally.
+- **Components, not render functions**: `registerEmbed`, `registerView`, and `registerSidebarSlot` accept React component references directly. Hosts mount them via `createElement` so hooks inside are tracked correctly. Don't call components directly as functions inside a render callback — that's a hook-rules violation.
+
 ## Near-term first-party plugins
 
 The roadmap has two validating plugins lined up, in order:

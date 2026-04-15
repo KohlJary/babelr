@@ -951,6 +951,26 @@
       "status": "backlog",
       "created_at": "2026-04-14T17:08:47.100248",
       "created_by": "daedalus"
+    },
+    {
+      "id": "cc256be5-c871-4985-8315-06ac573daa88",
+      "title": "Translation as default for plugin content — zero-config primitive",
+      "description": "Today polls translates correctly, but only because the plugin wires up useTranslateStrings + useTranslationSettings manually and remembers to map every translatable field through them. That's friction plugin authors won't reliably pay — the default path is 'content renders in the author's language' and the translation path is 'extra code.' Babelr's core promise is multilingual-by-default, so plugin content needs to follow that default too.\n\nGoal: plugin authors write normal JSX with plaintext strings. Translation happens automatically. The opt-out case (system identifiers, code snippets, URLs) is where you write extra code — not the translated case.\n\nOptions to evaluate:\n\n1. **`<T>` component** — `<T>{poll.question}</T>` becomes translated at render. Trivial to adopt, trivial to forget. Zero config but requires discipline.\n\n2. **Manifest-declared translatable fields** — plugin declares `translatableFields: ['question', 'options[].label']` in the embed kind definition. SDK/client transparently translates those fields on fetched content before handing to renderInline/renderPreview. Declarative, centralized, but requires plugin authors to enumerate their fields upfront.\n\n3. **Auto-wrap every string child** — a React context wrapper at the plugin-render boundary that proxies all string children through useTranslateStrings. Most magical, most fragile — grabs strings that shouldn't be translated (ids, URLs, technical identifiers) unless the plugin author marks them skip.\n\n4. **Server-side translation in the federation handler / API response** — translate the content server-side before shipping to the client, keyed off the caller's preferredLanguage. Translation decisions happen closer to the data. Higher server load, but plugins don't have to think about translation at all on the client.\n\nLean toward option 2 (declarative) + option 1 (`<T>` component) as a belt-and-suspenders pair: most content is automatically translated via the declarative field list; edge cases the plugin author knows about get `<T>` wrapping. Option 4 is attractive but worse for live content (poll option labels change via drag-and-drop in PM, etc.).\n\nShips with plugin Phase 3 (SDK gap-closure after polls). Not urgent for polls itself (already wired manually) but critical before PM + any third-party plugins — otherwise the translation-aware product becomes translation-aware-for-built-ins-only.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-15T15:46:45.365883",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "99bd308d-6339-48cf-8760-5eca291fbfea",
+      "title": "Validate polls federation across two-Tower staging",
+      "description": "Polls federation is wired on paper — the plugin ships a federationHandlers.poll entry, the plugin loader auto-mounts /plugins/polls/poll/by-slug/:slug, and the /embeds/resolve proxy dispatches cross-Tower refs to plugin kinds the same way it does first-party kinds. But none of it has been tested against a real second Tower.\n\nTest plan (run on a two-Tower staging deploy, same rig as the voice / Firefox items):\n\n1. Tower A user creates a poll. Shares the ref as [[poll:<slug>]] in a channel that federates to Tower B.\n2. Tower B user (member of the federated channel) sees the embed card. Content renders via the signed-GET to A's by-slug endpoint through A's cross-Tower syntax: [[towerA@tower-a.example.com:poll:<slug>]].\n3. Tower B user votes. Since v1 polls don't federate VOTES, expect a clean 401 / 403 from the vote endpoint. Document that limitation. (Voting-across-Towers is a follow-up that needs HTTP-signature-based auth on the vote call, same shape as the voice federation token pattern.)\n4. Live vote-count sync on Tower A's side still broadcasts via Tower A's WS to its own users; Tower B users don't see live updates for cross-Tower embeds today. Document; track as a separate item if the need surfaces.\n5. Federation policy test: Tower A sets FEDERATION_MODE=allowlist with Tower B absent. Tower B's /embeds/resolve fails with 403. Tower B adds to allowlist — works.\n\nIf Tower B users should be able to VOTE on Tower A's polls (likely yes for the shared-workspace pitch), that's the follow-up. The design mirrors the federated voice JWT handshake: home Tower signs a request to origin Tower for a vote-auth token; browser POSTs the vote with that token.\n\nBlocked on the same infra as firefox-staging-voice-parity-test + live-federated-voice-end-to-end-test: needs two real Tower deployments with public DNS + TLS. Batch with those.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-15T15:49:44.918219",
+      "created_by": "daedalus"
     }
   ],
   "version": 27

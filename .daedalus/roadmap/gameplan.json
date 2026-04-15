@@ -1,0 +1,108 @@
+{
+  "description": "Multi-phase plans currently in flight. Each phase references roadmap item titles; the activePhase section breaks the current phase into concrete tasks with status. Survives conversation compactions — a fresh session can pick up by reading this file.",
+  "phases": [
+    {
+      "id": "plugin-phase-1",
+      "title": "Plugin runtime — manifest, SDK, federation hooks",
+      "status": "done",
+      "roadmapItems": [
+        "Plugin runtime — manifest format, loader, SDK, federation hooks"
+      ],
+      "notes": "Shipped. PluginManifest / definePlugin / server + client loaders / auto-mounted federation routes / hello-world reference plugin."
+    },
+    {
+      "id": "plugin-phase-2",
+      "title": "Polls & Quizzes plugin — first SDK consumer",
+      "status": "done",
+      "roadmapItems": [
+        "Polls & Quizzes — first plugin (validates simple SDK case)"
+      ],
+      "notes": "Shipped end-to-end: schema migrations, REST routes, federation handler, real-time sync via babelr:ws custom event, translation wired manually (to be automated in Phase 3), list-detail view via the new ListDetailView primitive, sidebar-slot button opens the view."
+    },
+    {
+      "id": "plugin-phase-3",
+      "title": "SDK gap-closure based on polls implementation",
+      "status": "done",
+      "roadmapItems": [
+        "Translation as default for plugin content — zero-config primitive"
+      ],
+      "notes": "All four in-scope tasks shipped: component ergonomics (ComponentType + createElement), translation-by-default (<T>), WS helper (onWsMessage), and documented the server-safe/client-only file-split convention. Plugin authors now have one-liners for the friction points polls exposed. Phase 4 (project management) starts on a smoother SDK."
+    },
+    {
+      "id": "plugin-phase-4",
+      "title": "Project management plugin — complex SDK consumer",
+      "status": "planned",
+      "roadmapItems": [
+        "Project management — second plugin (validates complex SDK case)"
+      ],
+      "notes": "Multiple embed kinds, complex schema, plugin-provided view (kanban), AS2 custom objects for federation, drag-and-drop UI. Validates SDK at scale after Phase 3 closes known gaps."
+    },
+    {
+      "id": "plugin-phase-5",
+      "title": "Plugin distribution — npm packaging, admin install, manifest freeze",
+      "status": "planned",
+      "roadmapItems": [
+        "Plugin distribution — npm packaging, admin install flow, manifest freeze"
+      ],
+      "notes": "After polls + PM prove the contract, freeze the manifest and ship public-facing distribution."
+    }
+  ],
+  "activePhase": {
+    "id": "plugin-phase-3",
+    "title": "SDK gap-closure based on polls implementation",
+    "started": "2026-04-15",
+    "goal": "Make the frictions every plugin will hit into one-liners, not boilerplate — so PM (Phase 4) starts on a smoother SDK.",
+    "tasks": [
+      {
+        "id": "task-4",
+        "title": "Component ergonomics — accept ComponentType directly",
+        "status": "done",
+        "details": "registerEmbed / registerView / registerSidebarSlot currently expect render functions that return ReactNode. Plugin authors hit hook-rule violations if they call components directly. SDK should accept ComponentType and wrap with createElement internally. Smallest, unblocks #1. Do this first.",
+        "resolution": "EmbedDefinition.{Inline,Preview} and ViewDefinition.View are now ComponentType<Props>. Every callsite (render-with-embeds, EmbedSidebar, ChatView's view dispatch) goes through createElement, so hooks inside plugin components are tracked against the component instance rather than leaking into the caller's render cycle. Built-ins retrofit; SidebarSlot already used this shape."
+      },
+      {
+        "id": "task-1",
+        "title": "Translation-by-default — <T> component wraps useTranslateStrings",
+        "status": "done",
+        "details": "Add <T>{text}</T> component that auto-translates via the shared useTranslateStrings cache. Plugins wrap user-facing strings instead of manually wiring the hook.",
+        "resolution": "Shipped @babelr/client/components/T. Polls refactored from ~20 lines of manual useTranslateStrings/useMemo bookkeeping to <T>{value}</T> wrapping at each render site. Translation behavior identical (same cache, same pipeline). The declarative-manifest-fields option was considered but set aside — <T> covers the 95% case, and manifest-declared paths over fetched-data would require centralizing data fetching which plugins don't today. Revisit if <T> proves insufficient when PM lands."
+      },
+      {
+        "id": "task-6",
+        "title": "WS helper — onWsMessage(type, handler)",
+        "status": "done",
+        "details": "Every plugin that needs real-time sync duplicates the window.addEventListener('babelr:ws', ...) + type-filter + detail-extract dance. Add a single helper.",
+        "resolution": "Shipped @babelr/client/plugins/ws-helper. Plugins subscribe via onWsMessage<TPayload>(type, handler) which returns an unsubscribe function. Polls replaced its two inline WS listeners (one module-level, one useEffect) with one-line subscriptions. Namespacing convention documented: plugin:<id>:<event>."
+      },
+      {
+        "id": "task-3",
+        "title": "Formalize server-safe / client-only file split",
+        "status": "done",
+        "details": "Polls needed manifest.ts (server-safe) + client-entry.ts (client-only) + client.tsx (React components) to avoid server tsc tracing into JSX. Formalize the pattern.",
+        "resolution": "The split is already working: client-side RegisteredPlugin pairs a manifest with an optional setupClient imported from the plugin's `/client-entry` subpath. Documented the pattern in the plugins.md wiki seed page including recommended directory layout, package.json exports, and tsconfig.json. Kept the hello plugin as the single-file example; polls as the split-file example. Considered adding a `client?: string` field to PluginManifest for automatic loader resolution but decided against — the current explicit pairing in registered.ts is more readable and Phase 5 distribution will rework this layer anyway."
+      }
+    ],
+    "deferred": [
+      {
+        "id": "task-2",
+        "title": "Stable SDK re-exports for translation / hooks / UI primitives",
+        "reason": "Bigger design discussion — ties into Phase 5 distribution packaging. Decide then whether @babelr/plugin-sdk grows a /react subpath or a separate @babelr/plugin-ui package ships."
+      },
+      {
+        "id": "task-5",
+        "title": "SQL abstraction — plugin-friendly DB helper over drizzle",
+        "reason": "Big API design call. Drizzle coupling isn't pure yet (plugins still see sql template tag). Revisit once PM proves what the second real plugin actually needs."
+      },
+      {
+        "id": "task-7",
+        "title": "Plugin test harness",
+        "reason": "No urgent blocker. Build alongside Phase 4 when PM is complex enough to need tests."
+      },
+      {
+        "id": "task-8",
+        "title": "Cross-Tower voting — federated vote JWT handshake",
+        "reason": "Federation design task; batch with the live-federated-voice-end-to-end-test staging deploy when those Towers are up."
+      }
+    ]
+  }
+}

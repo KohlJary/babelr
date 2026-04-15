@@ -43,6 +43,14 @@ export function useWebSocket(
         try {
           const msg = JSON.parse(event.data) as WsServerMessage;
           onMessageRef.current(msg);
+          // Re-dispatch as a DOM custom event so plugins can subscribe
+          // to their own namespaced messages without plumbing through
+          // the core WS handler pipeline. Core message types are still
+          // delivered via onMessage above; this is an additive channel
+          // for plugin:<id>:<event> messages.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('babelr:ws', { detail: msg }));
+          }
         } catch {
           // Ignore malformed messages
         }

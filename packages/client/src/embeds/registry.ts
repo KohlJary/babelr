@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import type { ActorProfile, WikiRefKind } from '@babelr/shared';
 
 /**
@@ -65,8 +65,12 @@ export interface EmbedDefinition {
   label: string;
   /** Verb shown on the navigation button, e.g. "Open in Wiki". */
   navigateLabel: string;
-  renderInline: (props: EmbedInlineProps) => ReactNode;
-  renderPreview: (props: EmbedPreviewProps) => ReactNode;
+  /** React component rendered inline inside a message/wiki page.
+   *  Hosts mount it via createElement, so hooks inside are tracked
+   *  against this component (not the surrounding renderer). */
+  Inline: ComponentType<EmbedInlineProps>;
+  /** React component rendered inside the right-sidebar preview. */
+  Preview: ComponentType<EmbedPreviewProps>;
   navigate: (args: EmbedNavigateArgs, ctx: EmbedNavCtx) => void;
 }
 

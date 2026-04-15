@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@babelr/plugin-hello": "^0.1.0",
+    "@babelr/plugin-polls": "^0.1.0",
     "@babelr/plugin-sdk": "^0.1.0",
     "@babelr/shared": "*",
     "@fastify/cookie": "^11.0.0",

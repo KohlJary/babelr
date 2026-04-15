@@ -122,28 +122,16 @@ export interface FederationHandlerContext {
  * after the rewrite. The actual types come from the client's embed and
  * view registries — they're re-exported here for plugin authors.
  */
-export interface PluginClientApi {
-  registerEmbed: (def: ClientEmbedDefinition) => void;
-  registerView: (def: ClientViewDefinition) => void;
-  /** Base URL for this plugin's server-side routes — e.g.
-   *  `/plugins/polls`. Plugin fetches should prepend it so they hit the
-   *  right namespace regardless of where Babelr is mounted. */
-  routeBase: string;
-}
-
-/**
- * Re-exports of the client-side registry definition shapes. The actual
- * types are declared in @babelr/client's registries; we alias them here
- * with looser types (ReactNode as `unknown` via structural typing) so
- * the SDK can compile without depending on React directly. Plugin
- * authors get full IntelliSense via module augmentation at the
- * client-side boundary.
- */
 export interface ClientEmbedDefinition {
   kind: WikiRefKind | string;
   label: string;
   navigateLabel: string;
+  /** React component function for the inline embed. SDK keeps the prop
+   *  type loose (`unknown`) so plugins don't need to hard-depend on
+   *  React's types; plugin authors import the stricter types from the
+   *  client's public surface if they want full IntelliSense. */
   renderInline: (props: unknown) => unknown;
+  /** React component function for the sidebar preview. */
   renderPreview: (props: unknown) => unknown;
   navigate: (args: { slug: string; serverSlug?: string }, ctx: unknown) => void;
 }
@@ -153,5 +141,33 @@ export interface ClientViewDefinition {
   label: string;
   icon?: unknown;
   isAvailable?: (host: unknown) => boolean;
-  render: (host: unknown, viewState: Record<string, unknown>) => unknown;
+  /** React component function for the view. Receives
+   *  `{ host, viewState }` — the host's context bag plus the free-form
+   *  per-view state the host persists. Plugin authors write normal
+   *  function components; SDK mounts via createElement so hooks track
+   *  against the component instance. */
+  render: (props: { host: unknown; viewState: Record<string, unknown> }) => unknown;
 }
+
+export interface ClientSidebarSlotDefinition {
+  id: string;
+  /** React component. SDK keeps the prop type loose so plugin authors
+   *  can import the stricter SidebarSlotHostContext from the client
+   *  package if they want full IntelliSense. */
+  Component: (props: { host: unknown }) => unknown;
+  isAvailable?: (host: unknown) => boolean;
+}
+
+export interface PluginClientApi {
+  registerEmbed: (def: ClientEmbedDefinition) => void;
+  registerView: (def: ClientViewDefinition) => void;
+  /** Mount an arbitrary React component in the left sidebar's plugin
+   *  slot area. The component owns its own state, buttons, modals,
+   *  event wiring — the host just renders it. */
+  registerSidebarSlot: (def: ClientSidebarSlotDefinition) => void;
+  /** Base URL for this plugin's server-side routes — e.g.
+   *  `/plugins/polls`. Plugin fetches should prepend it so they hit the
+   *  right namespace regardless of where Babelr is mounted. */
+  routeBase: string;
+}
+

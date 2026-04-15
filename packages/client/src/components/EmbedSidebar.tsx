@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
+import { createElement } from 'react';
 import type { ActorProfile, WikiRefKind } from '@babelr/shared';
 import { getEmbed } from '../embeds/registry';
 import type { EmbedNavCtx } from '../embeds/registry';
@@ -74,7 +75,7 @@ export function EmbedSidebar({
         </div>
       </header>
       <div className="embed-sidebar-body">
-        {def.renderPreview({
+        {createElement(def.Preview, {
           slug: target.slug,
           serverSlug: target.serverSlug,
           actor,

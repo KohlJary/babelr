@@ -3,9 +3,11 @@ import type {
   PluginClientApi,
   ClientEmbedDefinition,
   ClientViewDefinition,
+  ClientSidebarSlotDefinition,
 } from '@babelr/plugin-sdk';
 import { registerEmbed, type EmbedDefinition } from '../embeds/registry';
 import { registerView, type ViewDefinition } from '../views/registry';
+import { registerSidebarSlot, type SidebarSlotDefinition } from './sidebar-registry';
 import { registeredPlugins } from './registered';
 
 /**
@@ -21,24 +23,62 @@ import { registeredPlugins } from './registered';
  * worst leaves a partial state for its own kind.
  */
 export async function initPlugins(): Promise<void> {
-  for (const manifest of registeredPlugins) {
-    if (!manifest.setupClient) continue;
+  for (const entry of registeredPlugins) {
+    const { manifest } = entry;
+    // Prefer the client-entry-provided setupClient; fall back to the
+    // manifest's own (for plugins that keep everything in one file).
+    const setup = entry.setupClient ?? manifest.setupClient;
+    if (!setup) continue;
     const api: PluginClientApi = {
       registerEmbed: (def: ClientEmbedDefinition) => {
-        // Plugin-author types are intentionally loose to avoid forcing
-        // React into the SDK. At the registration boundary we cast back
-        // to the strict client-side shape; if the plugin author got the
-        // contract wrong, errors surface at render time, same as any
-        // first-party mis-registration would.
-        registerEmbed(def as unknown as EmbedDefinition);
+        // The SDK's loose types (props: unknown) -> unknown map 1:1 to
+        // component functions that return ReactNode. Cast to the
+        // client's strict ComponentType shape — shapes are compatible,
+        // TS just needs the coercion.
+        registerEmbed({
+          kind: def.kind,
+          label: def.label,
+          navigateLabel: def.navigateLabel,
+          Inline: def.renderInline as unknown as EmbedDefinition['Inline'],
+          Preview: def.renderPreview as unknown as EmbedDefinition['Preview'],
+          navigate: def.navigate as unknown as EmbedDefinition['navigate'],
+        });
       },
       registerView: (def: ClientViewDefinition) => {
-        registerView(def as unknown as ViewDefinition);
+        registerView({
+          id: def.id,
+          label: def.label,
+          icon: def.icon as ViewDefinition['icon'],
+          isAvailable: def.isAvailable as ViewDefinition['isAvailable'],
+          View: def.render as unknown as ViewDefinition['View'],
+        });
+      },
+      registerSidebarSlot: (def: ClientSidebarSlotDefinition) => {
+        // Wrap the plugin's Component so the sidebar host context it
+        // receives has THIS plugin's routeBase, not the generic one
+        // ChatView passes. Each plugin registers its own slot with its
+        // own namespaced API path.
+        const pluginRouteBase = `/api/plugins/${manifest.id}`;
+        const OriginalComponent = def.Component as (props: {
+          host: unknown;
+        }) => unknown;
+        const wrapped = (({ host }: { host: unknown }) => {
+          const pluginHost = {
+            ...(host as Record<string, unknown>),
+            routeBase: pluginRouteBase,
+          };
+          return OriginalComponent({ host: pluginHost });
+        }) as unknown as SidebarSlotDefinition['Component'];
+        registerSidebarSlot({
+          id: def.id,
+          Component: wrapped,
+          isAvailable: def.isAvailable as SidebarSlotDefinition['isAvailable'],
+        });
       },
       routeBase: `/api/plugins/${manifest.id}`,
     };
     try {
-      await manifest.setupClient(api);
+      await setup(api);
     } catch (err) {
       console.error(`[plugin:${manifest.id}] setupClient failed:`, err);
     }
