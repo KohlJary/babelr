@@ -7,9 +7,15 @@ import './index.css';
 import './debug';
 import { registerBuiltinEmbeds } from './embeds/register-builtin';
 import { registerBuiltinViews } from './views/register-builtin';
+import { initPlugins } from './plugins/plugin-loader';
 
 registerBuiltinEmbeds();
 registerBuiltinViews();
+// Plugins load after built-ins so a plugin can override a built-in
+// registration if it intentionally wants to (last-write-wins in the
+// registries). Fire-and-forget — plugin init shouldn't block the UI,
+// and individual failures are swallowed inside initPlugins.
+void initPlugins();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

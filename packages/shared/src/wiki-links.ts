@@ -19,7 +19,22 @@
  * write about the syntax itself without triggering resolution.
  */
 
-export type WikiRefKind = 'page' | 'message' | 'event' | 'file' | 'image' | 'manual';
+/**
+ * Embed kind. Built-in values are the first-party kinds (page / message /
+ * event / file / image / manual); plugins contribute additional strings
+ * at runtime via registerEmbed. The `string & {}` trick keeps literal
+ * autocomplete for built-ins while permitting arbitrary plugin-supplied
+ * kinds — renderers dispatch by string equality regardless of origin.
+ */
+export type WikiRefKind =
+  | 'page'
+  | 'message'
+  | 'event'
+  | 'file'
+  | 'image'
+  | 'manual'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {});
 
 /**
  * Cross-tower origin for [[server@tower:kind:slug]] refs. When
@@ -193,20 +208,26 @@ export function parseWikiRefs(source: string): WikiRef[] {
     }
 
     // --- Local refs with explicit kind prefix ---
-    const lowerRaw = raw.toLowerCase();
-    let handled = false;
-    for (const [prefix, kind] of Object.entries(KIND_PREFIXES)) {
-      if (lowerRaw.startsWith(prefix)) {
-        const slug = raw.slice(prefix.length).trim().toLowerCase();
-        if (!slug) break;
-        const resolvedSlug = kind === 'page' ? slugifyWikiRef(slug) : slug;
-        if (!resolvedSlug) break;
-        refs.push({ kind, slug: resolvedSlug, raw, display, start, end });
-        handled = true;
-        break;
+    // Match any well-formed [[<kind>:<slug>]] where <kind> is lowercase
+    // letters/digits/hyphens. Built-in kinds get their canonical names
+    // via KIND_PREFIXES (wiki: → page); unknown prefixes (plugin-
+    // contributed kinds) pass through with kind = the prefix string.
+    // The renderer looks up kind against the embed registry; unknown
+    // kinds render as a fallback placeholder rather than breaking.
+    const kindMatch = /^([a-z][a-z0-9-]*):(.*)$/i.exec(raw);
+    if (kindMatch) {
+      const prefixKey = kindMatch[1].toLowerCase() + ':';
+      const slugText = kindMatch[2].trim();
+      if (slugText) {
+        const kind: WikiRefKind = KIND_PREFIXES[prefixKey] ?? kindMatch[1].toLowerCase();
+        const resolvedSlug =
+          kind === 'page' ? slugifyWikiRef(slugText) : slugText.toLowerCase();
+        if (resolvedSlug) {
+          refs.push({ kind, slug: resolvedSlug, raw, display, start, end });
+          continue;
+        }
       }
     }
-    if (handled) continue;
 
     // --- Bare [[slug]] — backwards-compatible wiki page ref ---
     const slug = slugifyWikiRef(raw);

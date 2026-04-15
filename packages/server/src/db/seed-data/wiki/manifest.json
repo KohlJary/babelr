@@ -8,6 +8,7 @@
     { "slug": "files", "title": "Server Files", "file": "files.md", "parent": "getting-started", "position": 3 },
     { "slug": "embedding", "title": "The Embed System", "file": "embedding.md", "position": 2 },
     { "slug": "translation", "title": "Translation", "file": "translation.md", "position": 3 },
-    { "slug": "federation", "title": "Federation & Towers", "file": "federation.md", "position": 4 }
+    { "slug": "federation", "title": "Federation & Towers", "file": "federation.md", "position": 4 },
+    { "slug": "plugins", "title": "Plugins", "file": "plugins.md", "position": 5 }
   ]
 }

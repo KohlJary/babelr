@@ -15,6 +15,8 @@
     "dump:i18n": "tsx --env-file=../../.env src/scripts/dump-ui-translations.ts"
   },
   "dependencies": {
+    "@babelr/plugin-hello": "^0.1.0",
+    "@babelr/plugin-sdk": "^0.1.0",
     "@babelr/shared": "*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",

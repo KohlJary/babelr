@@ -18,15 +18,12 @@ interface RenderOptions {
 
 export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode {
   const render = opts.variant === 'wiki' ? renderWikiMarkdown : renderMarkdown;
+  // Anything NOT a bare wiki page ref is embed-rendered. Page refs
+  // render as markdown links (with the wiki-click intercept opening
+  // the sidebar preview). Plugin-supplied kinds pass the filter and
+  // dispatch through the registry just like built-ins.
   const refs = parseWikiRefs(source).filter(
-    (r) =>
-      r.kind === 'message' ||
-      r.kind === 'event' ||
-      r.kind === 'file' ||
-      r.kind === 'image' ||
-      r.kind === 'manual' ||
-      r.origin ||
-      r.server,
+    (r) => r.kind !== 'page' || r.origin || r.server,
   );
 
   if (refs.length === 0) {

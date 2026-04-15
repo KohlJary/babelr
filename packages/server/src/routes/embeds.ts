@@ -2,6 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import '../types.ts';
 import { signedGet } from '../federation/delivery.ts';
+import { getPluginFederationHandler } from '../plugins/plugin-loader.ts';
 
 /**
  * Cross-tower embed resolution. Resolves [[server@tower:kind:slug]]
@@ -35,20 +36,31 @@ export default async function embedRoutes(fastify: FastifyInstance) {
     };
 
     const endpoint = kindEndpoints[kind];
-    if (!endpoint) {
-      return reply.status(400).send({ error: `Unknown embed kind: ${kind}` });
+    if (endpoint) {
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+      const url = `${protocol}://${tower}${endpoint}/${encodeURIComponent(slug)}`;
+      const result = await signedGet(db, request.actor.id, url);
+      if (!result) {
+        return reply.status(404).send({ error: 'Content not found or not accessible' });
+      }
+      return result;
     }
 
-    // Use http in dev, https in production — same signal as the
-    // rest of the federation code.
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-    const url = `${protocol}://${tower}${endpoint}/${encodeURIComponent(slug)}`;
-
-    const result = await signedGet(db, request.actor.id, url);
-    if (!result) {
-      return reply.status(404).send({ error: 'Content not found or not accessible' });
+    // Plugin-provided kind: fetch via the plugin's own cross-Tower
+    // endpoint at /plugins/<id>/by-slug/<slug>. Each plugin registers
+    // that route via its serverRoutes hook; the resolveBySlug handler
+    // on this Tower is the same contract a remote Tower would call.
+    const pluginHandler = getPluginFederationHandler(kind);
+    if (pluginHandler) {
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+      const url = `${protocol}://${tower}/plugins/${kind}/by-slug/${encodeURIComponent(slug)}`;
+      const result = await signedGet(db, request.actor.id, url);
+      if (!result) {
+        return reply.status(404).send({ error: 'Content not found or not accessible' });
+      }
+      return result;
     }
 
-    return result;
+    return reply.status(400).send({ error: `Unknown embed kind: ${kind}` });
   });
 }

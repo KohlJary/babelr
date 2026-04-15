@@ -38,6 +38,7 @@ import auditRoutes from './routes/audit.ts';
 import ssoRoutes from './routes/sso.ts';
 import voiceRoutes from './routes/voice.ts';
 import { initSfu, shutdownSfu } from './voice/sfu.ts';
+import pluginLoader from './plugins/plugin-loader.ts';
 
 export async function buildApp() {
   const config = loadConfig();
@@ -164,6 +165,7 @@ export async function buildApp() {
   await app.register(auditRoutes);
   await app.register(ssoRoutes);
   await app.register(voiceRoutes);
+  await app.register(pluginLoader);
   await app.register(wikiSeedPlugin);
 
   // SPA fallback — serve index.html for all non-API paths

@@ -5,7 +5,8 @@
   "license": "Hippocratic-3.0",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/plugins/*"
   ],
   "scripts": {
     "dev:server": "npm run dev -w packages/server",
