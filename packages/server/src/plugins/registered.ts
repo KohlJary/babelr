@@ -16,7 +16,8 @@ import type { PluginManifest } from '@babelr/plugin-sdk';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
+import pmManifest from '@babelr/plugin-project-management';
 
-const manifests: PluginManifest[] = [helloManifest, pollsManifest];
+const manifests: PluginManifest[] = [helloManifest, pollsManifest, pmManifest];
 
 export const registeredPlugins: PluginManifest[] = manifests;

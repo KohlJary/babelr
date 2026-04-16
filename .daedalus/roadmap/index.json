@@ -1001,7 +1001,17 @@
       "status": "backlog",
       "created_at": "2026-04-15T16:29:59.022991",
       "created_by": "daedalus"
+    },
+    {
+      "id": "pm-federation-e2e-test",
+      "title": "PM plugin federation — full end-to-end test on live federated Towers",
+      "description": "The project-management plugin ships a complete AS2 federation surface (outbound Create/Update/Delete of multi-typed ['Note','WorkItem'] objects, inbound inbox handlers, resolveBySlug for cross-Tower embeds, deliverToGroupFollowers decoration). None of this has been tested against a real second Tower — only against single-Tower dev and the type system.\n\nTest plan (run on a two-Tower staging deploy, same rig as the voice / Firefox / polls-federation items):\n\n1. Tower A user creates a board + work items. Verify Create activities appear in Tower B's inbox and produce shadow rows in plugin_pm_work_items. Tower B user sees them in the PM view.\n2. Tower A user edits a work item (title, priority, description). Verify Update activity arrives at Tower B and the existing row patches. WS sync fires plugin:pm:updated on Tower B.\n3. Tower A user deletes a work item. Verify Delete activity arrives at Tower B, row removed, chat OrderedCollection cleaned up.\n4. Tower A user moves a card across columns (reorder). Reorder currently only broadcasts locally — remote Towers don't receive position-only changes. Verify no crash; document the limitation (cross-Tower reorder sync would need a new activity type or a bulk-position update). Track as follow-up if needed.\n5. Cross-Tower embeds: Tower B user pastes [[towerA@tower-a.example.com:task:<slug>]] in a message. Verify TaskInline + TaskPreview render via signed-GET through the proxy. Same for [[board:<slug>]].\n6. Comments: Tower B user opens a work item created on Tower A. Comment thread backed by the local chat_id OrderedCollection — comments are local to each Tower in v1. Document the limitation; cross-Tower comment threading is a follow-up that needs the Group-relay pattern extended to OrderedCollections within plugin objects.\n7. Federation policy: Tower A sets FEDERATION_MODE=allowlist with Tower B absent. Verify inbound activities are rejected. Add Tower B — verify accepted.\n\nBlocked on: two real Tower deployments with public DNS + TLS (same infra as live-federated-voice-end-to-end-test, firefox-staging-voice-parity-test, and polls-federation-live-test). Batch all four.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "daedalus"
     }
   ],
-  "version": 27
+  "version": 28
 }

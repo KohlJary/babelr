@@ -1,0 +1,26 @@
+{
+  "name": "@babelr/plugin-project-management",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Hippocratic-3.0",
+  "type": "module",
+  "main": "./manifest.ts",
+  "types": "./manifest.ts",
+  "exports": {
+    ".": "./manifest.ts",
+    "./client-entry": "./client-entry.ts",
+    "./client": "./client.tsx"
+  },
+  "dependencies": {
+    "@babelr/plugin-sdk": "*",
+    "@babelr/shared": "*",
+    "drizzle-orm": "^0.39.3"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0"
+  }
+}

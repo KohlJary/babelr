@@ -35,6 +35,7 @@ import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
+import { EmbedHostProvider } from './E';
 import type { EmbedNavCtx } from '../embeds/registry';
 import type { WikiRefKind } from '@babelr/shared';
 import { getView, type ViewHostContext, type ViewState } from '../views/registry';
@@ -256,6 +257,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   }, [selectedServer, dmMode]);
 
   return (
+    <EmbedHostProvider host={{ actor, onPreviewEmbed: openEmbedPreview }}>
     <div className="app-layout">
       <ServerSidebar
         servers={servers}
@@ -595,5 +597,6 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         );
       })()}
     </div>
+    </EmbedHostProvider>
   );
 }

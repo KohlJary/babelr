@@ -12,6 +12,7 @@
   "dependencies": {
     "@babelr/plugin-hello": "^0.1.0",
     "@babelr/plugin-polls": "^0.1.0",
+    "@babelr/plugin-project-management": "^0.1.0",
     "@babelr/plugin-sdk": "^0.1.0",
     "@babelr/shared": "*",
     "@huggingface/transformers": "^4.0.1",

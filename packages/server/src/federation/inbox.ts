@@ -19,6 +19,7 @@ import { enqueueDelivery } from './delivery.ts';
 import { serializeActivity } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
+import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
 
 interface APActivity {
   id?: string;
@@ -779,6 +780,14 @@ async function handleCreate(
       });
       fastify.log.info({ pageUri, slug: pageSlug }, 'Remote Create(Article) processed');
     }
+  } else if (obj?.type && findPluginInboxHandler(obj.type)) {
+    const { handler } = findPluginInboxHandler(obj.type)!;
+    if (handler.handleCreate) {
+      await handler.handleCreate(
+        { fastify, remoteActor: { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local } },
+        obj as Record<string, unknown>,
+      );
+    }
   } else if (obj?.type === 'Event' && obj.id) {
     // Calendar event — create a shadow event on this instance.
     const objData = obj as Record<string, unknown>;
@@ -1158,6 +1167,15 @@ async function handleDelete(
     return;
   }
 
+  // Plugin inbox handlers — check before falling through to the
+  // generic objects-table tombstone below.
+  const actorCtx = { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local };
+  for (const handler of allPluginInboxHandlers()) {
+    if (handler.handleDelete) {
+      await handler.handleDelete({ fastify, remoteActor: actorCtx }, objectUri);
+    }
+  }
+
   // Find local copy and tombstone it. Accept if the remoteActor is
   // the author OR a Group that owns the channel (Group-relayed delete).
   const [obj] = await fastify.db
@@ -1380,6 +1398,28 @@ async function handleUpdate(
       fastify.log.info({ pageUri: obj.id }, 'Remote Update(Article) processed');
     }
     return;
+  }
+
+  // Plugin inbox handlers — multi-typed objects (e.g. ['Note', 'WorkItem'])
+  // carry the custom type in the array, so check before falling through
+  // to the generic objects-table path.
+  if (innerType && findPluginInboxHandler(innerType)) {
+    const { handler } = findPluginInboxHandler(innerType)!;
+    if (handler.handleUpdate) {
+      const actorCtx2 = { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local };
+      await handler.handleUpdate({ fastify, remoteActor: actorCtx2 }, obj as Record<string, unknown>);
+      return;
+    }
+  }
+  // Also check for array types (multi-typed objects).
+  const objTypes = (obj as Record<string, unknown>).type;
+  if (Array.isArray(objTypes)) {
+    const match = findPluginInboxHandler(objTypes as string[]);
+    if (match?.handler.handleUpdate) {
+      const actorCtx2 = { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local };
+      await match.handler.handleUpdate({ fastify, remoteActor: actorCtx2 }, obj as Record<string, unknown>);
+      return;
+    }
   }
 
   // Object update (e.g. Note edited). Accept the update if the

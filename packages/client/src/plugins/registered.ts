@@ -13,7 +13,9 @@ import type { PluginManifest, PluginClientApi } from '@babelr/plugin-sdk';
 
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
+import pmManifest from '@babelr/plugin-project-management';
 import { setupClient as pollsSetupClient } from '@babelr/plugin-polls/client-entry';
+import { setupClient as pmSetupClient } from '@babelr/plugin-project-management/client-entry';
 
 export interface RegisteredPlugin {
   manifest: PluginManifest;
@@ -25,4 +27,5 @@ export interface RegisteredPlugin {
 export const registeredPlugins: RegisteredPlugin[] = [
   { manifest: helloManifest },
   { manifest: pollsManifest, setupClient: pollsSetupClient },
+  { manifest: pmManifest, setupClient: pmSetupClient },
 ];

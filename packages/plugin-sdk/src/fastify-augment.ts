@@ -34,6 +34,15 @@ declare module 'fastify' {
     broadcastToChannel: (channelId: string, message: WsServerMessage) => void;
     broadcastToAllSubscribers: (message: WsServerMessage) => void;
     broadcastToActor: (actorId: string, message: WsServerMessage) => void;
+    /** Deliver an AS2 activity to all followers of a Group (server)
+     *  actor. The loader resolves groupId → actor row, signs the
+     *  request, and enqueues to each remote inbox. No-op if the group
+     *  isn't local. Plugins call this instead of importing server
+     *  federation internals directly. */
+    deliverToGroupFollowers: (
+      groupId: string,
+      activity: Record<string, unknown>,
+    ) => Promise<void>;
   }
 
   interface FastifyRequest {

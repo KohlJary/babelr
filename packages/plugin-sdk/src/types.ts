@@ -60,6 +60,17 @@ export interface PluginManifest {
   federationHandlers?: Record<string, FederationHandler>;
 
   /**
+   * Inbox activity handlers. Called when the Tower's inbox receives an
+   * AS2 activity whose object type matches a key in this map. The
+   * plugin loader checks object.type (or an element of the type array,
+   * for multi-typed objects) against the registered keys.
+   *
+   * This lets plugins receive federated objects without hard-coding
+   * their types into the core inbox handler.
+   */
+  inboxHandlers?: Record<string, PluginInboxHandler>;
+
+  /**
    * Client-side setup. Runs in the browser at app boot. Typically calls
    * registerEmbed() for each `[[kind:slug]]` the plugin contributes and
    * registerView() for each main-panel surface. Imperative on purpose:
@@ -103,6 +114,31 @@ export interface FederationHandler {
     slug: string,
     ctx: FederationHandlerContext,
   ) => Promise<unknown | null>;
+}
+
+export interface PluginInboxHandler {
+  handleCreate?: (
+    ctx: InboxHandlerContext,
+    objectData: Record<string, unknown>,
+  ) => Promise<void>;
+  handleUpdate?: (
+    ctx: InboxHandlerContext,
+    objectData: Record<string, unknown>,
+  ) => Promise<void>;
+  handleDelete?: (
+    ctx: InboxHandlerContext,
+    objectUri: string,
+  ) => Promise<void>;
+}
+
+export interface InboxHandlerContext {
+  fastify: FastifyInstance;
+  remoteActor: {
+    id: string;
+    uri: string;
+    type: string;
+    local: boolean;
+  };
 }
 
 export interface FederationHandlerContext {

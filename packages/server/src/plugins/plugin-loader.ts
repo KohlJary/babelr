@@ -2,7 +2,14 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { sql } from 'drizzle-orm';
-import type { PluginManifest, FederationHandler } from '@babelr/plugin-sdk';
+import type {
+  PluginManifest,
+  FederationHandler,
+  PluginInboxHandler,
+} from '@babelr/plugin-sdk';
+import { eq } from 'drizzle-orm';
+import { actors } from '../db/schema/actors.ts';
+import { enqueueToFollowers } from '../federation/delivery.ts';
 import { registeredPlugins } from './registered.ts';
 import '../types.ts';
 
@@ -33,6 +40,38 @@ export function getPluginFederationHandler(
   kind: string,
 ): FederationHandler | undefined {
   return federationHandlers.get(kind);
+}
+
+// objectType -> handler, populated from each plugin's inboxHandlers.
+// Queried by inbox.ts when it receives an AS2 Create/Update/Delete
+// whose object type doesn't match any built-in handler.
+const inboxHandlers = new Map<string, PluginInboxHandler>();
+
+export function getPluginInboxHandler(
+  objectType: string,
+): PluginInboxHandler | undefined {
+  return inboxHandlers.get(objectType);
+}
+
+/** Check if an activity's object type (which may be a string or an
+ *  array of strings for multi-typed objects) matches any registered
+ *  plugin inbox handler. Returns the handler and matched type. */
+export function findPluginInboxHandler(
+  objectType: string | string[],
+): { handler: PluginInboxHandler; matchedType: string } | undefined {
+  const types = Array.isArray(objectType) ? objectType : [objectType];
+  for (const t of types) {
+    const handler = inboxHandlers.get(t);
+    if (handler) return { handler, matchedType: t };
+  }
+  return undefined;
+}
+
+/** Return all registered plugin inbox handlers. Used by handleDelete
+ *  where the activity carries only the object URI (no type). Each
+ *  handler decides if the URI belongs to it. */
+export function allPluginInboxHandlers(): PluginInboxHandler[] {
+  return Array.from(inboxHandlers.values());
 }
 
 async function ensureMigrationsTable(fastify: FastifyInstance): Promise<void> {
@@ -144,6 +183,25 @@ async function pluginLoader(fastify: FastifyInstance): Promise<void> {
       continue;
     }
 
+    // Expose a federation delivery helper so plugin serverRoutes can
+    // push AS2 activities to Group followers without importing server
+    // internals (which breaks the client build when it traces into the
+    // manifest).
+    if (!fastify.hasDecorator('deliverToGroupFollowers')) {
+      fastify.decorate(
+        'deliverToGroupFollowers',
+        async (groupId: string, activity: Record<string, unknown>) => {
+          const [group] = await fastify.db
+            .select()
+            .from(actors)
+            .where(eq(actors.id, groupId))
+            .limit(1);
+          if (!group || !group.local) return;
+          await enqueueToFollowers(fastify, group, activity);
+        },
+      );
+    }
+
     await fastify.register(
       async (scoped) => {
         // Auto-mount a /by-slug/:slug route per federation-handled kind
@@ -179,6 +237,12 @@ async function pluginLoader(fastify: FastifyInstance): Promise<void> {
     if (manifest.federationHandlers) {
       for (const kind of Object.keys(manifest.federationHandlers)) {
         federationHandlers.set(kind, manifest.federationHandlers[kind]);
+      }
+    }
+
+    if (manifest.inboxHandlers) {
+      for (const objectType of Object.keys(manifest.inboxHandlers)) {
+        inboxHandlers.set(objectType, manifest.inboxHandlers[objectType]);
       }
     }
 
