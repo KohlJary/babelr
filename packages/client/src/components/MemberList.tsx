@@ -80,18 +80,12 @@ export function MemberList({
   void PERMISSIONS;
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel settings-panel-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>
-            {t('members.title')} ({members.length})
-          </h2>
-          <button className="settings-close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
-        {error && <div className="dm-lookup-error">{error}</div>}
-        <div className="discover-list">
+    <div className="member-list-body">
+      {error && <div className="dm-lookup-error">{error}</div>}
+      <div className="member-list-count">
+        {t('members.title')} ({members.length})
+      </div>
+      <div className="discover-list">
           {members.map((member) => {
             const isSelf = member.id === actor.id;
             const status = presenceStatus?.get(member.id) ?? 'offline';
@@ -187,7 +181,6 @@ export function MemberList({
             );
           })}
         </div>
-      </div>
     </div>
   );
 }

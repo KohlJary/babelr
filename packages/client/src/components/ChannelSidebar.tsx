@@ -27,9 +27,10 @@ interface ChannelSidebarProps {
   onShowFriends?: () => void;
   canManageChannels?: boolean;
   onEditChannel?: (channelId: string) => void;
-  onShowCalendar?: () => void;
-  onShowWiki?: () => void;
-  onShowFiles?: () => void;
+  /** View entries auto-generated from the view registry. Each entry
+   *  has already been filtered by isAvailable. */
+  viewEntries?: Array<{ id: string; label: string; icon?: import('react').ReactNode }>;
+  onOpenView?: (id: string) => void;
   /** Rendered content from the plugin sidebar-slot registry. ChatView
    *  builds this; the sidebar just slots it in below the built-in
    *  buttons so plugin entries appear in the same toolbar stack. */
@@ -37,7 +38,6 @@ interface ChannelSidebarProps {
   onJoinVoice?: (channelId: string) => void;
   activeVoiceChannelId?: string | null;
   onLeaveServer?: () => void;
-  onShowAuditLog?: () => void;
 }
 
 export function ChannelSidebar({
@@ -64,14 +64,12 @@ export function ChannelSidebar({
   onShowFriends,
   canManageChannels,
   onEditChannel,
-  onShowCalendar,
-  onShowWiki,
-  onShowFiles,
+  viewEntries,
+  onOpenView,
   pluginSlots,
   onJoinVoice,
   activeVoiceChannelId,
   onLeaveServer,
-  onShowAuditLog,
 }: ChannelSidebarProps) {
   const t = useT();
   if (mode === 'dms') {
@@ -87,11 +85,12 @@ export function ChannelSidebar({
               {t('channelSidebar.friends')}
             </button>
           )}
-          {onShowCalendar && (
-            <button className="sidebar-item add-channel" onClick={onShowCalendar}>
-              {t('events.title')}
+          {viewEntries?.filter((v) => v.id === 'calendar').map((v) => (
+            <button key={v.id} className="sidebar-item add-channel" onClick={() => onOpenView?.(v.id)}>
+              {v.icon && <span className="sidebar-view-icon">{v.icon}</span>}
+              {v.label}
             </button>
-          )}
+          ))}
           {conversations.length === 0 && (
             <div className="sidebar-empty">{t('channelSidebar.noConversations')}</div>
           )}
@@ -218,32 +217,23 @@ export function ChannelSidebar({
             {t('channelSidebar.inviteToChannel')}
           </button>
         )}
-        {onShowCalendar && (
-          <button className="sidebar-item add-channel" onClick={onShowCalendar}>
-            {t('events.title')}
+        {viewEntries?.map((v) => (
+          <button
+            key={v.id}
+            className="sidebar-item add-channel"
+            onClick={() => onOpenView?.(v.id)}
+          >
+            {v.icon && <span className="sidebar-view-icon">{v.icon}</span>}
+            {v.label}
           </button>
-        )}
-        {onShowWiki && (
-          <button className="sidebar-item add-channel" onClick={onShowWiki}>
-            {t('wiki.title')}
-          </button>
-        )}
-        {onShowFiles && (
-          <button className="sidebar-item add-channel" onClick={onShowFiles}>
-            {t('files.title')}
-          </button>
-        )}
+        ))}
         {pluginSlots}
         {onShowServerSettings && (
           <button className="sidebar-item add-channel" onClick={onShowServerSettings}>
             {t('channelSidebar.serverSettings')}
           </button>
         )}
-        {onShowAuditLog && (
-          <button className="sidebar-item add-channel" onClick={onShowAuditLog}>
-            {t('audit.title')}
-          </button>
-        )}
+        {/* Audit log is now a tab within server settings — no standalone button. */}
         {onLeaveServer && (
           <button
             className="sidebar-item add-channel"

@@ -157,9 +157,11 @@ export const UI_STRINGS = {
   'friends.failedToLoad': 'Failed to load friends',
   'friends.failedToAdd': 'Failed to add friend',
   'friends.friendsCount': 'Friends',
+  'friends.searchPlaceholder': 'Search friends…',
 
   // Channel settings
   'channelSettings.title': 'Channel Settings',
+  'channelSettings.tabGeneral': 'General',
   'channelSettings.name': 'Name',
   'channelSettings.category': 'Category',
   'channelSettings.categoryHint': 'Leave blank for no category',
@@ -177,6 +179,7 @@ export const UI_STRINGS = {
   'serverSettings.tabInfo': 'Info',
   'serverSettings.tabInvites': 'Invites',
   'serverSettings.tabRoles': 'Roles',
+  'serverSettings.tabAudit': 'Audit Log',
   'serverSettings.logo': 'Logo',
   'serverSettings.uploadImage': 'Upload image',
   'serverSettings.removeLogo': 'Remove',
@@ -547,6 +550,11 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Settings tabs
+  'settings.tabProfile': 'Profile',
+  'settings.tabTranslation': 'Translation',
+  'settings.tabAccount': 'Account',
+
   // Two-factor authentication
   'twoFactor.title': 'Two-factor authentication',
   'twoFactor.subtitle': 'Enter the 6-digit code from your authenticator app.',

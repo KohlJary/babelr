@@ -21,45 +21,36 @@ export function ThreadPanel({
 }: ThreadPanelProps) {
   const t = useT();
   return (
-    <div className="thread-panel-overlay" onClick={onClose}>
-      <div className="thread-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="thread-header">
-          <h3>{t('thread.title')}</h3>
-          <button className="thread-close" onClick={onClose}>
-            &times;
-          </button>
+    <div className="thread-panel-body">
+      <div className="thread-content">
+        <div className="parent-message">
+          <MessageItem
+            data={parentMessage}
+            compact={false}
+          />
         </div>
 
-        <div className="thread-content">
-          <div className="parent-message">
+        <div className="thread-divider" />
+
+        {loading && <div className="thread-loading">{t('thread.loadingReplies')}</div>}
+
+        {!loading && replies.length === 0 && (
+          <div className="thread-empty">{t('thread.empty')}</div>
+        )}
+
+        <div className="thread-replies">
+          {replies.map((item) => (
             <MessageItem
-              data={parentMessage}
+              key={item.message.id}
+              data={item}
               compact={false}
             />
-          </div>
-
-          <div className="thread-divider" />
-
-          {loading && <div className="thread-loading">{t('thread.loadingReplies')}</div>}
-
-          {!loading && replies.length === 0 && (
-            <div className="thread-empty">{t('thread.empty')}</div>
-          )}
-
-          <div className="thread-replies">
-            {replies.map((item) => (
-              <MessageItem
-                key={item.message.id}
-                data={item}
-                compact={false}
-              />
-            ))}
-          </div>
+          ))}
         </div>
+      </div>
 
-        <div className="thread-input-wrapper">
-          <MessageInput onSend={onSendReply} disabled={false} />
-        </div>
+      <div className="thread-input-wrapper">
+        <MessageInput onSend={onSendReply} disabled={false} />
       </div>
     </div>
   );

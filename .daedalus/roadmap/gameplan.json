@@ -58,45 +58,89 @@
         "Email verification on registration",
         "Two-factor authentication"
       ],
-      "notes": "The 'someone tried to use this as a real product' cluster. Onboarding + PWA have the most user-facing impact; email verification and 2FA are table-stakes security before any public deployment."
+      "notes": "Done. All four shipped: onboarding wizard (5-step), PWA (vite-plugin-pwa), email verification (nodemailer + SMTP), 2FA (TOTP + recovery codes)."
+    },
+    {
+      "id": "ux-views-migration",
+      "title": "UX refinement — migrate overlays to views, build component primitives",
+      "status": "planned",
+      "roadmapItems": [
+        "UX: migrate modal overlays to view registry for mobile-ready layout",
+        "UX: component primitives palette (TabbedView, ScrollListView, SidePanel)"
+      ],
+      "notes": "14 surfaces still use the old modal-overlay pattern from before the View/Sidebar paradigm. Mobile-hostile (no responsive layout, no back-gesture). Migrate the full-panel surfaces to registered views, build reusable primitives plugin authors can leverage, and make MemberList the default right-panel when no sidebar content is active."
     }
   ],
   "activePhase": {
-    "id": "mvp-gaps",
-    "title": "Market-MVP gaps — onboarding, PWA, email verification, 2FA",
+    "id": "ux-views-migration",
+    "title": "UX refinement — migrate overlays to views, build component primitives",
     "started": "2026-04-16",
-    "goal": "Close the gaps that would block a real user from adopting Babelr as their workspace. Onboarding flow makes first-run frictionless; PWA gives mobile users an installable app without native builds; email verification + 2FA are security table-stakes.",
-    "sequencing": "Onboarding first (highest UX impact, touches registration + server creation + language pref). PWA second (Vite PWA plugin, service worker, manifest.json — relatively mechanical). Email verification third (server-side, needs SMTP config). 2FA last (TOTP, recovery codes, most isolated).",
+    "goal": "Every full-panel surface uses the view registry. Every right-panel surface uses a standard SidePanel primitive. ChatView's show* state explosion is replaced by view IDs. Plugin authors get TabbedView, ScrollListView, and SidePanel out of the box. MemberList becomes the default right panel (Discord/Slack pattern). Mobile layout follows naturally once everything routes through views.",
+    "sequencing": "Primitives first (TabbedView, ScrollListView, SidePanel) so the migration has something to target. Then migrate surfaces in dependency order: settings (most complex, validates TabbedView), server settings, channel settings, then the simpler panels.",
     "tasks": [
       {
-        "id": "task-mvp-1",
-        "title": "First-run onboarding flow",
+        "id": "task-ux-1",
+        "title": "Component primitives — TabbedView, ScrollListView, SidePanel",
         "status": "done",
-        "resolution": "OnboardingWizard component with 4-step stepper: profile (display name), language (auto-detects browser locale, 17 languages), server (create-or-join with discoverable servers list, skip option), done screen. Client-side detection: App.tsx shows wizard instead of ChatView when actor.displayName is null. Updates profile via PUT /auth/profile, creates/joins server via existing APIs. 25 i18n strings added to shared/strings.ts. All strings localized via useT().",
-        "details": "Guided first-run experience for new users. After registration: (1) set display name + avatar, (2) set preferred language, (3) create or join a server, (4) create first channel. Stepper-style UI with skip-ahead. The registration form itself already exists — this wraps the post-registration steps into a cohesive flow. Server: detect 'needs onboarding' (no servers, no language set) and return a flag in the auth response. Client: OnboardingWizard component shown instead of ChatView when the flag is set. Must work for both self-hosted admins (create server) and invitees (join via invite link, skip server creation)."
+        "resolution": "Three primitives built alongside ListDetailView.\n\nTabbedView: tab bar with role='tablist' + content panel. Supports controlled (activeTab prop) and uncontrolled (internal state) modes. Tabs horizontally scroll on narrow viewports via overflow-x: auto. Active tab gets a blue bottom border.\n\nScrollListView: scrollable list with sticky header, optional search filter, empty/loading states, load-more pagination. Lighter than ListDetailView — single column, no detail panel.\n\nSidePanel: right-side panel (300px default, 400px wide variant). Escape-to-close via keydown listener. Header with title + close button, scrollable body.\n\nAll three match the dark theme, use flex layout with min-height: 0 for proper overflow.",
+        "details": "Build three reusable primitives exported alongside ListDetailView for plugin authors and internal use.\n\nTabbedView<T>: tab bar + content panel. Props: tabs array (id, label, icon?), activeTab, onTabChange, renderContent(tabId). Supports controlled and uncontrolled modes. CSS handles horizontal scroll on mobile for many tabs.\n\nScrollListView: scrollable list with sticky header, optional search filter, empty state, loading state. Lighter than ListDetailView — no detail panel, just a single column. Used for mentions, audit log, notifications.\n\nSidePanel: right-side panel that overlays or sits beside the chat. Props: title, onClose, children. Manages its own width, close button, escape-to-close. Used for MemberList, ThreadPanel, GlossaryEditor. MemberList becomes the default content when no other SidePanel is active.\n\nAll three get CSS that works in the existing dark theme and responds to narrow viewports."
       },
       {
-        "id": "task-mvp-2",
-        "title": "PWA support — installable web app + offline shell",
+        "id": "task-ux-2",
+        "title": "Register settings view — user settings + profile as TabbedView",
         "status": "done",
-        "resolution": "vite-plugin-pwa with generateSW mode. manifest.webmanifest with Babelr branding, dark theme (#0a0a0a), standalone display, 192+512 icons (placeholder — replace with real artwork). Workbox precaches the app shell (14 entries), navigateFallback to index.html with denylist for /api, /ws, /uploads. Runtime caching: NetworkFirst for API with 5s timeout + 50-entry/5-min cache. iOS meta tags: apple-mobile-web-app-capable, black-translucent status bar, apple-touch-icon. autoUpdate register type so new versions install silently on next visit.",
-        "details": "Vite PWA plugin (vite-plugin-pwa) with a service worker for offline shell + asset caching. manifest.json with Babelr branding, icons, theme color. Workbox runtime caching for API responses (network-first for messages, cache-first for static assets). Install prompt on supported browsers. iOS Safari meta tags for standalone mode. This is the quick mobile path — native apps (Capacitor) come later."
+        "resolution": "SettingsPanel refactored into TabbedView with three tabs: Profile (absorbs ProfilePanel — avatar, display name, bio), Translation (provider selection, API keys, language, toggle), Account (password change, 2FA). Registered as 'settings' view in register-builtin.ts. ChatView's showSettings + showProfile state + modal overlays removed — both buttons now call openView('settings'). ViewHostContext gains onActorUpdate so views that modify the actor can propagate changes up to App. SettingsPanel now calls useTranslationSettings() directly instead of receiving settings/onUpdate as props. 3 i18n strings for tab labels.",
+        "details": "Migrate SettingsPanel from a modal overlay to a registered 'settings' view using TabbedView. Tabs: Profile (display name, avatar, summary — absorbs ProfilePanel), Language & Translation (provider, preferred language), Account (password, 2FA, email verification status), About (app version, links). Remove showSettings + showProfile state from ChatView. The sidebar 'Settings' button now calls openView('settings') instead of toggling a boolean. SettingsPanel and ProfilePanel merge into one view component."
       },
       {
-        "id": "task-mvp-3",
-        "title": "Email verification on registration",
+        "id": "task-ux-3",
+        "title": "Register server settings view — TabbedView with roles + audit",
         "status": "done",
-        "resolution": "Schema: email_verified boolean + verification_token + verification_token_expires on actors. Server: register generates a UUID token with 24h TTL and sends via nodemailer (SMTP config from env: SMTP_HOST/PORT/USER/PASS/FROM). GET /auth/verify?token= marks verified and redirects to app. POST /auth/resend-verification re-generates token with rate limiting implicit in the 24h TTL. SKIP_EMAIL_VERIFICATION=true env var bypasses for self-hosted. Client: VerificationBanner shows at top of ChatView when emailVerified is false, with resend button. ActorProfile now includes emailVerified. 4 i18n strings.",
-        "details": "Server: email_verified boolean on actors table, verification_token + token_expires columns. POST /auth/register sends a verification email with a signed token link. GET /auth/verify?token=... marks the account verified. Unverified accounts can log in but see a banner + can't create servers or send messages (read-only). SMTP config via env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM). Resend endpoint with rate limiting. For self-hosted: optional SKIP_EMAIL_VERIFICATION=true env var."
+        "resolution": "ServerSettingsPanel refactored to use TabbedView with 4 tabs: Info (name, tagline, description, logo, tags), Invites, Roles (RolesPanel), Audit Log (absorbed AuditLogPanel inline). Registered as 'server-settings' view. ChatView showServerSettings + showAuditLog state removed — both sidebar buttons now call openView('server-settings'). ServerSettingsView fetches the full ServerView via new api.getServer(id) since the view host only has ServerSummary. 1 new i18n string (serverSettings.tabAudit).",
+        "details": "Migrate ServerSettingsPanel from a modal overlay to a registered 'server-settings' view using TabbedView. Tabs: General (name, tagline, description, delete), Invites (create/manage invite links), Roles (existing RolesPanel), Audit Log (existing AuditLogPanel). Remove showServerSettings + showAuditLog state from ChatView. Sidebar 'Server Settings' gear icon calls openView('server-settings'). AuditLogPanel becomes a tab, not a standalone surface."
       },
       {
-        "id": "task-mvp-4",
-        "title": "Two-factor authentication (TOTP)",
+        "id": "task-ux-4",
+        "title": "Register channel settings view — TabbedView",
         "status": "done",
-        "resolution": "Schema: totp_secret, totp_enabled, totp_recovery_codes on actors. Server: POST /auth/2fa/setup returns QR code data URL + secret. POST /auth/2fa/verify confirms setup with a TOTP code, enables 2FA, returns 10 recovery codes (stored argon2-hashed). Login flow: when totpEnabled, returns { twoFactorRequired, challengeToken } instead of a session — client shows TwoFactorChallenge. POST /auth/2fa/challenge validates TOTP or recovery code (consumed on use) and creates the session. POST /auth/2fa/disable turns it off with a valid code. Client: TwoFactorChallenge component during login, TwoFactorSettings in SettingsPanel for setup/disable with QR display + recovery codes grid. 17 i18n strings. In-memory challenge map with 5-min TTL.",
-        "details": "TOTP-based 2FA using otpauth. Server: totp_secret + totp_enabled on actors table. Setup flow: POST /auth/2fa/setup returns a QR code URI, POST /auth/2fa/verify confirms setup with a code. Login flow: if totp_enabled, the login response includes a 2fa_required flag; client shows a code input, POST /auth/2fa/challenge completes login. Recovery codes: 10 single-use codes generated at setup, stored hashed, shown once to the user. POST /auth/2fa/disable with a valid code turns it off. Client: 2FA section in SettingsPanel for setup/disable, code input modal during login."
+        "resolution": "ChannelSettingsPanel refactored to use TabbedView with one tab (General). Ready for a Permissions tab when per-channel overrides ship. Registered as 'channel-settings' view with channelId passed via viewState. ChatView editingChannelId state + modal overlay removed — channel gear icon now calls openView('channel-settings', { channelId }). ChannelSettingsView resolves the channel from host.channels. 1 new i18n string.",
+        "details": "Migrate ChannelSettingsPanel from a modal overlay to a registered 'channel-settings' view using TabbedView. Tabs: General (name, topic, private/public, delete), Permissions (per-channel overrides when they ship). Remove editingChannelId state from ChatView. Channel gear icon calls openView('channel-settings', { channelId })."
+      },
+      {
+        "id": "task-ux-5",
+        "title": "SidePanel — MemberList as default, ThreadPanel + GlossaryEditor",
+        "status": "done",
+        "resolution": "Unified right-panel slot in ChatView layout. Priority order: EmbedSidebar > Thread (SidePanel wide) > Glossary (SidePanel) > MemberList (SidePanel, default when in a server and no view active). MemberList refactored from modal overlay to inline content (settings-overlay wrapper removed, body renders directly in SidePanel). showMembers state removed — MemberList is always-visible default. ThreadPanel + GlossaryEditor render inside SidePanel wrappers. Three modal overlays eliminated.",
+        "details": "Replace the three right-side overlays (MemberList, ThreadPanel, GlossaryEditor) with SidePanel wrappers. MemberList becomes the default SidePanel content — always visible when no embed sidebar, thread, or glossary is open (mirrors Discord's member list behavior). ThreadPanel and GlossaryEditor render inside SidePanel when triggered, pushing MemberList out. EmbedSidebar already has this slot; unify with SidePanel so there's one right-panel manager. Remove showMembers + showGlossary state from ChatView."
+      },
+      {
+        "id": "task-ux-6",
+        "title": "Migrate remaining surfaces — FriendsPanel, MentionsPanel",
+        "status": "done",
+        "resolution": "FriendsPanel stripped of settings-overlay, now uses scroll-list-* CSS classes with add-friend form above the list. Registered as 'friends' view (icon: 👥, always available). MentionsPanel refactored to use ScrollListView primitive — cleanest migration yet. Registered as 'mentions' view (icon: @). ChatView showFriends + showMentions state removed. Friends button calls openView('friends'), mentions button calls openView('mentions'). 1 new i18n string.",
+        "details": "FriendsPanel → registered 'friends' view using ListDetailView (friend list on left, actions/profile on right). MentionsPanel → registered 'mentions' view using ScrollListView. Remove showFriends + showMentions state from ChatView. Both get sidebar buttons via the view registry's auto-toolbar."
+      },
+      {
+        "id": "task-ux-7",
+        "title": "ChatView cleanup — remove show* state, wire view toolbar",
+        "status": "done",
+        "resolution": "Auto-toolbar: ChannelSidebar now receives viewEntries (filtered by isAvailable) + onOpenView instead of individual onShowCalendar/onShowWiki/onShowFiles callbacks. The sidebar iterates viewEntries to render buttons — plugin views that set isAvailable automatically get sidebar entries. ChatView clutter: removed 8 comment lines for removed imports/state, collapsed state declarations. Remaining show* states are legitimate quick-action modals (createServer, createChannel, newDM, channelInvite) + the glossary SidePanel slot toggle. Import block cleaned up.",
+        "details": "After all surfaces are migrated, ChatView should have zero show* booleans. All panel switching routes through activeViewId + the view registry. The sidebar auto-generates toolbar entries from listViews() — each view's icon + label appears as a sidebar button, replacing the hardcoded button list. Plugin views (polls, PM) automatically get sidebar entries if they set isAvailable. This closes the 'sidebar entries iterate the view registry' roadmap item."
+      },
+      {
+        "id": "task-ux-8",
+        "title": "Polish — responsive breakpoints, mobile gestures, SDK export",
+        "status": "done",
+        "resolution": "Responsive CSS: tablet breakpoint (≤1024px) hides side panel. Mobile breakpoint (≤768px) shrinks server sidebar to 52px icon strip, channel sidebar becomes absolute-positioned drawer with shadow, side panel fills full width as overlay, embed sidebar fills 100%, compact channel header + message input, onboarding card full-width borderless, auth form full-width. Views that fill the chat panel auto-hide the channel sidebar via :has() selector. SDK export: packages/client/src/primitives.ts barrel file re-exports ListDetailView, TabbedView, ScrollListView, SidePanel, T, E + all prop types. Subpath export @babelr/client/primitives added to package.json. Mobile gestures deferred — needs a routing layer for proper back navigation, tracked as task-ux-responsive-native.",
+        "details": "Add responsive CSS: on narrow viewports (<768px), the left sidebar collapses to icons, the channel sidebar becomes a drawer, views fill the screen. Back gesture (swipe right) returns to the previous view. Export TabbedView, ScrollListView, SidePanel, and ListDetailView from the plugin SDK as stable primitives. Update the manual wiki page on available components."
       }
     ],
-    "deferred": []
+    "deferred": [
+      {
+        "id": "task-ux-responsive-native",
+        "title": "Full responsive layout + Capacitor native shell",
+        "reason": "The view migration + responsive breakpoints give us a mobile-usable PWA. Full native (Capacitor) is a separate effort once the PWA proves out the mobile UX."
+      }
+    ]
   }
 }

@@ -17,29 +17,24 @@ import type { SidebarSlotHostContext } from '../plugins/sidebar-registry';
 import { ChannelHeader } from './ChannelHeader';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
-import { SettingsPanel } from './SettingsPanel';
 import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
-import { ProfilePanel } from './ProfilePanel';
 import { ThreadPanel } from './ThreadPanel';
-import { ServerSettingsPanel } from './ServerSettingsPanel';
-import { MentionsPanel } from './MentionsPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
-import { FriendsPanel } from './FriendsPanel';
-import { AuditLogPanel } from './AuditLogPanel';
-import { ChannelSettingsPanel } from './ChannelSettingsPanel';
 import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
 import { EmbedHostProvider } from './E';
+import { SidePanel } from './SidePanel';
+import { useT } from '../i18n/I18nProvider';
 import { VerificationBanner } from './VerificationBanner';
 import type { EmbedNavCtx } from '../embeds/registry';
 import type { WikiRefKind } from '@babelr/shared';
-import { getView, type ViewHostContext, type ViewState } from '../views/registry';
+import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
@@ -52,20 +47,13 @@ interface ChatViewProps {
 }
 
 export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
+  const t = useT();
   const [dmMode, setDmMode] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showNewDM, setShowNewDM] = useState(false);
-  const [showMembers, setShowMembers] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showServerSettings, setShowServerSettings] = useState(false);
-  const [showAuditLog, setShowAuditLog] = useState(false);
-  const [showMentions, setShowMentions] = useState(false);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
-  const [showFriends, setShowFriends] = useState(false);
-  const [editingChannelId, setEditingChannelId] = useState<string | null>(null);
   // Which primary view fills the chat panel area. 'chat' is the
   // default — messages + input. 'calendar' and 'wiki' replace the
   // chat with the respective content surface, matching how Discord
@@ -293,29 +281,40 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         }}
         onCreateChannel={() => setShowCreateChannel(true)}
         onNewDM={() => setShowNewDM(true)}
-        onShowMembers={() => setShowMembers(true)}
+        onShowMembers={() => {}}
         onShowGlossary={() => setShowGlossary(true)}
         onShowServerSettings={
-          ['owner', 'admin'].includes(callerRole) ? () => setShowServerSettings(true) : undefined
-        }
-        onShowAuditLog={
-          ['owner', 'admin'].includes(callerRole) ? () => setShowAuditLog(true) : undefined
+          ['owner', 'admin'].includes(callerRole) ? () => openView('server-settings') : undefined
         }
         mutedChannels={mutedChannels}
         onToggleMute={handleToggleMute}
         selectedChannelIsPrivate={!dmMode && selectedChannel?.isPrivate}
         onInviteToChannel={!dmMode && selectedChannel?.isPrivate ? () => setShowChannelInvite(true) : undefined}
-        onShowFriends={dmMode ? () => setShowFriends(true) : undefined}
+        onShowFriends={dmMode ? () => openView('friends') : undefined}
         canManageChannels={!dmMode && ['owner', 'admin', 'moderator'].includes(callerRole)}
-        onEditChannel={(channelId) => setEditingChannelId(channelId)}
+        onEditChannel={(channelId) => openView('channel-settings', { channelId })}
         onLeaveServer={
           !dmMode && selectedServer && callerRole !== 'owner'
             ? () => void leaveServer(selectedServer.id)
             : undefined
         }
-        onShowCalendar={() => openView('calendar')}
-        onShowWiki={!dmMode && selectedServer ? () => openView('wiki') : undefined}
-        onShowFiles={!dmMode && selectedServer ? () => openView('files') : undefined}
+        viewEntries={listViews()
+          .filter((v) => {
+            if (!v.isAvailable) return false;
+            const hostCheck: ViewHostContext = {
+              actor,
+              selectedServer: selectedServer ? { id: selectedServer.id, name: selectedServer.name } : null,
+              callerRole,
+              channels,
+              navCtx,
+              openEmbedPreview,
+              closeView,
+              onActorUpdate,
+            };
+            return v.isAvailable(hostCheck);
+          })
+          .map((v) => ({ id: v.id, label: v.label, icon: v.icon }))}
+        onOpenView={openView}
         onJoinVoice={(channelId) => {
           if (voice.state.channelId === channelId) return;
           if (voice.state.channelId) voice.leave();
@@ -350,6 +349,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             navCtx,
             openEmbedPreview,
             closeView,
+            onActorUpdate,
           };
           return createElement(def.View, { host: hostCtx, viewState });
         })()}
@@ -362,9 +362,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           connected={connected}
           encrypted={dmMode && e2e.ready}
           onLogout={onLogout}
-          onOpenSettings={() => setShowSettings(true)}
-          onOpenProfile={() => setShowProfile(true)}
-          onOpenMentions={() => setShowMentions(true)}
+          onOpenSettings={() => openView('settings')}
+          onOpenProfile={() => openView('settings')}
+          onOpenMentions={() => openView('mentions')}
         />
         {voice.state.channelId &&
         selectedChannel?.id === voice.state.channelId &&
@@ -435,7 +435,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         )}
       </div>
 
-      {embedSidebar && (
+      {/* === Unified right panel === */}
+      {embedSidebar ? (
         <EmbedSidebar
           target={embedSidebar}
           actor={actor}
@@ -443,17 +444,56 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           navCtx={navCtx}
           onClose={() => setEmbedSidebar(null)}
         />
-      )}
+      ) : threadMessageId ? (
+        <SidePanel
+          title={t('thread.title')}
+          onClose={() => {
+            setThreadMessageId(null);
+            setThreadReplies([]);
+          }}
+          wide
+        >
+          <ThreadPanel
+            parentMessage={messages.find((m) => m.message.id === threadMessageId)!}
+            replies={threadReplies}
+            loading={threadLoading}
+            onSendReply={sendThreadReply}
+            onClose={() => {
+              setThreadMessageId(null);
+              setThreadReplies([]);
+            }}
+          />
+        </SidePanel>
+      ) : showGlossary && activeChannelId ? (
+        <SidePanel
+          title={t('glossary.title')}
+          onClose={() => setShowGlossary(false)}
+        >
+          <GlossaryEditor
+            channelId={activeChannelId}
+            onClose={() => setShowGlossary(false)}
+          />
+        </SidePanel>
+      ) : selectedServer && !dmMode && !activeViewId ? (
+        <SidePanel
+          title={t('members.title')}
+          onClose={() => {}}
+        >
+          <MemberList
+            serverId={selectedServer.id}
+            members={members}
+            actor={actor}
+            callerRole={callerRole}
+            presenceStatus={presenceStatus}
+            onKick={kick}
+            onClose={() => {}}
+            onRolesChanged={reloadMembers}
+          />
+        </SidePanel>
+      ) : null}
 
-      {showSettings && (
-        <SettingsPanel
-          settings={settings}
-          actor={actor}
-          onUpdate={updateSettings}
-          onClose={() => setShowSettings(false)}
-          onActorUpdate={onActorUpdate}
-        />
-      )}
+      {/* Settings now renders as a registered view — see
+         register-builtin.ts SettingsView. */}
       {showCreateServer && (
         <CreateServerModal
           onCreateServer={async (name, desc) => {
@@ -487,56 +527,11 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onClose={() => setShowNewDM(false)}
         />
       )}
-      {showMembers && selectedServer && (
-        <MemberList
-          serverId={selectedServer.id}
-          members={members}
-          actor={actor}
-          callerRole={callerRole}
-          presenceStatus={presenceStatus}
-          onKick={kick}
-          onClose={() => setShowMembers(false)}
-          onRolesChanged={reloadMembers}
-        />
-      )}
-      {showGlossary && activeChannelId && (
-        <GlossaryEditor
-          channelId={activeChannelId}
-          onClose={() => setShowGlossary(false)}
-        />
-      )}
-      {threadMessageId && (
-        <ThreadPanel
-          parentMessage={messages.find((m) => m.message.id === threadMessageId)!}
-          replies={threadReplies}
-          loading={threadLoading}
-          onSendReply={sendThreadReply}
-          onClose={() => {
-            setThreadMessageId(null);
-            setThreadReplies([]);
-          }}
-        />
-      )}
-      {showServerSettings && selectedServer && (
-        <ServerSettingsPanel
-          server={selectedServer}
-          onClose={() => setShowServerSettings(false)}
-          onUpdated={updateServer}
-        />
-      )}
-      {showProfile && (
-        <ProfilePanel
-          actor={actor}
-          onUpdate={() => {
-            // Profile updated — reload will pick up changes via getMe()
-            window.location.reload();
-          }}
-          onClose={() => setShowProfile(false)}
-        />
-      )}
-      {showMentions && (
-        <MentionsPanel onClose={() => setShowMentions(false)} />
-      )}
+      {/* MemberList, GlossaryEditor, and ThreadPanel now render in the
+         unified right panel above (SidePanel wrappers). */}
+      {/* Server settings now renders as a registered view. */}
+      {/* Profile now renders as the Profile tab within the settings view. */}
+      {/* Mentions now renders as a registered view. */}
       {showChannelInvite && activeChannelId && (
         <ChannelInviteModal
           channelId={activeChannelId}
@@ -544,32 +539,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onClose={() => setShowChannelInvite(false)}
         />
       )}
-      {showFriends && (
-        <FriendsPanel
-          onStartDM={async (actorId) => {
-            setDmMode(true);
-            await startDM(actorId);
-          }}
-          onClose={() => setShowFriends(false)}
-        />
-      )}
-      {showAuditLog && selectedServer && (
-        <AuditLogPanel
-          serverId={selectedServer.id}
-          onClose={() => setShowAuditLog(false)}
-        />
-      )}
-      {editingChannelId && (() => {
-        const ch = channels.find((c) => c.id === editingChannelId);
-        if (!ch) return null;
-        return (
-          <ChannelSettingsPanel
-            channel={ch}
-            onClose={() => setEditingChannelId(null)}
-            onUpdated={updateChannel}
-          />
-        );
-      })()}
+      {/* Friends now renders as a registered view. */}
+      {/* Audit log now renders as a tab in the server-settings view. */}
+      {/* Channel settings now renders as a registered view. */}
       {voice.state.channelId &&
         // Hide the floating widget when the user is already viewing the
         // full-size CallView for this same channel.

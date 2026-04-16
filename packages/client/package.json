@@ -4,6 +4,10 @@
   "private": true,
   "license": "Hippocratic-3.0",
   "type": "module",
+  "exports": {
+    ".": "./src/main.tsx",
+    "./primitives": "./src/primitives.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -48,61 +48,52 @@ export function GlossaryEditor({ channelId, onClose }: GlossaryEditorProps) {
   };
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>{t('glossary.title')}</h2>
-          <button className="settings-close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
+    <div className="glossary-body">
+      <p className="settings-hint">{t('glossary.hint')}</p>
 
-        <p className="settings-hint">{t('glossary.hint')}</p>
+      {loading ? (
+        <div className="sidebar-empty">{t('common.loading')}</div>
+      ) : (
+        <>
+          <div className="glossary-entries">
+            {Object.entries(glossary).map(([term, meaning]) => (
+              <div key={term} className="glossary-entry">
+                <span className="glossary-term">{term}</span>
+                <span className="glossary-arrow">&rarr;</span>
+                <span className="glossary-meaning">{meaning}</span>
+                <button className="glossary-remove" onClick={() => removeEntry(term)}>
+                  &times;
+                </button>
+              </div>
+            ))}
+            {Object.keys(glossary).length === 0 && (
+              <div className="sidebar-empty">{t('glossary.empty')}</div>
+            )}
+          </div>
 
-        {loading ? (
-          <div className="sidebar-empty">{t('common.loading')}</div>
-        ) : (
-          <>
-            <div className="glossary-entries">
-              {Object.entries(glossary).map(([term, meaning]) => (
-                <div key={term} className="glossary-entry">
-                  <span className="glossary-term">{term}</span>
-                  <span className="glossary-arrow">&rarr;</span>
-                  <span className="glossary-meaning">{meaning}</span>
-                  <button className="glossary-remove" onClick={() => removeEntry(term)}>
-                    &times;
-                  </button>
-                </div>
-              ))}
-              {Object.keys(glossary).length === 0 && (
-                <div className="sidebar-empty">{t('glossary.empty')}</div>
-              )}
-            </div>
-
-            <div className="glossary-add">
-              <input
-                className="modal-input"
-                placeholder={t('glossary.term')}
-                value={newTerm}
-                onChange={(e) => setNewTerm(e.target.value)}
-              />
-              <input
-                className="modal-input"
-                placeholder={t('glossary.translation')}
-                value={newMeaning}
-                onChange={(e) => setNewMeaning(e.target.value)}
-              />
-              <button className="discover-join-btn" onClick={addEntry}>
-                {t('common.add')}
-              </button>
-            </div>
-
-            <button className="auth-submit" onClick={save} disabled={saving}>
-              {saving ? '...' : t('glossary.save')}
+          <div className="glossary-add">
+            <input
+              className="modal-input"
+              placeholder={t('glossary.term')}
+              value={newTerm}
+              onChange={(e) => setNewTerm(e.target.value)}
+            />
+            <input
+              className="modal-input"
+              placeholder={t('glossary.translation')}
+              value={newMeaning}
+              onChange={(e) => setNewMeaning(e.target.value)}
+            />
+            <button className="discover-join-btn" onClick={addEntry}>
+              {t('common.add')}
             </button>
-          </>
-        )}
-      </div>
+          </div>
+
+          <button className="auth-submit" onClick={save} disabled={saving}>
+            {saving ? '...' : t('glossary.save')}
+          </button>
+        </>
+      )}
     </div>
   );
 }

@@ -107,6 +107,10 @@ export async function getServers(): Promise<ServerView[]> {
   return apiFetch('/servers');
 }
 
+export async function getServer(serverId: string): Promise<ServerView> {
+  return apiFetch(`/servers/${serverId}`);
+}
+
 export interface DiscoverableServer extends ServerView {
   joined: boolean;
 }

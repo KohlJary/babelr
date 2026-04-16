@@ -1031,7 +1031,37 @@
       "status": "backlog",
       "created_at": "2026-04-16T00:00:00.000000",
       "created_by": "kohl"
+    },
+    {
+      "id": "ux-views-migration",
+      "title": "UX: migrate modal overlays to view registry for mobile-ready layout",
+      "description": "14 surfaces still use the old modal-overlay pattern from before the View/Sidebar paradigm was established. These don't work on mobile (no responsive layout, no back-gesture, no view transitions). Migrate all full-panel surfaces (settings, server settings, channel settings, friends, mentions, profile) to registered views. Merge profile into settings as a tab. Make MemberList the default right panel. Remove ChatView's show* state explosion. Sidebar auto-generates toolbar entries from the view registry.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "in_progress",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "ux-component-primitives",
+      "title": "UX: component primitives palette (TabbedView, ScrollListView, SidePanel)",
+      "description": "Build a palette of reusable view primitives that both internal surfaces and plugin authors can leverage. TabbedView (tab bar + content panels), ScrollListView (scrollable list with header + search), SidePanel (right-panel overlay with close/escape). These sit alongside the existing ListDetailView. All get responsive CSS and dark-theme treatment. Exported from the plugin SDK as stable primitives.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "in_progress",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "playwright-integration-suite",
+      "title": "Playwright integration test suite — full pass over all user-facing surfaces",
+      "description": "The 5 structural smoke tests prove Playwright works and catch container-type regressions. But we have zero coverage of actual user flows: creating a server, sending a message, voting on a poll, dragging a kanban card, opening embeds, voice join, federation cross-tower renders, translation toggling, 2FA setup, onboarding completion, etc.\n\nScope:\n- Auth flows: register, login, 2FA challenge, email verification banner\n- Onboarding: all 5 steps, skip paths, language detection\n- Chat: send message, edit, delete, reactions, threads, embeds render inline, [[page:slug]] opens sidebar preview\n- Servers: create, join, leave, invite links, server settings tabs\n- Channels: create, edit settings, slow mode, glossary, private channels\n- Voice: join/leave (verify UI state — can't test actual WebRTC in headless)\n- Wiki: create page, edit, revisions, embed refs\n- Calendar: create event, RSVP, event chat\n- Files: upload, preview, download\n- PM plugin: create board, create work item, drag-and-drop reorder, comments, embed preview\n- Polls: create poll, vote, results update\n- Translation: toggle provider, verify translated content appears\n- Friends: send request, accept, DM from friend\n- Members: role assignment, kick\n- Settings: profile edit, password change, 2FA setup/disable\n- PWA: manifest served, service worker registers (verify via JS eval)\n- Responsive: narrow viewport renders mobile layout (once ux-8 ships)\n\nStructure: one spec file per domain (auth.spec.ts, chat.spec.ts, wiki.spec.ts, etc.). Shared helpers for login, server creation, channel setup. Page object model if the suite grows past ~20 spec files.\n\nBlocked on: nothing — can start anytime. Best batched after the UX views migration completes so we're testing the final layout, not an intermediate state.",
+      "priority": "P1",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 29
+  "version": 31
 }

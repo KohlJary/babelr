@@ -4,6 +4,11 @@ import { registerView, type ViewProps } from './registry';
 import { EventsPanel } from '../components/EventsPanel';
 import { WikiPanel } from '../components/WikiPanel';
 import FilesPanel from '../components/FilesPanel';
+import { SettingsPanel } from '../components/SettingsPanel';
+import { ServerSettingsPanel } from '../components/ServerSettingsPanel';
+import { ChannelSettingsPanel } from '../components/ChannelSettingsPanel';
+import { FriendsPanel } from '../components/FriendsPanel';
+import { MentionsPanel } from '../components/MentionsPanel';
 import * as api from '../api';
 
 /**
@@ -102,10 +107,61 @@ function ManualView({ host, viewState }: ViewProps) {
   });
 }
 
+function ServerSettingsView({ host }: ViewProps) {
+  if (!host.selectedServer) return null;
+  const [server, setServer] = useState<import('@babelr/shared').ServerView | null>(null);
+  useEffect(() => {
+    api.getServer(host.selectedServer!.id).then(setServer).catch(() => {});
+  }, [host.selectedServer]);
+  if (!server) return null;
+  return createElement(ServerSettingsPanel, {
+    server,
+    onClose: host.closeView,
+    onUpdated: (s: import('@babelr/shared').ServerView) => setServer(s),
+  });
+}
+
+function FriendsView({ host }: ViewProps) {
+  const startDM = async (actorId: string) => {
+    const res = await api.startDM(actorId);
+    void res;
+  };
+  return createElement(FriendsPanel, {
+    onStartDM: startDM,
+    onClose: host.closeView,
+  });
+}
+
+function MentionsView({ host }: ViewProps) {
+  return createElement(MentionsPanel, {
+    onClose: host.closeView,
+  });
+}
+
+function ChannelSettingsView({ host, viewState }: ViewProps) {
+  const channelId = viewState.channelId as string | undefined;
+  const channel = channelId
+    ? host.channels.find((c: { id: string }) => c.id === channelId)
+    : null;
+  if (!channel) return null;
+  return createElement(ChannelSettingsPanel, {
+    channel,
+    onClose: host.closeView,
+  });
+}
+
+function SettingsView({ host }: ViewProps) {
+  return createElement(SettingsPanel, {
+    actor: host.actor,
+    onClose: host.closeView,
+    onActorUpdate: host.onActorUpdate,
+  });
+}
+
 export function registerBuiltinViews(): void {
   registerView({
     id: 'calendar',
-    label: '📅 Calendar',
+    label: 'Calendar',
     icon: '📅',
     isAvailable: () => true,
     View: CalendarView,
@@ -132,5 +188,43 @@ export function registerBuiltinViews(): void {
     label: 'Manual',
     isAvailable: () => false,
     View: ManualView,
+  });
+
+  registerView({
+    id: 'settings',
+    label: 'Settings',
+    icon: '⚙️',
+    isAvailable: () => false,
+    View: SettingsView,
+  });
+
+  registerView({
+    id: 'server-settings',
+    label: 'Server Settings',
+    isAvailable: () => false,
+    View: ServerSettingsView,
+  });
+
+  registerView({
+    id: 'channel-settings',
+    label: 'Channel Settings',
+    isAvailable: () => false,
+    View: ChannelSettingsView,
+  });
+
+  registerView({
+    id: 'friends',
+    label: 'Friends',
+    icon: '👥',
+    isAvailable: () => true,
+    View: FriendsView,
+  });
+
+  registerView({
+    id: 'mentions',
+    label: 'Mentions',
+    icon: '@',
+    isAvailable: () => true,
+    View: MentionsView,
   });
 }

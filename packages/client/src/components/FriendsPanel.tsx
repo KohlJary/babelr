@@ -38,22 +38,18 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
 
   const doAction = async (id: string, action: () => Promise<unknown>) => {
     setPendingAction(id);
-    try {
-      await action();
-    } finally {
-      setPendingAction(null);
-    }
+    try { await action(); } finally { setPendingAction(null); }
   };
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>{t('friends.title')}</h2>
-          <button className="settings-close" onClick={onClose}>&times;</button>
-        </div>
+    <div className="friends-view">
+      <div className="scroll-list-header">
+        <h2 className="scroll-list-title">{t('friends.title')}</h2>
+        <button className="scroll-list-close" onClick={onClose} aria-label="Close">&times;</button>
+      </div>
 
-        <form onSubmit={handleAdd} className="dm-remote-lookup">
+      <div className="friends-add-section">
+        <form onSubmit={(e) => void handleAdd(e)} className="dm-remote-lookup">
           <input
             type="text"
             placeholder={t('friends.addByHandle')}
@@ -66,9 +62,11 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
           </button>
         </form>
         {addError && <div className="dm-lookup-error">{addError}</div>}
-
-        {loading && <div className="sidebar-empty">{t('common.loading')}</div>}
         {error && <div className="dm-lookup-error">{error}</div>}
+      </div>
+
+      <div className="scroll-list-body">
+        {loading && <div className="scroll-list-loading">{t('common.loading')}</div>}
 
         {!loading && incoming.length > 0 && (
           <div className="friends-section">
@@ -80,20 +78,8 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
                   <span className="friends-handle">@{f.other.preferredUsername}</span>
                 </div>
                 <div className="friends-actions">
-                  <button
-                    className="friends-btn accept"
-                    onClick={() => doAction(f.id, () => acceptFriend(f.id))}
-                    disabled={pendingAction === f.id}
-                  >
-                    {t('friends.accept')}
-                  </button>
-                  <button
-                    className="friends-btn decline"
-                    onClick={() => doAction(f.id, () => removeFriend(f.id))}
-                    disabled={pendingAction === f.id}
-                  >
-                    {t('friends.decline')}
-                  </button>
+                  <button className="friends-btn accept" onClick={() => doAction(f.id, () => acceptFriend(f.id))} disabled={pendingAction === f.id}>{t('friends.accept')}</button>
+                  <button className="friends-btn decline" onClick={() => doAction(f.id, () => removeFriend(f.id))} disabled={pendingAction === f.id}>{t('friends.decline')}</button>
                 </div>
               </div>
             ))}
@@ -111,13 +97,7 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
                 </div>
                 <div className="friends-actions">
                   <span className="friends-pending">{t('friends.pending')}</span>
-                  <button
-                    className="friends-btn decline"
-                    onClick={() => doAction(f.id, () => removeFriend(f.id))}
-                    disabled={pendingAction === f.id}
-                  >
-                    {t('friends.cancel')}
-                  </button>
+                  <button className="friends-btn decline" onClick={() => doAction(f.id, () => removeFriend(f.id))} disabled={pendingAction === f.id}>{t('friends.cancel')}</button>
                 </div>
               </div>
             ))}
@@ -127,7 +107,7 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
         <div className="friends-section">
           <h3 className="friends-section-header">{t('friends.friendsCount')} ({accepted.length})</h3>
           {!loading && accepted.length === 0 && (
-            <div className="sidebar-empty">{t('friends.empty')}</div>
+            <div className="scroll-list-empty">{t('friends.empty')}</div>
           )}
           {accepted.map((f) => (
             <div key={f.id} className="friends-row">
@@ -136,25 +116,8 @@ export function FriendsPanel({ onStartDM, onClose }: FriendsPanelProps) {
                 <span className="friends-handle">@{f.other.preferredUsername}</span>
               </div>
               <div className="friends-actions">
-                <button
-                  className="friends-btn accept"
-                  onClick={() =>
-                    doAction(f.id, async () => {
-                      await onStartDM(f.other.id);
-                      onClose();
-                    })
-                  }
-                  disabled={pendingAction === f.id}
-                >
-                  {t('friends.message')}
-                </button>
-                <button
-                  className="friends-btn decline"
-                  onClick={() => doAction(f.id, () => removeFriend(f.id))}
-                  disabled={pendingAction === f.id}
-                >
-                  {t('friends.remove')}
-                </button>
+                <button className="friends-btn accept" onClick={() => doAction(f.id, async () => { await onStartDM(f.other.id); onClose(); })} disabled={pendingAction === f.id}>{t('friends.message')}</button>
+                <button className="friends-btn decline" onClick={() => doAction(f.id, () => removeFriend(f.id))} disabled={pendingAction === f.id}>{t('friends.remove')}</button>
               </div>
             </div>
           ))}

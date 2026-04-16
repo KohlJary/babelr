@@ -41,6 +41,10 @@ export interface ViewHostContext {
   /** Close the active view (returns to the chat default). Bound to
    *  the X / "back to chat" button each view typically renders. */
   closeView: () => void;
+  /** Update the current actor's profile state (propagates to App).
+   *  Used by settings/profile views that modify displayName, language,
+   *  avatar, etc. */
+  onActorUpdate?: (actor: ActorProfile) => void;
 }
 
 /**

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { ChannelView } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { TabbedView } from './TabbedView';
 
 interface ChannelSettingsPanelProps {
   channel: ChannelView;
@@ -10,7 +11,13 @@ interface ChannelSettingsPanelProps {
   onUpdated?: (channel: ChannelView) => void;
 }
 
-export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSettingsPanelProps) {
+function GeneralTab({
+  channel,
+  onUpdated,
+}: {
+  channel: ChannelView;
+  onUpdated?: (c: ChannelView) => void;
+}) {
   const t = useT();
   const [name, setName] = useState(channel.name);
   const [category, setCategory] = useState(channel.category ?? '');
@@ -42,85 +49,63 @@ export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSet
   };
 
   return (
-    <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel settings-panel-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <h2>{t('channelSettings.title')}</h2>
-          <button className="settings-close" onClick={onClose}>
-            &times;
-          </button>
-        </div>
-
-        <div className="settings-tab-content">
-          <div className="settings-field">
-            <label htmlFor="channel-name">{t('channelSettings.name')}</label>
-            <input
-              id="channel-name"
-              className="modal-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-            />
-          </div>
-
-          <div className="settings-field">
-            <label htmlFor="channel-category">{t('channelSettings.category')}</label>
-            <input
-              id="channel-category"
-              className="modal-input"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder={t('channelSettings.categoryHint')}
-              maxLength={64}
-            />
-          </div>
-
-          <div className="settings-field">
-            <label htmlFor="channel-topic">{t('channelSettings.topic')}</label>
-            <input
-              id="channel-topic"
-              className="modal-input"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder={t('channelSettings.topicHint')}
-              maxLength={256}
-            />
-          </div>
-
-          <div className="settings-field">
-            <label htmlFor="channel-description">{t('channelSettings.description')}</label>
-            <textarea
-              id="channel-description"
-              className="modal-input"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('channelSettings.descriptionHint')}
-              rows={5}
-            />
-          </div>
-
-          <div className="settings-field">
-            <label htmlFor="channel-slowmode">{t('channelSettings.slowMode')}</label>
-            <input
-              id="channel-slowmode"
-              type="number"
-              min={0}
-              max={21600}
-              className="modal-input"
-              value={slowMode}
-              onChange={(e) => setSlowMode(e.target.value)}
-            />
-            <p className="settings-hint">{t('channelSettings.slowModeHint')}</p>
-          </div>
-
-          <div className="settings-divider" />
-
-          <button className="auth-submit" onClick={handleSave} disabled={saving}>
-            {saving ? t('common.saving') : t('common.saveChanges')}
-          </button>
-          {status && <p className="settings-hint">{status}</p>}
-        </div>
+    <div className="settings-tab-body">
+      <div className="settings-field">
+        <label htmlFor="channel-name">{t('channelSettings.name')}</label>
+        <input id="channel-name" className="modal-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
       </div>
+
+      <div className="settings-field">
+        <label htmlFor="channel-category">{t('channelSettings.category')}</label>
+        <input id="channel-category" className="modal-input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder={t('channelSettings.categoryHint')} maxLength={64} />
+      </div>
+
+      <div className="settings-field">
+        <label htmlFor="channel-topic">{t('channelSettings.topic')}</label>
+        <input id="channel-topic" className="modal-input" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('channelSettings.topicHint')} maxLength={256} />
+      </div>
+
+      <div className="settings-field">
+        <label htmlFor="channel-description">{t('channelSettings.description')}</label>
+        <textarea id="channel-description" className="modal-input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('channelSettings.descriptionHint')} rows={5} />
+      </div>
+
+      <div className="settings-field">
+        <label htmlFor="channel-slowmode">{t('channelSettings.slowMode')}</label>
+        <input id="channel-slowmode" type="number" min={0} max={21600} className="modal-input" value={slowMode} onChange={(e) => setSlowMode(e.target.value)} />
+        <p className="settings-hint">{t('channelSettings.slowModeHint')}</p>
+      </div>
+
+      <div className="settings-divider" />
+
+      <button className="auth-submit" onClick={() => void handleSave()} disabled={saving}>
+        {saving ? t('common.saving') : t('common.saveChanges')}
+      </button>
+      {status && <p className="settings-hint">{status}</p>}
     </div>
+  );
+}
+
+export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSettingsPanelProps) {
+  const t = useT();
+
+  const tabs = [
+    { id: 'general', label: t('channelSettings.tabGeneral') },
+  ];
+
+  return (
+    <TabbedView
+      title={`${t('channelSettings.title')} · #${channel.name}`}
+      tabs={tabs}
+      onClose={onClose}
+      renderContent={(tabId) => {
+        switch (tabId) {
+          case 'general':
+            return <GeneralTab channel={channel} onUpdated={onUpdated} />;
+          default:
+            return null;
+        }
+      }}
+    />
   );
 }
