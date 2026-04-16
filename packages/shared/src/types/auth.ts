@@ -19,6 +19,7 @@ export interface ActorProfile {
   displayName: string | null;
   preferredLanguage: string;
   emailVerified: boolean;
+  totpEnabled: boolean;
   avatarUrl?: string | null;
   summary?: string | null;
   createdAt: Date;

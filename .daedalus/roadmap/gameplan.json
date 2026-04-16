@@ -92,7 +92,8 @@
       {
         "id": "task-mvp-4",
         "title": "Two-factor authentication (TOTP)",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Schema: totp_secret, totp_enabled, totp_recovery_codes on actors. Server: POST /auth/2fa/setup returns QR code data URL + secret. POST /auth/2fa/verify confirms setup with a TOTP code, enables 2FA, returns 10 recovery codes (stored argon2-hashed). Login flow: when totpEnabled, returns { twoFactorRequired, challengeToken } instead of a session — client shows TwoFactorChallenge. POST /auth/2fa/challenge validates TOTP or recovery code (consumed on use) and creates the session. POST /auth/2fa/disable turns it off with a valid code. Client: TwoFactorChallenge component during login, TwoFactorSettings in SettingsPanel for setup/disable with QR display + recovery codes grid. 17 i18n strings. In-memory challenge map with 5-min TTL.",
         "details": "TOTP-based 2FA using otpauth. Server: totp_secret + totp_enabled on actors table. Setup flow: POST /auth/2fa/setup returns a QR code URI, POST /auth/2fa/verify confirms setup with a code. Login flow: if totp_enabled, the login response includes a 2fa_required flag; client shows a code input, POST /auth/2fa/challenge completes login. Recovery codes: 10 single-use codes generated at setup, stored hashed, shown once to the user. POST /auth/2fa/disable with a valid code turns it off. Client: 2FA section in SettingsPanel for setup/disable, code input modal during login."
       }
     ],

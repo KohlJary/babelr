@@ -8,12 +8,26 @@ import { collectionItems } from '../db/schema/collections.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
 import { lookupActorByHandle } from '../federation/resolve.ts';
 import { broadcastActorUpdate } from '../federation/delivery.ts';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { sendVerificationEmail, isEmailEnabled } from '../email.ts';
+import * as OTPAuth from 'otpauth';
+import QRCode from 'qrcode';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === 'true';
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface PendingChallenge {
+  actorId: string;
+  expires: Date;
+}
+const pending2faChallenges = new Map<string, PendingChallenge>();
+
+function generateRecoveryCodes(): string[] {
+  return Array.from({ length: 10 }, () =>
+    randomBytes(4).toString('hex').toUpperCase(),
+  );
+}
 
 function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
   const props = actor.properties as Record<string, unknown> | null;
@@ -24,6 +38,7 @@ function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
     displayName: actor.displayName,
     preferredLanguage: actor.preferredLanguage ?? 'en',
     emailVerified: actor.emailVerified ?? false,
+    totpEnabled: actor.totpEnabled ?? false,
     avatarUrl: (props?.avatarUrl as string) ?? null,
     summary: actor.summary,
     createdAt: actor.createdAt,
@@ -169,6 +184,18 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const valid = await argon2.verify(actor.passwordHash, password);
     if (!valid) {
       return reply.status(401).send({ error: 'Invalid credentials' });
+    }
+
+    // If 2FA is enabled, don't create a session yet — return a
+    // challenge token so the client can prompt for the TOTP code.
+    if (actor.totpEnabled) {
+      const challengeToken = randomUUID();
+      const expires = new Date(Date.now() + 5 * 60 * 1000);
+      pending2faChallenges.set(challengeToken, {
+        actorId: actor.id,
+        expires,
+      });
+      return { twoFactorRequired: true, challengeToken };
     }
 
     // Destroy any existing session before creating a new one (rotation)
@@ -460,4 +487,184 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     return { sent: true };
   });
+
+  // --- Two-factor authentication (TOTP) ---
+
+  fastify.post('/auth/2fa/setup', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    if (request.actor.totpEnabled) {
+      return reply.status(400).send({ error: '2FA is already enabled' });
+    }
+
+    const secret = new OTPAuth.Secret({ size: 20 });
+    const totp = new OTPAuth.TOTP({
+      issuer: 'Babelr',
+      label: request.actor.preferredUsername,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret,
+    });
+
+    // Store the secret (not yet enabled — needs verification).
+    await db
+      .update(actors)
+      .set({ totpSecret: secret.base32, updatedAt: new Date() })
+      .where(eq(actors.id, request.actor.id));
+
+    const otpauthUri = totp.toString();
+    const qrDataUrl = await QRCode.toDataURL(otpauthUri);
+
+    return { otpauthUri, qrDataUrl, secret: secret.base32 };
+  });
+
+  fastify.post<{ Body: { code: string } }>(
+    '/auth/2fa/verify',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      if (request.actor.totpEnabled) {
+        return reply.status(400).send({ error: '2FA is already enabled' });
+      }
+      if (!request.actor.totpSecret) {
+        return reply.status(400).send({ error: 'Call /auth/2fa/setup first' });
+      }
+
+      const { code } = request.body ?? {};
+      if (!code) return reply.status(400).send({ error: 'Code is required' });
+
+      const totp = new OTPAuth.TOTP({
+        issuer: 'Babelr',
+        label: request.actor.preferredUsername,
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(request.actor.totpSecret),
+      });
+
+      const delta = totp.validate({ token: code, window: 1 });
+      if (delta === null) {
+        return reply.status(400).send({ error: 'Invalid code' });
+      }
+
+      const recoveryCodes = generateRecoveryCodes();
+      const hashedCodes = await Promise.all(
+        recoveryCodes.map((c) => argon2.hash(c)),
+      );
+
+      await db
+        .update(actors)
+        .set({
+          totpEnabled: true,
+          totpRecoveryCodes: hashedCodes,
+          updatedAt: new Date(),
+        })
+        .where(eq(actors.id, request.actor.id));
+
+      return { enabled: true, recoveryCodes };
+    },
+  );
+
+  fastify.post<{ Body: { challengeToken: string; code: string } }>(
+    '/auth/2fa/challenge',
+    async (request, reply) => {
+      const { challengeToken, code } = request.body ?? {};
+      if (!challengeToken || !code) {
+        return reply.status(400).send({ error: 'challengeToken and code are required' });
+      }
+
+      const challenge = pending2faChallenges.get(challengeToken);
+      if (!challenge || new Date() > challenge.expires) {
+        pending2faChallenges.delete(challengeToken);
+        return reply.status(400).send({ error: 'Challenge expired or invalid' });
+      }
+      pending2faChallenges.delete(challengeToken);
+
+      const [actor] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, challenge.actorId))
+        .limit(1);
+
+      if (!actor || !actor.totpSecret) {
+        return reply.status(400).send({ error: 'Invalid state' });
+      }
+
+      // Try TOTP code first.
+      const totp = new OTPAuth.TOTP({
+        issuer: 'Babelr',
+        label: actor.preferredUsername,
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(actor.totpSecret),
+      });
+
+      let valid = totp.validate({ token: code, window: 1 }) !== null;
+
+      // If TOTP didn't match, try recovery codes.
+      if (!valid) {
+        const stored = (actor.totpRecoveryCodes as string[]) ?? [];
+        for (let i = 0; i < stored.length; i++) {
+          if (await argon2.verify(stored[i], code)) {
+            valid = true;
+            // Consume the recovery code.
+            const remaining = [...stored];
+            remaining.splice(i, 1);
+            await db
+              .update(actors)
+              .set({ totpRecoveryCodes: remaining, updatedAt: new Date() })
+              .where(eq(actors.id, actor.id));
+            break;
+          }
+        }
+      }
+
+      if (!valid) {
+        return reply.status(401).send({ error: 'Invalid code' });
+      }
+
+      await fastify.destroySession(request, reply);
+      await fastify.createSession(actor.id, reply);
+
+      return toProfile(actor);
+    },
+  );
+
+  fastify.post<{ Body: { code: string } }>(
+    '/auth/2fa/disable',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      if (!request.actor.totpEnabled) {
+        return reply.status(400).send({ error: '2FA is not enabled' });
+      }
+
+      const { code } = request.body ?? {};
+      if (!code) return reply.status(400).send({ error: 'Code is required' });
+
+      const totp = new OTPAuth.TOTP({
+        issuer: 'Babelr',
+        label: request.actor.preferredUsername,
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+        secret: OTPAuth.Secret.fromBase32(request.actor.totpSecret!),
+      });
+
+      if (totp.validate({ token: code, window: 1 }) === null) {
+        return reply.status(400).send({ error: 'Invalid code' });
+      }
+
+      await db
+        .update(actors)
+        .set({
+          totpEnabled: false,
+          totpSecret: null,
+          totpRecoveryCodes: [],
+          updatedAt: new Date(),
+        })
+        .where(eq(actors.id, request.actor.id));
+
+      return { disabled: true };
+    },
+  );
 }

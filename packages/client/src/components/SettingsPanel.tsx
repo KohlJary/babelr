@@ -6,15 +6,17 @@ import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';
 import { useOllamaModels } from '../hooks/useOllamaModels';
+import { TwoFactorSettings } from './TwoFactorSettings';
 
 interface SettingsPanelProps {
   settings: TranslationSettings;
+  actor: ActorProfile;
   onUpdate: (partial: Partial<TranslationSettings>) => void;
   onClose: () => void;
   onActorUpdate?: (actor: ActorProfile) => void;
 }
 
-export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: SettingsPanelProps) {
+export function SettingsPanel({ settings, actor, onUpdate, onClose, onActorUpdate }: SettingsPanelProps) {
   const t = useT();
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
@@ -279,6 +281,9 @@ export function SettingsPanel({ settings, onUpdate, onClose, onActorUpdate }: Se
             {pwSubmitting ? '...' : t('settings.updatePassword')}
           </button>
         </form>
+
+        <div className="settings-divider" />
+        <TwoFactorSettings actor={actor} onActorUpdate={onActorUpdate} />
       </div>
     </div>
   );

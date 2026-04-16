@@ -414,6 +414,66 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* Two-factor authentication ----------------------------------------- */
+.auth-hint {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  text-align: center;
+  margin: 0;
+}
+.tfa-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.tfa-qr {
+  width: 200px;
+  height: 200px;
+  align-self: center;
+  border-radius: 8px;
+  background: white;
+  padding: 8px;
+}
+.tfa-secret {
+  text-align: center;
+}
+.tfa-secret code {
+  background: #1e293b;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #60a5fa;
+  letter-spacing: 0.05em;
+}
+.tfa-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.tfa-recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.3rem;
+}
+.tfa-recovery-code {
+  background: #1e293b;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: #e2e8f0;
+  text-align: center;
+  letter-spacing: 0.1em;
+}
+.settings-cancel-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
 .verification-banner-sent {
   color: #4ade80;
   font-size: 0.85rem;

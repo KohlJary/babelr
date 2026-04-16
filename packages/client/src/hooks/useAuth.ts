@@ -7,29 +7,45 @@ export function useAuth() {
   const [actor, setActor] = useState<ActorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
 
-  // Check existing session on mount
   useEffect(() => {
     api
       .getMe()
       .then(setActor)
-      .catch(() => {
-        // Not logged in
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   const handleLogin = useCallback(async (input: LoginInput) => {
     setError(null);
     try {
-      const profile = await api.login(input);
-      setActor(profile);
+      const result = await api.login(input);
+      if (result.type === '2fa') {
+        setTwoFactorChallenge(result.challengeToken);
+      } else {
+        setActor(result.profile);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
       throw err;
     }
   }, []);
+
+  const handleComplete2fa = useCallback(async (code: string) => {
+    if (!twoFactorChallenge) return;
+    setError(null);
+    try {
+      const profile = await api.complete2faChallenge(twoFactorChallenge, code);
+      setTwoFactorChallenge(null);
+      setActor(profile);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid code';
+      setError(message);
+      throw err;
+    }
+  }, [twoFactorChallenge]);
 
   const handleRegister = useCallback(async (input: RegisterInput) => {
     setError(null);
@@ -56,7 +72,9 @@ export function useAuth() {
     actor,
     loading,
     error,
+    twoFactorChallenge,
     login: handleLogin,
+    complete2fa: handleComplete2fa,
     register: handleRegister,
     logout: handleLogout,
     updateActor,

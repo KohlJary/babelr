@@ -51,8 +51,47 @@ export async function register(input: RegisterInput): Promise<ActorProfile> {
   return apiFetch('/auth/register', { method: 'POST', body: JSON.stringify(input) });
 }
 
-export async function login(input: LoginInput): Promise<ActorProfile> {
-  return apiFetch('/auth/login', { method: 'POST', body: JSON.stringify(input) });
+export type LoginResult =
+  | { type: 'success'; profile: ActorProfile }
+  | { type: '2fa'; challengeToken: string };
+
+export async function login(input: LoginInput): Promise<LoginResult> {
+  const result = await apiFetch<Record<string, unknown>>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (result.twoFactorRequired) {
+    return { type: '2fa', challengeToken: result.challengeToken as string };
+  }
+  return { type: 'success', profile: result as unknown as ActorProfile };
+}
+
+export async function complete2faChallenge(
+  challengeToken: string,
+  code: string,
+): Promise<ActorProfile> {
+  return apiFetch('/auth/2fa/challenge', {
+    method: 'POST',
+    body: JSON.stringify({ challengeToken, code }),
+  });
+}
+
+export async function setup2fa(): Promise<{ otpauthUri: string; qrDataUrl: string; secret: string }> {
+  return apiFetch('/auth/2fa/setup', { method: 'POST' });
+}
+
+export async function verify2faSetup(code: string): Promise<{ enabled: boolean; recoveryCodes: string[] }> {
+  return apiFetch('/auth/2fa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
+export async function disable2fa(code: string): Promise<void> {
+  await apiFetch('/auth/2fa/disable', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
 }
 
 export async function logout(): Promise<void> {

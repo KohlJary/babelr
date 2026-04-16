@@ -448,6 +448,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       {showSettings && (
         <SettingsPanel
           settings={settings}
+          actor={actor}
           onUpdate={updateSettings}
           onClose={() => setShowSettings(false)}
           onActorUpdate={onActorUpdate}

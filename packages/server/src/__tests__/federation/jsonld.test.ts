@@ -29,6 +29,9 @@ const mockActor = {
   emailVerified: true,
   verificationToken: null,
   verificationTokenExpires: null,
+  totpSecret: null,
+  totpEnabled: false,
+  totpRecoveryCodes: [],
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
 };

@@ -35,13 +35,16 @@
     "mediasoup": "^3.19.19",
     "nodemailer": "^8.0.5",
     "openid-client": "^6.8.3",
+    "otpauth": "^9.5.0",
     "postgres": "^3.4.0",
+    "qrcode": "^1.5.4",
     "rrule": "^2.8.1"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^8.0.0",
+    "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.30.0",
     "tsx": "^4.0.0"
