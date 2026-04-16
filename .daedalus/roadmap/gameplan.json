@@ -31,109 +31,68 @@
     {
       "id": "plugin-phase-4",
       "title": "Project management plugin — complex SDK consumer",
-      "status": "planned",
+      "status": "done",
       "roadmapItems": [
         "Project management — second plugin (validates complex SDK case)"
       ],
-      "notes": "Multiple embed kinds, complex schema, plugin-provided view (kanban), AS2 custom objects for federation, drag-and-drop UI. Validates SDK at scale after Phase 3 closes known gaps."
+      "notes": "Shipped. 9 tasks: schema + CRUD, board list + kanban view, work item CRUD + sidebar preview, DnD reordering, comment threads (useChat), task + board embeds, real-time WS sync, AS2 federation (plugin inbox dispatch hook + outbound delivery + inbound handling), polish pass. SDK additions: <E> component, PluginInboxHandler, fastify.deliverToGroupFollowers. Roadmap item added for e2e federation testing on live Towers."
     },
     {
       "id": "plugin-phase-5",
       "title": "Plugin distribution — npm packaging, admin install, manifest freeze",
       "status": "planned",
       "roadmapItems": [
-        "Plugin distribution — npm packaging, admin install flow, manifest freeze"
+        "Plugin distribution — npm packaging, admin install flow, manifest freeze",
+        "Plugin SDK — stable re-exports of @babelr/client utilities",
+        "Plugin test harness — standard pattern for plugin unit + integration tests"
       ],
-      "notes": "After polls + PM prove the contract, freeze the manifest and ship public-facing distribution."
+      "notes": "Polls + PM prove the contract works end-to-end. Phase 5 freezes the manifest, ships npm packaging so third-party authors can build/distribute plugins, and batches the SDK re-export + test harness deferred items. Circle back after MVP gaps are closed."
+    },
+    {
+      "id": "mvp-gaps",
+      "title": "Market-MVP gaps — onboarding, PWA, email verification, 2FA",
+      "status": "planned",
+      "roadmapItems": [
+        "First-run onboarding flow — guided server creation + language preference",
+        "PWA support — installable web app + offline shell as a quick mobile path",
+        "Email verification on registration",
+        "Two-factor authentication"
+      ],
+      "notes": "The 'someone tried to use this as a real product' cluster. Onboarding + PWA have the most user-facing impact; email verification and 2FA are table-stakes security before any public deployment."
     }
   ],
   "activePhase": {
-    "id": "plugin-phase-4",
-    "title": "Project management — complex SDK consumer",
-    "started": "2026-04-15",
-    "goal": "Build PM as the second first-party plugin, validating the SDK at complex scale. Multiple embed kinds, plugin-provided view, drag-and-drop UI, AS2 federation of custom objects, comment threads via useChat. Prove the Phase 3 primitives (<T>, onWsMessage, ComponentType registries, split-file pattern) scale before Phase 5 freezes the manifest.",
-    "sequencing": "Build bottom-up: schema first, then server routes, then kanban UI, then embed/comments, then federation. Each step leaves the plugin runnable — no half-built half-broken state.",
+    "id": "mvp-gaps",
+    "title": "Market-MVP gaps — onboarding, PWA, email verification, 2FA",
+    "started": "2026-04-16",
+    "goal": "Close the gaps that would block a real user from adopting Babelr as their workspace. Onboarding flow makes first-run frictionless; PWA gives mobile users an installable app without native builds; email verification + 2FA are security table-stakes.",
+    "sequencing": "Onboarding first (highest UX impact, touches registration + server creation + language pref). PWA second (Vite PWA plugin, service worker, manifest.json — relatively mechanical). Email verification third (server-side, needs SMTP config). 2FA last (TOTP, recovery codes, most isolated).",
     "tasks": [
       {
-        "id": "task-pm-1",
-        "title": "Schema + migrations + basic server CRUD",
-        "status": "done",
-        "details": "Schema + server routes for boards and work items. No federation, no comments, no embeds, no client — those arrive in later tasks. Plugin-scoped table namespace plugin_pm_*.",
-        "resolution": "packages/plugins/project-management/ with manifest.ts. Three tables created idempotently (CREATE TABLE IF NOT EXISTS): plugin_pm_boards, plugin_pm_columns, plugin_pm_work_items. Server routes: POST /boards (creates with three seed columns: Todo / In Progress / Done), GET /boards?serverId=..., GET /boards/:slug (full detail with columns + work items grouped by column), POST /boards/:slug/work-items (positions at end of column), PATCH /work-items/:slug (edit + cross-column move with board-consistency check), DELETE /work-items/:slug. Sprints and comments deferred to later tasks. Plugin registered on server; client registration (setupClient) comes with task-pm-2. Three smoke tests on the manifest identity + migration shape. 256 tests pass."
+        "id": "task-mvp-1",
+        "title": "First-run onboarding flow",
+        "status": "pending",
+        "details": "Guided first-run experience for new users. After registration: (1) set display name + avatar, (2) set preferred language, (3) create or join a server, (4) create first channel. Stepper-style UI with skip-ahead. The registration form itself already exists — this wraps the post-registration steps into a cohesive flow. Server: detect 'needs onboarding' (no servers, no language set) and return a flag in the auth response. Client: OnboardingWizard component shown instead of ChatView when the flag is set. Must work for both self-hosted admins (create server) and invitees (join via invite link, skip server creation)."
       },
       {
-        "id": "task-pm-2",
-        "title": "Board list view — ListDetailView + empty kanban on select",
-        "status": "done",
-        "details": "Register a 'pm' view with ListDetailView: left rail = boards for the current server (search, create, select), right = selected board's columns as empty lanes. Sidebar slot button '📋 Boards' opens the view.",
-        "resolution": "client.tsx + client-entry.ts shipped. Sidebar slot '📋 Boards' opens the PM view (server-scoped; hidden in DM mode). Main panel uses ListDetailView with boards on the left, BoardKanban on the right. Create-board flow uses the main panel for the form (same pattern polls adopted). Columns render side-by-side with empty-state messages; WorkItemCard component already exists but won't be populated until task-pm-3 wires item creation. All user strings wrapped in <T> — board names, descriptions, column names, card titles and descriptions translate automatically via the Phase 3 primitive."
+        "id": "task-mvp-2",
+        "title": "PWA support — installable web app + offline shell",
+        "status": "pending",
+        "details": "Vite PWA plugin (vite-plugin-pwa) with a service worker for offline shell + asset caching. manifest.json with Babelr branding, icons, theme color. Workbox runtime caching for API responses (network-first for messages, cache-first for static assets). Install prompt on supported browsers. iOS Safari meta tags for standalone mode. This is the quick mobile path — native apps (Capacitor) come later."
       },
       {
-        "id": "task-pm-3",
-        "title": "Work item CRUD in the kanban UI",
-        "status": "done",
-        "details": "Create work item inline in a column (+ button → compact form). Click card to open detail. Edit in place. Delete.",
-        "resolution": "Each column gets a '+ Add card' button that expands to an inline title input (rest of fields edited in the detail modal after). POST /work-items triggers a full board refetch via onMutated. Cards click into a read-only *sidebar preview* rendered by the 'task' embed (TaskPreview, all strings wrapped in <T>), and the preview's navigate handler fires a window EDIT_EVENT that BoardKanban listens for to pop WorkItemDetailModal — keeps the preview (read-only, translated) and the modal (edit surface) decoupled. Modal edits title / description / priority (low/medium/high/critical) / item type (task/bug/story/epic) plus Save and Delete. Assignee picker deferred to task-pm-5 — ships with comments so the picker UI has a real need. Translation-by-default: card title / description / column name all wrap <T>. The TaskPreview / TaskInline components also satisfy the 'task' half of task-pm-6, leaving only board refs + federation for that ticket."
+        "id": "task-mvp-3",
+        "title": "Email verification on registration",
+        "status": "pending",
+        "details": "Server: email_verified boolean on actors table, verification_token + token_expires columns. POST /auth/register sends a verification email with a signed token link. GET /auth/verify?token=... marks the account verified. Unverified accounts can log in but see a banner + can't create servers or send messages (read-only). SMTP config via env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM). Resend endpoint with rate limiting. For self-hosted: optional SKIP_EMAIL_VERIFICATION=true env var."
       },
       {
-        "id": "task-pm-4",
-        "title": "Drag-and-drop reordering + cross-column moves",
-        "status": "done",
-        "details": "HTML5 drag-and-drop API (no deps). Drop on a column triggers PATCH /work-items/:slug with new column_id + position. Optimistic UI update with rollback on server error. Real-time sync via plugin:pm:updated WS broadcast so other viewers see the move. Handles the N+1 reorder problem with a position-rebalance on the server when positions get tight.",
-        "resolution": "Cards are draggable via the HTML5 DnD API. Each card-slot has top/bottom halves that compute the insertion index; the empty-column and tail zones handle the first and last slots. Blue insertion-line CSS marks the target. Server exposes POST /boards/:slug/reorder { assignments: [{ columnId, itemIds: slug[] }] } — client sends the full new ordering for the 1-2 affected columns and the server rewrites positions sequentially (simpler + more robust than fractional-position math at this scale). Optimistic update applies the new order locally; on server error we roll back to the pre-drop snapshot. Refetch after success picks up canonical positions + any concurrent edits. Real-time sync across clients deferred to task-pm-7."
-      },
-      {
-        "id": "task-pm-5",
-        "title": "Work item comments thread",
-        "status": "done",
-        "details": "Each work item has a chatId (OrderedCollection) on creation — mirrors how events / files / wiki pages handle their comment threads. Use useChat(actor, chatId) in the detail view; get reactions + translations + threading for free. Comment content goes through the existing translation pipeline. Zero new chat code.",
-        "resolution": "Work items create an OrderedCollection in the shared objects table at insert time (uri: /plugins/project-management/tasks/<slug>/chat, properties include isTaskChat + taskSlug for later federation discovery) and persist its id in plugin_pm_work_items.chat_id. WorkItemView exposes chatId to the client. WorkItemDetailModal renders a TaskComments pane when chatId is present — uses useChat(actor, chatId) with the existing MessageList + MessageInput + useTranslation pipeline, so translation / reactions / threading come for free. Work-item delete cleans up the OrderedCollection row. Assignee picker still deferred (sliding to pm-9 polish pass since comments shipped without needing it after all)."
-      },
-      {
-        "id": "task-pm-6",
-        "title": "[[task:slug]] + [[board:slug]] embeds",
-        "status": "done",
-        "details": "Register two embed kinds. [[task:slug]] inline card: title + status badge + assignee avatar + priority indicator. Preview: full detail with comments. [[board:slug]] inline: board name + work-item count + top-3 columns. Preview: mini read-only kanban. Federation handlers resolveBySlug auto-wired via the plugin loader. Validates multiple-embed-kinds-per-plugin for the first time.",
-        "resolution": "task kind landed with task-pm-3 (TaskInline + TaskPreview + Edit-via-EDIT_EVENT navigate). task-pm-6 adds the board kind: BoardInline (name + count badge) and BoardPreview (mini kanban with top-3 cards per column + overflow count). board navigate opens the PM view via EmbedNavCtx.openView('project-management') and defer-dispatches an OPEN_BOARD_EVENT that PmView listens for, selecting the target board. Server exposes federationHandlers.task and .board via resolveBySlug — the plugin loader auto-mounts /plugins/project-management/<kind>/by-slug/:slug so cross-tower [[server@tower:task:slug]] + [[server@tower:board:slug]] both resolve through the federation proxy. First plugin to ship two embed kinds + validates the federation handler surface is right."
-      },
-      {
-        "id": "task-pm-7",
-        "title": "Real-time sync across all PM mutations",
-        "status": "done",
-        "details": "plugin:pm:updated WS events on work item create/move/edit/delete and on comment create. Client-side cache invalidation + optimistic-update reconciliation. Follow the polls pattern (module-level onWsMessage subscription that publishes into a cache map).",
-        "resolution": "Server broadcasts plugin:pm:updated { boardSlug, kind, slug? } on every mutation — board create, work-item create/patch/delete, reorder. Uses fastify.broadcastToAllSubscribers (same surface as polls). Client has two listeners: BoardKanban filters by boardSlug and refetches when a matching event arrives; PmView reloads the board list on any event (so counts and new boards stay fresh). Comment-message broadcasts are already handled by the core message pipeline since TaskComments uses useChat(actor, chatId) — no plugin-side work needed. Our own mutations still refetch via onMutated; hearing our own echo is at worst a redundant roundtrip, which keeps the code path singular."
-      },
-      {
-        "id": "task-pm-8",
-        "title": "Federation — AS2 custom objects for work items + boards",
-        "status": "done",
-        "details": "Work items federate as AS2 Note variants with type: 'WorkItem' + custom fields. Board metadata as Group properties. Inbox handler accepts remote Create/Update/Delete of work items from federated members. Cross-Tower [[server@tower:task:slug]] works through the proxy. Remote members can comment; comment federation reuses the existing Group-followers delivery pattern. This is the biggest chunk — validates AS2 custom object handling for the plugin system, not just message-shaped data.",
-        "resolution": "Three layers shipped. (1) Plugin inbox dispatch hook: PluginInboxHandler interface in the SDK, registered per-objectType in the manifest's new inboxHandlers map. plugin-loader stores handlers; inbox.ts's handleCreate checks multi-typed objects (e.g. ['Note','WorkItem']), handleUpdate/handleDelete dispatch to plugin handlers before falling through to generic paths. (2) Outbound delivery: work-item create/update/delete wraps the item in a multi-typed AS2 ['Note','WorkItem'] activity with babelr:-namespaced fields (priority, itemType, boardId, columnId, slug) and delivers via Group-followers through the new fastify.deliverToGroupFollowers(groupId, activity) decoration — avoids importing server internals from plugin code, which would break the client Vite build. (3) Inbound handling: PM plugin registers a WorkItem inbox handler — handleCreate upserts into plugin_pm_work_items (ON CONFLICT slug DO UPDATE), handleUpdate patches fields, handleDelete removes the row + chat OrderedCollection. All three broadcast plugin:pm:updated WS so local clients sync in real-time. Board metadata doesn't federate as separate objects — boards are Group-scoped, remote towers fetch via the existing signed-proxy resolveBySlug."
-      },
-      {
-        "id": "task-pm-9",
-        "title": "Polish: translation coverage, edge cases, empty states",
-        "status": "done",
-        "details": "Sweep all user-facing strings through <T>. Validate translation works for work item titles + descriptions + comments end-to-end. Empty states for no-boards / no-work-items / no-comments. Error handling for deleted / moved items. Accessibility pass on drag-and-drop. Loading states for slow federation fetches. This is the sign-off pass before declaring PM done.",
-        "resolution": "Translation sweep: all form labels (Name, Description, Title, Priority, Type), button labels (Save, Cancel, Delete, Add, Create board, Add card), status labels (Loading board/work item, Board/Task not found, Nothing here yet), heading text (New board, Work item, Boards, Comments), field labels (Points, Due, Created), and priority/type badge text now go through <T>. Board detail shows a 'Loading board…' placeholder while fetching (covers the selectedSlug && !selectedBoard case). DnD accessibility: cards have aria-roledescription='draggable card' + aria-label of the item title; columns have aria-label + aria-roledescription='kanban column'. Inline embeds wrap loading/error text in <T>. Error messages from server errors are structural and intentionally left un-translated."
+        "id": "task-mvp-4",
+        "title": "Two-factor authentication (TOTP)",
+        "status": "pending",
+        "details": "TOTP-based 2FA using otpauth. Server: totp_secret + totp_enabled on actors table. Setup flow: POST /auth/2fa/setup returns a QR code URI, POST /auth/2fa/verify confirms setup with a code. Login flow: if totp_enabled, the login response includes a 2fa_required flag; client shows a code input, POST /auth/2fa/challenge completes login. Recovery codes: 10 single-use codes generated at setup, stored hashed, shown once to the user. POST /auth/2fa/disable with a valid code turns it off. Client: 2FA section in SettingsPanel for setup/disable, code input modal during login."
       }
     ],
-    "deferred": [
-      {
-        "id": "task-pm-sprints",
-        "title": "Sprint planning + sprint view",
-        "reason": "Useful but not required for validating the SDK. Ship core kanban first; sprints are additive once work item primitives exist."
-      },
-      {
-        "id": "task-pm-permissions",
-        "title": "Per-board permissions (viewers / editors / admins)",
-        "reason": "Core PM inherits server-level CONNECT_VOICE / VIEW_CHANNELS style permissions for v1. Board-scoped roles are a polish item if there's demand."
-      },
-      {
-        "id": "task-pm-imports",
-        "title": "Import from Jira / Linear / GitHub Issues",
-        "reason": "The slack-teams-import roadmap item already covers this pattern for chat; extend when PM is stable. Not blocking the SDK validation goal."
-      }
-    ]
+    "deferred": []
   }
 }
