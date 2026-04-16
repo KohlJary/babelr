@@ -547,6 +547,12 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Email verification
+  'verification.banner': 'Please verify your email to unlock all features.',
+  'verification.resend': 'Resend email',
+  'verification.sending': 'Sending…',
+  'verification.sent': 'Verification email sent!',
+
   'onboarding.embedsTitle': 'Link anything with embeds',
   'onboarding.embedsSubtitle': 'Type [[kind:name]] in any message to embed a live reference. Click to preview, translate automatically.',
   'onboarding.embedPage': 'Embed a wiki page',

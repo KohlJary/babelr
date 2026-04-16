@@ -547,6 +547,10 @@ export async function updateProfile(
   });
 }
 
+export async function resendVerification(): Promise<void> {
+  await apiFetch('/auth/resend-verification', { method: 'POST' });
+}
+
 export async function setPublicKey(publicKey: JsonWebKey): Promise<void> {
   await apiFetch('/auth/publickey', {
     method: 'PUT',

@@ -144,6 +144,10 @@ export async function buildApp() {
   await app.register(seedPlugin);
   await app.register(i18nSeedPlugin);
 
+  // Email transport (SMTP config from env)
+  const { initEmail } = await import('./email.ts');
+  initEmail(app);
+
   // Routes
   await app.register(healthRoutes);
   await app.register(authRoutes);

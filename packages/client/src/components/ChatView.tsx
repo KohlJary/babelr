@@ -36,6 +36,7 @@ import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
 import { EmbedHostProvider } from './E';
+import { VerificationBanner } from './VerificationBanner';
 import type { EmbedNavCtx } from '../embeds/registry';
 import type { WikiRefKind } from '@babelr/shared';
 import { getView, type ViewHostContext, type ViewState } from '../views/registry';
@@ -258,6 +259,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
 
   return (
     <EmbedHostProvider host={{ actor, onPreviewEmbed: openEmbedPreview }}>
+    {!actor.emailVerified && <VerificationBanner />}
     <div className="app-layout">
       <ServerSidebar
         servers={servers}

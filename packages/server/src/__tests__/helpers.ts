@@ -71,6 +71,7 @@ export async function createTestApp() {
         fastify.decorate('voiceLeave', () => null);
         fastify.decorate('voiceGetRoom', () => []);
         fastify.decorate('voiceBroadcastToRoom', () => {});
+        fastify.decorate('deliverToGroupFollowers', async () => {});
       },
       { name: 'ws', dependencies: ['db', 'config-plugin'] },
     ),

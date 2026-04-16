@@ -8,8 +8,12 @@ import { collectionItems } from '../db/schema/collections.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
 import { lookupActorByHandle } from '../federation/resolve.ts';
 import { broadcastActorUpdate } from '../federation/delivery.ts';
+import { randomUUID } from 'crypto';
+import { sendVerificationEmail, isEmailEnabled } from '../email.ts';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
+const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === 'true';
+const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
   const props = actor.properties as Record<string, unknown> | null;
@@ -19,6 +23,7 @@ function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
     preferredUsername: actor.preferredUsername,
     displayName: actor.displayName,
     preferredLanguage: actor.preferredLanguage ?? 'en',
+    emailVerified: actor.emailVerified ?? false,
     avatarUrl: (props?.avatarUrl as string) ?? null,
     summary: actor.summary,
     createdAt: actor.createdAt,
@@ -72,6 +77,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const protocol = fastify.config.secureCookies ? 'https' : 'http';
     const baseUri = `${protocol}://${domain}/users/${username}`;
 
+    const skipVerification = SKIP_EMAIL_VERIFICATION || !isEmailEnabled();
+    const token = skipVerification ? null : randomUUID();
+    const tokenExpires = token
+      ? new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS)
+      : null;
+
     const [actor] = await db
       .insert(actors)
       .values({
@@ -80,6 +91,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
         email,
         passwordHash,
         preferredLanguage: preferredLanguage ?? 'en',
+        emailVerified: skipVerification,
+        verificationToken: token,
+        verificationTokenExpires: tokenExpires,
         uri: baseUri,
         inboxUri: `${baseUri}/inbox`,
         outboxUri: `${baseUri}/outbox`,
@@ -88,6 +102,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
         local: true,
       })
       .returning();
+
+    if (token) {
+      void sendVerificationEmail(email, token, fastify.config).catch((err) =>
+        fastify.log.error({ err }, 'Failed to send verification email'),
+      );
+    }
 
     // First user becomes instance admin
     const [userCount] = await db
@@ -362,4 +382,82 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return { publicKey: props?.publicKey ?? null };
     },
   );
+
+  // --- Email verification ---
+
+  fastify.get<{ Querystring: { token?: string } }>(
+    '/auth/verify',
+    async (request, reply) => {
+      const { token } = request.query;
+      if (!token) {
+        return reply.status(400).send({ error: 'Token is required' });
+      }
+
+      const [actor] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.verificationToken, token))
+        .limit(1);
+
+      if (!actor) {
+        return reply.status(400).send({ error: 'Invalid or expired token' });
+      }
+
+      if (
+        actor.verificationTokenExpires &&
+        new Date() > actor.verificationTokenExpires
+      ) {
+        return reply.status(400).send({ error: 'Token has expired. Request a new one.' });
+      }
+
+      await db
+        .update(actors)
+        .set({
+          emailVerified: true,
+          verificationToken: null,
+          verificationTokenExpires: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(actors.id, actor.id));
+
+      // Redirect to the app — the client will see emailVerified: true
+      // on the next getMe() call.
+      const protocol = fastify.config.secureCookies ? 'https' : 'http';
+      return reply.redirect(`${protocol}://${domain}/?verified=1`);
+    },
+  );
+
+  fastify.post('/auth/resend-verification', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
+
+    if (request.actor.emailVerified) {
+      return reply.status(400).send({ error: 'Email already verified' });
+    }
+
+    if (!isEmailEnabled()) {
+      return reply.status(503).send({ error: 'Email sending is not configured' });
+    }
+
+    const token = randomUUID();
+    const expires = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS);
+
+    await db
+      .update(actors)
+      .set({
+        verificationToken: token,
+        verificationTokenExpires: expires,
+        updatedAt: new Date(),
+      })
+      .where(eq(actors.id, request.actor.id));
+
+    if (request.actor.email) {
+      void sendVerificationEmail(request.actor.email, token, fastify.config).catch(
+        (err) => fastify.log.error({ err }, 'Failed to send verification email'),
+      );
+    }
+
+    return { sent: true };
+  });
 }

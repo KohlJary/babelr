@@ -85,7 +85,8 @@
       {
         "id": "task-mvp-3",
         "title": "Email verification on registration",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Schema: email_verified boolean + verification_token + verification_token_expires on actors. Server: register generates a UUID token with 24h TTL and sends via nodemailer (SMTP config from env: SMTP_HOST/PORT/USER/PASS/FROM). GET /auth/verify?token= marks verified and redirects to app. POST /auth/resend-verification re-generates token with rate limiting implicit in the 24h TTL. SKIP_EMAIL_VERIFICATION=true env var bypasses for self-hosted. Client: VerificationBanner shows at top of ChatView when emailVerified is false, with resend button. ActorProfile now includes emailVerified. 4 i18n strings.",
         "details": "Server: email_verified boolean on actors table, verification_token + token_expires columns. POST /auth/register sends a verification email with a signed token link. GET /auth/verify?token=... marks the account verified. Unverified accounts can log in but see a banner + can't create servers or send messages (read-only). SMTP config via env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM). Resend endpoint with rate limiting. For self-hosted: optional SKIP_EMAIL_VERIFICATION=true env var."
       },
       {

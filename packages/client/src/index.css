@@ -385,6 +385,40 @@ body {
   padding: 1rem 0;
 }
 
+/* Email verification banner ----------------------------------------- */
+.verification-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.verification-banner-text {
+  color: #fbbf24;
+}
+.verification-banner-btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.verification-banner-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.verification-banner-sent {
+  color: #4ade80;
+  font-size: 0.85rem;
+}
+
 .auth-divider {
   display: flex;
   align-items: center;

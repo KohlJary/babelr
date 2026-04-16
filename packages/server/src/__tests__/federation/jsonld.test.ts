@@ -26,6 +26,9 @@ const mockActor = {
   preferredLanguage: 'en',
   properties: { apPublicKey: { id: 'https://test.babelr.local/users/alice#main-key', owner: 'https://test.babelr.local/users/alice', publicKeyPem: '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----' } },
   local: true,
+  emailVerified: true,
+  verificationToken: null,
+  verificationTokenExpires: null,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
 };
