@@ -78,7 +78,8 @@
       {
         "id": "task-mvp-2",
         "title": "PWA support — installable web app + offline shell",
-        "status": "pending",
+        "status": "done",
+        "resolution": "vite-plugin-pwa with generateSW mode. manifest.webmanifest with Babelr branding, dark theme (#0a0a0a), standalone display, 192+512 icons (placeholder — replace with real artwork). Workbox precaches the app shell (14 entries), navigateFallback to index.html with denylist for /api, /ws, /uploads. Runtime caching: NetworkFirst for API with 5s timeout + 50-entry/5-min cache. iOS meta tags: apple-mobile-web-app-capable, black-translucent status bar, apple-touch-icon. autoUpdate register type so new versions install silently on next visit.",
         "details": "Vite PWA plugin (vite-plugin-pwa) with a service worker for offline shell + asset caching. manifest.json with Babelr branding, icons, theme color. Workbox runtime caching for API responses (network-first for messages, cache-first for static assets). Install prompt on supported browsers. iOS Safari meta tags for standalone mode. This is the quick mobile path — native apps (Capacitor) come later."
       },
       {

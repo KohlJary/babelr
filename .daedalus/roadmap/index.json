@@ -1011,7 +1011,27 @@
       "status": "backlog",
       "created_at": "2026-04-16T00:00:00.000000",
       "created_by": "daedalus"
+    },
+    {
+      "id": "pwa-live-validation",
+      "title": "PWA validation on live Tower — install flow, offline shell, update cycle",
+      "description": "PWA ships with placeholder icons and has only been verified via the Vite build output (sw.js, manifest.webmanifest present, precache entries correct). Needs hands-on validation on a real deployed Tower with HTTPS:\n\n1. Chrome desktop: install prompt appears, app opens in standalone window, icon on taskbar\n2. Android Chrome: Add to Home Screen, splash screen, standalone mode, no URL bar\n3. iOS Safari: Add to Home Screen via share sheet, apple-mobile-web-app-capable kicks in, black-translucent status bar, no Safari chrome\n4. Offline: kill network, app shell loads from SW cache, messages show 'reconnecting' state, no browser error page\n5. Update cycle: deploy a new version, revisit — autoUpdate SW installs silently, next page load picks up new assets\n6. API caching: NetworkFirst with 5s timeout — verify stale API data shows briefly then refreshes when network returns\n\nBlocked on same infra as the federation e2e tests: needs a real Tower with public DNS + TLS. Batch with those.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "daedalus"
+    },
+    {
+      "id": "branding-icons",
+      "title": "Babelr logo + PWA icons — generate candidates via ComfyUI",
+      "description": "The PWA ships with 1x1 placeholder PNGs. Before any public-facing deployment, generate real icon artwork. Use ComfyUI to produce logo candidates — the name 'Babelr' + the Tower/translation/federation identity gives solid creative direction. Deliverables: favicon.svg, pwa-192.png, pwa-512.png (maskable-safe), apple-touch-icon, og:image for link previews. Consider the dark (#0a0a0a) background the app uses.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 28
+  "version": 29
 }
