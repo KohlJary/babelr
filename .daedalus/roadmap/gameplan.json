@@ -71,7 +71,8 @@
       {
         "id": "task-mvp-1",
         "title": "First-run onboarding flow",
-        "status": "pending",
+        "status": "done",
+        "resolution": "OnboardingWizard component with 4-step stepper: profile (display name), language (auto-detects browser locale, 17 languages), server (create-or-join with discoverable servers list, skip option), done screen. Client-side detection: App.tsx shows wizard instead of ChatView when actor.displayName is null. Updates profile via PUT /auth/profile, creates/joins server via existing APIs. 25 i18n strings added to shared/strings.ts. All strings localized via useT().",
         "details": "Guided first-run experience for new users. After registration: (1) set display name + avatar, (2) set preferred language, (3) create or join a server, (4) create first channel. Stepper-style UI with skip-ahead. The registration form itself already exists — this wraps the post-registration steps into a cohesive flow. Server: detect 'needs onboarding' (no servers, no language set) and return a flag in the auth response. Client: OnboardingWizard component shown instead of ChatView when the flag is set. Must work for both self-hosted admins (create server) and invitees (join via invite link, skip server creation)."
       },
       {
