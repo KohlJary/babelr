@@ -1061,7 +1061,17 @@
       "status": "backlog",
       "created_at": "2026-04-16T00:00:00.000000",
       "created_by": "kohl"
+    },
+    {
+      "id": "mobile-ux-refinement",
+      "title": "Mobile UX refinement — navigation drawer, bottom tabs, sidebar content strategy",
+      "description": "The responsive breakpoints from the UX views migration prevent the app from being literally broken on mobile, but the experience is still 'desktop layout crammed into a small screen' rather than a mobile-native feel. Before going live, this needs a proper mobile-first treatment.\n\nAreas to address:\n\n1. **Navigation model**: The server sidebar + channel sidebar + chat panel + side panel four-column layout doesn't translate to mobile. Need a proper navigation stack or drawer model. Options: (a) hamburger drawer for server+channel sidebar that slides in from the left, (b) bottom tab bar for top-level nav (chat, calendar, wiki, settings), (c) swipe gestures between the navigation layers. Discord mobile uses a swipe-left-for-servers, swipe-right-for-members pattern — worth studying.\n\n2. **Side panel content on mobile**: MemberList as always-visible default doesn't work on small screens. On mobile it should be behind a tap (member count badge in the header that opens a full-screen member list). Same for threads, glossary, and embed preview — all should be full-screen overlays with a back button on mobile rather than side panels.\n\n3. **Bottom sheet pattern**: Modals (create server, create channel, new DM, channel invite) should use a bottom sheet on mobile instead of centered overlays — more thumb-friendly, standard mobile pattern.\n\n4. **Touch targets**: Buttons, sidebar items, and interactive elements need minimum 44px touch targets on mobile. Current 0.4rem padding is too small.\n\n5. **Keyboard handling**: Mobile keyboard pushes the message input off-screen on some devices. Need viewport-fit=cover + visual viewport API or position: sticky tricks.\n\n6. **View transitions**: React view transitions or simple CSS animations for navigating between views. Currently the switch is instant, which feels jarring on mobile.\n\n7. **Pull-to-refresh**: For message lists and board views.\n\nThis is a design-heavy effort — may want to prototype in Figma before coding. Consider doing a pass on a real phone (iPhone + Android) to identify the worst pain points before committing to an implementation approach.\n\nBlocked on: nothing technically, but best done after the full Playwright integration suite so regressions are caught. The PWA live validation item should happen concurrently — testing on real devices surfaces issues no simulator catches.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 31
+  "version": 32
 }
