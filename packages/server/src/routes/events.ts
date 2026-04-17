@@ -9,7 +9,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { events, eventAttendees } from '../db/schema/events.ts';
-import { toAuthorView } from './channels.ts';
+import { toAuthorView } from '../serializers.ts';
 import type {
   EventView,
   EventEmbedView,

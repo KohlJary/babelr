@@ -8,6 +8,8 @@ import authPlugin from '../plugins/auth.ts';
 import healthRoutes from '../routes/health.ts';
 import authRoutes from '../routes/auth.ts';
 import channelRoutes from '../routes/channels.ts';
+import messageRoutes from '../routes/messages.ts';
+import channelSettingsRoutes from '../routes/channel-settings.ts';
 import serverRoutes from '../routes/servers.ts';
 import dmRoutes from '../routes/dms.ts';
 import friendsRoutes from '../routes/friends.ts';
@@ -84,6 +86,8 @@ export async function createTestApp() {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(channelRoutes);
+  await app.register(messageRoutes);
+  await app.register(channelSettingsRoutes);
   await app.register(serverRoutes);
   await app.register(dmRoutes);
   await app.register(friendsRoutes);

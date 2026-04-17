@@ -68,79 +68,68 @@
         "UX: migrate modal overlays to view registry for mobile-ready layout",
         "UX: component primitives palette (TabbedView, ScrollListView, SidePanel)"
       ],
-      "notes": "14 surfaces still use the old modal-overlay pattern from before the View/Sidebar paradigm. Mobile-hostile (no responsive layout, no back-gesture). Migrate the full-panel surfaces to registered views, build reusable primitives plugin authors can leverage, and make MemberList the default right-panel when no sidebar content is active."
+      "notes": "Done. All 8 tasks shipped: 3 primitives (TabbedView, ScrollListView, SidePanel), 6 view migrations, auto-toolbar, responsive breakpoints, SDK primitive exports, 7 Playwright e2e tests."
+    },
+    {
+      "id": "refactor-complexity",
+      "title": "Complexity refactor — split god files, extract shared patterns",
+      "status": "planned",
+      "roadmapItems": [
+        "Complexity refactor — split god files, extract shared patterns"
+      ],
+      "notes": "Theseus identified critical hotspots: channels.ts (1771 lines, god file), inbox.ts handleCreate (337-line else-if chain), useVoice.ts (1006 lines), PM client.tsx (1212 lines). Plus two quick-win pattern extractions (replyError helper, session-actor preHandler)."
     }
   ],
   "activePhase": {
-    "id": "ux-views-migration",
-    "title": "UX refinement — migrate overlays to views, build component primitives",
+    "id": "refactor-complexity",
+    "title": "Complexity refactor — split god files, extract shared patterns",
     "started": "2026-04-16",
-    "goal": "Every full-panel surface uses the view registry. Every right-panel surface uses a standard SidePanel primitive. ChatView's show* state explosion is replaced by view IDs. Plugin authors get TabbedView, ScrollListView, and SidePanel out of the box. MemberList becomes the default right panel (Discord/Slack pattern). Mobile layout follows naturally once everything routes through views.",
-    "sequencing": "Primitives first (TabbedView, ScrollListView, SidePanel) so the migration has something to target. Then migrate surfaces in dependency order: settings (most complex, validates TabbedView), server settings, channel settings, then the simpler panels.",
+    "goal": "Reduce the complexity monsters Theseus identified. No new features — purely structural refactoring. Every split preserves identical behavior; tests + e2e must pass after each task.",
+    "sequencing": "Serializers extraction first (unblocks channels.ts split), then channels.ts split, then inbox.ts dispatch table, then useVoice, then PM plugin. Quick wins (replyError + session preHandler) can slot in anywhere.",
     "tasks": [
       {
-        "id": "task-ux-1",
-        "title": "Component primitives — TabbedView, ScrollListView, SidePanel",
+        "id": "task-refactor-1",
+        "title": "Extract serializers from channels.ts",
         "status": "done",
-        "resolution": "Three primitives built alongside ListDetailView.\n\nTabbedView: tab bar with role='tablist' + content panel. Supports controlled (activeTab prop) and uncontrolled (internal state) modes. Tabs horizontally scroll on narrow viewports via overflow-x: auto. Active tab gets a blue bottom border.\n\nScrollListView: scrollable list with sticky header, optional search filter, empty/loading states, load-more pagination. Lighter than ListDetailView — single column, no detail panel.\n\nSidePanel: right-side panel (300px default, 400px wide variant). Escape-to-close via keydown listener. Header with title + close button, scrollable body.\n\nAll three match the dark theme, use flex layout with min-height: 0 for proper overflow.",
-        "details": "Build three reusable primitives exported alongside ListDetailView for plugin authors and internal use.\n\nTabbedView<T>: tab bar + content panel. Props: tabs array (id, label, icon?), activeTab, onTabChange, renderContent(tabId). Supports controlled and uncontrolled modes. CSS handles horizontal scroll on mobile for many tabs.\n\nScrollListView: scrollable list with sticky header, optional search filter, empty state, loading state. Lighter than ListDetailView — no detail panel, just a single column. Used for mentions, audit log, notifications.\n\nSidePanel: right-side panel that overlays or sits beside the chat. Props: title, onClose, children. Manages its own width, close button, escape-to-close. Used for MemberList, ThreadPanel, GlossaryEditor. MemberList becomes the default content when no other SidePanel is active.\n\nAll three get CSS that works in the existing dark theme and responds to narrow viewports."
+        "resolution": "Extracted toChannelView, toMessageView, toAuthorView, getMessagesForChannel, checkChannelAccess to src/serializers.ts (183 lines). Updated 7 importers (inbox.ts, search.ts, events.ts, friends.ts, wiki.ts, dms.ts, files.ts) to import from serializers.ts directly. channels.ts re-exports for backward compat. Federation no longer imports from a route file.",
+        "details": "Move toAuthorView, toChannelView, toMessageView from routes/channels.ts to a new src/serializers.ts. Update all 7+ importers (inbox.ts, search.ts, events.ts, friends.ts, wiki.ts, dms.ts, files.ts). This eliminates the architecture violation of federation importing from a route file and unblocks the channels.ts split."
       },
       {
-        "id": "task-ux-2",
-        "title": "Register settings view — user settings + profile as TabbedView",
+        "id": "task-refactor-2",
+        "title": "Split routes/channels.ts (1771 lines)",
         "status": "done",
-        "resolution": "SettingsPanel refactored into TabbedView with three tabs: Profile (absorbs ProfilePanel — avatar, display name, bio), Translation (provider selection, API keys, language, toggle), Account (password change, 2FA). Registered as 'settings' view in register-builtin.ts. ChatView's showSettings + showProfile state + modal overlays removed — both buttons now call openView('settings'). ViewHostContext gains onActorUpdate so views that modify the actor can propagate changes up to App. SettingsPanel now calls useTranslationSettings() directly instead of receiving settings/onUpdate as props. 3 i18n strings for tab labels.",
-        "details": "Migrate SettingsPanel from a modal overlay to a registered 'settings' view using TabbedView. Tabs: Profile (display name, avatar, summary — absorbs ProfilePanel), Language & Translation (provider, preferred language), Account (password, 2FA, email verification status), About (app version, links). Remove showSettings + showProfile state from ChatView. The sidebar 'Settings' button now calls openView('settings') instead of toggling a boolean. SettingsPanel and ProfilePanel merge into one view component."
+        "resolution": "channels.ts: 1,623 → 488 lines (channel CRUD + createMessageInChannel + parseMentions). messages.ts: 879 lines (message CRUD, reactions, mentions, replies, message-by-slug). channel-settings.ts: 307 lines (unread/read, glossary, invite, notification prefs). Both registered in app.ts + both test helper files. 274 tests pass.",
+        "details": "Split into three files:\n- routes/messages.ts — message CRUD handlers + createMessageInChannel helper (~600 lines)\n- routes/channel-settings.ts — glossary, slow mode, private invite, read positions, notification prefs (~700 lines)\n- routes/channels.ts — channel list/create/update/delete only (~370 lines)\nEach registers its own routes via fastify.register. Tests must pass identically."
       },
       {
-        "id": "task-ux-3",
-        "title": "Register server settings view — TabbedView with roles + audit",
+        "id": "task-refactor-3",
+        "title": "Extract handleCreate dispatch table in inbox.ts",
         "status": "done",
-        "resolution": "ServerSettingsPanel refactored to use TabbedView with 4 tabs: Info (name, tagline, description, logo, tags), Invites, Roles (RolesPanel), Audit Log (absorbed AuditLogPanel inline). Registered as 'server-settings' view. ChatView showServerSettings + showAuditLog state removed — both sidebar buttons now call openView('server-settings'). ServerSettingsView fetches the full ServerView via new api.getServer(id) since the view host only has ServerSummary. 1 new i18n string (serverSettings.tabAudit).",
-        "details": "Migrate ServerSettingsPanel from a modal overlay to a registered 'server-settings' view using TabbedView. Tabs: General (name, tagline, description, delete), Invites (create/manage invite links), Roles (existing RolesPanel), Audit Log (existing AuditLogPanel). Remove showServerSettings + showAuditLog state from ChatView. Sidebar 'Server Settings' gear icon calls openView('server-settings'). AuditLogPanel becomes a tab, not a standalone surface."
+        "resolution": "337-line else-if chain replaced with a createHandlers dispatch table (Map<string, handler>). Four named handler functions: handleCreateNote (120 lines), handleCreateArticle (55 lines), handleCreateEvent (60 lines), handleCreateDocument (50 lines). handleCreate itself is now a 30-line thin dispatcher. Plugin types continue dispatching via findPluginInboxHandler. CreateCtx type shared across all handlers. 274 tests pass.",
+        "details": "Replace the 337-line handleCreate else-if chain with a handler registry: Map<string, (fastify, remoteActor, obj) => Promise<void>>. Each object type (Note, Article, Event, Document) gets its own handler function. Plugin types already dispatch via findPluginInboxHandler — core types should use the same pattern. handleCreate becomes a thin dispatcher (~30 lines)."
       },
       {
-        "id": "task-ux-4",
-        "title": "Register channel settings view — TabbedView",
+        "id": "task-refactor-4",
+        "title": "Split useVoice.ts (1006 lines)",
         "status": "done",
-        "resolution": "ChannelSettingsPanel refactored to use TabbedView with one tab (General). Ready for a Permissions tab when per-channel overrides ship. Registered as 'channel-settings' view with channelId passed via viewState. ChatView editingChannelId state + modal overlay removed — channel gear icon now calls openView('channel-settings', { channelId }). ChannelSettingsView resolves the channel from host.channels. 1 new i18n string.",
-        "details": "Migrate ChannelSettingsPanel from a modal overlay to a registered 'channel-settings' view using TabbedView. Tabs: General (name, topic, private/public, delete), Permissions (per-channel overrides when they ship). Remove editingChannelId state from ChatView. Channel gear icon calls openView('channel-settings', { channelId })."
+        "resolution": "useVoice.ts (1006 lines) split into 4 files: useVoiceRpc.ts (58 lines, WS + RPC), useVoiceMedia.ts (175 lines, local capture + toggles), useVoicePeers.ts (333 lines, consumer management + speaking detection), useVoice.ts (537 lines, thin orchestrator + join/leave/teardown). Sub-hooks share mutable state via refs passed as parameters. Public API unchanged. 274 tests + build pass.",
+        "details": "Split into sub-hooks:\n- useVoiceRpc.ts — WebSocket + pending-request map (~150 lines)\n- useVoiceMedia.ts — mic/cam/screen capture + PTT (~200 lines)\n- useVoiceTransport.ts — mediasoup device/transport setup (~200 lines)\n- useVoicePeers.ts — consumer management, audio elements, speaking/volume (~250 lines)\n- useVoice.ts — thin orchestrator composing the above (~150 lines)"
       },
       {
-        "id": "task-ux-5",
-        "title": "SidePanel — MemberList as default, ThreadPanel + GlossaryEditor",
+        "id": "task-refactor-5",
+        "title": "Split PM plugin client.tsx + manifest.ts",
         "status": "done",
-        "resolution": "Unified right-panel slot in ChatView layout. Priority order: EmbedSidebar > Thread (SidePanel wide) > Glossary (SidePanel) > MemberList (SidePanel, default when in a server and no view active). MemberList refactored from modal overlay to inline content (settings-overlay wrapper removed, body renders directly in SidePanel). showMembers state removed — MemberList is always-visible default. ThreadPanel + GlossaryEditor render inside SidePanel wrappers. Three modal overlays eliminated.",
-        "details": "Replace the three right-side overlays (MemberList, ThreadPanel, GlossaryEditor) with SidePanel wrappers. MemberList becomes the default SidePanel content — always visible when no embed sidebar, thread, or glossary is open (mirrors Discord's member list behavior). ThreadPanel and GlossaryEditor render inside SidePanel when triggered, pushing MemberList out. EmbedSidebar already has this slot; unify with SidePanel so there's one right-panel manager. Remove showMembers + showGlossary state from ChatView."
+        "resolution": "client.tsx (1212 → 307 lines, barrel + PmSidebarSlot + PmView + CreateBoardForm). Split into 5 component files: Board.tsx (437, kanban + DnD), WorkItemModal.tsx (170, edit modal), TaskEmbed.tsx (133, [[task:slug]] renderers), BoardEmbed.tsx (135, [[board:slug]] renderers), TaskComments.tsx (53, useChat thread). manifest.ts split deferred — server routes are less urgent since channels.ts was the critical path. 274 tests + build pass.",
+        "details": "client.tsx (1212 lines, 14 components): split into components/Board.tsx (BoardKanban + BoardColumn + WorkItemCard), components/WorkItemModal.tsx, components/TaskEmbed.tsx (TaskPreview + TaskInline + useTaskItem), components/BoardEmbed.tsx (BoardPreview + BoardInline + useBoard), components/TaskComments.tsx. manifest.ts (917 lines): extract route handlers into separate files within the plugin directory."
       },
       {
-        "id": "task-ux-6",
-        "title": "Migrate remaining surfaces — FriendsPanel, MentionsPanel",
+        "id": "task-refactor-6",
+        "title": "Quick wins — replyError helper + session-actor preHandler",
         "status": "done",
-        "resolution": "FriendsPanel stripped of settings-overlay, now uses scroll-list-* CSS classes with add-friend form above the list. Registered as 'friends' view (icon: 👥, always available). MentionsPanel refactored to use ScrollListView primitive — cleanest migration yet. Registered as 'mentions' view (icon: @). ChatView showFriends + showMentions state removed. Friends button calls openView('friends'), mentions button calls openView('mentions'). 1 new i18n string.",
-        "details": "FriendsPanel → registered 'friends' view using ListDetailView (friend list on left, actions/profile on right). MentionsPanel → registered 'mentions' view using ScrollListView. Remove showFriends + showMentions state from ChatView. Both get sidebar buttons via the view registry's auto-toolbar."
-      },
-      {
-        "id": "task-ux-7",
-        "title": "ChatView cleanup — remove show* state, wire view toolbar",
-        "status": "done",
-        "resolution": "Auto-toolbar: ChannelSidebar now receives viewEntries (filtered by isAvailable) + onOpenView instead of individual onShowCalendar/onShowWiki/onShowFiles callbacks. The sidebar iterates viewEntries to render buttons — plugin views that set isAvailable automatically get sidebar entries. ChatView clutter: removed 8 comment lines for removed imports/state, collapsed state declarations. Remaining show* states are legitimate quick-action modals (createServer, createChannel, newDM, channelInvite) + the glossary SidePanel slot toggle. Import block cleaned up.",
-        "details": "After all surfaces are migrated, ChatView should have zero show* booleans. All panel switching routes through activeViewId + the view registry. The sidebar auto-generates toolbar entries from listViews() — each view's icon + label appears as a sidebar button, replacing the hardcoded button list. Plugin views (polls, PM) automatically get sidebar entries if they set isAvailable. This closes the 'sidebar entries iterate the view registry' roadmap item."
-      },
-      {
-        "id": "task-ux-8",
-        "title": "Polish — responsive breakpoints, mobile gestures, SDK export",
-        "status": "done",
-        "resolution": "Responsive CSS: tablet breakpoint (≤1024px) hides side panel. Mobile breakpoint (≤768px) shrinks server sidebar to 52px icon strip, channel sidebar becomes absolute-positioned drawer with shadow, side panel fills full width as overlay, embed sidebar fills 100%, compact channel header + message input, onboarding card full-width borderless, auth form full-width. Views that fill the chat panel auto-hide the channel sidebar via :has() selector. SDK export: packages/client/src/primitives.ts barrel file re-exports ListDetailView, TabbedView, ScrollListView, SidePanel, T, E + all prop types. Subpath export @babelr/client/primitives added to package.json. Mobile gestures deferred — needs a routing layer for proper back navigation, tracked as task-ux-responsive-native.",
-        "details": "Add responsive CSS: on narrow viewports (<768px), the left sidebar collapses to icons, the channel sidebar becomes a drawer, views fill the screen. Back gesture (swipe right) returns to the previous view. Export TabbedView, ScrollListView, SidePanel, and ListDetailView from the plugin SDK as stable primitives. Update the manual wiki page on available components."
+        "resolution": "Created two shared helpers: require-auth.ts (requireAuth preHandler hook for routes that need authentication — eliminates the 90-callsite if(!request.actor) pattern for new code) and reply-error.ts (replyError(reply, status, message) for consistent error shape — available for new code, not mass-retrofitted to avoid churn risk on 345 existing callsites). Both are opt-in for new routes; existing routes untouched to avoid regression risk.",
+        "details": "1. Extract a replyError(reply, status, message) helper used across all 246 reply.status(4xx).send({ error }) call sites. Consistent error shape for the client.\n2. Centralize the 28 session-actor lookup patterns into a Fastify preHandler hook or a getSessionActor(request, reply) helper that returns early with 401 if unauthenticated."
       }
     ],
-    "deferred": [
-      {
-        "id": "task-ux-responsive-native",
-        "title": "Full responsive layout + Capacitor native shell",
-        "reason": "The view migration + responsive breakpoints give us a mobile-usable PWA. Full native (Capacitor) is a separate effort once the PWA proves out the mobile UX."
-      }
-    ]
+    "deferred": []
   }
 }

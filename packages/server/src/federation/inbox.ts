@@ -12,7 +12,7 @@ import { wikiPages } from '../db/schema/wiki.ts';
 import { events } from '../db/schema/events.ts';
 import { serverFiles } from '../db/schema/files.ts';
 import { generateShortSlug } from '@babelr/shared';
-import { toAuthorView } from '../routes/channels.ts';
+import { toAuthorView } from '../serializers.ts';
 import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
 import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
 import { enqueueDelivery } from './delivery.ts';
@@ -573,6 +573,299 @@ async function findOrCreateDM(
   return { dmId: channel.id, isNew: true };
 }
 
+type CreateCtx = {
+  fastify: FastifyInstance;
+  remoteActor: typeof actors.$inferSelect;
+  obj: Record<string, unknown>;
+};
+
+async function handleCreateNote(ctx: CreateCtx) {
+  const { fastify, remoteActor, obj } = ctx;
+  const toList = (obj.to as string[]) ?? [];
+  const isPublic = toList.includes('https://www.w3.org/ns/activitystreams#Public');
+
+  let localDMId: string | null = null;
+  let dmIsNew = false;
+  let dmLocalRecipient: typeof actors.$inferSelect | null = null;
+  if (!isPublic) {
+    for (const uri of toList) {
+      const [target] = await fastify.db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.uri, uri), eq(actors.local, true), eq(actors.type, 'Person')))
+        .limit(1);
+      if (target) {
+        const result = await findOrCreateDM(fastify, target, remoteActor);
+        localDMId = result.dmId;
+        dmIsNew = result.isNew;
+        dmLocalRecipient = target;
+        break;
+      }
+    }
+  }
+
+  let noteAuthor = remoteActor;
+  const noteAttributedTo = obj.attributedTo as string | undefined;
+  if (noteAttributedTo && noteAttributedTo !== remoteActor.uri) {
+    const resolved = await resolveActor(fastify.db, noteAttributedTo);
+    if (resolved) noteAuthor = resolved;
+  }
+
+  let channelContextId: string | null = localDMId;
+  if (!channelContextId && obj.context) {
+    const contextUri = obj.context as string;
+    const [shadow] = await fastify.db
+      .select({ id: objects.id })
+      .from(objects)
+      .where(eq(objects.uri, contextUri))
+      .limit(1);
+    if (shadow) channelContextId = shadow.id;
+  }
+
+  let localInReplyTo: string | null = null;
+  const inReplyToUri = obj.inReplyTo as string | undefined;
+  if (inReplyToUri) {
+    const [parent] = await fastify.db
+      .select({ id: objects.id })
+      .from(objects)
+      .where(eq(objects.uri, inReplyToUri))
+      .limit(1);
+    if (parent) localInReplyTo = parent.id;
+  }
+
+  const noteProps: Record<string, unknown> = {};
+  if (obj.babelrEncrypted) noteProps.encrypted = true;
+  if (obj.babelrIv) noteProps.iv = obj.babelrIv;
+  if (obj.babelrAttachments) noteProps.attachments = obj.babelrAttachments;
+
+  const remoteSlug = obj.babelrSlug as string | undefined;
+
+  const [stored] = await fastify.db
+    .insert(objects)
+    .values({
+      uri: obj.id as string,
+      type: 'Note',
+      attributedTo: noteAuthor.id,
+      content: (obj.content as string) ?? null,
+      context: channelContextId,
+      inReplyTo: localInReplyTo,
+      slug: remoteSlug ?? null,
+      to: toList,
+      cc: (obj.cc as string[]) ?? [],
+      published: obj.published ? new Date(obj.published as string) : new Date(),
+      ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
+    })
+    .onConflictDoNothing({ target: objects.uri })
+    .returning();
+
+  if (channelContextId && stored) {
+    const messageView = {
+      id: stored.id,
+      content: stored.content ?? '',
+      channelId: channelContextId,
+      authorId: noteAuthor.id,
+      slug: stored.slug ?? null,
+      published: stored.published.toISOString(),
+      ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
+    };
+    const authorView = {
+      id: noteAuthor.id,
+      preferredUsername: noteAuthor.preferredUsername,
+      displayName: noteAuthor.displayName,
+      avatarUrl: ((noteAuthor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
+    };
+    fastify.broadcastToChannel(channelContextId, {
+      type: 'message:new',
+      payload: { message: messageView, author: authorView },
+    });
+
+    if (dmIsNew && dmLocalRecipient && localDMId) {
+      const localAuthorView = {
+        id: dmLocalRecipient.id,
+        preferredUsername: dmLocalRecipient.preferredUsername,
+        displayName: dmLocalRecipient.displayName,
+        avatarUrl:
+          ((dmLocalRecipient.properties as Record<string, unknown> | null)?.avatarUrl as string) ??
+          null,
+      };
+      fastify.broadcastToActor(dmLocalRecipient.id, {
+        type: 'conversation:new',
+        payload: {
+          conversation: {
+            id: localDMId,
+            participants: [localAuthorView, authorView],
+            lastMessage: messageView,
+          },
+        },
+      });
+    }
+  }
+}
+
+async function handleCreateArticle(ctx: CreateCtx) {
+  const { fastify, remoteActor, obj } = ctx;
+  const pageUri = obj.id as string;
+  const pageSlug = (obj.slug as string) ?? '';
+  const pageTitle = (obj.name as string) ?? 'Untitled';
+  const pageContent = (obj.content as string) ?? '';
+  const pageTags = Array.isArray(obj.tags) ? (obj.tags as string[]) : [];
+  const groupUri = (obj.context as string) ?? '';
+
+  let groupId: string | null = null;
+  if (groupUri) {
+    const [group] = await fastify.db
+      .select({ id: actors.id })
+      .from(actors)
+      .where(eq(actors.uri, groupUri))
+      .limit(1);
+    if (group) groupId = group.id;
+  }
+  if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
+
+  if (groupId && pageSlug) {
+    let authorId = remoteActor.id;
+    const attrTo = obj.attributedTo as string | undefined;
+    if (attrTo && attrTo !== remoteActor.uri) {
+      const resolved = await resolveActor(fastify.db, attrTo);
+      if (resolved) authorId = resolved.id;
+    }
+
+    await fastify.db
+      .insert(wikiPages)
+      .values({
+        uri: pageUri,
+        serverId: groupId,
+        slug: pageSlug,
+        title: pageTitle,
+        content: pageContent,
+        tags: pageTags,
+        parentId: (obj.parentId as string) ?? null,
+        position: (obj.position as number) ?? 0,
+        createdById: authorId,
+        lastEditedById: authorId,
+      })
+      .onConflictDoNothing();
+
+    fastify.broadcastToAllSubscribers({
+      type: 'wiki:page-changed',
+      payload: { serverId: groupId, action: 'created', slug: pageSlug },
+    });
+    fastify.log.info({ pageUri, slug: pageSlug }, 'Remote Create(Article) processed');
+  }
+}
+
+async function handleCreateEvent(ctx: CreateCtx) {
+  const { fastify, remoteActor, obj } = ctx;
+  const eventUri = obj.id as string;
+  const groupUri = (obj.context as string) ?? '';
+
+  let groupId: string | null = null;
+  if (groupUri) {
+    const [group] = await fastify.db
+      .select({ id: actors.id })
+      .from(actors)
+      .where(eq(actors.uri, groupUri))
+      .limit(1);
+    if (group) groupId = group.id;
+  }
+  if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
+
+  if (groupId) {
+    let authorId = remoteActor.id;
+    const attrTo = obj.attributedTo as string | undefined;
+    if (attrTo && attrTo !== remoteActor.uri) {
+      const resolved = await resolveActor(fastify.db, attrTo);
+      if (resolved) authorId = resolved.id;
+    }
+
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+    const chatUri = `${protocol}://${config.domain}/events/${crypto.randomUUID()}/chat`;
+    const [chatChannel] = await fastify.db
+      .insert(objects)
+      .values({
+        uri: chatUri,
+        type: 'OrderedCollection',
+        belongsTo: null,
+        properties: { name: obj.name ?? 'Event', isEventChat: true },
+      })
+      .returning();
+
+    await fastify.db
+      .insert(events)
+      .values({
+        uri: eventUri,
+        ownerType: 'server',
+        ownerId: groupId,
+        createdById: authorId,
+        slug: (obj.slug as string) ?? null,
+        title: (obj.name as string) ?? 'Untitled Event',
+        description: (obj.content as string) ?? null,
+        startAt: new Date((obj.startTime as string) ?? new Date()),
+        endAt: new Date((obj.endTime as string) ?? new Date()),
+        location: (obj.location as string) ?? null,
+        rrule: (obj.rrule as string) ?? null,
+        eventChatId: chatChannel.id,
+      })
+      .onConflictDoNothing();
+
+    fastify.log.info({ eventUri }, 'Remote Create(Event) processed');
+  }
+}
+
+async function handleCreateDocument(ctx: CreateCtx) {
+  const { fastify, remoteActor, obj } = ctx;
+  const groupUri = (obj.context as string) ?? '';
+
+  let groupId: string | null = null;
+  if (groupUri) {
+    const [group] = await fastify.db.select({ id: actors.id }).from(actors).where(eq(actors.uri, groupUri)).limit(1);
+    if (group) groupId = group.id;
+  }
+  if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
+
+  if (groupId) {
+    let authorId = remoteActor.id;
+    const attrTo = obj.attributedTo as string | undefined;
+    if (attrTo && attrTo !== remoteActor.uri) {
+      const resolved = await resolveActor(fastify.db, attrTo);
+      if (resolved) authorId = resolved.id;
+    }
+
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+    const chatUri = `${protocol}://${config.domain}/files/${crypto.randomUUID()}/chat`;
+    const [chatChannel] = await fastify.db.insert(objects).values({
+      uri: chatUri, type: 'OrderedCollection', belongsTo: null,
+      properties: { name: obj.filename ?? 'File', isFileChat: true },
+    }).returning();
+
+    await fastify.db.insert(serverFiles).values({
+      serverId: groupId,
+      uploaderId: authorId,
+      filename: (obj.filename as string) ?? 'unknown',
+      contentType: (obj.contentType as string) ?? 'application/octet-stream',
+      sizeBytes: (obj.sizeBytes as number) ?? 0,
+      storageUrl: (obj.storageUrl as string) ?? (obj.id as string),
+      slug: (obj.slug as string) ?? generateShortSlug(),
+      title: (obj.name as string) ?? null,
+      description: (obj.description as string) ?? null,
+      tags: Array.isArray(obj.tags) ? (obj.tags as string[]) : [],
+      folderPath: (obj.folderPath as string) ?? null,
+      chatId: chatChannel.id,
+    }).onConflictDoNothing();
+
+    fastify.log.info({ fileId: obj.id }, 'Remote Create(Document) processed');
+  }
+}
+
+const createHandlers: Record<string, (ctx: CreateCtx) => Promise<void>> = {
+  Note: handleCreateNote,
+  Article: handleCreateArticle,
+  Event: handleCreateEvent,
+  Document: handleCreateDocument,
+};
+
 async function handleCreate(
   fastify: FastifyInstance,
   remoteActor: typeof actors.$inferSelect,
@@ -580,317 +873,24 @@ async function handleCreate(
 ) {
   const obj = activity.object;
   if (typeof obj === 'string') {
-    // Object is a URI reference — resolve it
     await resolveObject(fastify.db, obj);
-  } else if (obj?.type === 'Note' && obj.id) {
-    const toList = (obj.to as string[]) ?? [];
-    const isPublic = toList.includes('https://www.w3.org/ns/activitystreams#Public');
+  } else if (obj?.type && obj.id) {
+    const objType = obj.type as string;
+    const ctx: CreateCtx = { fastify, remoteActor, obj: obj as Record<string, unknown> };
 
-    // Detect DM: non-public, addressed to a local Person
-    let localDMId: string | null = null;
-    let dmIsNew = false;
-    let dmLocalRecipient: typeof actors.$inferSelect | null = null;
-    if (!isPublic) {
-      for (const uri of toList) {
-        const [target] = await fastify.db
-          .select()
-          .from(actors)
-          .where(and(eq(actors.uri, uri), eq(actors.local, true), eq(actors.type, 'Person')))
-          .limit(1);
-        if (target) {
-          const result = await findOrCreateDM(fastify, target, remoteActor);
-          localDMId = result.dmId;
-          dmIsNew = result.isNew;
-          dmLocalRecipient = target;
-          break;
-        }
+    // Built-in type handler
+    const handler = createHandlers[objType];
+    if (handler) {
+      await handler(ctx);
+    } else {
+      // Plugin handler (supports multi-typed arrays like ['Note', 'WorkItem'])
+      const pluginMatch = findPluginInboxHandler(objType);
+      if (pluginMatch?.handler.handleCreate) {
+        await pluginMatch.handler.handleCreate(
+          { fastify, remoteActor: { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local } },
+          obj as Record<string, unknown>,
+        );
       }
-    }
-
-    // Resolve the Note's real author. For DMs and personal-fanout
-    // deliveries, remoteActor IS the author. But for Group-relayed
-    // messages, remoteActor is the Group and the Note's attributedTo
-    // points at the actual person who wrote the message. Resolve
-    // that person so the stored Note gets the right author.
-    let noteAuthor = remoteActor;
-    const noteAttributedTo = (obj as Record<string, unknown>).attributedTo as string | undefined;
-    if (noteAttributedTo && noteAttributedTo !== remoteActor.uri) {
-      const resolved = await resolveActor(fastify.db, noteAttributedTo);
-      if (resolved) noteAuthor = resolved;
-    }
-
-    // For public channel messages, resolve the `context` URI from the
-    // inbound Note to a local shadow channel. If the message references
-    // a channel URI we already cached during join-remote, the Note gets
-    // stored with the shadow's local id as its context — then the
-    // existing message-list and WS subscription flows Just Work.
-    let channelContextId: string | null = localDMId;
-    if (!channelContextId && (obj as Record<string, unknown>).context) {
-      const contextUri = (obj as Record<string, unknown>).context as string;
-      const [shadow] = await fastify.db
-        .select({ id: objects.id })
-        .from(objects)
-        .where(eq(objects.uri, contextUri))
-        .limit(1);
-      if (shadow) channelContextId = shadow.id;
-    }
-
-    // Resolve inReplyTo URI to a local object ID so the reply
-    // attaches to the correct thread on the receiving instance.
-    let localInReplyTo: string | null = null;
-    const inReplyToUri = (obj as Record<string, unknown>).inReplyTo as string | undefined;
-    if (inReplyToUri) {
-      const [parent] = await fastify.db
-        .select({ id: objects.id })
-        .from(objects)
-        .where(eq(objects.uri, inReplyToUri))
-        .limit(1);
-      if (parent) localInReplyTo = parent.id;
-    }
-
-    // Extract Babelr-custom encryption fields
-    const noteProps: Record<string, unknown> = {};
-    if ((obj as Record<string, unknown>).babelrEncrypted) noteProps.encrypted = true;
-    if ((obj as Record<string, unknown>).babelrIv) {
-      noteProps.iv = (obj as Record<string, unknown>).babelrIv;
-    }
-    if ((obj as Record<string, unknown>).babelrAttachments) {
-      noteProps.attachments = (obj as Record<string, unknown>).babelrAttachments;
-    }
-
-    // Preserve the message slug so [[msg:slug]] embeds resolve
-    // on the receiving instance without a round-trip to the origin.
-    const remoteSlug = (obj as Record<string, unknown>).babelrSlug as string | undefined;
-
-    const [stored] = await fastify.db
-      .insert(objects)
-      .values({
-        uri: obj.id,
-        type: 'Note',
-        attributedTo: noteAuthor.id,
-        content: obj.content ?? null,
-        context: channelContextId,
-        inReplyTo: localInReplyTo,
-        slug: remoteSlug ?? null,
-        to: toList,
-        cc: (obj.cc as string[]) ?? [],
-        published: obj.published ? new Date(obj.published as string) : new Date(),
-        ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
-      })
-      .onConflictDoNothing({ target: objects.uri })
-      .returning();
-
-    // Broadcast to locally-connected participants. For DMs this
-    // targets the local DM collection; for federated channel
-    // messages it targets the shadow channel's subscribers.
-    if (channelContextId && stored) {
-      const messageView = {
-        id: stored.id,
-        content: stored.content ?? '',
-        channelId: channelContextId,
-        authorId: noteAuthor.id,
-        slug: stored.slug ?? null,
-        published: stored.published.toISOString(),
-        ...(Object.keys(noteProps).length > 0 && { properties: noteProps }),
-      };
-      const authorView = {
-        id: noteAuthor.id,
-        preferredUsername: noteAuthor.preferredUsername,
-        displayName: noteAuthor.displayName,
-        avatarUrl: ((noteAuthor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
-      };
-      fastify.broadcastToChannel(channelContextId, {
-        type: 'message:new',
-        payload: { message: messageView, author: authorView },
-      });
-
-      // If this is a brand-new DM, push conversation:new to the recipient
-      // so their sidebar updates without a reload
-      if (dmIsNew && dmLocalRecipient && localDMId) {
-        const localAuthorView = {
-          id: dmLocalRecipient.id,
-          preferredUsername: dmLocalRecipient.preferredUsername,
-          displayName: dmLocalRecipient.displayName,
-          avatarUrl:
-            ((dmLocalRecipient.properties as Record<string, unknown> | null)?.avatarUrl as string) ??
-            null,
-        };
-        fastify.broadcastToActor(dmLocalRecipient.id, {
-          type: 'conversation:new',
-          payload: {
-            conversation: {
-              id: localDMId,
-              participants: [localAuthorView, authorView],
-              lastMessage: messageView,
-            },
-          },
-        });
-      }
-    }
-  } else if (obj?.type === 'Article' && obj.id) {
-    // Wiki page — create a shadow wiki_pages row on this instance.
-    const objData = obj as Record<string, unknown>;
-    const pageUri = obj.id as string;
-    const pageSlug = (objData.slug as string) ?? '';
-    const pageTitle = (objData.name as string) ?? 'Untitled';
-    const pageContent = (objData.content as string) ?? '';
-    const pageTags = Array.isArray(objData.tags) ? (objData.tags as string[]) : [];
-    const groupUri = (objData.context as string) ?? '';
-
-    // Find the cached remote Group that owns this wiki.
-    let groupId: string | null = null;
-    if (groupUri) {
-      const [group] = await fastify.db
-        .select({ id: actors.id })
-        .from(actors)
-        .where(eq(actors.uri, groupUri))
-        .limit(1);
-      if (group) groupId = group.id;
-    }
-    if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
-
-    if (groupId && pageSlug) {
-      // Resolve the author.
-      let authorId = remoteActor.id;
-      const attrTo = objData.attributedTo as string | undefined;
-      if (attrTo && attrTo !== remoteActor.uri) {
-        const resolved = await resolveActor(fastify.db, attrTo);
-        if (resolved) authorId = resolved.id;
-      }
-
-      await fastify.db
-        .insert(wikiPages)
-        .values({
-          uri: pageUri,
-          serverId: groupId,
-          slug: pageSlug,
-          title: pageTitle,
-          content: pageContent,
-          tags: pageTags,
-          parentId: (objData.parentId as string) ?? null,
-          position: (objData.position as number) ?? 0,
-          createdById: authorId,
-          lastEditedById: authorId,
-        })
-        .onConflictDoNothing();
-
-      fastify.broadcastToAllSubscribers({
-        type: 'wiki:page-changed',
-        payload: { serverId: groupId, action: 'created', slug: pageSlug },
-      });
-      fastify.log.info({ pageUri, slug: pageSlug }, 'Remote Create(Article) processed');
-    }
-  } else if (obj?.type && findPluginInboxHandler(obj.type)) {
-    const { handler } = findPluginInboxHandler(obj.type)!;
-    if (handler.handleCreate) {
-      await handler.handleCreate(
-        { fastify, remoteActor: { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local } },
-        obj as Record<string, unknown>,
-      );
-    }
-  } else if (obj?.type === 'Event' && obj.id) {
-    // Calendar event — create a shadow event on this instance.
-    const objData = obj as Record<string, unknown>;
-    const eventUri = obj.id as string;
-    const groupUri = (objData.context as string) ?? '';
-
-    let groupId: string | null = null;
-    if (groupUri) {
-      const [group] = await fastify.db
-        .select({ id: actors.id })
-        .from(actors)
-        .where(eq(actors.uri, groupUri))
-        .limit(1);
-      if (group) groupId = group.id;
-    }
-    if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
-
-    if (groupId) {
-      let authorId = remoteActor.id;
-      const attrTo = objData.attributedTo as string | undefined;
-      if (attrTo && attrTo !== remoteActor.uri) {
-        const resolved = await resolveActor(fastify.db, attrTo);
-        if (resolved) authorId = resolved.id;
-      }
-
-      // Create event chat collection
-      const config = fastify.config;
-      const protocol = config.secureCookies ? 'https' : 'http';
-      const chatUri = `${protocol}://${config.domain}/events/${crypto.randomUUID()}/chat`;
-      const [chatChannel] = await fastify.db
-        .insert(objects)
-        .values({
-          uri: chatUri,
-          type: 'OrderedCollection',
-          belongsTo: null,
-          properties: { name: objData.name ?? 'Event', isEventChat: true },
-        })
-        .returning();
-
-      await fastify.db
-        .insert(events)
-        .values({
-          uri: eventUri,
-          ownerType: 'server',
-          ownerId: groupId,
-          createdById: authorId,
-          slug: (objData.slug as string) ?? null,
-          title: (objData.name as string) ?? 'Untitled Event',
-          description: (objData.content as string) ?? null,
-          startAt: new Date((objData.startTime as string) ?? new Date()),
-          endAt: new Date((objData.endTime as string) ?? new Date()),
-          location: (objData.location as string) ?? null,
-          rrule: (objData.rrule as string) ?? null,
-          eventChatId: chatChannel.id,
-        })
-        .onConflictDoNothing();
-
-      fastify.log.info({ eventUri }, 'Remote Create(Event) processed');
-    }
-  } else if (obj?.type === 'Document' && obj.id) {
-    // Server file — create a shadow server_files row.
-    const objData = obj as Record<string, unknown>;
-    const groupUri = (objData.context as string) ?? '';
-
-    let groupId: string | null = null;
-    if (groupUri) {
-      const [group] = await fastify.db.select({ id: actors.id }).from(actors).where(eq(actors.uri, groupUri)).limit(1);
-      if (group) groupId = group.id;
-    }
-    if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
-
-    if (groupId) {
-      let authorId = remoteActor.id;
-      const attrTo = objData.attributedTo as string | undefined;
-      if (attrTo && attrTo !== remoteActor.uri) {
-        const resolved = await resolveActor(fastify.db, attrTo);
-        if (resolved) authorId = resolved.id;
-      }
-
-      const config = fastify.config;
-      const protocol = config.secureCookies ? 'https' : 'http';
-      const chatUri = `${protocol}://${config.domain}/files/${crypto.randomUUID()}/chat`;
-      const [chatChannel] = await fastify.db.insert(objects).values({
-        uri: chatUri, type: 'OrderedCollection', belongsTo: null,
-        properties: { name: objData.filename ?? 'File', isFileChat: true },
-      }).returning();
-
-      await fastify.db.insert(serverFiles).values({
-        serverId: groupId,
-        uploaderId: authorId,
-        filename: (objData.filename as string) ?? 'unknown',
-        contentType: (objData.contentType as string) ?? 'application/octet-stream',
-        sizeBytes: (objData.sizeBytes as number) ?? 0,
-        storageUrl: (objData.storageUrl as string) ?? obj.id as string,
-        slug: (objData.slug as string) ?? generateShortSlug(),
-        title: (objData.name as string) ?? null,
-        description: (objData.description as string) ?? null,
-        tags: Array.isArray(objData.tags) ? (objData.tags as string[]) : [],
-        folderPath: (objData.folderPath as string) ?? null,
-        chatId: chatChannel.id,
-      }).onConflictDoNothing();
-
-      fastify.log.info({ fileId: obj.id }, 'Remote Create(Document) processed');
     }
   }
 

@@ -19,6 +19,8 @@ import i18nSeedPlugin from './plugins/i18n-seed.ts';
 import healthRoutes from './routes/health.ts';
 import authRoutes from './routes/auth.ts';
 import channelRoutes from './routes/channels.ts';
+import messageRoutes from './routes/messages.ts';
+import channelSettingsRoutes from './routes/channel-settings.ts';
 import wsRoutes from './routes/ws.ts';
 import translateRoutes from './routes/translate.ts';
 import serverRoutes from './routes/servers.ts';
@@ -152,6 +154,8 @@ export async function buildApp() {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(channelRoutes);
+  await app.register(messageRoutes);
+  await app.register(channelSettingsRoutes);
   await app.register(wsRoutes);
   await app.register(translateRoutes);
   await app.register(serverRoutes);

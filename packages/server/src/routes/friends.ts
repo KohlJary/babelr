@@ -5,7 +5,7 @@ import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import type { FriendshipView, FriendshipState } from '@babelr/shared';
-import { toAuthorView } from './channels.ts';
+import { toAuthorView } from '../serializers.ts';
 import { lookupActorByHandle } from '../federation/resolve.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import {

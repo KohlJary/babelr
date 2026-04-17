@@ -13,7 +13,7 @@ import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { serverFiles } from '../db/schema/files.ts';
-import { toAuthorView } from './channels.ts';
+import { toAuthorView } from '../serializers.ts';
 import type {
   FileView,
   FileEmbedView,

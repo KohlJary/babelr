@@ -5,7 +5,7 @@ import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { actors } from '../db/schema/actors.ts';
 import type { MessageListResponse, MessageWithAuthor } from '@babelr/shared';
-import { toMessageView, toAuthorView, checkChannelAccess } from './channels.ts';
+import { toMessageView, toAuthorView, checkChannelAccess } from '../serializers.ts';
 
 const DEFAULT_LIMIT = 50;
 

@@ -1071,7 +1071,17 @@
       "status": "backlog",
       "created_at": "2026-04-16T00:00:00.000000",
       "created_by": "kohl"
+    },
+    {
+      "id": "refactor-complexity",
+      "title": "Complexity refactor — split god files, extract shared patterns",
+      "description": "Theseus complexity analysis identified critical hotspots. Priority order:\n1. Extract src/serializers.ts from channels.ts (50 lines, unblocks everything)\n2. Split routes/channels.ts (1771 lines) into messages.ts + channel-settings.ts\n3. Extract handleCreate dispatch table in inbox.ts (handler registry pattern)\n4. Split useVoice.ts (1006 lines) into RPC/media/transport/peers hooks\n5. Split PM plugin client.tsx (1212 lines) + manifest.ts (917 lines)\n6. Quick wins: shared replyError helper (246 occurrences), centralized session-actor preHandler (28 occurrences)",
+      "priority": "P1",
+      "item_type": "chore",
+      "status": "in_progress",
+      "created_at": "2026-04-16T00:00:00.000000",
+      "created_by": "daedalus"
     }
   ],
-  "version": 32
+  "version": 33
 }

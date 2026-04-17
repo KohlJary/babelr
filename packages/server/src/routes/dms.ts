@@ -5,12 +5,8 @@ import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
-import {
-  toAuthorView,
-  toMessageView,
-  getMessagesForChannel,
-  createMessageInChannel,
-} from './channels.ts';
+import { toAuthorView, toMessageView, getMessagesForChannel } from '../serializers.ts';
+import { createMessageInChannel } from './channels.ts';
 import type { DMConversation, CreateMessageInput } from '@babelr/shared';
 
 const DEFAULT_LIMIT = 50;

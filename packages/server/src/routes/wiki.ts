@@ -6,7 +6,7 @@ import { writeAuditLog } from '../audit.ts';
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { wikiPages, wikiPageRevisions, wikiPageLinks } from '../db/schema/wiki.ts';
-import { toAuthorView } from './channels.ts';
+import { toAuthorView } from '../serializers.ts';
 import { extractWikiSlugs, PERMISSIONS } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 import { enqueueToFollowers, enqueueDelivery } from '../federation/delivery.ts';
