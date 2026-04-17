@@ -6449,6 +6449,21 @@ textarea.modal-input {
   margin-top: 0.5rem;
 }
 
+/* Syntax-highlighted code blocks (Shiki) ----------------------------- */
+.shiki {
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0.25rem 0;
+}
+.shiki code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
 .message-author-clickable {
   background: none;
   border: none;

@@ -2,11 +2,32 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { parseWikiRefs } from '@babelr/shared';
+import { highlightCodeSync, preloadHighlighter } from './code-highlight';
+
+// Pre-warm the highlighter so it's ready before the first code block
+preloadHighlighter();
+
+// Custom renderer for fenced code blocks with syntax highlighting
+const codeRenderer = new marked.Renderer();
+codeRenderer.code = ({ text, lang }: { text: string; lang?: string | null }) => {
+  const language = lang?.split(/\s/)[0] ?? '';
+  if (language) {
+    const highlighted = highlightCodeSync(text, language);
+    if (highlighted) return highlighted;
+  }
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const langClass = language ? ` class="language-${language}"` : '';
+  return `<pre><code${langClass}>${escaped}</code></pre>`;
+};
 
 // Configure marked for chat messages
 marked.setOptions({
   breaks: true,
   gfm: true,
+  renderer: codeRenderer,
 });
 
 /**
@@ -54,7 +75,7 @@ export function renderMarkdown(content: string): string {
       'p', 'br', 'strong', 'em', 'del', 'code', 'pre',
       'ul', 'ol', 'li', 'blockquote', 'a', 'span',
     ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style'],
   });
 }
 
@@ -79,6 +100,7 @@ export function renderWikiMarkdown(content: string): string {
   // Create a custom renderer that adds id attributes to headings
   // for table-of-contents anchor linking.
   const renderer = new marked.Renderer();
+  renderer.code = codeRenderer.code;
   renderer.heading = ({ text, depth }: { text: string; depth: number }) => {
     const id = headingId(text);
     return `<h${depth} id="${id}">${text}</h${depth}>`;
@@ -93,7 +115,7 @@ export function renderWikiMarkdown(content: string): string {
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'img',
     ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'src', 'alt', 'title', 'id'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'src', 'alt', 'title', 'id'],
   });
 }
 

@@ -1231,7 +1231,17 @@
       "status": "backlog",
       "created_at": "2026-04-17T00:00:00.000000",
       "created_by": "kohl"
+    },
+    {
+      "id": "rich-message-input",
+      "title": "Rich message input — inline code blocks, markdown toolbar, embed lookup",
+      "description": "The message input is currently a plain textarea. Three enhancements to bring it up to Teams/Notion level:\n\n1. **Inline code block rendering**: when the user types a fenced code block (```lang), render it with syntax highlighting directly in the input (like Teams). Language picker dropdown for selecting the syntax. The input becomes a mini rich-text surface for code while staying plain markdown under the hood.\n\n2. **Markdown formatting toolbar**: buttons above the input for bold, italic, strikethrough, code, link, bulleted/numbered list, heading, blockquote. Each inserts the corresponding markdown syntax around the selection (or at cursor). Keyboard shortcuts (Ctrl+B, Ctrl+I, etc.) for power users. The toolbar is collapsible to save space.\n\n3. **Embed lookup from chat**: typing [[ opens a search dropdown that queries wiki pages, events, files, tasks, boards, and polls by name. Select an item to insert the [[kind:slug]] ref. Autocomplete-style with category grouping (Pages, Events, Files, Tasks). Also handles @mention autocomplete (type @ to search members).\n\nAll three maintain plain markdown as the underlying format — the input is a rich preview of what the message will look like, not a separate rich-text model. This avoids the complexity of a full WYSIWYG editor while giving users the visual feedback they expect.\n\nDepends on: syntax highlighting (shipped), embed registry (shipped), member list API (exists).",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 36
+  "version": 37
 }

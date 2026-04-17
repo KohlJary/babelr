@@ -116,7 +116,8 @@
       {
         "id": "task-polish-1",
         "title": "Syntax highlighting for code blocks",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Shiki integration via lazy-loaded highlighter. 23 common languages pre-loaded (JS/TS/Python/Rust/Go/etc). github-dark theme. Hooked into marked's code renderer (sync path via highlightCodeSync for initial render, preloadHighlighter on app load for warm cache). Applied to both chat messages and wiki content. DOMPurify allowlist updated to permit style attributes for Shiki's token colors. PWA precache scoped to exclude Shiki's 300+ grammar chunks (10 entries / 1.2MB instead of 316 / 10.9MB). 274 tests + build pass.",
         "details": "Add Shiki (or highlight.js) to the markdown renderer for fenced code blocks with language tags (```js, ```python, etc.). Lazy-load the highlighter to avoid bloating the initial bundle. Apply to both chat messages and wiki content. The wiki enhancement roadmap item covers additional wiki-specific features (callouts, task lists, ToC) — this task is just the syntax highlighting shared between chat and wiki."
       },
       {

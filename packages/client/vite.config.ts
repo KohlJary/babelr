@@ -55,7 +55,11 @@ export default defineConfig({
         ],
       },
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,woff2,svg,png}'],
+        // Only precache the app shell — Shiki splits 300+ grammar
+        // chunks that shouldn't be precached. The index + main CSS +
+        // HTML + fonts + images are enough for offline shell.
+        globPatterns: ['**/*.{css,html,woff2,svg,png}', 'assets/index-*.js'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
     }),
   ],
