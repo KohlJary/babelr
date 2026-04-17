@@ -124,7 +124,8 @@
       {
         "id": "task-launch-4",
         "title": "User bans",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Schema: server_bans table (serverId, userId, bannedBy, reason, expiresAt for temp bans). Routes: POST /servers/:serverId/ban (with optional durationHours), DELETE /servers/:serverId/ban/:userId to unban, GET /servers/:serverId/bans to list. Join endpoint checks ban list — expired bans auto-cleaned on join attempt. Permission: owner/admin only. Owner can't be banned. Audit-logged (member.ban, member.unban). WS broadcast member:banned. Ban also removes server membership. Client: banUser, unbanUser, getBans API functions. 274 tests + build pass.",
         "details": "Schema: server_bans table (id, serverId, userId, bannedBy, reason, bannedAt, expiresAt nullable for permanent). Routes: POST /servers/:serverId/ban { userId, reason?, duration? }, DELETE /servers/:serverId/ban/:userId to unban, GET /servers/:serverId/bans to list. Join endpoint checks ban list. New BAN_MEMBERS permission. Client: ban button in member list (for admins), ban management in server settings. Audit-logged. WS broadcast member:banned so other clients update."
       },
       {

@@ -8,6 +8,7 @@ import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { invites } from '../db/schema/invites.ts';
 import { serverRoles, serverRoleAssignments } from '../db/schema/roles.ts';
+import { serverBans } from '../db/schema/bans.ts';
 import { DEFAULT_ROLE_DEFINITIONS, PERMISSIONS } from '@babelr/shared';
 import type { CreateServerInput, ServerView, UpdateServerInput } from '@babelr/shared';
 import { hasPermission, ensureManageRolesSurvives, LockoutError } from '../permissions.ts';
@@ -42,6 +43,31 @@ function toServerView(
     logoUrl: (props.logoUrl as string | undefined) ?? null,
     tags: Array.isArray(props.tags) ? (props.tags as string[]) : [],
   };
+}
+
+async function getCallerRole(
+  db: ReturnType<typeof import('../db/index.ts').createDb>,
+  serverId: string,
+  actor: { id: string; uri: string },
+): Promise<string | null> {
+  const [server] = await db
+    .select()
+    .from(actors)
+    .where(eq(actors.id, serverId))
+    .limit(1);
+  if (!server?.followersUri) return null;
+  const [membership] = await db
+    .select()
+    .from(collectionItems)
+    .where(
+      and(
+        eq(collectionItems.collectionUri, server.followersUri),
+        eq(collectionItems.itemUri, actor.uri),
+      ),
+    )
+    .limit(1);
+  if (!membership) return null;
+  return ((membership.properties as Record<string, unknown>)?.role as string) ?? 'member';
 }
 
 export default async function serverRoutes(fastify: FastifyInstance) {
@@ -362,6 +388,26 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       }
 
       const actor = request.actor;
+
+      // Check if banned
+      const [ban] = await db
+        .select()
+        .from(serverBans)
+        .where(
+          and(
+            eq(serverBans.serverId, server.id),
+            eq(serverBans.userId, actor.id),
+          ),
+        )
+        .limit(1);
+      if (ban) {
+        const expired = ban.expiresAt && new Date() > ban.expiresAt;
+        if (!expired) {
+          return reply.status(403).send({ error: 'You are banned from this server' });
+        }
+        // Expired ban — clean it up and allow join
+        await db.delete(serverBans).where(eq(serverBans.id, ban.id));
+      }
 
       // Check if already a member
       const [existing] = await db
@@ -1046,6 +1092,145 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         expiresAt: inv.expiresAt?.toISOString() ?? null,
         createdAt: inv.createdAt.toISOString(),
       }));
+    },
+  );
+
+  // --- Bans ---
+
+  // Ban a user from a server
+  fastify.post<{
+    Params: { serverId: string };
+    Body: { userId: string; reason?: string; durationHours?: number };
+  }>('/servers/:serverId/ban', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+    const { serverId } = request.params;
+    const { userId, reason, durationHours } = request.body ?? {};
+    if (!userId) return reply.status(400).send({ error: 'userId is required' });
+
+    // Permission check — BAN_MEMBERS or owner/admin
+    const callerRole = await getCallerRole(db, serverId, request.actor);
+    if (!callerRole || !['owner', 'admin'].includes(callerRole)) {
+      return reply.status(403).send({ error: 'Insufficient permissions' });
+    }
+
+    // Can't ban yourself or the owner
+    const [target] = await db.select().from(actors).where(eq(actors.id, userId)).limit(1);
+    if (!target) return reply.status(404).send({ error: 'User not found' });
+    if (target.id === request.actor.id) return reply.status(400).send({ error: 'Cannot ban yourself' });
+
+    const targetRole = await getCallerRole(db, serverId, target);
+    if (targetRole === 'owner') return reply.status(403).send({ error: 'Cannot ban the server owner' });
+
+    const expiresAt = durationHours
+      ? new Date(Date.now() + durationHours * 60 * 60 * 1000)
+      : null;
+
+    // Upsert ban
+    await db
+      .insert(serverBans)
+      .values({
+        serverId,
+        userId,
+        bannedBy: request.actor.id,
+        reason: reason ?? null,
+        expiresAt,
+      })
+      .onConflictDoNothing();
+
+    // Remove from server membership
+    const [server] = await db.select().from(actors).where(eq(actors.id, serverId)).limit(1);
+    if (server?.followersUri) {
+      await db
+        .delete(collectionItems)
+        .where(
+          and(
+            eq(collectionItems.collectionUri, server.followersUri),
+            eq(collectionItems.itemUri, target.uri),
+          ),
+        );
+    }
+
+    // Audit log
+    await writeAuditLog(db, {
+      serverId,
+      actorId: request.actor.id,
+      action: 'member.ban',
+      category: 'member',
+      details: { targetId: userId },
+      summary: `Banned ${target.preferredUsername}${reason ? `: ${reason}` : ''}`,
+    });
+
+    fastify.broadcastToAllSubscribers({
+      type: 'member:banned',
+      payload: { serverId, userId },
+    } as never);
+
+    return { ok: true };
+  });
+
+  // Unban a user
+  fastify.delete<{
+    Params: { serverId: string; userId: string };
+  }>('/servers/:serverId/ban/:userId', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+    const { serverId, userId } = request.params;
+
+    const callerRole = await getCallerRole(db, serverId, request.actor);
+    if (!callerRole || !['owner', 'admin'].includes(callerRole)) {
+      return reply.status(403).send({ error: 'Insufficient permissions' });
+    }
+
+    await db
+      .delete(serverBans)
+      .where(and(eq(serverBans.serverId, serverId), eq(serverBans.userId, userId)));
+
+    await writeAuditLog(db, {
+      serverId,
+      actorId: request.actor.id,
+      action: 'member.unban',
+      category: 'member',
+      details: { targetId: userId },
+      summary: `Unbanned user ${userId}`,
+    });
+
+    return { ok: true };
+  });
+
+  // List bans for a server
+  fastify.get<{ Params: { serverId: string } }>(
+    '/servers/:serverId/bans',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { serverId } = request.params;
+
+      const callerRole = await getCallerRole(db, serverId, request.actor);
+      if (!callerRole || !['owner', 'admin'].includes(callerRole)) {
+        return reply.status(403).send({ error: 'Insufficient permissions' });
+      }
+
+      const bans = await db
+        .select({
+          ban: serverBans,
+          user: { id: actors.id, preferredUsername: actors.preferredUsername, displayName: actors.displayName },
+        })
+        .from(serverBans)
+        .innerJoin(actors, eq(serverBans.userId, actors.id))
+        .where(eq(serverBans.serverId, serverId));
+
+      return {
+        bans: bans.map((b) => ({
+          id: b.ban.id,
+          userId: b.ban.userId,
+          username: b.user.preferredUsername,
+          displayName: b.user.displayName,
+          reason: b.ban.reason,
+          bannedAt: b.ban.bannedAt.toISOString(),
+          expiresAt: b.ban.expiresAt?.toISOString() ?? null,
+        })),
+      };
     },
   );
 }

@@ -18,3 +18,4 @@ export { serverFiles } from './files.ts';
 export { auditLogs } from './audit-logs.ts';
 export { pushSubscriptions } from './push-subscriptions.ts';
 export { pins } from './pins.ts';
+export { serverBans } from './bans.ts';

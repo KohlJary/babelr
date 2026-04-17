@@ -1114,8 +1114,8 @@
     },
     {
       "id": "user-bans",
-      "title": "User bans — permanent server ban with optional IP ban",
-      "description": "Kick exists but banned users can rejoin immediately. Schema: server_bans(id, serverId, userId, bannedBy, reason, bannedAt, expiresAt). Routes: POST /servers/:serverId/ban (with optional duration for temp bans), DELETE to unban, GET to list bans. Join endpoint checks ban list before allowing membership. Permission: BAN_MEMBERS (new permission). Audit-logged. IP bans deferred (needs request IP tracking + privacy considerations).",
+      "title": "User bans — permanent server ban with optional IP ban + live testing",
+      "description": "Kick exists but banned users can rejoin immediately. Schema: server_bans(id, serverId, userId, bannedBy, reason, bannedAt, expiresAt). Routes shipped. Join endpoint checks ban list. Audit-logged. IP bans deferred (needs request IP tracking + privacy considerations).\n\nLive testing needed on a real Tower: ban a user, verify they can't rejoin, verify temp ban expires correctly, verify unban allows rejoin, verify ban management UI in server settings works end-to-end. Batch with the other live-Tower test items.",
       "priority": "P1",
       "item_type": "feature",
       "status": "backlog",

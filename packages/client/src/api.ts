@@ -602,6 +602,21 @@ export async function unpinMessage(channelId: string, messageId: string): Promis
   await apiFetch(`/channels/${channelId}/messages/${messageId}/pin`, { method: 'DELETE' });
 }
 
+export async function banUser(serverId: string, userId: string, reason?: string, durationHours?: number): Promise<void> {
+  await apiFetch(`/servers/${serverId}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, reason, durationHours }),
+  });
+}
+
+export async function unbanUser(serverId: string, userId: string): Promise<void> {
+  await apiFetch(`/servers/${serverId}/ban/${userId}`, { method: 'DELETE' });
+}
+
+export async function getBans(serverId: string): Promise<{ bans: Array<{ id: string; userId: string; username: string; displayName: string | null; reason: string | null; bannedAt: string; expiresAt: string | null }> }> {
+  return apiFetch(`/servers/${serverId}/bans`);
+}
+
 export async function resendVerification(): Promise<void> {
   await apiFetch('/auth/resend-verification', { method: 'POST' });
 }
