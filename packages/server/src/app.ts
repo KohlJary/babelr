@@ -150,6 +150,10 @@ export async function buildApp() {
   const { initEmail } = await import('./email.ts');
   initEmail(app);
 
+  // Web push (VAPID config from env)
+  const { initPush } = await import('./push.ts');
+  initPush(app);
+
   // Routes
   await app.register(healthRoutes);
   await app.register(authRoutes);
@@ -173,6 +177,8 @@ export async function buildApp() {
   await app.register(auditRoutes);
   await app.register(ssoRoutes);
   await app.register(voiceRoutes);
+  const { default: pushRoutes } = await import('./routes/push.ts');
+  await app.register(pushRoutes);
   await app.register(pluginLoader);
   await app.register(wikiSeedPlugin);
 

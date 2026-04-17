@@ -24,6 +24,7 @@ import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
 import { PERMISSIONS, generateMessageSlug, isValidMessageSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 import { writeAuditLog } from '../audit.ts';
+import { broadcastPushToChannel } from '../push.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -143,6 +144,27 @@ export async function createMessageInChannel(
   if (actor.local) {
     const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
     const channelProps = (channel?.properties as Record<string, unknown> | null) ?? null;
+
+    // Push notification to offline users (after channel lookup so we
+    // can include channel/server name in the notification)
+    const chName = (channelProps?.name as string) ?? undefined;
+    let srvName: string | undefined;
+    if (channel?.belongsTo) {
+      const [srv] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+      srvName = srv?.displayName ?? srv?.preferredUsername ?? undefined;
+    }
+    const sender = actor.displayName ?? actor.preferredUsername;
+    const pushTitle = srvName && chName
+      ? `${sender} · #${chName} · ${srvName}`
+      : chName
+        ? `${sender} · #${chName}`
+        : sender;
+    void broadcastPushToChannel(fastify, channelId, actor.id, {
+      title: pushTitle,
+      body: content.trim().slice(0, 200),
+      tag: `msg-${channelId}`,
+      data: { channelId, messageId: note.id },
+    }).catch((err) => fastify.log.error(err, 'Push broadcast failed'));
     const isDM = channel && !channel.belongsTo && channelProps?.isDM === true;
 
     if (isDM) {

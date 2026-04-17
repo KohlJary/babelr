@@ -32,6 +32,7 @@ import { EmbedHostProvider } from './E';
 import { SidePanel } from './SidePanel';
 import { useT } from '../i18n/I18nProvider';
 import { VerificationBanner } from './VerificationBanner';
+import { subscribeToPush } from '../push';
 import type { EmbedNavCtx } from '../embeds/registry';
 import type { WikiRefKind } from '@babelr/shared';
 import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
@@ -48,6 +49,11 @@ interface ChatViewProps {
 
 export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const t = useT();
+
+  useEffect(() => {
+    void subscribeToPush();
+  }, []);
+
   const [dmMode, setDmMode] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
@@ -130,6 +136,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     dmMode,
     dmMode && e2e.ready && recipientId ? { e2e, recipientId } : undefined,
     stableExtraWs,
+    {
+      channelName: dmMode ? undefined : selectedChannel?.name,
+      serverName: dmMode ? undefined : selectedServer?.name,
+    },
   );
 
   const { messageReactions, handleWsMessage: handleReactionWs, toggleReaction } = useReactions(activeChannelId, actor.id, messages);

@@ -1201,7 +1201,27 @@
       "status": "backlog",
       "created_at": "2026-04-17T00:00:00.000000",
       "created_by": "kohl"
+    },
+    {
+      "id": "notification-levels",
+      "title": "Server + channel notification levels — all messages / mentions only / none",
+      "description": "Current notification model is binary (muted or not). Need three levels: all messages (default), mentions only (@me or @role), and none. Settable per-server with per-channel override.\n\nSchema: extend notification_preferences with a `level` enum ('all' | 'mentions' | 'none') alongside the existing `muted` boolean (which becomes sugar for level=none). Per-server default stored on the server membership (collection_items.properties). Per-channel override stored in notification_preferences.\n\nServer-side: broadcastPushToChannel and showDesktopNotification check the effective level before sending. For 'mentions', parse the message for @username tokens and only notify actors who are mentioned.\n\nClient: notification settings UI in server settings (dropdown per server) and channel settings (override dropdown). Bell icon in channel header with current level indicator.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "mentions-overhaul",
+      "title": "Mentions overhaul — fix delivery, autocomplete, translation exclusion",
+      "description": "Three issues with the current @mention system:\n\n1. **Delivery broken**: parseMentions() extracts @usernames from content and stores mentioned actor IDs in message properties.mentions, but the /mentions endpoint filters client-side by scanning all messages — doesn't actually work reliably. Need server-side mention indexing (mentions table or a proper WHERE clause on the properties JSONB).\n\n2. **Autocomplete**: typing @ in the message input should show a dropdown of channel members filtered by the typed prefix. Need a member search endpoint or client-side filtering from the member list. Autocomplete inserts @username and highlights it in the message.\n\n3. **Translation exclusion**: @username tokens should be excluded from the translation pipeline. Currently they get translated (e.g. @alice might become @alicia in Spanish). The maskEmbeds/restoreEmbeds pattern used for [[kind:slug]] should be extended to also mask @mentions before sending to the translation provider, then restore them after.",
+      "priority": "P2",
+      "item_type": "bug",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 34
+  "version": 35
 }

@@ -103,7 +103,8 @@
       {
         "id": "task-launch-1",
         "title": "Web push notifications",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Server: push_subscriptions table, VAPID config from env (VAPID_PUBLIC_KEY/PRIVATE_KEY), web-push npm package. Routes: GET /push/vapid-key, POST /push/subscribe (upsert by endpoint), DELETE /push/unsubscribe. broadcastPushToChannel() fires on every new message via createMessageInChannel — respects per-channel mute. Expired subscriptions (404/410) auto-cleaned. Client: custom SW (injectManifest mode) with push event handler showing notifications + notificationclick focusing/opening the app. subscribeToPush() called on ChatView mount — requests permission, gets VAPID key, subscribes via PushManager, registers with server. push.ts module handles the subscription flow. 274 tests + build pass.",
         "details": "Server: VAPID key pair generation + storage. New user_push_subscriptions table (actorId, endpoint, p256dh, auth, createdAt). POST /push/subscribe + DELETE /push/unsubscribe routes. On new message/DM/mention: fan out web-push notifications to subscribed devices via the web-push npm package. Respect per-channel mute from notification_preferences. Client: request Notification permission after onboarding. Register push subscription with the service worker. SW push event handler shows notification with message preview + sender. Click navigates to the channel. Desktop: Notification API for foreground-but-unfocused tab. Badge API for unread count on the PWA icon."
       },
       {

@@ -29,6 +29,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
@@ -51,24 +54,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        // Cache the app shell aggressively (JS, CSS, HTML, fonts).
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,woff2,svg,png}'],
-        // API and WS are always network — never serve stale data for
-        // messages, auth, or real-time events.
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/, /^\/ws/, /^\/uploads/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https?:\/\/.*\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxEntries: 50, maxAgeSeconds: 300 },
-              networkTimeoutSeconds: 5,
-            },
-          },
-        ],
       },
     }),
   ],

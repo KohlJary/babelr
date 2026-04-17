@@ -16,3 +16,4 @@ export { wikiPages, wikiPageRevisions, wikiPageLinks } from './wiki.ts';
 export { serverRoles, serverRoleAssignments } from './roles.ts';
 export { serverFiles } from './files.ts';
 export { auditLogs } from './audit-logs.ts';
+export { pushSubscriptions } from './push-subscriptions.ts';

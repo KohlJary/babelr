@@ -2,12 +2,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ActorProfile, AuthorView, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
+import { showDesktopNotification } from '../push';
 import { useWebSocket } from './useWebSocket';
 import type { E2EContext } from './useE2E';
 
 interface E2EOptions {
   e2e: E2EContext;
   recipientId: string;
+}
+
+export interface ChatNotificationContext {
+  channelName?: string;
+  serverName?: string;
 }
 
 export function useChat(
@@ -19,6 +25,7 @@ export function useChat(
    *  channel-scoped events to hooks (like useReactions) that don't
    *  have their own WS subscription. */
   extraWsHandler?: (msg: WsServerMessage) => void,
+  notifCtx?: ChatNotificationContext,
 ) {
   const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,6 +68,18 @@ export function useChat(
           });
         } else {
           setMessages((prev) => [...prev, msg.payload]);
+        }
+        // Desktop notification for messages from other users
+        if (msg.payload.author?.id !== actor.id) {
+          const sender = msg.payload.author?.displayName ?? msg.payload.author?.preferredUsername ?? '';
+          const ctx = notifCtx;
+          const title = ctx?.serverName && ctx?.channelName
+            ? `${sender} · #${ctx.channelName} · ${ctx.serverName}`
+            : ctx?.channelName
+              ? `${sender} · #${ctx.channelName}`
+              : sender;
+          const content = msg.payload.message?.content ?? '';
+          showDesktopNotification(title, content.slice(0, 200), `msg-${channelId}`);
         }
         // Clear typing indicator when user sends a message
         if (msg.payload.author) {
