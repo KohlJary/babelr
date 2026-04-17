@@ -117,7 +117,8 @@
       {
         "id": "task-launch-3",
         "title": "Pinned messages",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Generic pins table (contextId + targetId + targetType) extensible to wiki pages and embeds. Routes: GET /channels/:channelId/pins, POST/DELETE /channels/:channelId/messages/:messageId/pin. Permission-gated (MANAGE_MESSAGES). WS broadcast pin:add/pin:remove. Client: pin/unpin buttons in message actions (📌 Pin / 📌 Unpin), pinnedIds state in ChatView loaded on channel change, threaded through MessageList → MessageItem. 274 tests + build pass.",
         "details": "Schema: pins table (channelId, messageId, pinnedBy, pinnedAt) or add pinned_at + pinned_by columns to the objects table. Routes: POST /channels/:channelId/messages/:messageId/pin, DELETE to unpin, GET /channels/:channelId/pins returns pinned messages. Permission: MANAGE_MESSAGES. Client: pin/unpin in message context menu, 'Pinned' button in channel header opens a ScrollListView. WS broadcast pin:add / pin:remove for real-time. Federate as AS2 Add/Remove activities."
       },
       {

@@ -12,6 +12,8 @@ interface ChannelHeaderProps {
   onOpenSettings: () => void;
   onOpenProfile: () => void;
   onOpenMentions: () => void;
+  onOpenPins?: () => void;
+  pinCount?: number;
 }
 
 export function ChannelHeader({
@@ -24,6 +26,8 @@ export function ChannelHeader({
   onOpenSettings,
   onOpenProfile,
   onOpenMentions,
+  onOpenPins,
+  pinCount,
 }: ChannelHeaderProps) {
   const t = useT();
   return (
@@ -44,6 +48,11 @@ export function ChannelHeader({
         <button className="username-btn" onClick={onOpenProfile} title={t('channelHeader.editProfile')}>
           {actor.displayName ?? actor.preferredUsername}
         </button>
+        {onOpenPins && (
+          <button className="settings-btn" onClick={onOpenPins} title="Pinned messages">
+            📌{pinCount ? ` ${pinCount}` : ''}
+          </button>
+        )}
         <button className="settings-btn" onClick={onOpenMentions} title={t('channelHeader.mentions')}>
           @
         </button>

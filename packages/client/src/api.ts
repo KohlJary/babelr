@@ -590,6 +590,18 @@ export async function updateProfile(
   });
 }
 
+export async function getPins(channelId: string): Promise<{ pins: unknown[] }> {
+  return apiFetch(`/channels/${channelId}/pins`);
+}
+
+export async function pinMessage(channelId: string, messageId: string): Promise<void> {
+  await apiFetch(`/channels/${channelId}/messages/${messageId}/pin`, { method: 'POST' });
+}
+
+export async function unpinMessage(channelId: string, messageId: string): Promise<void> {
+  await apiFetch(`/channels/${channelId}/messages/${messageId}/pin`, { method: 'DELETE' });
+}
+
 export async function resendVerification(): Promise<void> {
   await apiFetch('/auth/resend-verification', { method: 'POST' });
 }

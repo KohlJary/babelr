@@ -6449,6 +6449,37 @@ textarea.modal-input {
   margin-top: 0.5rem;
 }
 
+/* Pinned messages sidebar -------------------------------------------- */
+.pinned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pinned-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+.pinned-item .pinned-embed {
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+}
+.pinned-unpin-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.pinned-unpin-btn:hover {
+  color: #fca5a5;
+}
+
 /* Link previews ------------------------------------------------------ */
 .link-previews {
   display: flex;

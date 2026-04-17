@@ -550,6 +550,12 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Pinned messages
+  'pins.title': 'Pinned Messages',
+  'pins.empty': 'No pinned messages yet.',
+  'pins.pin': 'Pin',
+  'pins.unpin': 'Unpin',
+
   // Settings tabs
   'settings.tabProfile': 'Profile',
   'settings.tabTranslation': 'Translation',

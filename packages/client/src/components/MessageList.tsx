@@ -20,6 +20,9 @@ interface MessageListProps {
   onConvertToWikiPage?: (message: MessageWithAuthor) => void;
   onPreviewEmbed?: (kind: WikiRefKind, slug: string, serverSlug?: string) => void;
   callerRole?: string;
+  pinnedMessageIds?: Set<string>;
+  onPinMessage?: (messageId: string) => void;
+  onUnpinMessage?: (messageId: string) => void;
 }
 
 export function MessageList({
@@ -38,6 +41,9 @@ export function MessageList({
   onConvertToWikiPage,
   onPreviewEmbed,
   callerRole,
+  pinnedMessageIds,
+  onPinMessage,
+  onUnpinMessage,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,6 +105,9 @@ export function MessageList({
               onConvertToWikiPage ? () => onConvertToWikiPage(item) : undefined
             }
             onPreviewEmbed={onPreviewEmbed}
+            isPinned={pinnedMessageIds?.has(item.message.id)}
+            onPin={onPinMessage ? () => onPinMessage(item.message.id) : undefined}
+            onUnpin={onUnpinMessage ? () => onUnpinMessage(item.message.id) : undefined}
           />
         );
       })}

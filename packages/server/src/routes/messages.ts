@@ -20,6 +20,7 @@ import { PERMISSIONS, isValidMessageSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 import { signedGet } from '../federation/delivery.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { pins } from '../db/schema/pins.ts';
 import { createMessageInChannel, parseMentions } from './channels.ts';
 import {
   toMessageView,
@@ -874,6 +875,130 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             updated: message.updated.toISOString(),
           }),
       };
+    },
+  );
+
+  // --- Pinned messages ---
+
+  // Get pinned messages for a channel
+  fastify.get<{ Params: { channelId: string } }>(
+    '/channels/:channelId/pins',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { channelId } = request.params;
+      const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (!allowed) return reply.status(403).send({ error: 'Not a member' });
+
+      const pinRows = await db
+        .select()
+        .from(pins)
+        .where(and(eq(pins.contextId, channelId), eq(pins.targetType, 'message')))
+        .orderBy(desc(pins.pinnedAt));
+
+      const messageIds = pinRows.map((p) => p.targetId);
+      if (messageIds.length === 0) return { pins: [] };
+
+      const rows = await db
+        .select({ object: objects, actor: actors })
+        .from(objects)
+        .innerJoin(actors, eq(objects.attributedTo, actors.id))
+        .where(inArray(objects.id, messageIds));
+
+      const messageMap = new Map(rows.map((r) => [r.object.id, r]));
+
+      const result = pinRows
+        .map((pin) => {
+          const row = messageMap.get(pin.targetId);
+          if (!row) return null;
+          return {
+            pin: {
+              id: pin.id,
+              pinnedBy: pin.pinnedBy,
+              pinnedAt: pin.pinnedAt.toISOString(),
+            },
+            message: toMessageView(row.object),
+            author: toAuthorView(row.actor),
+          };
+        })
+        .filter(Boolean);
+
+      return { pins: result };
+    },
+  );
+
+  // Pin a message
+  fastify.post<{ Params: { channelId: string; messageId: string } }>(
+    '/channels/:channelId/messages/:messageId/pin',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { channelId, messageId } = request.params;
+
+      const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (!allowed) return reply.status(403).send({ error: 'Not a member' });
+
+      // Permission check
+      if (channel?.belongsTo) {
+        if (!(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.MANAGE_MESSAGES))) {
+          return reply.status(403).send({ error: 'Insufficient permissions' });
+        }
+      }
+
+      // Verify message exists in this channel
+      const [msg] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+        .limit(1);
+      if (!msg) return reply.status(404).send({ error: 'Message not found' });
+
+      await db
+        .insert(pins)
+        .values({
+          contextId: channelId,
+          targetId: messageId,
+          targetType: 'message',
+          pinnedBy: request.actor.id,
+        })
+        .onConflictDoNothing();
+
+      fastify.broadcastToChannel(channelId, {
+        type: 'pin:add',
+        payload: { channelId, messageId },
+      } as never);
+
+      return { ok: true };
+    },
+  );
+
+  // Unpin a message
+  fastify.delete<{ Params: { channelId: string; messageId: string } }>(
+    '/channels/:channelId/messages/:messageId/pin',
+    async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+
+      const { channelId, messageId } = request.params;
+
+      const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (!allowed) return reply.status(403).send({ error: 'Not a member' });
+
+      if (channel?.belongsTo) {
+        if (!(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.MANAGE_MESSAGES))) {
+          return reply.status(403).send({ error: 'Insufficient permissions' });
+        }
+      }
+
+      await db
+        .delete(pins)
+        .where(and(eq(pins.contextId, channelId), eq(pins.targetId, messageId)));
+
+      fastify.broadcastToChannel(channelId, {
+        type: 'pin:remove',
+        payload: { channelId, messageId },
+      } as never);
+
+      return { ok: true };
     },
   );
 }

@@ -54,11 +54,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     void subscribeToPush();
   }, []);
 
+
   const [dmMode, setDmMode] = useState(false);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const [showNewDM, setShowNewDM] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
+  const [showPins, setShowPins] = useState(false);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   // Which primary view fills the chat panel area. 'chat' is the
   // default — messages + input. 'calendar' and 'wiki' replace the
@@ -113,6 +115,42 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
   const activeChannelId = dmMode ? selectedDM?.id ?? null : selectedChannel?.id ?? null;
+
+  // Pinned messages
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [pinnedData, setPinnedData] = useState<MessageWithAuthor[]>([]);
+  const reloadPins = useCallback(() => {
+    if (!activeChannelId) { setPinnedIds(new Set()); setPinnedData([]); return; }
+    api.getPins(activeChannelId).then((res) => {
+      const pinItems = res.pins as Array<{ pin: unknown; message: import('@babelr/shared').MessageView; author: import('@babelr/shared').AuthorView }>;
+      setPinnedIds(new Set(pinItems.map((p) => p.message.id)));
+      setPinnedData(pinItems.map((p) => ({ message: p.message, author: p.author })));
+    }).catch(() => {});
+  }, [activeChannelId]);
+  useEffect(() => { reloadPins(); }, [reloadPins]);
+  // Real-time pin sync via WS
+  useEffect(() => {
+    if (!activeChannelId) return;
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent).detail as { type: string; payload: { channelId: string } };
+      if ((msg.type === 'pin:add' || msg.type === 'pin:remove') && msg.payload.channelId === activeChannelId) {
+        reloadPins();
+      }
+    };
+    window.addEventListener('babelr:ws', handler);
+    return () => window.removeEventListener('babelr:ws', handler);
+  }, [activeChannelId, reloadPins]);
+
+  const handlePin = useCallback(async (messageId: string) => {
+    if (!activeChannelId) return;
+    await api.pinMessage(activeChannelId, messageId);
+    setPinnedIds((prev) => new Set([...prev, messageId]));
+  }, [activeChannelId]);
+  const handleUnpin = useCallback(async (messageId: string) => {
+    if (!activeChannelId) return;
+    await api.unpinMessage(activeChannelId, messageId);
+    setPinnedIds((prev) => { const next = new Set(prev); next.delete(messageId); return next; });
+  }, [activeChannelId]);
 
   // Close the embed sidebar whenever the user switches channels or
   // servers — embed previews are contextual to where the user is.
@@ -375,6 +413,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onOpenSettings={() => openView('settings')}
           onOpenProfile={() => openView('settings')}
           onOpenMentions={() => openView('mentions')}
+          onOpenPins={activeChannelId ? () => setShowPins((v) => !v) : undefined}
+          pinCount={pinnedIds.size || undefined}
         />
         {voice.state.channelId &&
         selectedChannel?.id === voice.state.channelId &&
@@ -426,6 +466,9 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           }
           onPreviewEmbed={openEmbedPreview}
           callerRole={callerRole}
+          pinnedMessageIds={pinnedIds}
+          onPinMessage={(id) => void handlePin(id)}
+          onUnpinMessage={(id) => void handleUnpin(id)}
         />
         <TypingIndicator users={typingUsers} />
         {dmMode && selectedDM && (() => {
@@ -483,6 +526,47 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             channelId={activeChannelId}
             onClose={() => setShowGlossary(false)}
           />
+        </SidePanel>
+      ) : showPins && activeChannelId ? (
+        <SidePanel
+          title={t('pins.title')}
+          onClose={() => setShowPins(false)}
+        >
+          <div className="pinned-list">
+            {pinnedData.length === 0 && (
+              <div className="scroll-list-empty">{t('pins.empty')}</div>
+            )}
+            {pinnedData.map((item) => {
+              const authorName = item.author.displayName ?? item.author.preferredUsername;
+              const snippet = item.message.content.length > 200
+                ? item.message.content.slice(0, 200) + '…'
+                : item.message.content;
+              const chName = !dmMode ? selectedChannel?.name : undefined;
+              const srvName = !dmMode ? selectedServer?.name : undefined;
+              return (
+                <div key={item.message.id} className="pinned-item">
+                  <div className="message-embed ok pinned-embed">
+                    <span className="message-embed-icon">💬</span>
+                    <span className="message-embed-body">
+                      <span className="message-embed-meta">
+                        <strong>{authorName}</strong>
+                        {chName && <> · #{chName}</>}
+                        {srvName && <> · <span className="message-embed-server">{srvName}</span></>}
+                      </span>
+                      <span className="message-embed-snippet">{snippet}</span>
+                    </span>
+                  </div>
+                  <button
+                    className="pinned-unpin-btn"
+                    onClick={() => void handleUnpin(item.message.id)}
+                    title={t('pins.unpin')}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </SidePanel>
       ) : selectedServer && !dmMode && !activeViewId ? (
         <SidePanel

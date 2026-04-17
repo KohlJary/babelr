@@ -23,6 +23,9 @@ interface MessageItemProps {
   canDelete?: boolean;
   /** Seed a new wiki page from this message's content */
   onConvertToWikiPage?: () => void;
+  isPinned?: boolean;
+  onPin?: () => void;
+  onUnpin?: () => void;
   /** Called when the user clicks any inline embed — the host opens
    *  its embed sidebar with kind + slug. */
   onPreviewEmbed?: (
@@ -98,6 +101,9 @@ export function MessageItem({
   canDelete,
   onConvertToWikiPage,
   onPreviewEmbed,
+  isPinned,
+  onPin,
+  onUnpin,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -199,6 +205,12 @@ export function MessageItem({
       )}
       {canDelete && (
         <button className="message-action-btn message-action-danger" onClick={onDelete}>{t('messages.delete')}</button>
+      )}
+      {onPin && !isPinned && (
+        <button className="message-action-btn" onClick={onPin}>📌 {t('pins.pin')}</button>
+      )}
+      {onUnpin && isPinned && (
+        <button className="message-action-btn" onClick={onUnpin}>📌 {t('pins.unpin')}</button>
       )}
       {onConvertToWikiPage && (
         <button
