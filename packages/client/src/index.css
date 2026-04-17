@@ -6449,6 +6449,134 @@ textarea.modal-input {
   margin-top: 0.5rem;
 }
 
+.message-author-clickable {
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  font-weight: inherit;
+}
+.message-author-clickable:hover {
+  text-decoration: underline;
+}
+
+/* Profile card ------------------------------------------------------- */
+.profile-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 1rem;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.profile-card-loading {
+  color: #94a3b8;
+  text-align: center;
+  padding: 1rem;
+}
+.profile-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.profile-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.profile-card-avatar-default {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.profile-card-identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.profile-card-name {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-card-handle {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+.profile-card-bio {
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.profile-card-meta {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+.profile-card-mutual {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.profile-card-mutual-label {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.profile-card-mutual-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.profile-card-server-chip {
+  background: #0f172a;
+  color: #cbd5e1;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
+}
+.profile-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+.profile-card-btn {
+  flex: 1;
+  padding: 0.4rem;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.profile-card-btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
+}
+.profile-card-btn:hover {
+  opacity: 0.9;
+}
+
 /* Pinned messages sidebar -------------------------------------------- */
 .pinned-list {
   display: flex;

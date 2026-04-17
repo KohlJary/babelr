@@ -550,6 +550,11 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Profile cards
+  'profileCard.memberSince': 'Member since',
+  'profileCard.mutualServers': 'Mutual servers',
+  'profileCard.sendMessage': 'Send Message',
+
   // Pinned messages
   'pins.title': 'Pinned Messages',
   'pins.empty': 'No pinned messages yet.',

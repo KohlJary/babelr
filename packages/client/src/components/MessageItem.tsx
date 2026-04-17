@@ -6,6 +6,7 @@ import { EmojiPicker } from './EmojiPicker';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
 import { useT } from '../i18n/I18nProvider';
 import { LinkPreviewCards } from './LinkPreview';
+import { ProfileCard } from './ProfileCard';
 import type { UIStringKey } from '@babelr/shared';
 
 interface MessageItemProps {
@@ -112,6 +113,8 @@ export function MessageItem({
   const [editContent, setEditContent] = useState(message.content);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | undefined>();
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileAnchor, setProfileAnchor] = useState<DOMRect | undefined>();
 
   const openPicker = (e: React.MouseEvent<HTMLButtonElement>) => {
     setPickerAnchor(e.currentTarget.getBoundingClientRect());
@@ -326,7 +329,16 @@ export function MessageItem({
     <div className="message">
       <div className="message-header">
         {avatarEl}
-        <span className="message-author">{author.displayName ?? author.preferredUsername}</span>
+        <button
+          type="button"
+          className="message-author message-author-clickable"
+          onClick={(e) => {
+            setProfileAnchor(e.currentTarget.getBoundingClientRect());
+            setShowProfile(true);
+          }}
+        >
+          {author.displayName ?? author.preferredUsername}
+        </button>
         <span className="message-time">
           {formatTime(message.published, t)}
           {message.updated && <span className="edited-badge"> {t('messages.edited')}</span>}
@@ -349,6 +361,13 @@ export function MessageItem({
       {idiomLine}
       {reactionsBlock}
       {actionsBlock}
+      {showProfile && (
+        <ProfileCard
+          userId={author.id}
+          anchorRect={profileAnchor}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
     </div>
   );
 }

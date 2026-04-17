@@ -410,6 +410,69 @@ export default async function authRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Get a user's public profile (for profile cards)
+  fastify.get<{ Params: { userId: string } }>(
+    '/users/:userId/profile',
+    async (request, reply) => {
+      if (!request.actor) {
+        return reply.status(401).send({ error: 'Not authenticated' });
+      }
+
+      const [user] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.userId))
+        .limit(1);
+
+      if (!user) {
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      const props = user.properties as Record<string, unknown> | null;
+
+      // Find mutual servers (both the requesting actor and target are members)
+      const requesterMemberships = await db
+        .select({ collectionUri: collectionItems.collectionUri })
+        .from(collectionItems)
+        .where(eq(collectionItems.itemUri, request.actor.uri));
+
+      const targetMemberships = await db
+        .select({ collectionUri: collectionItems.collectionUri })
+        .from(collectionItems)
+        .where(eq(collectionItems.itemUri, user.uri));
+
+      const requesterUris = new Set(requesterMemberships.map((m) => m.collectionUri));
+      const mutualUris = targetMemberships
+        .filter((m) => requesterUris.has(m.collectionUri))
+        .map((m) => m.collectionUri);
+
+      const mutualServers: Array<{ id: string; name: string }> = [];
+      for (const uri of mutualUris) {
+        const [server] = await db
+          .select({ id: actors.id, displayName: actors.displayName, preferredUsername: actors.preferredUsername })
+          .from(actors)
+          .where(and(eq(actors.followersUri, uri), eq(actors.type, 'Group')))
+          .limit(1);
+        if (server) {
+          mutualServers.push({
+            id: server.id,
+            name: server.displayName ?? server.preferredUsername,
+          });
+        }
+      }
+
+      return {
+        id: user.id,
+        preferredUsername: user.preferredUsername,
+        displayName: user.displayName,
+        summary: user.summary,
+        avatarUrl: (props?.avatarUrl as string) ?? null,
+        createdAt: user.createdAt.toISOString(),
+        mutualServers,
+      };
+    },
+  );
+
   // --- Email verification ---
 
   fastify.get<{ Querystring: { token?: string } }>(

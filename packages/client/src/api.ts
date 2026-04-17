@@ -602,6 +602,20 @@ export async function unpinMessage(channelId: string, messageId: string): Promis
   await apiFetch(`/channels/${channelId}/messages/${messageId}/pin`, { method: 'DELETE' });
 }
 
+export interface UserProfile {
+  id: string;
+  preferredUsername: string;
+  displayName: string | null;
+  summary: string | null;
+  avatarUrl: string | null;
+  createdAt: string;
+  mutualServers: Array<{ id: string; name: string }>;
+}
+
+export async function getUserProfile(userId: string): Promise<UserProfile> {
+  return apiFetch(`/users/${userId}/profile`);
+}
+
 export async function banUser(serverId: string, userId: string, reason?: string, durationHours?: number): Promise<void> {
   await apiFetch(`/servers/${serverId}/ban`, {
     method: 'POST',

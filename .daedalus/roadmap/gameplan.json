@@ -131,7 +131,8 @@
       {
         "id": "task-launch-5",
         "title": "User profile cards",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Server: GET /users/:userId/profile returns public profile (avatar, displayName, username, bio, createdAt, mutual servers with the requesting user). Client: ProfileCard component rendered as a fixed popover when clicking an author name in messages. Shows avatar (or colored initial), display name, handle, bio, member-since date, mutual servers (chips), and Send Message button. Click outside or Escape to close. Positioned relative to the clicked element. CSS dark card with shadow. 3 i18n strings. 274 tests + build pass.",
         "details": "Server: GET /users/:userId/profile returns public profile (avatar, displayName, username, bio, createdAt, mutual servers with the requesting user, roles in the current server). Client: ProfileCard component rendered as a popover when clicking a username/avatar in messages or member list. Shows avatar, name, bio, role badges, member-since date. Action buttons: Send DM, Add Friend, Kick/Ban (admin-only). Reuse the ProfilePanel's AvatarDisplay component."
       }
     ],
