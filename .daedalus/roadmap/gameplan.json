@@ -110,7 +110,8 @@
       {
         "id": "task-launch-2",
         "title": "Link preview / URL unfurling",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Server: unfurl.ts extracts URLs from message content, fetches og:meta (title, description, image, site_name) with 5s timeout + 256KB body limit, caches by URL for 24h, max 3 URLs per message. Runs asynchronously after message creation — doesn't block the response. Previews stored as message.properties.linkPreviews and broadcast via message:updated WS event. Client: LinkPreviewCards component renders compact cards with image thumbnail, site name, title, description. Blue left border accent. Wired into MessageItem for both compact and full message layouts. useChat's message:updated handler merges linkPreviews from the WS payload so previews appear in real-time without a page reload.",
         "details": "Server: on message create, detect URLs via regex. For each URL, fetch the page (with timeout + size limit), parse og:title, og:description, og:image, og:site_name from meta tags. Store as message.properties.linkPreviews array. Rate-limited (max 3 URLs per message, cache by URL hash for 24h). Client: LinkPreview component below the message content — compact card with image thumbnail, title, description, domain. Click opens the URL. Skip unfurling for [[kind:slug]] embeds. Blocklist for known-bad domains."
       },
       {

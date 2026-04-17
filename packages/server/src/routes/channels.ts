@@ -25,6 +25,7 @@ import { PERMISSIONS, generateMessageSlug, isValidMessageSlug } from '@babelr/sh
 import { hasPermission } from '../permissions.ts';
 import { writeAuditLog } from '../audit.ts';
 import { broadcastPushToChannel } from '../push.ts';
+import { unfurlLinks } from '../unfurl.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -139,6 +140,34 @@ export async function createMessageInChannel(
     type: 'message:new',
     payload: { message: messageView, author: authorView },
   });
+
+  // Unfurl links asynchronously — don't block the response. When
+  // previews resolve, patch the message properties and broadcast
+  // a message:updated so clients render the preview cards.
+  void (async () => {
+    try {
+      const previews = await unfurlLinks(content);
+      if (previews.length > 0) {
+        const existingProps = (note.properties as Record<string, unknown>) ?? {};
+        await db
+          .update(objects)
+          .set({ properties: { ...existingProps, linkPreviews: previews } })
+          .where(eq(objects.id, note.id));
+        fastify.broadcastToChannel(channelId, {
+          type: 'message:updated',
+          payload: {
+            messageId: note.id,
+            channelId,
+            content: note.content ?? '',
+            updatedAt: new Date().toISOString(),
+            linkPreviews: previews,
+          },
+        } as never);
+      }
+    } catch (err) {
+      fastify.log.error(err, 'Link unfurl failed');
+    }
+  })();
 
   // Federation: enqueue delivery based on channel type
   if (actor.local) {

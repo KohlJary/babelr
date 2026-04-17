@@ -5,6 +5,7 @@ import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
 import { useT } from '../i18n/I18nProvider';
+import { LinkPreviewCards } from './LinkPreview';
 import type { UIStringKey } from '@babelr/shared';
 
 interface MessageItemProps {
@@ -115,6 +116,9 @@ export function MessageItem({
   const displayContent =
     hasTranslation && !showOriginal ? translation.translatedContent : message.content;
   const metadata = hasTranslation ? translation.metadata : undefined;
+  const linkPreviews = (message.properties as Record<string, unknown> | undefined)?.linkPreviews as
+    | Array<{ url: string; title: string | null; description: string | null; image: string | null; siteName: string | null }>
+    | undefined;
 
   const contentClass = ['message-content', isTranslating ? 'translating' : '']
     .filter(Boolean)
@@ -280,6 +284,7 @@ export function MessageItem({
             actor,
           })}
         </div>
+        {linkPreviews && <LinkPreviewCards previews={linkPreviews} />}
         {attachmentsBlock}
         {(indicator || metadataBadge) && (
           <div className="translation-info">
@@ -321,6 +326,7 @@ export function MessageItem({
           onPreviewEmbed,
         })}
       </div>
+      {linkPreviews && <LinkPreviewCards previews={linkPreviews} />}
       {attachmentsBlock}
       {(indicator || metadataBadge) && (
         <div className="translation-info">

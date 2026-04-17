@@ -43,18 +43,29 @@ export function useChat(
     (msg: WsServerMessage) => {
       if (msg.type === 'message:updated') {
         setMessages((prev) =>
-          prev.map((m) =>
-            m.message.id === msg.payload.messageId
-              ? {
-                  ...m,
-                  message: {
-                    ...m.message,
-                    content: msg.payload.content,
-                    updated: msg.payload.updatedAt,
-                  },
-                }
-              : m,
-          ),
+          prev.map((m) => {
+            if (m.message.id !== msg.payload.messageId) return m;
+            const updated = {
+              ...m,
+              message: {
+                ...m.message,
+                content: msg.payload.content,
+                updated: msg.payload.updatedAt,
+              },
+            };
+            // Merge any extra fields (e.g. linkPreviews from unfurl)
+            const extra = msg.payload as Record<string, unknown>;
+            if (extra.linkPreviews) {
+              updated.message = {
+                ...updated.message,
+                properties: {
+                  ...(updated.message.properties as Record<string, unknown> ?? {}),
+                  linkPreviews: extra.linkPreviews,
+                },
+              };
+            }
+            return updated;
+          }),
         );
       } else if (msg.type === 'message:deleted') {
         setMessages((prev) =>
