@@ -1125,10 +1125,10 @@
     {
       "id": "user-profile-cards",
       "title": "User profile cards — view other users' profiles on click",
-      "description": "Clicking a username or avatar in messages/member list should show a profile card with: avatar, display name, username, bio, roles in current server, member since date, mutual servers, and action buttons (DM, add friend, kick/ban for admins). Server-side: GET /users/:userId/profile returns public profile data. Client: ProfileCard component rendered in a popover or side panel.\n\nShipped: basic card with avatar, name, bio, mutual servers, Send Message button. Enhancements needed:\n- Add Friend button (check friendship state, show pending/accepted/add)\n- Inline DM composer (type a message directly from the card without navigating away)\n- Role badges for the current server\n- Kick/Ban buttons for admins (wire to existing endpoints)\n- Open card from member list clicks (not just message author)",
+      "description": "Clicking a username or avatar in messages shows a profile card with avatar, display name, username, bio, member since date, mutual servers, and Send Message button. Shipped.",
       "priority": "P1",
       "item_type": "feature",
-      "status": "backlog",
+      "status": "done",
       "created_at": "2026-04-17T00:00:00.000000",
       "created_by": "kohl"
     },
@@ -1221,7 +1221,17 @@
       "status": "backlog",
       "created_at": "2026-04-17T00:00:00.000000",
       "created_by": "kohl"
+    },
+    {
+      "id": "profile-card-enhancements",
+      "title": "Profile card enhancements — Add Friend, inline DM, role badges, admin actions",
+      "description": "The basic profile card shipped with avatar, name, bio, mutual servers, and Send Message. Enhancements:\n\n- **Add Friend button**: check friendship state (none/pending_out/pending_in/accepted), show appropriate action (Add Friend / Pending / Accept / Already Friends). Wire to existing friend API.\n- **Inline DM composer**: text input directly in the card to send a quick message without navigating to the DM view.\n- **Role badges**: show the user's roles in the current server (colored chips matching the role editor).\n- **Admin actions**: Kick and Ban buttons for users with MANAGE_MEMBERS / owner/admin role. Wire to existing kick and ban endpoints.\n- **Member list trigger**: open the card from member list clicks, not just message author names.\n- **Avatar click**: clicking the avatar in the message header should also open the card (currently only the name is clickable).",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 35
+  "version": 36
 }
