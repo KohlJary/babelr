@@ -1125,7 +1125,7 @@
     {
       "id": "user-profile-cards",
       "title": "User profile cards — view other users' profiles on click",
-      "description": "Clicking a username or avatar in messages/member list should show a profile card with: avatar, display name, username, bio, roles in current server, member since date, mutual servers, and action buttons (DM, add friend, kick/ban for admins). Server-side: GET /users/:userId/profile returns public profile data. Client: ProfileCard component rendered in a popover or side panel.",
+      "description": "Clicking a username or avatar in messages/member list should show a profile card with: avatar, display name, username, bio, roles in current server, member since date, mutual servers, and action buttons (DM, add friend, kick/ban for admins). Server-side: GET /users/:userId/profile returns public profile data. Client: ProfileCard component rendered in a popover or side panel.\n\nShipped: basic card with avatar, name, bio, mutual servers, Send Message button. Enhancements needed:\n- Add Friend button (check friendship state, show pending/accepted/add)\n- Inline DM composer (type a message directly from the card without navigating away)\n- Role badges for the current server\n- Kick/Ban buttons for admins (wire to existing endpoints)\n- Open card from member list clicks (not just message author)",
       "priority": "P1",
       "item_type": "feature",
       "status": "backlog",

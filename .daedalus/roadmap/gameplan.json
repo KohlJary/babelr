@@ -90,58 +90,60 @@
         "User bans — permanent server ban",
         "User profile cards — view other users' profiles on click"
       ],
-      "notes": "The 'feels incomplete' cluster. Push notifications is the biggest — users literally miss messages without it. Link previews make every pasted URL look broken. Pinned messages, bans, and profile cards are table-stakes expectations. After these five, the P2 items (code highlighting, advanced search, DND, message jump, accessibility) are the next priority."
+      "notes": "Done. All 5 P1 tasks shipped: push notifications (VAPID + desktop fallback), link previews (async og:meta unfurl), pinned messages (generic schema + message-embed cards), user bans (permanent + temp + auto-expiry), profile cards (popover with mutual servers)."
+    },
+    {
+      "id": "launch-polish",
+      "title": "Launch polish — P2 features for credibility",
+      "status": "planned",
+      "roadmapItems": [
+        "Syntax highlighting for code blocks in messages",
+        "Advanced search filters — from:user, in:channel, before/after:date, has:file",
+        "Do Not Disturb mode + quiet hours",
+        "Jump to message — click notification/mention/search result to scroll to message in context",
+        "Accessibility — ARIA landmarks, keyboard navigation, screen reader support, focus management"
+      ],
+      "notes": "The 'feels polished' cluster. Code highlighting is the quickest win (Shiki/highlight.js). Message jump unlocks pinned message clicks, search result navigation, and notification deep links. Advanced search and DND are independent. Accessibility is the biggest effort but critical for enterprise."
     }
   ],
   "activePhase": {
-    "id": "launch-gaps",
-    "title": "Launch gaps — features users expect from a chat app",
+    "id": "launch-polish",
+    "title": "Launch polish — P2 features for credibility",
     "started": "2026-04-17",
-    "goal": "Close the gaps that make Babelr feel incomplete compared to Discord/Slack. Five P1 features that address the biggest user-facing pain points. Each is independently shippable.",
-    "sequencing": "Push notifications first (biggest user impact — messages are literally missed without it). Link previews second (every URL looks broken). Pinned messages third (quick win, simple schema + UI). User bans fourth (security table-stakes). Profile cards last (polish, not blocking).",
+    "goal": "Five P2 features that take Babelr from 'works' to 'feels polished'. Each is independently shippable. Code highlighting and message jump are quickest; accessibility is the biggest effort.",
+    "sequencing": "Code highlighting first (quickest win, biggest visual impact on technical users). Message jump second (unlocks pinned message clicks, search results, notification deep links). Advanced search third (builds on existing full-text infra). DND fourth (extends existing notification preferences). Accessibility last (biggest effort, cross-cutting).",
     "tasks": [
       {
-        "id": "task-launch-1",
-        "title": "Web push notifications",
-        "status": "done",
-        "resolution": "Server: push_subscriptions table, VAPID config from env (VAPID_PUBLIC_KEY/PRIVATE_KEY), web-push npm package. Routes: GET /push/vapid-key, POST /push/subscribe (upsert by endpoint), DELETE /push/unsubscribe. broadcastPushToChannel() fires on every new message via createMessageInChannel — respects per-channel mute. Expired subscriptions (404/410) auto-cleaned. Client: custom SW (injectManifest mode) with push event handler showing notifications + notificationclick focusing/opening the app. subscribeToPush() called on ChatView mount — requests permission, gets VAPID key, subscribes via PushManager, registers with server. push.ts module handles the subscription flow. 274 tests + build pass.",
-        "details": "Server: VAPID key pair generation + storage. New user_push_subscriptions table (actorId, endpoint, p256dh, auth, createdAt). POST /push/subscribe + DELETE /push/unsubscribe routes. On new message/DM/mention: fan out web-push notifications to subscribed devices via the web-push npm package. Respect per-channel mute from notification_preferences. Client: request Notification permission after onboarding. Register push subscription with the service worker. SW push event handler shows notification with message preview + sender. Click navigates to the channel. Desktop: Notification API for foreground-but-unfocused tab. Badge API for unread count on the PWA icon."
+        "id": "task-polish-1",
+        "title": "Syntax highlighting for code blocks",
+        "status": "pending",
+        "details": "Add Shiki (or highlight.js) to the markdown renderer for fenced code blocks with language tags (```js, ```python, etc.). Lazy-load the highlighter to avoid bloating the initial bundle. Apply to both chat messages and wiki content. The wiki enhancement roadmap item covers additional wiki-specific features (callouts, task lists, ToC) — this task is just the syntax highlighting shared between chat and wiki."
       },
       {
-        "id": "task-launch-2",
-        "title": "Link preview / URL unfurling",
-        "status": "done",
-        "resolution": "Server: unfurl.ts extracts URLs from message content, fetches og:meta (title, description, image, site_name) with 5s timeout + 256KB body limit, caches by URL for 24h, max 3 URLs per message. Runs asynchronously after message creation — doesn't block the response. Previews stored as message.properties.linkPreviews and broadcast via message:updated WS event. Client: LinkPreviewCards component renders compact cards with image thumbnail, site name, title, description. Blue left border accent. Wired into MessageItem for both compact and full message layouts. useChat's message:updated handler merges linkPreviews from the WS payload so previews appear in real-time without a page reload.",
-        "details": "Server: on message create, detect URLs via regex. For each URL, fetch the page (with timeout + size limit), parse og:title, og:description, og:image, og:site_name from meta tags. Store as message.properties.linkPreviews array. Rate-limited (max 3 URLs per message, cache by URL hash for 24h). Client: LinkPreview component below the message content — compact card with image thumbnail, title, description, domain. Click opens the URL. Skip unfurling for [[kind:slug]] embeds. Blocklist for known-bad domains."
+        "id": "task-polish-2",
+        "title": "Jump to message",
+        "status": "pending",
+        "details": "Click a pinned message card, search result, mention, or notification to navigate to the message in context. Server: GET /channels/:channelId/messages?around=messageId returns messages before and after the target. Client: scrollToMessage(channelId, messageId) function that selects the channel, loads the message context, scrolls to it, and highlights it briefly (yellow flash or border pulse). Wire into: pinned message cards (click jumps), mentions view (click jumps), search results (click jumps), push notification deep links (data.channelId + data.messageId)."
       },
       {
-        "id": "task-launch-3",
-        "title": "Pinned messages",
-        "status": "done",
-        "resolution": "Generic pins table (contextId + targetId + targetType) extensible to wiki pages and embeds. Routes: GET /channels/:channelId/pins, POST/DELETE /channels/:channelId/messages/:messageId/pin. Permission-gated (MANAGE_MESSAGES). WS broadcast pin:add/pin:remove. Client: pin/unpin buttons in message actions (📌 Pin / 📌 Unpin), pinnedIds state in ChatView loaded on channel change, threaded through MessageList → MessageItem. 274 tests + build pass.",
-        "details": "Schema: pins table (channelId, messageId, pinnedBy, pinnedAt) or add pinned_at + pinned_by columns to the objects table. Routes: POST /channels/:channelId/messages/:messageId/pin, DELETE to unpin, GET /channels/:channelId/pins returns pinned messages. Permission: MANAGE_MESSAGES. Client: pin/unpin in message context menu, 'Pinned' button in channel header opens a ScrollListView. WS broadcast pin:add / pin:remove for real-time. Federate as AS2 Add/Remove activities."
+        "id": "task-polish-3",
+        "title": "Advanced search filters",
+        "status": "pending",
+        "details": "Parse search queries for operator prefixes: from:username, in:channelname, before:YYYY-MM-DD, after:YYYY-MM-DD, has:file, has:image, has:link. Add WHERE clauses to the existing PostgreSQL full-text search query. Client: filter pills below the search bar showing active filters with × to remove. Autocomplete for from: and in: operators using member/channel lists."
       },
       {
-        "id": "task-launch-4",
-        "title": "User bans",
-        "status": "done",
-        "resolution": "Schema: server_bans table (serverId, userId, bannedBy, reason, expiresAt for temp bans). Routes: POST /servers/:serverId/ban (with optional durationHours), DELETE /servers/:serverId/ban/:userId to unban, GET /servers/:serverId/bans to list. Join endpoint checks ban list — expired bans auto-cleaned on join attempt. Permission: owner/admin only. Owner can't be banned. Audit-logged (member.ban, member.unban). WS broadcast member:banned. Ban also removes server membership. Client: banUser, unbanUser, getBans API functions. 274 tests + build pass.",
-        "details": "Schema: server_bans table (id, serverId, userId, bannedBy, reason, bannedAt, expiresAt nullable for permanent). Routes: POST /servers/:serverId/ban { userId, reason?, duration? }, DELETE /servers/:serverId/ban/:userId to unban, GET /servers/:serverId/bans to list. Join endpoint checks ban list. New BAN_MEMBERS permission. Client: ban button in member list (for admins), ban management in server settings. Audit-logged. WS broadcast member:banned so other clients update."
+        "id": "task-polish-4",
+        "title": "Do Not Disturb + quiet hours",
+        "status": "pending",
+        "details": "Add 'dnd' to the presence status enum (online/away/dnd/offline). When DND: suppress all push notifications and desktop notifications, show a red DND badge on the user's avatar across the app. Quiet hours: auto-enable DND between user-configured times (stored on actor profile). Server: broadcastPushToChannel and showDesktopNotification check DND status before sending. Client: DND toggle in the channel header user menu or settings. Quiet hours config in the Account settings tab."
       },
       {
-        "id": "task-launch-5",
-        "title": "User profile cards",
-        "status": "done",
-        "resolution": "Server: GET /users/:userId/profile returns public profile (avatar, displayName, username, bio, createdAt, mutual servers with the requesting user). Client: ProfileCard component rendered as a fixed popover when clicking an author name in messages. Shows avatar (or colored initial), display name, handle, bio, member-since date, mutual servers (chips), and Send Message button. Click outside or Escape to close. Positioned relative to the clicked element. CSS dark card with shadow. 3 i18n strings. 274 tests + build pass.",
-        "details": "Server: GET /users/:userId/profile returns public profile (avatar, displayName, username, bio, createdAt, mutual servers with the requesting user, roles in the current server). Client: ProfileCard component rendered as a popover when clicking a username/avatar in messages or member list. Shows avatar, name, bio, role badges, member-since date. Action buttons: Send DM, Add Friend, Kick/Ban (admin-only). Reuse the ProfilePanel's AvatarDisplay component."
+        "id": "task-polish-5",
+        "title": "Accessibility pass",
+        "status": "pending",
+        "details": "WCAG 2.1 AA compliance pass. ARIA landmarks on major layout regions (nav, main, aside, complementary). Keyboard navigation: Tab through interactive elements, Enter/Space to activate, arrow keys in lists/tabs. Focus management: trap focus in modals, restore focus on close, auto-focus on view transitions. Skip-to-content link. High-contrast mode support via prefers-contrast media query. Reduced-motion via prefers-reduced-motion. Screen reader announcements for live content (aria-live on message list, notification toasts). Test with VoiceOver (macOS) + NVDA (Windows)."
       }
     ],
-    "deferred": [
-      {
-        "id": "launch-p2-batch",
-        "title": "P2 features: code highlighting, advanced search, DND, message jump, accessibility",
-        "reason": "Important for polish but not blocking launch. Tackle after the P1 gaps are closed."
-      }
-    ]
+    "deferred": []
   }
 }
