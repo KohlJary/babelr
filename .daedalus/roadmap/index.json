@@ -1081,7 +1081,127 @@
       "status": "in_progress",
       "created_at": "2026-04-16T00:00:00.000000",
       "created_by": "daedalus"
+    },
+    {
+      "id": "web-push-notifications",
+      "title": "Web push notifications — VAPID, service worker push, desktop Notification API",
+      "description": "Users miss messages when the tab is backgrounded. Need web push (VAPID keys, subscription registration, server-side fan-out on new message/DM/mention) + desktop Notification API for foreground-but-unfocused. Badge count on the PWA icon. Respects per-channel mute + future DND settings. The PWA service worker already exists — extend it with push event handling.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "link-preview-unfurl",
+      "title": "Link preview / URL unfurling — og:image, title, description for pasted URLs",
+      "description": "Every pasted URL renders as raw text. Server-side unfurler: on message create, detect URLs, fetch og:meta (title, description, image, site name), store as message properties. Client renders a compact preview card below the message. Rate-limited + cached to avoid abuse. Allowlist/blocklist for domains. Skip unfurling for embeds ([[kind:slug]]) since those have their own renderer.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "pinned-messages",
+      "title": "Pinned messages — pin/unpin per channel with pinned-messages view",
+      "description": "Basic channel organization. Schema: pinned_at timestamp + pinned_by on the message (or a junction table). Routes: POST /channels/:channelId/messages/:messageId/pin, DELETE to unpin, GET /channels/:channelId/pins. UI: pin icon in message context menu, 'Pinned' button in channel header opens a ScrollListView of pinned messages. Permission-gated (MANAGE_MESSAGES). Federate pin/unpin as AS2 Add/Remove activities.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "user-bans",
+      "title": "User bans — permanent server ban with optional IP ban",
+      "description": "Kick exists but banned users can rejoin immediately. Schema: server_bans(id, serverId, userId, bannedBy, reason, bannedAt, expiresAt). Routes: POST /servers/:serverId/ban (with optional duration for temp bans), DELETE to unban, GET to list bans. Join endpoint checks ban list before allowing membership. Permission: BAN_MEMBERS (new permission). Audit-logged. IP bans deferred (needs request IP tracking + privacy considerations).",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "user-profile-cards",
+      "title": "User profile cards — view other users' profiles on click",
+      "description": "Clicking a username or avatar in messages/member list should show a profile card with: avatar, display name, username, bio, roles in current server, member since date, mutual servers, and action buttons (DM, add friend, kick/ban for admins). Server-side: GET /users/:userId/profile returns public profile data. Client: ProfileCard component rendered in a popover or side panel.",
+      "priority": "P1",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "message-code-highlighting",
+      "title": "Syntax highlighting for code blocks in messages",
+      "description": "Code blocks in messages render without coloring. Add Shiki or highlight.js to the markdown renderer for fenced code blocks with language tags. The wiki enhancement item covers wiki content; this covers chat messages. Lazy-load the highlighter to avoid bloating the initial bundle.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "advanced-search-filters",
+      "title": "Advanced search filters — from:user, in:channel, before/after:date, has:file",
+      "description": "Full-text search exists but no filter syntax. Parse search queries for operator prefixes (from:, in:, before:, after:, has:) and add WHERE clauses to the existing PostgreSQL full-text query. UI: filter pills below the search bar showing active filters.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "dnd-quiet-hours",
+      "title": "Do Not Disturb mode + quiet hours",
+      "description": "Per-channel mute exists but no global DND. Add DND status to presence (online/away/dnd/offline). When DND: suppress all notifications and push, show a DND badge on avatar. Quiet hours: auto-enable DND between configured times (e.g. 10pm-8am). Stored on actor profile. Respected by push notification fan-out and desktop Notification API.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "message-jump",
+      "title": "Jump to message — click notification/mention/search result to scroll to message in context",
+      "description": "Currently clicking a mention or search result doesn't navigate to the message. Need: select the correct channel, load messages around the target message ID, scroll to it, and highlight it briefly. Server: GET /channels/:channelId/messages?around=messageId returns messages before and after. Client: scrollToMessage(channelId, messageId) function used by mentions view, search results, and push notification deep links.",
+      "priority": "P2",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "accessibility-pass",
+      "title": "Accessibility — ARIA landmarks, keyboard navigation, screen reader support, focus management",
+      "description": "Minimal accessibility today (4 aria attributes on the PM plugin). Need: ARIA landmarks on major layout regions, keyboard navigation for all interactive elements, focus management on view transitions, skip-to-content link, high-contrast mode support, reduced-motion media query, screen reader announcements for live content (messages, notifications). Follow WCAG 2.1 AA. Test with VoiceOver + NVDA.",
+      "priority": "P2",
+      "item_type": "chore",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "media-players",
+      "title": "Video/audio/GIF inline players + media gallery",
+      "description": "Image lightbox exists but no video/audio playback. Detect media type from file uploads and embeds. Video: inline HTML5 player with controls. Audio: compact waveform player. GIFs: auto-play inline (respect reduced-motion). Gallery view for scrolling through media in a channel. Lazy-load media to avoid bandwidth waste.",
+      "priority": "P3",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
+    },
+    {
+      "id": "server-discovery-ui",
+      "title": "Server discovery browse UI — search, filter by tags, public server listing",
+      "description": "The /servers/discover API returns public servers but there's no browse UI. Add a 'Discover Servers' view accessible from the server sidebar (+) button. Search by name, filter by tags, show member count + description. Join button. Mirrors Discord's server discovery but scoped to the local Tower (cross-Tower discovery is a federation follow-up).",
+      "priority": "P3",
+      "item_type": "feature",
+      "status": "backlog",
+      "created_at": "2026-04-17T00:00:00.000000",
+      "created_by": "kohl"
     }
   ],
-  "version": 33
+  "version": 34
 }

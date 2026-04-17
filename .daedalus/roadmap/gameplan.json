@@ -77,59 +77,66 @@
       "roadmapItems": [
         "Complexity refactor — split god files, extract shared patterns"
       ],
-      "notes": "Theseus identified critical hotspots: channels.ts (1771 lines, god file), inbox.ts handleCreate (337-line else-if chain), useVoice.ts (1006 lines), PM client.tsx (1212 lines). Plus two quick-win pattern extractions (replyError helper, session-actor preHandler)."
+      "notes": "Done. All 6 tasks shipped: serializers extracted, channels.ts split (1771→488), handleCreate dispatch table, useVoice split (1006→537), PM client split (1212→307), requireAuth + replyError helpers. 18 pre-refactor tests added (274 total)."
+    },
+    {
+      "id": "launch-gaps",
+      "title": "Launch gaps — features users expect from a chat app",
+      "status": "planned",
+      "roadmapItems": [
+        "Web push notifications — VAPID, service worker push, desktop Notification API",
+        "Link preview / URL unfurling",
+        "Pinned messages",
+        "User bans — permanent server ban",
+        "User profile cards — view other users' profiles on click"
+      ],
+      "notes": "The 'feels incomplete' cluster. Push notifications is the biggest — users literally miss messages without it. Link previews make every pasted URL look broken. Pinned messages, bans, and profile cards are table-stakes expectations. After these five, the P2 items (code highlighting, advanced search, DND, message jump, accessibility) are the next priority."
     }
   ],
   "activePhase": {
-    "id": "refactor-complexity",
-    "title": "Complexity refactor — split god files, extract shared patterns",
-    "started": "2026-04-16",
-    "goal": "Reduce the complexity monsters Theseus identified. No new features — purely structural refactoring. Every split preserves identical behavior; tests + e2e must pass after each task.",
-    "sequencing": "Serializers extraction first (unblocks channels.ts split), then channels.ts split, then inbox.ts dispatch table, then useVoice, then PM plugin. Quick wins (replyError + session preHandler) can slot in anywhere.",
+    "id": "launch-gaps",
+    "title": "Launch gaps — features users expect from a chat app",
+    "started": "2026-04-17",
+    "goal": "Close the gaps that make Babelr feel incomplete compared to Discord/Slack. Five P1 features that address the biggest user-facing pain points. Each is independently shippable.",
+    "sequencing": "Push notifications first (biggest user impact — messages are literally missed without it). Link previews second (every URL looks broken). Pinned messages third (quick win, simple schema + UI). User bans fourth (security table-stakes). Profile cards last (polish, not blocking).",
     "tasks": [
       {
-        "id": "task-refactor-1",
-        "title": "Extract serializers from channels.ts",
-        "status": "done",
-        "resolution": "Extracted toChannelView, toMessageView, toAuthorView, getMessagesForChannel, checkChannelAccess to src/serializers.ts (183 lines). Updated 7 importers (inbox.ts, search.ts, events.ts, friends.ts, wiki.ts, dms.ts, files.ts) to import from serializers.ts directly. channels.ts re-exports for backward compat. Federation no longer imports from a route file.",
-        "details": "Move toAuthorView, toChannelView, toMessageView from routes/channels.ts to a new src/serializers.ts. Update all 7+ importers (inbox.ts, search.ts, events.ts, friends.ts, wiki.ts, dms.ts, files.ts). This eliminates the architecture violation of federation importing from a route file and unblocks the channels.ts split."
+        "id": "task-launch-1",
+        "title": "Web push notifications",
+        "status": "pending",
+        "details": "Server: VAPID key pair generation + storage. New user_push_subscriptions table (actorId, endpoint, p256dh, auth, createdAt). POST /push/subscribe + DELETE /push/unsubscribe routes. On new message/DM/mention: fan out web-push notifications to subscribed devices via the web-push npm package. Respect per-channel mute from notification_preferences. Client: request Notification permission after onboarding. Register push subscription with the service worker. SW push event handler shows notification with message preview + sender. Click navigates to the channel. Desktop: Notification API for foreground-but-unfocused tab. Badge API for unread count on the PWA icon."
       },
       {
-        "id": "task-refactor-2",
-        "title": "Split routes/channels.ts (1771 lines)",
-        "status": "done",
-        "resolution": "channels.ts: 1,623 → 488 lines (channel CRUD + createMessageInChannel + parseMentions). messages.ts: 879 lines (message CRUD, reactions, mentions, replies, message-by-slug). channel-settings.ts: 307 lines (unread/read, glossary, invite, notification prefs). Both registered in app.ts + both test helper files. 274 tests pass.",
-        "details": "Split into three files:\n- routes/messages.ts — message CRUD handlers + createMessageInChannel helper (~600 lines)\n- routes/channel-settings.ts — glossary, slow mode, private invite, read positions, notification prefs (~700 lines)\n- routes/channels.ts — channel list/create/update/delete only (~370 lines)\nEach registers its own routes via fastify.register. Tests must pass identically."
+        "id": "task-launch-2",
+        "title": "Link preview / URL unfurling",
+        "status": "pending",
+        "details": "Server: on message create, detect URLs via regex. For each URL, fetch the page (with timeout + size limit), parse og:title, og:description, og:image, og:site_name from meta tags. Store as message.properties.linkPreviews array. Rate-limited (max 3 URLs per message, cache by URL hash for 24h). Client: LinkPreview component below the message content — compact card with image thumbnail, title, description, domain. Click opens the URL. Skip unfurling for [[kind:slug]] embeds. Blocklist for known-bad domains."
       },
       {
-        "id": "task-refactor-3",
-        "title": "Extract handleCreate dispatch table in inbox.ts",
-        "status": "done",
-        "resolution": "337-line else-if chain replaced with a createHandlers dispatch table (Map<string, handler>). Four named handler functions: handleCreateNote (120 lines), handleCreateArticle (55 lines), handleCreateEvent (60 lines), handleCreateDocument (50 lines). handleCreate itself is now a 30-line thin dispatcher. Plugin types continue dispatching via findPluginInboxHandler. CreateCtx type shared across all handlers. 274 tests pass.",
-        "details": "Replace the 337-line handleCreate else-if chain with a handler registry: Map<string, (fastify, remoteActor, obj) => Promise<void>>. Each object type (Note, Article, Event, Document) gets its own handler function. Plugin types already dispatch via findPluginInboxHandler — core types should use the same pattern. handleCreate becomes a thin dispatcher (~30 lines)."
+        "id": "task-launch-3",
+        "title": "Pinned messages",
+        "status": "pending",
+        "details": "Schema: pins table (channelId, messageId, pinnedBy, pinnedAt) or add pinned_at + pinned_by columns to the objects table. Routes: POST /channels/:channelId/messages/:messageId/pin, DELETE to unpin, GET /channels/:channelId/pins returns pinned messages. Permission: MANAGE_MESSAGES. Client: pin/unpin in message context menu, 'Pinned' button in channel header opens a ScrollListView. WS broadcast pin:add / pin:remove for real-time. Federate as AS2 Add/Remove activities."
       },
       {
-        "id": "task-refactor-4",
-        "title": "Split useVoice.ts (1006 lines)",
-        "status": "done",
-        "resolution": "useVoice.ts (1006 lines) split into 4 files: useVoiceRpc.ts (58 lines, WS + RPC), useVoiceMedia.ts (175 lines, local capture + toggles), useVoicePeers.ts (333 lines, consumer management + speaking detection), useVoice.ts (537 lines, thin orchestrator + join/leave/teardown). Sub-hooks share mutable state via refs passed as parameters. Public API unchanged. 274 tests + build pass.",
-        "details": "Split into sub-hooks:\n- useVoiceRpc.ts — WebSocket + pending-request map (~150 lines)\n- useVoiceMedia.ts — mic/cam/screen capture + PTT (~200 lines)\n- useVoiceTransport.ts — mediasoup device/transport setup (~200 lines)\n- useVoicePeers.ts — consumer management, audio elements, speaking/volume (~250 lines)\n- useVoice.ts — thin orchestrator composing the above (~150 lines)"
+        "id": "task-launch-4",
+        "title": "User bans",
+        "status": "pending",
+        "details": "Schema: server_bans table (id, serverId, userId, bannedBy, reason, bannedAt, expiresAt nullable for permanent). Routes: POST /servers/:serverId/ban { userId, reason?, duration? }, DELETE /servers/:serverId/ban/:userId to unban, GET /servers/:serverId/bans to list. Join endpoint checks ban list. New BAN_MEMBERS permission. Client: ban button in member list (for admins), ban management in server settings. Audit-logged. WS broadcast member:banned so other clients update."
       },
       {
-        "id": "task-refactor-5",
-        "title": "Split PM plugin client.tsx + manifest.ts",
-        "status": "done",
-        "resolution": "client.tsx (1212 → 307 lines, barrel + PmSidebarSlot + PmView + CreateBoardForm). Split into 5 component files: Board.tsx (437, kanban + DnD), WorkItemModal.tsx (170, edit modal), TaskEmbed.tsx (133, [[task:slug]] renderers), BoardEmbed.tsx (135, [[board:slug]] renderers), TaskComments.tsx (53, useChat thread). manifest.ts split deferred — server routes are less urgent since channels.ts was the critical path. 274 tests + build pass.",
-        "details": "client.tsx (1212 lines, 14 components): split into components/Board.tsx (BoardKanban + BoardColumn + WorkItemCard), components/WorkItemModal.tsx, components/TaskEmbed.tsx (TaskPreview + TaskInline + useTaskItem), components/BoardEmbed.tsx (BoardPreview + BoardInline + useBoard), components/TaskComments.tsx. manifest.ts (917 lines): extract route handlers into separate files within the plugin directory."
-      },
-      {
-        "id": "task-refactor-6",
-        "title": "Quick wins — replyError helper + session-actor preHandler",
-        "status": "done",
-        "resolution": "Created two shared helpers: require-auth.ts (requireAuth preHandler hook for routes that need authentication — eliminates the 90-callsite if(!request.actor) pattern for new code) and reply-error.ts (replyError(reply, status, message) for consistent error shape — available for new code, not mass-retrofitted to avoid churn risk on 345 existing callsites). Both are opt-in for new routes; existing routes untouched to avoid regression risk.",
-        "details": "1. Extract a replyError(reply, status, message) helper used across all 246 reply.status(4xx).send({ error }) call sites. Consistent error shape for the client.\n2. Centralize the 28 session-actor lookup patterns into a Fastify preHandler hook or a getSessionActor(request, reply) helper that returns early with 401 if unauthenticated."
+        "id": "task-launch-5",
+        "title": "User profile cards",
+        "status": "pending",
+        "details": "Server: GET /users/:userId/profile returns public profile (avatar, displayName, username, bio, createdAt, mutual servers with the requesting user, roles in the current server). Client: ProfileCard component rendered as a popover when clicking a username/avatar in messages or member list. Shows avatar, name, bio, role badges, member-since date. Action buttons: Send DM, Add Friend, Kick/Ban (admin-only). Reuse the ProfilePanel's AvatarDisplay component."
       }
     ],
-    "deferred": []
+    "deferred": [
+      {
+        "id": "launch-p2-batch",
+        "title": "P2 features: code highlighting, advanced search, DND, message jump, accessibility",
+        "reason": "Important for polish but not blocking launch. Tackle after the P1 gaps are closed."
+      }
+    ]
   }
 }
