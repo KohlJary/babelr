@@ -590,6 +590,13 @@ export async function updateProfile(
   });
 }
 
+export async function getMessagesAround(
+  channelId: string,
+  messageId: string,
+): Promise<MessageListResponse & { targetMessageId: string }> {
+  return apiFetch(`/channels/${channelId}/messages?around=${encodeURIComponent(messageId)}`);
+}
+
 export async function getPins(channelId: string): Promise<{ pins: unknown[] }> {
   return apiFetch(`/channels/${channelId}/pins`);
 }

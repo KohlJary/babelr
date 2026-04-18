@@ -123,7 +123,8 @@
       {
         "id": "task-polish-2",
         "title": "Jump to message",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Server: GET /channels/:channelId/messages?around=messageId loads messages before and after a target (half the limit each direction). Client: jumpToMessage(messageId) sets highlightMessageId state, which flows through MessageList → MessageItem. MessageItem scrolls into view (smooth, centered) and applies a 2-second blue flash animation via message-highlighted CSS class. Pinned message cards are clickable — clicking jumps to the message and closes the pins sidebar. API function getMessagesAround added. 274 tests + build pass.",
         "details": "Click a pinned message card, search result, mention, or notification to navigate to the message in context. Server: GET /channels/:channelId/messages?around=messageId returns messages before and after the target. Client: scrollToMessage(channelId, messageId) function that selects the channel, loads the message context, scrolls to it, and highlights it briefly (yellow flash or border pulse). Wire into: pinned message cards (click jumps), mentions view (click jumps), search results (click jumps), push notification deep links (data.channelId + data.messageId)."
       },
       {

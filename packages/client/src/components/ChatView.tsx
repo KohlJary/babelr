@@ -62,6 +62,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showGlossary, setShowGlossary] = useState(false);
   const [showPins, setShowPins] = useState(false);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   // Which primary view fills the chat panel area. 'chat' is the
   // default — messages + input. 'calendar' and 'wiki' replace the
   // chat with the respective content surface, matching how Discord
@@ -146,6 +147,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     await api.pinMessage(activeChannelId, messageId);
     setPinnedIds((prev) => new Set([...prev, messageId]));
   }, [activeChannelId]);
+  const jumpToMessage = useCallback((messageId: string) => {
+    setShowPins(false);
+    setHighlightMessageId(messageId);
+    // Clear highlight after animation
+    setTimeout(() => setHighlightMessageId(null), 2500);
+  }, []);
+
   const handleUnpin = useCallback(async (messageId: string) => {
     if (!activeChannelId) return;
     await api.unpinMessage(activeChannelId, messageId);
@@ -469,6 +477,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           pinnedMessageIds={pinnedIds}
           onPinMessage={(id) => void handlePin(id)}
           onUnpinMessage={(id) => void handleUnpin(id)}
+          highlightMessageId={highlightMessageId}
         />
         <TypingIndicator users={typingUsers} />
         {dmMode && selectedDM && (() => {
@@ -545,7 +554,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               const srvName = !dmMode ? selectedServer?.name : undefined;
               return (
                 <div key={item.message.id} className="pinned-item">
-                  <div className="message-embed ok pinned-embed">
+                  <div
+                    className="message-embed ok pinned-embed"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => jumpToMessage(item.message.id)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <span className="message-embed-icon">💬</span>
                     <span className="message-embed-body">
                       <span className="message-embed-meta">

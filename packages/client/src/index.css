@@ -6449,6 +6449,41 @@ textarea.modal-input {
   margin-top: 0.5rem;
 }
 
+/* Jump to present button --------------------------------------------- */
+.message-list {
+  position: relative;
+}
+.jump-to-present {
+  position: sticky;
+  bottom: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: block;
+  margin: 0 auto;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 0.4rem 1rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+.jump-to-present:hover {
+  background: #1d4ed8;
+}
+
+/* Jump-to-message highlight ----------------------------------------- */
+.message-highlighted {
+  animation: message-flash 2s ease-out;
+}
+@keyframes message-flash {
+  0% { background-color: rgba(59, 130, 246, 0.25); }
+  100% { background-color: transparent; }
+}
+
 /* Syntax-highlighted code blocks (Shiki) ----------------------------- */
 .shiki {
   border-radius: 4px;

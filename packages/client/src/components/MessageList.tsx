@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MessageWithAuthor, ActorProfile, WikiRefKind } from '@babelr/shared';
+import { useT } from '../i18n/I18nProvider';
 import type { CachedTranslation } from '../translation';
 import { MessageItem } from './MessageItem';
 
@@ -23,6 +24,7 @@ interface MessageListProps {
   pinnedMessageIds?: Set<string>;
   onPinMessage?: (messageId: string) => void;
   onUnpinMessage?: (messageId: string) => void;
+  highlightMessageId?: string | null;
 }
 
 export function MessageList({
@@ -44,17 +46,25 @@ export function MessageList({
   pinnedMessageIds,
   onPinMessage,
   onUnpinMessage,
+  highlightMessageId,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
 
   // Track if user is near bottom
+  const [showJumpToPresent, setShowJumpToPresent] = useState(false);
+
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) return;
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     shouldAutoScroll.current = atBottom;
+    setShowJumpToPresent(!atBottom);
+  };
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Auto-scroll on new messages
@@ -64,19 +74,21 @@ export function MessageList({
     }
   }, [messages.length]);
 
+  const t = useT();
+
   if (loading) {
-    return <div className="message-list loading">Loading messages...</div>;
+    return <div className="message-list loading">{t('messages.loadingMessages')}</div>;
   }
 
   return (
     <div className="message-list" ref={containerRef} onScroll={handleScroll}>
       {hasMore && (
         <button className="load-more" onClick={onLoadMore}>
-          Load older messages
+          {t('messages.loadMore')}
         </button>
       )}
       {messages.length === 0 && (
-        <div className="no-messages">No messages yet. Say something!</div>
+        <div className="no-messages">{t('messages.empty')}</div>
       )}
       {messages.map((item, i) => {
         const prevItem = i > 0 ? messages[i - 1] : null;
@@ -108,10 +120,20 @@ export function MessageList({
             isPinned={pinnedMessageIds?.has(item.message.id)}
             onPin={onPinMessage ? () => onPinMessage(item.message.id) : undefined}
             onUnpin={onUnpinMessage ? () => onUnpinMessage(item.message.id) : undefined}
+            highlighted={highlightMessageId === item.message.id}
           />
         );
       })}
       <div ref={bottomRef} />
+      {showJumpToPresent && (
+        <button
+          type="button"
+          className="jump-to-present"
+          onClick={scrollToBottom}
+        >
+          {t('messages.jumpToPresent')}
+        </button>
+      )}
     </div>
   );
 }

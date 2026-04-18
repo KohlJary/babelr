@@ -550,6 +550,10 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Messages (jump to present)
+  'messages.jumpToPresent': '↓ Jump to Present',
+  'messages.loadingMessages': 'Loading messages…',
+
   // Profile cards
   'profileCard.memberSince': 'Member since',
   'profileCard.mutualServers': 'Mutual servers',

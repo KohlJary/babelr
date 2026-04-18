@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { eq, and, desc, inArray } from 'drizzle-orm';
+import { eq, and, desc, gt, lt, inArray } from 'drizzle-orm';
 import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
@@ -37,7 +37,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   // Get messages for a channel (with membership check)
   fastify.get<{
     Params: { channelId: string };
-    Querystring: { cursor?: string; limit?: string };
+    Querystring: { cursor?: string; limit?: string; around?: string };
   }>('/channels/:channelId/messages', async (request, reply) => {
     if (!request.actor) {
       return reply.status(401).send({ error: 'Not authenticated' });
@@ -49,6 +49,49 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!channel) return reply.status(404).send({ error: 'Channel not found' });
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
+
+    // ?around=messageId — load messages surrounding a target message
+    const { around } = request.query;
+    if (around) {
+      const half = Math.floor(limit / 2);
+      const [target] = await db
+        .select()
+        .from(objects)
+        .where(and(eq(objects.id, around), eq(objects.context, channelId), eq(objects.type, 'Note')))
+        .limit(1);
+      if (!target) return reply.status(404).send({ error: 'Message not found' });
+
+      // Messages before (older) + the target + messages after (newer)
+      const before = await db
+        .select({ object: objects, actor: actors })
+        .from(objects)
+        .innerJoin(actors, eq(objects.attributedTo, actors.id))
+        .where(and(eq(objects.context, channelId), eq(objects.type, 'Note'), lt(objects.published, target.published)))
+        .orderBy(desc(objects.published))
+        .limit(half);
+
+      const after = await db
+        .select({ object: objects, actor: actors })
+        .from(objects)
+        .innerJoin(actors, eq(objects.attributedTo, actors.id))
+        .where(and(eq(objects.context, channelId), eq(objects.type, 'Note'), gt(objects.published, target.published)))
+        .orderBy(objects.published)
+        .limit(half);
+
+      const [targetAuthor] = await db.select().from(actors).where(eq(actors.id, target.attributedTo!)).limit(1);
+      const allRows = [
+        ...before.reverse(),
+        { object: target, actor: targetAuthor },
+        ...after,
+      ];
+      const messages = allRows
+        .filter((r) => r.actor)
+        .map((r) => ({
+          message: toMessageView(r.object),
+          author: toAuthorView(r.actor),
+        }));
+      return { messages, hasMore: before.length === half, targetMessageId: around };
+    }
 
     return getMessagesForChannel(db, channelId, request.query.cursor, limit);
   });

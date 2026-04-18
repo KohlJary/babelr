@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
@@ -27,6 +27,7 @@ interface MessageItemProps {
   isPinned?: boolean;
   onPin?: () => void;
   onUnpin?: () => void;
+  highlighted?: boolean;
   /** Called when the user clicks any inline embed — the host opens
    *  its embed sidebar with kind + slug. */
   onPreviewEmbed?: (
@@ -105,6 +106,7 @@ export function MessageItem({
   isPinned,
   onPin,
   onUnpin,
+  highlighted,
 }: MessageItemProps) {
   const t = useT();
   const { message, author } = data;
@@ -115,6 +117,13 @@ export function MessageItem({
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | undefined>();
   const [showProfile, setShowProfile] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | undefined>();
+  const messageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlighted && messageRef.current) {
+      messageRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [highlighted]);
 
   const openPicker = (e: React.MouseEvent<HTMLButtonElement>) => {
     setPickerAnchor(e.currentTarget.getBoundingClientRect());
@@ -326,7 +335,7 @@ export function MessageItem({
   );
 
   return (
-    <div className="message">
+    <div ref={messageRef} className={`message${highlighted ? ' message-highlighted' : ''}`}>
       <div className="message-header">
         {avatarEl}
         <button
