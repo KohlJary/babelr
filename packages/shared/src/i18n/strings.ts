@@ -550,6 +550,15 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Do Not Disturb
+  'dnd.title': 'Do Not Disturb',
+  'dnd.toggle': 'Enable DND',
+  'dnd.active': 'DND is active — notifications suppressed',
+  'dnd.quietHours': 'Quiet hours',
+  'dnd.quietHoursDesc': 'Automatically enable DND during these hours',
+  'dnd.startHour': 'Start',
+  'dnd.endHour': 'End',
+
   // Search
   'search.placeholder': 'Search messages… (from:user in:channel before:date has:file)',
   'search.button': 'Search',

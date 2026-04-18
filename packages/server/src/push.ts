@@ -4,6 +4,41 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, ne } from 'drizzle-orm';
 import { pushSubscriptions } from './db/schema/push-subscriptions.ts';
 import { notificationPreferences } from './db/schema/notification-preferences.ts';
+import { actors } from './db/schema/actors.ts';
+
+/**
+ * Check if an actor is currently in DND mode (explicit or quiet hours).
+ */
+async function isActorDnd(
+  db: FastifyInstance['db'],
+  actorId: string,
+): Promise<boolean> {
+  const [actor] = await db
+    .select({ properties: actors.properties })
+    .from(actors)
+    .where(eq(actors.id, actorId))
+    .limit(1);
+  if (!actor) return false;
+  const props = actor.properties as Record<string, unknown> | null;
+  if (!props) return false;
+
+  // Explicit DND toggle
+  if (props.dnd === true) return true;
+
+  // Quiet hours: { enabled, startHour, endHour } (24h format, local time)
+  const qh = props.quietHours as { enabled?: boolean; startHour?: number; endHour?: number } | undefined;
+  if (qh?.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
+    const hour = new Date().getHours();
+    if (qh.startHour > qh.endHour) {
+      // Overnight range (e.g. 22-8)
+      if (hour >= qh.startHour || hour < qh.endHour) return true;
+    } else {
+      if (hour >= qh.startHour && hour < qh.endHour) return true;
+    }
+  }
+
+  return false;
+}
 
 let vapidConfigured = false;
 
@@ -45,6 +80,9 @@ export async function sendPushToActor(
 ): Promise<void> {
   if (!vapidConfigured) return;
   const db = fastify.db;
+
+  // Check DND
+  if (await isActorDnd(db, actorId)) return;
 
   // Check if this channel is muted for this actor
   if (channelId) {
@@ -120,6 +158,9 @@ export async function broadcastPushToChannel(
   }
 
   for (const [actorId, subs] of actorSubs) {
+    // Check DND (explicit or quiet hours)
+    if (await isActorDnd(db, actorId)) continue;
+
     // Check mute
     const [muted] = await db
       .select()

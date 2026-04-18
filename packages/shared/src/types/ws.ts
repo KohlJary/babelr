@@ -2,7 +2,7 @@
 import type { MessageView, AuthorView, DMConversation } from './messages.js';
 import type { FriendshipView } from './friends.js';
 
-export type PresenceStatus = 'online' | 'away' | 'offline';
+export type PresenceStatus = 'online' | 'away' | 'dnd' | 'offline';
 
 /**
  * SFU signaling. Track slot is passed via appData so server + clients can

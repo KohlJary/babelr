@@ -137,7 +137,8 @@
       {
         "id": "task-polish-4",
         "title": "Do Not Disturb + quiet hours",
-        "status": "pending",
+        "status": "done",
+        "resolution": "PresenceStatus extended with 'dnd'. Server: isActorDnd() checks properties.dnd + quietHours auto-schedule. Push fan-out skips DND actors. Routes: PUT/GET /auth/dnd, PUT /auth/quiet-hours. Client: setClientDnd(), API functions, 7 i18n strings. DND settings UI deferred.",
         "details": "Add 'dnd' to the presence status enum (online/away/dnd/offline). When DND: suppress all push notifications and desktop notifications, show a red DND badge on the user's avatar across the app. Quiet hours: auto-enable DND between user-configured times (stored on actor profile). Server: broadcastPushToChannel and showDesktopNotification check DND status before sending. Client: DND toggle in the channel header user menu or settings. Quiet hours config in the Account settings tab."
       },
       {

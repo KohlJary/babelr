@@ -638,6 +638,25 @@ export async function getBans(serverId: string): Promise<{ bans: Array<{ id: str
   return apiFetch(`/servers/${serverId}/bans`);
 }
 
+export async function getDndState(): Promise<{
+  dnd: boolean;
+  quietHours: { enabled: boolean; startHour: number; endHour: number };
+}> {
+  return apiFetch('/auth/dnd');
+}
+
+export async function setDnd(dnd: boolean): Promise<void> {
+  await apiFetch('/auth/dnd', { method: 'PUT', body: JSON.stringify({ dnd }) });
+}
+
+export async function setQuietHours(config: {
+  enabled: boolean;
+  startHour?: number;
+  endHour?: number;
+}): Promise<void> {
+  await apiFetch('/auth/quiet-hours', { method: 'PUT', body: JSON.stringify(config) });
+}
+
 export async function resendVerification(): Promise<void> {
   await apiFetch('/auth/resend-verification', { method: 'POST' });
 }

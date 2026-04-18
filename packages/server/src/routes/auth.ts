@@ -272,6 +272,60 @@ export default async function authRoutes(fastify: FastifyInstance) {
     }));
   });
 
+  // Toggle DND mode
+  fastify.put<{ Body: { dnd: boolean } }>('/auth/dnd', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    const { dnd } = request.body ?? {};
+    const props = (request.actor.properties as Record<string, unknown>) ?? {};
+    await db
+      .update(actors)
+      .set({ properties: { ...props, dnd: !!dnd }, updatedAt: new Date() })
+      .where(eq(actors.id, request.actor.id));
+
+    // Broadcast presence change
+    fastify.broadcastToAllSubscribers({
+      type: 'presence:update',
+      payload: { actorId: request.actor.id, status: dnd ? 'dnd' : 'online' },
+    });
+
+    return { dnd: !!dnd };
+  });
+
+  // Configure quiet hours
+  fastify.put<{
+    Body: { enabled: boolean; startHour?: number; endHour?: number };
+  }>('/auth/quiet-hours', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    const { enabled, startHour, endHour } = request.body ?? {};
+    const props = (request.actor.properties as Record<string, unknown>) ?? {};
+    await db
+      .update(actors)
+      .set({
+        properties: {
+          ...props,
+          quietHours: {
+            enabled: !!enabled,
+            startHour: startHour ?? 22,
+            endHour: endHour ?? 8,
+          },
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(actors.id, request.actor.id));
+
+    return { quietHours: { enabled: !!enabled, startHour: startHour ?? 22, endHour: endHour ?? 8 } };
+  });
+
+  // Get DND + quiet hours state
+  fastify.get('/auth/dnd', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    const props = (request.actor.properties as Record<string, unknown>) ?? {};
+    return {
+      dnd: props.dnd === true,
+      quietHours: (props.quietHours as Record<string, unknown>) ?? { enabled: false, startHour: 22, endHour: 8 },
+    };
+  });
+
   // Look up a user by handle (supports remote via WebFinger)
   fastify.post<{ Body: { handle: string } }>('/users/lookup', async (request, reply) => {
     if (!request.actor) {

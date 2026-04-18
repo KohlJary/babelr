@@ -5,6 +5,12 @@ const API_BASE = '/api';
 /** Whether we have desktop notification permission (even without
  *  a service worker — used for dev-mode fallback). */
 let desktopNotifGranted = false;
+let clientDndActive = false;
+
+/** Set the client-side DND flag to suppress desktop notifications. */
+export function setClientDnd(dnd: boolean): void {
+  clientDndActive = dnd;
+}
 
 /**
  * Request notification permission and subscribe to web push.
@@ -78,7 +84,7 @@ export function showDesktopNotification(
   body: string,
   tag?: string,
 ): void {
-  if (!desktopNotifGranted || document.hasFocus()) return;
+  if (!desktopNotifGranted || document.hasFocus() || clientDndActive) return;
   try {
     new Notification(title, {
       body,
