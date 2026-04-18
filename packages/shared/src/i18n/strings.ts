@@ -550,6 +550,13 @@ export const UI_STRINGS = {
   'onboarding.joining': 'Joining…',
   'onboarding.join': 'Join',
   'onboarding.skipForNow': 'Skip for now',
+  // Search
+  'search.placeholder': 'Search messages… (from:user in:channel before:date has:file)',
+  'search.button': 'Search',
+  'search.failed': 'Search failed',
+  'search.noResults': 'No results found',
+  'search.hint': 'Filters: from:username in:channel before:YYYY-MM-DD after:YYYY-MM-DD has:file has:link has:image',
+
   // Messages (jump to present)
   'messages.jumpToPresent': '↓ Jump to Present',
   'messages.loadingMessages': 'Loading messages…',

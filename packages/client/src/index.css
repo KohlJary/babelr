@@ -6449,6 +6449,42 @@ textarea.modal-input {
   margin-top: 0.5rem;
 }
 
+/* Search filter pills ------------------------------------------------ */
+.search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem 0;
+}
+.search-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.78rem;
+  color: #60a5fa;
+}
+.search-filter-pill button {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0;
+  line-height: 1;
+}
+.search-filter-pill button:hover {
+  color: #fca5a5;
+}
+.search-hint {
+  padding: 0.25rem 1rem;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
 /* Jump to present button --------------------------------------------- */
 .message-list {
   position: relative;

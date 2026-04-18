@@ -130,7 +130,8 @@
       {
         "id": "task-polish-3",
         "title": "Advanced search filters",
-        "status": "pending",
+        "status": "done",
+        "resolution": "Server: parseFilters() extracts from:, in:, before:, after:, has: operators from the query string, adds corresponding SQL conditions (author lookup, channel name ILIKE, date range, attachment/link/image checks). Remaining text goes through existing tsquery full-text. Returns active filters in the response so the client can render pills. Client: SearchPanel shows filter pills with × to remove each filter. Hint text below the search bar shows available operators. All strings through i18n (5 new keys). 274 tests + build pass.",
         "details": "Parse search queries for operator prefixes: from:username, in:channelname, before:YYYY-MM-DD, after:YYYY-MM-DD, has:file, has:image, has:link. Add WHERE clauses to the existing PostgreSQL full-text search query. Client: filter pills below the search bar showing active filters with × to remove. Autocomplete for from: and in: operators using member/channel lists."
       },
       {
