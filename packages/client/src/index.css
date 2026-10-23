@@ -3961,6 +3961,354 @@ textarea.modal-input {
   color: #e2e8f0;
 }
 
+/* Blinds plugin ---------------------------------------------------------
+ * Grader for blind eval rounds ([[blind:<round>]]). Reuses the poll
+ * embed/preview classes for the card and header so the two plugins
+ * look like siblings; the rest is phone-first (the embed sidebar goes
+ * full-width on mobile). Touch targets are >= 44px. */
+.blind-embed {
+  min-width: 12rem;
+}
+.blind-embed-locked {
+  cursor: default;
+}
+.blind-progress {
+  display: block;
+  height: 4px;
+  background: #334155;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 0.25rem;
+}
+.blind-progress-bar {
+  display: block;
+  height: 100%;
+  background: #4ade80;
+  transition: width 0.3s ease-out;
+}
+.blind-grader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: #e2e8f0;
+}
+.blind-header-meta {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.blind-header-meta .poll-preview-closed-badge {
+  margin-bottom: 0;
+}
+.blind-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+.blind-jump select {
+  min-height: 44px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  padding: 0 0.5rem;
+  font-family: inherit;
+}
+.blind-prompt {
+  background: #111827;
+  border-left: 3px solid #4b6cb7;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0 4px 4px 0;
+}
+.blind-prompt-id {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+.blind-prompt-text {
+  margin: 0.25rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+.blind-step-title {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1rem;
+  color: #e2e8f0;
+}
+.blind-count {
+  color: #94a3b8;
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+.blind-answer-text {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 0.95rem;
+  color: #e2e8f0;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+.blind-rubric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.blind-field {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.blind-field-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  padding: 0;
+  margin-bottom: 0.35rem;
+}
+.blind-field-help {
+  margin: 0 0 0.35rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+.blind-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.blind-segment {
+  position: relative;
+}
+.blind-segment input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.blind-segment label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  cursor: pointer;
+  user-select: none;
+}
+.blind-segment label:hover {
+  border-color: #4b6cb7;
+}
+.blind-segment input:checked + label {
+  border-color: #4ade80;
+  background: #14532d;
+  font-weight: 600;
+}
+.blind-segment input:focus-visible + label {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+.blind-segment input:disabled + label {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.blind-clear {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  min-height: 44px;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+}
+.blind-note {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.75rem;
+}
+.blind-optional {
+  color: #94a3b8;
+  font-weight: normal;
+}
+.blind-note textarea {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  padding: 0.5rem;
+  font-family: inherit;
+  font-size: 1rem; /* >= 16px so iOS doesn't zoom on focus */
+  resize: vertical;
+}
+.blind-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  position: sticky;
+  bottom: 0;
+  background: #0a0e13;
+  padding: 0.5rem 0;
+  border-top: 1px solid #1f2937;
+}
+.blind-primary,
+.blind-secondary,
+.blind-lock-button {
+  min-height: 44px;
+  padding: 0 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.blind-nav button {
+  flex: 1;
+}
+.blind-primary {
+  background: #1e40af;
+  border: 1px solid #2563eb;
+  color: #dbeafe;
+}
+.blind-primary:hover:not(:disabled) {
+  background: #2563eb;
+}
+.blind-secondary {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+}
+.blind-secondary:hover:not(:disabled) {
+  border-color: #4b6cb7;
+}
+.blind-primary:disabled,
+.blind-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.blind-lock-button {
+  background: #991b1b;
+  border: 1px solid #b91c1c;
+  color: #fecaca;
+}
+.blind-lock-button:hover {
+  background: #b91c1c;
+}
+.blind-warning {
+  color: #fcd34d;
+  font-size: 0.85rem;
+}
+.blind-confirm {
+  border: 1px solid #b91c1c;
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: #1f1315;
+}
+.blind-confirm p {
+  margin: 0 0 0.5rem;
+}
+.blind-confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.blind-status {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  min-height: 1em;
+}
+.blind-rank-prompt {
+  margin-bottom: 1rem;
+}
+.blind-rank-prompt h4 {
+  margin: 0.5rem 0 0.25rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.blind-rank-prompt-text {
+  margin: 0 0 0.5rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+.blind-badge {
+  font-size: 0.7rem;
+  font-weight: normal;
+  color: #fcd34d;
+  border: 1px solid #a16207;
+  border-radius: 3px;
+  padding: 0 0.3rem;
+}
+.blind-rank-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.blind-rank-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 0.25rem 0.25rem 0.25rem 0.5rem;
+}
+.blind-rank-label {
+  font-weight: 600;
+}
+.blind-rank-snippet {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.blind-rank-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+.blind-rank-buttons button {
+  min-width: 44px;
+  min-height: 44px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.blind-rank-buttons button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.blind-view {
+  flex: 1;
+  overflow: auto;
+  padding: 0.75rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  width: 100%;
+}
+.blind-view-bar {
+  margin-bottom: 0.5rem;
+}
+
 /* Project-management plugin — kanban + board list ---------------------- */
 .pm-list-row {
   display: flex;

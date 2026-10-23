@@ -15,6 +15,7 @@
     "dump:i18n": "tsx --env-file=../../.env src/scripts/dump-ui-translations.ts"
   },
   "dependencies": {
+    "@babelr/plugin-blinds": "^0.1.0",
     "@babelr/plugin-hello": "^0.1.0",
     "@babelr/plugin-polls": "^0.1.0",
     "@babelr/plugin-project-management": "^0.1.0",
