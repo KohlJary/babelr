@@ -24,7 +24,13 @@ const mockActor = {
   followersUri: 'https://test.babelr.local/users/alice/followers',
   followingUri: 'https://test.babelr.local/users/alice/following',
   preferredLanguage: 'en',
-  properties: { apPublicKey: { id: 'https://test.babelr.local/users/alice#main-key', owner: 'https://test.babelr.local/users/alice', publicKeyPem: '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----' } },
+  properties: {
+    apPublicKey: {
+      id: 'https://test.babelr.local/users/alice#main-key',
+      owner: 'https://test.babelr.local/users/alice',
+      publicKeyPem: '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----',
+    },
+  },
   local: true,
   emailVerified: true,
   verificationToken: null,
@@ -69,7 +75,9 @@ describe('JSON-LD Serialization', () => {
     expect(result.inbox).toBe('https://test.babelr.local/users/alice/inbox');
     expect(result.outbox).toBe('https://test.babelr.local/users/alice/outbox');
     expect(result.publicKey).toBeTruthy();
-    expect((result.publicKey as Record<string, unknown>).publicKeyPem).toContain('BEGIN PUBLIC KEY');
+    expect((result.publicKey as Record<string, unknown>).publicKeyPem).toContain(
+      'BEGIN PUBLIC KEY',
+    );
   });
 
   it('serializes a Note', () => {

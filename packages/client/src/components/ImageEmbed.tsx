@@ -74,9 +74,22 @@ export function ImageEmbed({ slug, serverSlug, actor, onClick }: ImageEmbedProps
     loadMore: chatLoadMore,
     typingUsers: chatTyping,
     notifyTyping: chatNotifyTyping,
-  } = useChat(actor ?? { id: '', uri: '', preferredUsername: '', displayName: null, preferredLanguage: 'en' } as ActorProfile, chatId, false);
-  const { translations: chatTranslations, isTranslating: chatIsTranslating } =
-    useTranslation(chatMessages, translationSettings);
+  } = useChat(
+    actor ??
+      ({
+        id: '',
+        uri: '',
+        preferredUsername: '',
+        displayName: null,
+        preferredLanguage: 'en',
+      } as ActorProfile),
+    chatId,
+    false,
+  );
+  const { translations: chatTranslations, isTranslating: chatIsTranslating } = useTranslation(
+    chatMessages,
+    translationSettings,
+  );
 
   useEffect(() => {
     if (state.status !== 'loading') return;
@@ -84,7 +97,9 @@ export function ImageEmbed({ slug, serverSlug, actor, onClick }: ImageEmbedProps
     void fetchEmbed(slug, serverSlug).then((next) => {
       if (!cancelled) setState(next);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [slug, state.status]);
 
   const closeLightbox = useCallback(() => setLightbox(false), []);
@@ -101,10 +116,7 @@ export function ImageEmbed({ slug, serverSlug, actor, onClick }: ImageEmbedProps
 
   return (
     <>
-      <figure
-        className="image-embed ok"
-        onClick={() => (onClick ? onClick() : setLightbox(true))}
-      >
+      <figure className="image-embed ok" onClick={() => (onClick ? onClick() : setLightbox(true))}>
         <img
           src={data.storageUrl}
           alt={data.title ?? data.filename}
@@ -133,9 +145,7 @@ export function ImageEmbed({ slug, serverSlug, actor, onClick }: ImageEmbedProps
                   &times;
                 </button>
               </div>
-              {data.description && (
-                <p className="image-lightbox-description">{data.description}</p>
-              )}
+              {data.description && <p className="image-lightbox-description">{data.description}</p>}
               <p className="file-meta">
                 {data.uploader.displayName ?? data.uploader.preferredUsername}
                 {data.serverName && <> &middot; {data.serverName}</>}

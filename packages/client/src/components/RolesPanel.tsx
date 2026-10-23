@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useEffect, useMemo, useState } from 'react';
 import type { ServerRoleView } from '@babelr/shared';
-import {
-  PERMISSION_CATEGORIES,
-  PERMISSION_LABELS,
-  type Permission,
-} from '@babelr/shared';
+import { PERMISSION_CATEGORIES, PERMISSION_LABELS, type Permission } from '@babelr/shared';
 import { useServerRoles } from '../hooks/useServerRoles';
 
 interface RolesPanelProps {
@@ -29,8 +25,7 @@ interface RolesPanelProps {
  * ships.
  */
 export function RolesPanel({ serverId }: RolesPanelProps) {
-  const { roles, loading, error, createRole, updateRole, deleteRole } =
-    useServerRoles(serverId);
+  const { roles, loading, error, createRole, updateRole, deleteRole } = useServerRoles(serverId);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState('');
   const [draftColor, setDraftColor] = useState<string>('');
@@ -163,19 +158,18 @@ export function RolesPanel({ serverId }: RolesPanelProps) {
             <li key={role.id}>
               <button
                 type="button"
-                className={`roles-list-item ${
-                  selectedRoleId === role.id ? 'selected' : ''
-                }`}
+                className={`roles-list-item ${selectedRoleId === role.id ? 'selected' : ''}`}
                 onClick={() => setSelectedRoleId(role.id)}
               >
                 {role.color && (
-                  <span
-                    className="roles-list-dot"
-                    style={{ backgroundColor: role.color }}
-                  />
+                  <span className="roles-list-dot" style={{ backgroundColor: role.color }} />
                 )}
                 <span className="roles-list-name">
-                  {role.isSystem && <span className="roles-system-marker" title="System role">🔒 </span>}
+                  {role.isSystem && (
+                    <span className="roles-system-marker" title="System role">
+                      🔒{' '}
+                    </span>
+                  )}
                   {role.name}
                 </span>
               </button>
@@ -185,9 +179,7 @@ export function RolesPanel({ serverId }: RolesPanelProps) {
       </aside>
 
       <main className="roles-editor">
-        {!selectedRole && (
-          <div className="sidebar-empty">Select or create a role to edit.</div>
-        )}
+        {!selectedRole && <div className="sidebar-empty">Select or create a role to edit.</div>}
         {selectedRole && (
           <>
             <div className="roles-editor-header">

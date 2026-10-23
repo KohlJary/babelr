@@ -81,9 +81,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
     // Full-text search on remaining text (after filters removed)
     if (filters.textQuery.length > 0) {
       const searchQuery = filters.textQuery.split(/\s+/).join(' & ');
-      conditions.push(
-        sql`${objects.contentSearch} @@ to_tsquery('english', ${searchQuery})`,
-      );
+      conditions.push(sql`${objects.contentSearch} @@ to_tsquery('english', ${searchQuery})`);
     }
 
     // Channel filter — by ID (existing param) or by name (in: operator)
@@ -103,7 +101,12 @@ export default async function searchRoutes(fastify: FastifyInstance) {
           ),
         );
       if (channels.length > 0) {
-        conditions.push(inArray(objects.context, channels.map((c) => c.id)));
+        conditions.push(
+          inArray(
+            objects.context,
+            channels.map((c) => c.id),
+          ),
+        );
       } else {
         // No matching channel — return empty
         return { messages: [], hasMore: false };
@@ -147,9 +150,7 @@ export default async function searchRoutes(fastify: FastifyInstance) {
 
     // Build the query — use rank if there's a text query, otherwise order by date
     const hasTextQuery = filters.textQuery.length > 0;
-    const searchQuery = hasTextQuery
-      ? filters.textQuery.split(/\s+/).join(' & ')
-      : '';
+    const searchQuery = hasTextQuery ? filters.textQuery.split(/\s+/).join(' & ') : '';
 
     const rows = await db
       .select({

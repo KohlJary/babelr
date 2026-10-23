@@ -59,9 +59,7 @@ export function toMessageView(
   };
 }
 
-export function toAuthorView(
-  actor: typeof actors.$inferSelect,
-): AuthorView {
+export function toAuthorView(actor: typeof actors.$inferSelect): AuthorView {
   const props = actor.properties as Record<string, unknown> | null;
   return {
     id: actor.id,
@@ -98,10 +96,7 @@ export async function getMessagesForChannel(
   const messageIds = items.map((row) => row.object.id);
   const reactionRows =
     messageIds.length > 0
-      ? await db
-          .select()
-          .from(reactions)
-          .where(inArray(reactions.objectId, messageIds))
+      ? await db.select().from(reactions).where(inArray(reactions.objectId, messageIds))
       : [];
 
   const reactionsByMessage = new Map<string, Record<string, string[]>>();
@@ -120,8 +115,7 @@ export async function getMessagesForChannel(
 
   const response: MessageListResponse = { messages, hasMore };
   if (hasMore && items.length > 0) {
-    response.cursor =
-      items[items.length - 1].object.published.toISOString();
+    response.cursor = items[items.length - 1].object.published.toISOString();
   }
   return response;
 }
@@ -143,11 +137,7 @@ export async function checkChannelAccess(
   if (!channel) return { allowed: false, channel: null };
   if (!channel.belongsTo) return { allowed: true, channel };
 
-  const [server] = await db
-    .select()
-    .from(actors)
-    .where(eq(actors.id, channel.belongsTo))
-    .limit(1);
+  const [server] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
 
   if (!server?.followersUri) return { allowed: false, channel };
 
@@ -170,10 +160,7 @@ export async function checkChannelAccess(
       .select({ id: collectionItems.id })
       .from(collectionItems)
       .where(
-        and(
-          eq(collectionItems.collectionUri, channel.uri),
-          eq(collectionItems.itemUri, actorUri),
-        ),
+        and(eq(collectionItems.collectionUri, channel.uri), eq(collectionItems.itemUri, actorUri)),
       )
       .limit(1);
     return { allowed: !!channelMembership, channel };

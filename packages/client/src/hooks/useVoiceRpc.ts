@@ -33,9 +33,7 @@ export function useVoiceRpc() {
    * consumer-resumed / producer-closed-ack all dispatch through this map.
    */
   const rpc = useCallback(
-    <T extends WsServerMessage>(
-      build: (requestId: string) => WsClientMessage,
-    ): Promise<T> => {
+    <T extends WsServerMessage>(build: (requestId: string) => WsClientMessage): Promise<T> => {
       const requestId = newRequestId();
       const msg = build(requestId);
       return new Promise<T>((resolve, reject) => {

@@ -14,10 +14,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { serverFiles } from '../db/schema/files.ts';
 import { toAuthorView } from '../serializers.ts';
-import type {
-  FileView,
-  FileEmbedView,
-} from '@babelr/shared';
+import type { FileView, FileEmbedView } from '@babelr/shared';
 import { PERMISSIONS, generateShortSlug, isValidShortSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 import { enqueueToFollowers, enqueueDelivery } from '../federation/delivery.ts';
@@ -80,7 +77,9 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   }>('/servers/:serverId/folders', async (request, reply) => {
     if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
 
-    if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))) {
+    if (
+      !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))
+    ) {
       return reply.status(403).send({ error: 'Not a member of this server' });
     }
 
@@ -127,12 +126,18 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   }>('/servers/:serverId/files', async (request, reply) => {
     if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
 
-    if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))) {
+    if (
+      !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))
+    ) {
       return reply.status(403).send({ error: 'Not a member of this server' });
     }
 
     // For remote servers, sync files from the origin.
-    const [serverActor] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+    const [serverActor] = await db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, request.params.serverId))
+      .limit(1);
     if (serverActor && !serverActor.local) {
       try {
         const origin = new URL(serverActor.uri).origin;
@@ -145,38 +150,68 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         if (res.ok) {
           const data = (await res.json()) as {
             files: Array<{
-              storageUrl: string; filename: string; contentType: string;
-              sizeBytes: number; slug: string | null; title: string | null;
-              description: string | null; tags: string[]; folderPath: string | null;
+              storageUrl: string;
+              filename: string;
+              contentType: string;
+              sizeBytes: number;
+              slug: string | null;
+              title: string | null;
+              description: string | null;
+              tags: string[];
+              folderPath: string | null;
             }>;
           };
           for (const f of data.files ?? []) {
-            const [existing] = await db.select({ id: serverFiles.id }).from(serverFiles)
-              .where(eq(serverFiles.storageUrl, f.storageUrl)).limit(1);
+            const [existing] = await db
+              .select({ id: serverFiles.id })
+              .from(serverFiles)
+              .where(eq(serverFiles.storageUrl, f.storageUrl))
+              .limit(1);
             if (existing) {
-              await db.update(serverFiles).set({
-                title: f.title, description: f.description, tags: f.tags,
-                folderPath: f.folderPath, updatedAt: new Date(),
-              }).where(eq(serverFiles.id, existing.id));
+              await db
+                .update(serverFiles)
+                .set({
+                  title: f.title,
+                  description: f.description,
+                  tags: f.tags,
+                  folderPath: f.folderPath,
+                  updatedAt: new Date(),
+                })
+                .where(eq(serverFiles.id, existing.id));
             } else {
               const chatUri = `${new URL(serverActor.uri).protocol}//${new URL(serverActor.uri).host}/files/${crypto.randomUUID()}/chat`;
-              const [chatChannel] = await db.insert(objects).values({
-                uri: chatUri, type: 'OrderedCollection', belongsTo: null,
-                properties: { name: f.filename, isFileChat: true },
-              }).returning();
-              await db.insert(serverFiles).values({
-                serverId: serverActor.id, uploaderId: serverActor.id,
-                filename: f.filename, contentType: f.contentType,
-                sizeBytes: f.sizeBytes, storageUrl: f.storageUrl,
-                slug: f.slug ?? generateShortSlug(),
-                title: f.title, description: f.description,
-                tags: f.tags, folderPath: f.folderPath,
-                chatId: chatChannel.id,
-              }).onConflictDoNothing();
+              const [chatChannel] = await db
+                .insert(objects)
+                .values({
+                  uri: chatUri,
+                  type: 'OrderedCollection',
+                  belongsTo: null,
+                  properties: { name: f.filename, isFileChat: true },
+                })
+                .returning();
+              await db
+                .insert(serverFiles)
+                .values({
+                  serverId: serverActor.id,
+                  uploaderId: serverActor.id,
+                  filename: f.filename,
+                  contentType: f.contentType,
+                  sizeBytes: f.sizeBytes,
+                  storageUrl: f.storageUrl,
+                  slug: f.slug ?? generateShortSlug(),
+                  title: f.title,
+                  description: f.description,
+                  tags: f.tags,
+                  folderPath: f.folderPath,
+                  chatId: chatChannel.id,
+                })
+                .onConflictDoNothing();
             }
           }
         }
-      } catch { /* Non-fatal */ }
+      } catch {
+        /* Non-fatal */
+      }
     }
 
     const conditions = [eq(serverFiles.serverId, request.params.serverId)];
@@ -218,7 +253,14 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
 
-      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.UPLOAD_FILES))) {
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.UPLOAD_FILES,
+        ))
+      ) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -253,7 +295,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       const description = fields.description?.value?.trim() || null;
       const folderPath = fields.folderPath?.value?.trim() || null;
       const tagsRaw = fields.tags?.value?.trim();
-      const tags = tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : [];
+      const tags = tagsRaw
+        ? tagsRaw
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [];
 
       // Create the comment-thread collection (same pattern as event chat)
       const cfg = fastify.config;
@@ -304,18 +351,40 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
       // Federation: deliver Create(Document) to Group followers.
       if (request.actor.local) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, request.params.serverId))
+          .limit(1);
         if (group) {
-          const doc = { ...serializeFile(created), attributedTo: request.actor.uri, context: group.uri };
+          const doc = {
+            ...serializeFile(created),
+            attributedTo: request.actor.uri,
+            context: group.uri,
+          };
           const proto = cfg.secureCookies ? 'https' : 'http';
           const actUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
           if (!group.local && group.inboxUri) {
-            const act = serializeActivity(actUri, 'Create', request.actor.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const act = serializeActivity(
+              actUri,
+              'Create',
+              request.actor.uri,
+              doc,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, request.actor)
               .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
               .catch((err) => fastify.log.error(err, 'File create remote federation failed'));
           } else {
-            const act = serializeActivity(actUri, 'Create', group.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const act = serializeActivity(
+              actUri,
+              'Create',
+              group.uri,
+              doc,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, group)
               .then((k) => enqueueToFollowers(fastify, k, act))
               .catch((err) => fastify.log.error(err, 'File create federation failed'));
@@ -342,7 +411,14 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
 
-      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))) {
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.VIEW_FILES,
+        ))
+      ) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
 
@@ -350,7 +426,12 @@ export default async function fileRoutes(fastify: FastifyInstance) {
         .select({ file: serverFiles, uploader: actors })
         .from(serverFiles)
         .innerJoin(actors, eq(serverFiles.uploaderId, actors.id))
-        .where(and(eq(serverFiles.id, request.params.fileId), eq(serverFiles.serverId, request.params.serverId)))
+        .where(
+          and(
+            eq(serverFiles.id, request.params.fileId),
+            eq(serverFiles.serverId, request.params.serverId),
+          ),
+        )
         .limit(1);
 
       if (!row) return reply.status(404).send({ error: 'File not found' });
@@ -362,14 +443,24 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   // Update file metadata
   fastify.put<{
     Params: { serverId: string; fileId: string };
-    Body: { title?: string; description?: string | null; tags?: string[]; folderPath?: string | null };
+    Body: {
+      title?: string;
+      description?: string | null;
+      tags?: string[];
+      folderPath?: string | null;
+    };
   }>('/servers/:serverId/files/:fileId', async (request, reply) => {
     if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
 
     const [file] = await db
       .select()
       .from(serverFiles)
-      .where(and(eq(serverFiles.id, request.params.fileId), eq(serverFiles.serverId, request.params.serverId)))
+      .where(
+        and(
+          eq(serverFiles.id, request.params.fileId),
+          eq(serverFiles.serverId, request.params.serverId),
+        ),
+      )
       .limit(1);
 
     if (!file) return reply.status(404).send({ error: 'File not found' });
@@ -377,7 +468,14 @@ export default async function fileRoutes(fastify: FastifyInstance) {
     // Allow edit if uploader or has MANAGE_FILES
     const isUploader = file.uploaderId === request.actor.id;
     if (!isUploader) {
-      if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.MANAGE_FILES))) {
+      if (
+        !(await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.MANAGE_FILES,
+        ))
+      ) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
     }
@@ -395,23 +493,49 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       .where(eq(serverFiles.id, file.id))
       .returning();
 
-    const [uploader] = await db.select().from(actors).where(eq(actors.id, updated.uploaderId)).limit(1);
+    const [uploader] = await db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, updated.uploaderId))
+      .limit(1);
 
     // Federation: deliver Update(Document).
     if (request.actor.local) {
-      const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+      const [group] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, request.params.serverId))
+        .limit(1);
       if (group) {
         const cfg = fastify.config;
         const proto = cfg.secureCookies ? 'https' : 'http';
-        const doc = { ...serializeFile(updated), attributedTo: request.actor.uri, context: group.uri };
+        const doc = {
+          ...serializeFile(updated),
+          attributedTo: request.actor.uri,
+          context: group.uri,
+        };
         const actUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
         if (!group.local && group.inboxUri) {
-          const act = serializeActivity(actUri, 'Update', request.actor.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          const act = serializeActivity(
+            actUri,
+            'Update',
+            request.actor.uri,
+            doc,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, request.actor)
             .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
             .catch((err) => fastify.log.error(err, 'File update remote federation failed'));
         } else {
-          const act = serializeActivity(actUri, 'Update', group.uri, doc, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          const act = serializeActivity(
+            actUri,
+            'Update',
+            group.uri,
+            doc,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, group)
             .then((k) => enqueueToFollowers(fastify, k, act))
             .catch((err) => fastify.log.error(err, 'File update federation failed'));
@@ -431,14 +555,26 @@ export default async function fileRoutes(fastify: FastifyInstance) {
       const [file] = await db
         .select()
         .from(serverFiles)
-        .where(and(eq(serverFiles.id, request.params.fileId), eq(serverFiles.serverId, request.params.serverId)))
+        .where(
+          and(
+            eq(serverFiles.id, request.params.fileId),
+            eq(serverFiles.serverId, request.params.serverId),
+          ),
+        )
         .limit(1);
 
       if (!file) return reply.status(404).send({ error: 'File not found' });
 
       const isUploader = file.uploaderId === request.actor.id;
       if (!isUploader) {
-        if (!(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.MANAGE_FILES))) {
+        if (
+          !(await hasPermission(
+            db,
+            request.params.serverId,
+            request.actor.id,
+            PERMISSIONS.MANAGE_FILES,
+          ))
+        ) {
           return reply.status(403).send({ error: 'Insufficient permissions' });
         }
       }
@@ -453,18 +589,36 @@ export default async function fileRoutes(fastify: FastifyInstance) {
 
       // Federation: deliver Delete(Document).
       if (request.actor.local) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, request.params.serverId))
+          .limit(1);
         if (group) {
           const cfg = fastify.config;
           const proto = cfg.secureCookies ? 'https' : 'http';
           const actUri = `${proto}://${cfg.domain}/activities/${crypto.randomUUID()}`;
           if (!group.local && group.inboxUri) {
-            const act = serializeActivity(actUri, 'Delete', request.actor.uri, file.storageUrl, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const act = serializeActivity(
+              actUri,
+              'Delete',
+              request.actor.uri,
+              file.storageUrl,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, request.actor)
               .then((k) => enqueueDelivery(db, act, group.inboxUri!, k.id))
               .catch((err) => fastify.log.error(err, 'File delete remote federation failed'));
           } else {
-            const act = serializeActivity(actUri, 'Delete', group.uri, file.storageUrl, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const act = serializeActivity(
+              actUri,
+              'Delete',
+              group.uri,
+              file.storageUrl,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, group)
               .then((k) => enqueueToFollowers(fastify, k, act))
               .catch((err) => fastify.log.error(err, 'File delete federation failed'));
@@ -490,55 +644,56 @@ export default async function fileRoutes(fastify: FastifyInstance) {
   );
 
   // Embed lookup by slug
-  fastify.get<{ Params: { slug: string } }>(
-    '/files/by-slug/:slug',
-    async (request, reply) => {
-      const { slug } = request.params;
-      if (!isValidShortSlug(slug)) {
-        return reply.status(400).send({ error: 'Invalid slug format' });
+  fastify.get<{ Params: { slug: string } }>('/files/by-slug/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    if (!isValidShortSlug(slug)) {
+      return reply.status(400).send({ error: 'Invalid slug format' });
+    }
+
+    const [row] = await db
+      .select({ file: serverFiles, uploader: actors })
+      .from(serverFiles)
+      .innerJoin(actors, eq(serverFiles.uploaderId, actors.id))
+      .where(eq(serverFiles.slug, slug))
+      .limit(1);
+
+    if (!row) return reply.status(404).send({ error: 'File not found' });
+
+    // For authenticated requests, check membership. For
+    // unauthenticated (federation proxy), allow public files.
+    if (request.actor) {
+      if (!(await hasPermission(db, row.file.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))) {
+        return reply.status(404).send({ error: 'File not found' });
       }
+    }
 
-      const [row] = await db
-        .select({ file: serverFiles, uploader: actors })
-        .from(serverFiles)
-        .innerJoin(actors, eq(serverFiles.uploaderId, actors.id))
-        .where(eq(serverFiles.slug, slug))
-        .limit(1);
+    // Resolve server name for the embed view
+    const [server] = await db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, row.file.serverId))
+      .limit(1);
+    const serverProps = server?.properties as Record<string, unknown> | null;
 
-      if (!row) return reply.status(404).send({ error: 'File not found' });
+    const view: FileEmbedView = {
+      id: row.file.id,
+      slug: row.file.slug!,
+      filename: row.file.filename,
+      contentType: row.file.contentType,
+      sizeBytes: row.file.sizeBytes,
+      storageUrl: row.file.storageUrl,
+      title: row.file.title,
+      description: row.file.description,
+      serverId: row.file.serverId,
+      serverName:
+        (serverProps?.name as string | undefined) ??
+        server?.displayName ??
+        server?.preferredUsername ??
+        null,
+      uploader: toAuthorView(row.uploader),
+      chatId: row.file.chatId,
+    };
 
-      // For authenticated requests, check membership. For
-      // unauthenticated (federation proxy), allow public files.
-      if (request.actor) {
-        if (!(await hasPermission(db, row.file.serverId, request.actor.id, PERMISSIONS.VIEW_FILES))) {
-          return reply.status(404).send({ error: 'File not found' });
-        }
-      }
-
-      // Resolve server name for the embed view
-      const [server] = await db.select().from(actors).where(eq(actors.id, row.file.serverId)).limit(1);
-      const serverProps = server?.properties as Record<string, unknown> | null;
-
-      const view: FileEmbedView = {
-        id: row.file.id,
-        slug: row.file.slug!,
-        filename: row.file.filename,
-        contentType: row.file.contentType,
-        sizeBytes: row.file.sizeBytes,
-        storageUrl: row.file.storageUrl,
-        title: row.file.title,
-        description: row.file.description,
-        serverId: row.file.serverId,
-        serverName:
-          (serverProps?.name as string | undefined) ??
-          server?.displayName ??
-          server?.preferredUsername ??
-          null,
-        uploader: toAuthorView(row.uploader),
-        chatId: row.file.chatId,
-      };
-
-      return view;
-    },
-  );
+    return view;
+  });
 }

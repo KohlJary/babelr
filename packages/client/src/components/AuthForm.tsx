@@ -20,8 +20,10 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
 
   useEffect(() => {
     fetch('/api/auth/sso-config')
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.oidcEnabled) setSsoEnabled(true); })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.oidcEnabled) setSsoEnabled(true);
+      })
       .catch(() => {});
   }, []);
 

@@ -76,12 +76,9 @@ export function EventDetailPanel({
   const eventTrans = eventFieldTranslations.get(event.id);
 
   const [showOriginal, setShowOriginal] = useState(false);
-  const displayTitle =
-    showOriginal || !eventTrans ? event.title : eventTrans.title;
+  const displayTitle = showOriginal || !eventTrans ? event.title : eventTrans.title;
   const displayDescription =
-    showOriginal || !eventTrans
-      ? event.description
-      : eventTrans.description ?? event.description;
+    showOriginal || !eventTrans ? event.description : (eventTrans.description ?? event.description);
   const hasTranslation = eventTrans?.anyTranslated ?? false;
 
   const linkedChannel = useMemo(
@@ -154,9 +151,7 @@ export function EventDetailPanel({
             {(eventFieldsLoading || hasTranslation) && (
               <div className="event-meta-row event-translation-row">
                 {eventFieldsLoading && !hasTranslation && (
-                  <span className="event-translation-loading">
-                    {t('events.translating')}
-                  </span>
+                  <span className="event-translation-loading">{t('events.translating')}</span>
                 )}
                 {hasTranslation && eventTrans && (
                   <button
@@ -177,9 +172,7 @@ export function EventDetailPanel({
             )}
           </div>
 
-          {displayDescription && (
-            <div className="event-description">{displayDescription}</div>
-          )}
+          {displayDescription && <div className="event-description">{displayDescription}</div>}
 
           <div className="settings-divider" />
 
@@ -228,7 +221,11 @@ export function EventDetailPanel({
               </button>
             )}
             {canDelete && (
-              <button className="friends-btn decline" style={{ marginLeft: 'auto' }} onClick={handleDelete}>
+              <button
+                className="friends-btn decline"
+                style={{ marginLeft: 'auto' }}
+                onClick={handleDelete}
+              >
                 {t('common.delete')}
               </button>
             )}
@@ -245,9 +242,7 @@ export function EventDetailPanel({
               <div className="event-attendee-group">
                 <span className="event-attendee-label">{t('events.rsvpGoing')}</span>
                 <span>
-                  {going
-                    .map((a) => a.actor.displayName ?? a.actor.preferredUsername)
-                    .join(', ')}
+                  {going.map((a) => a.actor.displayName ?? a.actor.preferredUsername).join(', ')}
                 </span>
               </div>
             )}
@@ -265,9 +260,7 @@ export function EventDetailPanel({
               <div className="event-attendee-group event-attendee-declined">
                 <span className="event-attendee-label">{t('events.rsvpDeclined')}</span>
                 <span>
-                  {declined
-                    .map((a) => a.actor.displayName ?? a.actor.preferredUsername)
-                    .join(', ')}
+                  {declined.map((a) => a.actor.displayName ?? a.actor.preferredUsername).join(', ')}
                 </span>
               </div>
             )}
@@ -287,11 +280,7 @@ export function EventDetailPanel({
               actor={actor}
             />
             <TypingIndicator users={typingUsers} />
-            <MessageInput
-              onSend={sendMessage}
-              disabled={!connected}
-              onTyping={notifyTyping}
-            />
+            <MessageInput onSend={sendMessage} disabled={!connected} onTyping={notifyTyping} />
           </div>
         </div>
       </div>

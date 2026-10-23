@@ -77,9 +77,7 @@ export async function buildApp() {
     ),
   );
 
-  app.register(
-    fp(async () => {}, { name: 'config-plugin' }),
-  );
+  app.register(fp(async () => {}, { name: 'config-plugin' }));
 
   // CORS — locked to configured domain in production
   const allowedOrigins = isProduction
@@ -130,7 +128,10 @@ export async function buildApp() {
   });
 
   // Serve client build in production
-  const clientDistDir = join(process.cwd(), isProduction ? '../client/dist' : '../../packages/client/dist');
+  const clientDistDir = join(
+    process.cwd(),
+    isProduction ? '../client/dist' : '../../packages/client/dist',
+  );
   if (existsSync(clientDistDir)) {
     await app.register(fastifyStatic, {
       root: clientDistDir,

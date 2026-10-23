@@ -74,7 +74,9 @@ function fetchEmbed(slug: string, serverSlug?: string): Promise<EmbedState> {
 export function MessageEmbed({ slug, serverSlug, onNavigate }: MessageEmbedProps) {
   const t = useT();
   const cacheKey = serverSlug ? `${serverSlug}:${slug}` : slug;
-  const [state, setState] = useState<EmbedState>(() => resolved.get(cacheKey) ?? { status: 'loading' });
+  const [state, setState] = useState<EmbedState>(
+    () => resolved.get(cacheKey) ?? { status: 'loading' },
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -109,9 +111,7 @@ export function MessageEmbed({ slug, serverSlug, onNavigate }: MessageEmbedProps
 
   const { embed } = state;
   const authorName = embed.author.displayName ?? embed.author.preferredUsername;
-  const snippet = embed.content.length > 200
-    ? embed.content.slice(0, 200) + '…'
-    : embed.content;
+  const snippet = embed.content.length > 200 ? embed.content.slice(0, 200) + '…' : embed.content;
 
   return (
     <button

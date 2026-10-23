@@ -188,10 +188,7 @@ export default definePlugin({
 
     /** Build an AS2 WorkItem object from a row. Multi-typed so AP-
      *  unaware servers degrade to seeing a Note. */
-    function buildWorkItemObject(
-      item: WorkItemRow,
-      origin: string,
-    ): Record<string, unknown> {
+    function buildWorkItemObject(item: WorkItemRow, origin: string): Record<string, unknown> {
       return {
         '@context': 'https://www.w3.org/ns/activitystreams',
         type: ['Note', 'WorkItem'],
@@ -350,33 +347,30 @@ export default definePlugin({
       return detail;
     });
 
-    fastify.get<{ Querystring: { serverId?: string } }>(
-      '/boards',
-      async (request, reply) => {
-        if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-        const { serverId } = request.query;
-        if (!serverId) {
-          return reply.status(400).send({ error: 'serverId query param is required' });
-        }
-        const rows = (await fastify.db.execute(
-          sql`SELECT b.*,
+    fastify.get<{ Querystring: { serverId?: string } }>('/boards', async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const { serverId } = request.query;
+      if (!serverId) {
+        return reply.status(400).send({ error: 'serverId query param is required' });
+      }
+      const rows = (await fastify.db.execute(
+        sql`SELECT b.*,
                      (SELECT COUNT(*) FROM plugin_pm_work_items w WHERE w.board_id = b.id)
                        AS work_item_count
               FROM plugin_pm_boards b
               WHERE server_id = ${serverId}
               ORDER BY updated_at DESC`,
-        )) as unknown as (BoardRow & { work_item_count: string })[];
-        return rows.map<BoardSummary>((b) => ({
-          slug: b.slug,
-          name: b.name,
-          description: b.description,
-          createdBy: b.created_by,
-          createdAt: b.created_at,
-          updatedAt: b.updated_at,
-          workItemCount: Number(b.work_item_count),
-        }));
-      },
-    );
+      )) as unknown as (BoardRow & { work_item_count: string })[];
+      return rows.map<BoardSummary>((b) => ({
+        slug: b.slug,
+        name: b.name,
+        description: b.description,
+        createdBy: b.created_by,
+        createdAt: b.created_at,
+        updatedAt: b.updated_at,
+        workItemCount: Number(b.work_item_count),
+      }));
+    });
 
     fastify.get<{ Params: { slug: string } }>('/boards/:slug', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
@@ -483,33 +477,30 @@ export default definePlugin({
       } satisfies WorkItemView;
     });
 
-    fastify.get<{ Params: { slug: string } }>(
-      '/work-items/:slug',
-      async (request, reply) => {
-        if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-        const items = (await fastify.db.execute(
-          sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
-        )) as unknown as WorkItemRow[];
-        const i = items[0];
-        if (!i) return reply.status(404).send({ error: 'Work item not found' });
-        return {
-          slug: i.slug,
-          title: i.title,
-          description: i.description,
-          priority: i.priority,
-          itemType: i.item_type,
-          reporterId: i.reporter_id,
-          assigneeId: i.assignee_id,
-          storyPoints: i.story_points,
-          dueDate: i.due_date,
-          position: i.position,
-          columnId: i.column_id,
-          chatId: i.chat_id,
-          createdAt: i.created_at,
-          updatedAt: i.updated_at,
-        } satisfies WorkItemView;
-      },
-    );
+    fastify.get<{ Params: { slug: string } }>('/work-items/:slug', async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const items = (await fastify.db.execute(
+        sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
+      )) as unknown as WorkItemRow[];
+      const i = items[0];
+      if (!i) return reply.status(404).send({ error: 'Work item not found' });
+      return {
+        slug: i.slug,
+        title: i.title,
+        description: i.description,
+        priority: i.priority,
+        itemType: i.item_type,
+        reporterId: i.reporter_id,
+        assigneeId: i.assignee_id,
+        storyPoints: i.story_points,
+        dueDate: i.due_date,
+        position: i.position,
+        columnId: i.column_id,
+        chatId: i.chat_id,
+        createdAt: i.created_at,
+        updatedAt: i.updated_at,
+      } satisfies WorkItemView;
+    });
 
     // Bulk reorder endpoint — drop targets produce a new ordered
     // itemIds list per affected column (at most two columns per drop,
@@ -602,8 +593,7 @@ export default definePlugin({
         body.description !== undefined ? body.description : current.description;
       const nextPriority = body.priority ?? current.priority;
       const nextItemType = body.itemType ?? current.item_type;
-      const nextAssignee =
-        body.assigneeId !== undefined ? body.assigneeId : current.assignee_id;
+      const nextAssignee = body.assigneeId !== undefined ? body.assigneeId : current.assignee_id;
       const nextStoryPoints =
         body.storyPoints !== undefined ? body.storyPoints : current.story_points;
       const nextDueDate = body.dueDate !== undefined ? body.dueDate : current.due_date;
@@ -614,9 +604,7 @@ export default definePlugin({
           sql`SELECT id FROM plugin_pm_columns WHERE id = ${body.columnId} AND board_id = ${current.board_id}`,
         )) as unknown as { id: string }[];
         if (check.length === 0) {
-          return reply
-            .status(400)
-            .send({ error: 'columnId does not belong to this board' });
+          return reply.status(400).send({ error: 'columnId does not belong to this board' });
         }
       }
 
@@ -661,44 +649,39 @@ export default definePlugin({
       } satisfies WorkItemView;
     });
 
-    fastify.delete<{ Params: { slug: string } }>(
-      '/work-items/:slug',
-      async (request, reply) => {
-        if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-        // Fetch full row before deleting so we can construct the AS2
-        // Delete activity with proper context.
-        const existing = (await fastify.db.execute(
-          sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
-        )) as unknown as WorkItemRow[];
-        const toDelete = existing[0];
-        if (!toDelete) return reply.status(404).send({ error: 'Work item not found' });
-        const res = (await fastify.db.execute(
-          sql`DELETE FROM plugin_pm_work_items WHERE id = ${toDelete.id}
+    fastify.delete<{ Params: { slug: string } }>('/work-items/:slug', async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      // Fetch full row before deleting so we can construct the AS2
+      // Delete activity with proper context.
+      const existing = (await fastify.db.execute(
+        sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
+      )) as unknown as WorkItemRow[];
+      const toDelete = existing[0];
+      if (!toDelete) return reply.status(404).send({ error: 'Work item not found' });
+      const res = (await fastify.db.execute(
+        sql`DELETE FROM plugin_pm_work_items WHERE id = ${toDelete.id}
               RETURNING id, chat_id, board_id`,
-        )) as unknown as {
-          id: string;
-          chat_id: string | null;
-          board_id: string;
-        }[];
-        if (res.length === 0) return reply.status(404).send({ error: 'Work item not found' });
-        // Drop the comment thread too. Any child messages cascade via
-        // the objects.in_reply_to / context FKs in the core schema.
-        const chatId = res[0].chat_id;
-        if (chatId) {
-          await fastify.db.execute(
-            sql`DELETE FROM objects WHERE id = ${chatId}`,
-          );
-        }
-        const parentBoard = (await fastify.db.execute(
-          sql`SELECT slug FROM plugin_pm_boards WHERE id = ${res[0].board_id} LIMIT 1`,
-        )) as unknown as { slug: string }[];
-        if (parentBoard[0]) {
-          broadcastPm(parentBoard[0].slug, 'work-item', request.params.slug);
-        }
-        void deliverWorkItem('Delete', toDelete);
-        return reply.status(204).send();
-      },
-    );
+      )) as unknown as {
+        id: string;
+        chat_id: string | null;
+        board_id: string;
+      }[];
+      if (res.length === 0) return reply.status(404).send({ error: 'Work item not found' });
+      // Drop the comment thread too. Any child messages cascade via
+      // the objects.in_reply_to / context FKs in the core schema.
+      const chatId = res[0].chat_id;
+      if (chatId) {
+        await fastify.db.execute(sql`DELETE FROM objects WHERE id = ${chatId}`);
+      }
+      const parentBoard = (await fastify.db.execute(
+        sql`SELECT slug FROM plugin_pm_boards WHERE id = ${res[0].board_id} LIMIT 1`,
+      )) as unknown as { slug: string }[];
+      if (parentBoard[0]) {
+        broadcastPm(parentBoard[0].slug, 'work-item', request.params.slug);
+      }
+      void deliverWorkItem('Delete', toDelete);
+      return reply.status(204).send();
+    });
   },
 
   inboxHandlers: {
@@ -801,13 +784,9 @@ export default definePlugin({
         const item = items[0];
         if (!item) return;
 
-        await ctx.fastify.db.execute(
-          sql`DELETE FROM plugin_pm_work_items WHERE slug = ${slug}`,
-        );
+        await ctx.fastify.db.execute(sql`DELETE FROM plugin_pm_work_items WHERE slug = ${slug}`);
         if (item.chat_id) {
-          await ctx.fastify.db.execute(
-            sql`DELETE FROM objects WHERE id = ${item.chat_id}`,
-          );
+          await ctx.fastify.db.execute(sql`DELETE FROM objects WHERE id = ${item.chat_id}`);
         }
 
         const bs = (await ctx.fastify.db.execute(

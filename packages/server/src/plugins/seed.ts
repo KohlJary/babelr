@@ -15,11 +15,7 @@ async function seedPlugin(fastify: FastifyInstance) {
     const channelUri = `${protocol}://${config.domain}/channels/general`;
 
     // Upsert the default "Babelr" server (Group actor)
-    let [server] = await db
-      .select()
-      .from(actors)
-      .where(eq(actors.uri, serverUri))
-      .limit(1);
+    let [server] = await db.select().from(actors).where(eq(actors.uri, serverUri)).limit(1);
 
     if (!server) {
       [server] = await db

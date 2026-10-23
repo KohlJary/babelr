@@ -13,10 +13,7 @@ interface WikiPagePreviewProps {
   serverId: string;
 }
 
-type State =
-  | { status: 'loading' }
-  | { status: 'ok'; page: WikiPageView }
-  | { status: 'locked' };
+type State = { status: 'loading' } | { status: 'ok'; page: WikiPageView } | { status: 'locked' };
 
 export function WikiPagePreview({ slug, serverId }: WikiPagePreviewProps) {
   const t = useT();
@@ -52,7 +49,9 @@ export function WikiPagePreview({ slug, serverId }: WikiPagePreviewProps) {
       {page.tags.length > 0 && (
         <div className="wiki-page-preview-tags">
           {page.tags.map((tag) => (
-            <span key={tag} className="wiki-page-preview-tag">{tag}</span>
+            <span key={tag} className="wiki-page-preview-tag">
+              {tag}
+            </span>
           ))}
         </div>
       )}

@@ -31,10 +31,7 @@ interface PollViewProps {
 const cache = new Map<string, PollPayload>();
 const inflight = new Map<string, Promise<PollPayload | null>>();
 
-async function fetchPoll(
-  slug: string,
-  routeBase: string,
-): Promise<PollPayload | null> {
+async function fetchPoll(slug: string, routeBase: string): Promise<PollPayload | null> {
   const cached = cache.get(slug);
   if (cached) return cached;
   const existing = inflight.get(slug);
@@ -378,9 +375,7 @@ export function PollsView(props: PollsViewProps) {
               <code>{`[[poll:${item.slug}]]`}</code>
               <button
                 type="button"
-                onClick={() =>
-                  void navigator.clipboard.writeText(`[[poll:${item.slug}]]`)
-                }
+                onClick={() => void navigator.clipboard.writeText(`[[poll:${item.slug}]]`)}
               >
                 Copy
               </button>
@@ -467,10 +462,7 @@ export function PollPreview(props: Record<string, unknown>) {
           const pct = percent(opt.voteCount, poll.totalVotes);
           const picked = myVote === opt.id;
           return (
-            <li
-              key={opt.id}
-              className={`poll-preview-option${picked ? ' picked' : ''}`}
-            >
+            <li key={opt.id} className={`poll-preview-option${picked ? ' picked' : ''}`}>
               <button
                 type="button"
                 className="poll-preview-option-button"
@@ -492,7 +484,10 @@ export function PollPreview(props: Record<string, unknown>) {
       <div className="poll-preview-footer">
         {poll.totalVotes} vote{poll.totalVotes === 1 ? '' : 's'}
         {myVote && !closed && poll.allowRevote && (
-          <span className="poll-preview-revote-hint"> · click another option to change your vote</span>
+          <span className="poll-preview-revote-hint">
+            {' '}
+            · click another option to change your vote
+          </span>
         )}
       </div>
       {error && <div className="poll-preview-error">{error}</div>}

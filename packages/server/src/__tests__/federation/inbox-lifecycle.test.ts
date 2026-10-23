@@ -47,13 +47,19 @@ describe('Follow lifecycle', () => {
       domain: 'remote.tower',
     });
 
-    const res = await postToInbox(app, '/users/alice/inbox', {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/follow-1`,
-      type: 'Follow',
-      actor: bob.uri,
-      object: `http://test.babelr.local/users/alice`,
-    }, bob.uri, privateKeyPem);
+    const res = await postToInbox(
+      app,
+      '/users/alice/inbox',
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/follow-1`,
+        type: 'Follow',
+        actor: bob.uri,
+        object: `http://test.babelr.local/users/alice`,
+      },
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
@@ -77,21 +83,24 @@ describe('Follow lifecycle', () => {
     });
 
     // Get the server's Group actor
-    const [group] = await db
-      .select()
-      .from(actors)
-      .where(eq(actors.id, server.id));
+    const [group] = await db.select().from(actors).where(eq(actors.id, server.id));
 
     // Find the slug from the group's URI
     const slug = group.preferredUsername;
 
-    const res = await postToInbox(app, `/groups/${slug}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/follow-1`,
-      type: 'Follow',
-      actor: bob.uri,
-      object: group.uri,
-    }, bob.uri, privateKeyPem);
+    const res = await postToInbox(
+      app,
+      `/groups/${slug}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/follow-1`,
+        type: 'Follow',
+        actor: bob.uri,
+        object: group.uri,
+      },
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
@@ -133,13 +142,19 @@ describe('Follow lifecycle', () => {
     testConfig.federationDomains = ['trusted.tower'];
 
     try {
-      const res = await postToInbox(app, '/users/alice/inbox', {
-        '@context': 'https://www.w3.org/ns/activitystreams',
-        id: `${eve.uri}/activities/follow-1`,
-        type: 'Follow',
-        actor: eve.uri,
-        object: `http://test.babelr.local/users/alice`,
-      }, eve.uri, privateKeyPem);
+      const res = await postToInbox(
+        app,
+        '/users/alice/inbox',
+        {
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          id: `${eve.uri}/activities/follow-1`,
+          type: 'Follow',
+          actor: eve.uri,
+          object: `http://test.babelr.local/users/alice`,
+        },
+        eve.uri,
+        privateKeyPem,
+      );
 
       expect(res.statusCode).toBe(403);
       const body = JSON.parse(res.body);
@@ -172,29 +187,32 @@ describe('Create activities', () => {
     const [ch] = await db.select().from(objects).where(eq(objects.id, channel.id));
 
     const noteUri = `${bob.uri}/notes/test-note-1`;
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/create-1`,
-      type: 'Create',
-      actor: bob.uri,
-      object: {
-        id: noteUri,
-        type: 'Note',
-        attributedTo: bob.uri,
-        content: 'Hello from remote!',
-        context: ch.uri,
-        published: new Date().toISOString(),
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/create-1`,
+        type: 'Create',
+        actor: bob.uri,
+        object: {
+          id: noteUri,
+          type: 'Note',
+          attributedTo: bob.uri,
+          content: 'Hello from remote!',
+          context: ch.uri,
+          published: new Date().toISOString(),
+        },
+        to: [group.followersUri],
       },
-      to: [group.followersUri],
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
     // Check shadow Note was created
-    const [note] = await db
-      .select()
-      .from(objects)
-      .where(eq(objects.uri, noteUri));
+    const [note] = await db.select().from(objects).where(eq(objects.uri, noteUri));
 
     expect(note).toBeDefined();
     expect(note.content).toBe('Hello from remote!');
@@ -217,31 +235,34 @@ describe('Create activities', () => {
     });
 
     const articleUri = `http://remote.tower/wiki/test-page`;
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/create-article-1`,
-      type: 'Create',
-      actor: bob.uri,
-      object: {
-        id: articleUri,
-        type: 'Article',
-        attributedTo: bob.uri,
-        context: group.uri,
-        name: 'Remote Wiki Page',
-        content: '# Hello\nThis is a remote wiki page.',
-        url: articleUri,
-        slug: 'remote-page',
-        tags: ['docs'],
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/create-article-1`,
+        type: 'Create',
+        actor: bob.uri,
+        object: {
+          id: articleUri,
+          type: 'Article',
+          attributedTo: bob.uri,
+          context: group.uri,
+          name: 'Remote Wiki Page',
+          content: '# Hello\nThis is a remote wiki page.',
+          url: articleUri,
+          slug: 'remote-page',
+          tags: ['docs'],
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
     // Check shadow wiki page was created
-    const [page] = await db
-      .select()
-      .from(wikiPages)
-      .where(eq(wikiPages.uri, articleUri));
+    const [page] = await db.select().from(wikiPages).where(eq(wikiPages.uri, articleUri));
 
     expect(page).toBeDefined();
     expect(page.title).toBe('Remote Wiki Page');
@@ -267,30 +288,33 @@ describe('Create activities', () => {
     const startTime = new Date(Date.now() + 86400000).toISOString();
     const endTime = new Date(Date.now() + 90000000).toISOString();
 
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/create-event-1`,
-      type: 'Create',
-      actor: bob.uri,
-      object: {
-        id: eventUri,
-        type: 'Event',
-        attributedTo: bob.uri,
-        context: group.uri,
-        name: 'Remote Standup',
-        content: 'Daily standup meeting',
-        startTime,
-        endTime,
-        location: 'Remote',
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/create-event-1`,
+        type: 'Create',
+        actor: bob.uri,
+        object: {
+          id: eventUri,
+          type: 'Event',
+          attributedTo: bob.uri,
+          context: group.uri,
+          name: 'Remote Standup',
+          content: 'Daily standup meeting',
+          startTime,
+          endTime,
+          location: 'Remote',
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
-    const [event] = await db
-      .select()
-      .from(events)
-      .where(eq(events.uri, eventUri));
+    const [event] = await db.select().from(events).where(eq(events.uri, eventUri));
 
     expect(event).toBeDefined();
     expect(event.title).toBe('Remote Standup');
@@ -312,31 +336,34 @@ describe('Create activities', () => {
     });
 
     const docUri = `http://remote.tower/files/test-doc`;
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/create-doc-1`,
-      type: 'Create',
-      actor: bob.uri,
-      object: {
-        id: docUri,
-        type: 'Document',
-        attributedTo: bob.uri,
-        context: group.uri,
-        name: 'Design Spec',
-        filename: 'design-spec.pdf',
-        contentType: 'application/pdf',
-        storageUrl: 'http://remote.tower/uploads/design-spec.pdf',
-        description: 'Design specification document',
-        slug: 'abc123',
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/create-doc-1`,
+        type: 'Create',
+        actor: bob.uri,
+        object: {
+          id: docUri,
+          type: 'Document',
+          attributedTo: bob.uri,
+          context: group.uri,
+          name: 'Design Spec',
+          filename: 'design-spec.pdf',
+          contentType: 'application/pdf',
+          storageUrl: 'http://remote.tower/uploads/design-spec.pdf',
+          description: 'Design specification document',
+          slug: 'abc123',
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
-    const [file] = await db
-      .select()
-      .from(serverFiles)
-      .where(eq(serverFiles.slug, 'abc123'));
+    const [file] = await db.select().from(serverFiles).where(eq(serverFiles.slug, 'abc123'));
 
     expect(file).toBeDefined();
     expect(file.filename).toBe('design-spec.pdf');
@@ -355,27 +382,30 @@ describe('Update activities', () => {
     // Need a local user to receive the update
     await createTestUser(app, 'alice');
 
-    const res = await postToInbox(app, '/inbox', {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/update-1`,
-      type: 'Update',
-      actor: bob.uri,
-      object: {
-        id: bob.uri,
-        type: 'Person',
-        preferredUsername: 'bob',
-        name: 'Bob Updated',
-        summary: 'New bio',
+    const res = await postToInbox(
+      app,
+      '/inbox',
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/update-1`,
+        type: 'Update',
+        actor: bob.uri,
+        object: {
+          id: bob.uri,
+          type: 'Person',
+          preferredUsername: 'bob',
+          name: 'Bob Updated',
+          summary: 'New bio',
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
     // Check actor was updated
-    const [updated] = await db
-      .select()
-      .from(actors)
-      .where(eq(actors.id, bob.id));
+    const [updated] = await db.select().from(actors).where(eq(actors.id, bob.id));
 
     expect(updated.displayName).toBe('Bob Updated');
     expect(updated.summary).toBe('New bio');
@@ -407,18 +437,24 @@ describe('Update activities', () => {
       attributedTo: bob.id,
     });
 
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/update-note-1`,
-      type: 'Update',
-      actor: bob.uri,
-      object: {
-        id: noteUri,
-        type: 'Note',
-        attributedTo: bob.uri,
-        content: 'Edited content',
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/update-note-1`,
+        type: 'Update',
+        actor: bob.uri,
+        object: {
+          id: noteUri,
+          type: 'Note',
+          attributedTo: bob.uri,
+          content: 'Edited content',
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
@@ -454,13 +490,19 @@ describe('Delete activities', () => {
       attributedTo: bob.id,
     });
 
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/delete-1`,
-      type: 'Delete',
-      actor: bob.uri,
-      object: noteUri,
-    }, bob.uri, privateKeyPem);
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/delete-1`,
+        type: 'Delete',
+        actor: bob.uri,
+        object: noteUri,
+      },
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
@@ -489,32 +531,38 @@ describe('Like / Undo(Like)', () => {
     // Create a message to react to
     const [ch] = await db.select().from(objects).where(eq(objects.id, channel.id));
     const noteUri = `http://test.babelr.local/notes/react-test`;
-    const [note] = await db.insert(objects).values({
-      uri: noteUri,
-      type: 'Note',
-      content: 'React to me',
-      context: ch.id,
-      attributedTo: bob.id,
-    }).returning();
+    const [note] = await db
+      .insert(objects)
+      .values({
+        uri: noteUri,
+        type: 'Note',
+        content: 'React to me',
+        context: ch.id,
+        attributedTo: bob.id,
+      })
+      .returning();
 
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/like-1`,
-      type: 'Like',
-      actor: bob.uri,
-      object: {
-        id: noteUri,
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/like-1`,
+        type: 'Like',
         actor: bob.uri,
-        emoji: '👍',
+        object: {
+          id: noteUri,
+          actor: bob.uri,
+          emoji: '👍',
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
-    const [reaction] = await db
-      .select()
-      .from(reactions)
-      .where(eq(reactions.objectId, note.id));
+    const [reaction] = await db.select().from(reactions).where(eq(reactions.objectId, note.id));
 
     expect(reaction).toBeDefined();
     expect(reaction.emoji).toBe('👍');
@@ -539,13 +587,16 @@ describe('Like / Undo(Like)', () => {
     // Create message + reaction
     const [ch] = await db.select().from(objects).where(eq(objects.id, channel.id));
     const noteUri = `http://test.babelr.local/notes/undo-react-test`;
-    const [note] = await db.insert(objects).values({
-      uri: noteUri,
-      type: 'Note',
-      content: 'React then undo',
-      context: ch.id,
-      attributedTo: bob.id,
-    }).returning();
+    const [note] = await db
+      .insert(objects)
+      .values({
+        uri: noteUri,
+        type: 'Note',
+        content: 'React then undo',
+        context: ch.id,
+        attributedTo: bob.id,
+      })
+      .returning();
 
     await db.insert(reactions).values({
       objectId: note.id,
@@ -553,24 +604,27 @@ describe('Like / Undo(Like)', () => {
       emoji: '👍',
     });
 
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/undo-like-1`,
-      type: 'Undo',
-      actor: bob.uri,
-      object: {
-        type: 'Like',
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/undo-like-1`,
+        type: 'Undo',
         actor: bob.uri,
-        object: { id: noteUri, emoji: '👍' },
+        object: {
+          type: 'Like',
+          actor: bob.uri,
+          object: { id: noteUri, emoji: '👍' },
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 
-    const remaining = await db
-      .select()
-      .from(reactions)
-      .where(eq(reactions.objectId, note.id));
+    const remaining = await db.select().from(reactions).where(eq(reactions.objectId, note.id));
 
     expect(remaining).toHaveLength(0);
   });
@@ -593,17 +647,23 @@ describe('Undo(Follow)', () => {
       itemId: bob.id,
     });
 
-    const res = await postToInbox(app, `/groups/${group.preferredUsername}/inbox`, {
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${bob.uri}/activities/undo-follow-1`,
-      type: 'Undo',
-      actor: bob.uri,
-      object: {
-        type: 'Follow',
+    const res = await postToInbox(
+      app,
+      `/groups/${group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${bob.uri}/activities/undo-follow-1`,
+        type: 'Undo',
         actor: bob.uri,
-        object: group.uri,
+        object: {
+          type: 'Follow',
+          actor: bob.uri,
+          object: group.uri,
+        },
       },
-    }, bob.uri, privateKeyPem);
+      bob.uri,
+      privateKeyPem,
+    );
 
     expect(res.statusCode).toBe(202);
 

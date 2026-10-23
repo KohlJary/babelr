@@ -19,7 +19,9 @@ interface SettingsPanelProps {
 
 function AvatarDisplay({ actor }: { actor: ActorProfile }) {
   if (actor.avatarUrl) {
-    return <img className="profile-avatar-img" src={actor.avatarUrl} alt={actor.preferredUsername} />;
+    return (
+      <img className="profile-avatar-img" src={actor.avatarUrl} alt={actor.preferredUsername} />
+    );
   }
   const colors = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'];
   const color = colors[actor.preferredUsername.charCodeAt(0) % colors.length];
@@ -158,9 +160,7 @@ function TranslationTab({
   onActorUpdate?: (a: ActorProfile) => void;
 }) {
   const t = useT();
-  const ollama = useOllamaModels(
-    settings.provider === 'ollama' ? settings.ollamaBaseUrl : '',
-  );
+  const ollama = useOllamaModels(settings.provider === 'ollama' ? settings.ollamaBaseUrl : '');
 
   return (
     <div className="settings-tab-body">
@@ -170,15 +170,27 @@ function TranslationTab({
           <div className="provider-tier-label">{t('settings.tierTonePreserving')}</div>
 
           <label className="provider-option">
-            <input type="radio" name="translation-provider" checked={settings.provider === 'anthropic'} onChange={() => onUpdate({ provider: 'anthropic' })} />
+            <input
+              type="radio"
+              name="translation-provider"
+              checked={settings.provider === 'anthropic'}
+              onChange={() => onUpdate({ provider: 'anthropic' })}
+            />
             <div className="provider-option-body">
               <div className="provider-option-title">{t('settings.providerAnthropic')}</div>
-              <div className="provider-option-caption">{t('settings.providerAnthropicCaption')}</div>
+              <div className="provider-option-caption">
+                {t('settings.providerAnthropicCaption')}
+              </div>
             </div>
           </label>
 
           <label className="provider-option">
-            <input type="radio" name="translation-provider" checked={settings.provider === 'openai'} onChange={() => onUpdate({ provider: 'openai' })} />
+            <input
+              type="radio"
+              name="translation-provider"
+              checked={settings.provider === 'openai'}
+              onChange={() => onUpdate({ provider: 'openai' })}
+            />
             <div className="provider-option-body">
               <div className="provider-option-title">{t('settings.providerOpenAI')}</div>
               <div className="provider-option-caption">{t('settings.providerOpenAICaption')}</div>
@@ -186,7 +198,12 @@ function TranslationTab({
           </label>
 
           <label className="provider-option">
-            <input type="radio" name="translation-provider" checked={settings.provider === 'ollama'} onChange={() => onUpdate({ provider: 'ollama' })} />
+            <input
+              type="radio"
+              name="translation-provider"
+              checked={settings.provider === 'ollama'}
+              onChange={() => onUpdate({ provider: 'ollama' })}
+            />
             <div className="provider-option-body">
               <div className="provider-option-title">{t('settings.providerOllama')}</div>
               <div className="provider-option-caption">{t('settings.providerOllamaCaption')}</div>
@@ -196,7 +213,12 @@ function TranslationTab({
           <div className="provider-tier-label">{t('settings.tierTranslationOnly')}</div>
 
           <label className="provider-option">
-            <input type="radio" name="translation-provider" checked={settings.provider === 'local'} onChange={() => onUpdate({ provider: 'local' })} />
+            <input
+              type="radio"
+              name="translation-provider"
+              checked={settings.provider === 'local'}
+              onChange={() => onUpdate({ provider: 'local' })}
+            />
             <div className="provider-option-body">
               <div className="provider-option-title">{t('settings.providerLocal')}</div>
               <div className="provider-option-caption">{t('settings.providerLocalCaption')}</div>
@@ -208,7 +230,12 @@ function TranslationTab({
       {settings.provider === 'anthropic' && (
         <div className="settings-field">
           <label>{t('settings.anthropicApiKey')}</label>
-          <input type="password" placeholder="sk-ant-..." value={settings.anthropicApiKey} onChange={(e) => onUpdate({ anthropicApiKey: e.target.value })} />
+          <input
+            type="password"
+            placeholder="sk-ant-..."
+            value={settings.anthropicApiKey}
+            onChange={(e) => onUpdate({ anthropicApiKey: e.target.value })}
+          />
           <p className="settings-hint">{t('settings.apiKeyHint')}</p>
         </div>
       )}
@@ -216,7 +243,12 @@ function TranslationTab({
       {settings.provider === 'openai' && (
         <div className="settings-field">
           <label>{t('settings.openaiApiKey')}</label>
-          <input type="password" placeholder="sk-..." value={settings.openaiApiKey} onChange={(e) => onUpdate({ openaiApiKey: e.target.value })} />
+          <input
+            type="password"
+            placeholder="sk-..."
+            value={settings.openaiApiKey}
+            onChange={(e) => onUpdate({ openaiApiKey: e.target.value })}
+          />
           <p className="settings-hint">{t('settings.apiKeyHint')}</p>
         </div>
       )}
@@ -225,9 +257,16 @@ function TranslationTab({
         <>
           <div className="settings-field">
             <label>{t('settings.ollamaBaseUrl')}</label>
-            <input type="url" placeholder="http://localhost:11434" value={settings.ollamaBaseUrl} onChange={(e) => onUpdate({ ollamaBaseUrl: e.target.value })} />
+            <input
+              type="url"
+              placeholder="http://localhost:11434"
+              value={settings.ollamaBaseUrl}
+              onChange={(e) => onUpdate({ ollamaBaseUrl: e.target.value })}
+            />
             <p className="settings-hint">{t('settings.ollamaBaseUrlHint')}</p>
-            {ollama.status === 'checking' && <p className="settings-hint">{t('settings.ollamaChecking')}</p>}
+            {ollama.status === 'checking' && (
+              <p className="settings-hint">{t('settings.ollamaChecking')}</p>
+            )}
             {ollama.status === 'ok' && (
               <p className="settings-hint success">
                 {ollama.models.length === 1
@@ -235,22 +274,39 @@ function TranslationTab({
                   : t('settings.ollamaConnected', { count: ollama.models.length })}
               </p>
             )}
-            {ollama.status === 'empty' && <p className="settings-hint error">{t('settings.ollamaNoModels')}</p>}
-            {ollama.status === 'error' && <p className="settings-hint error">{t('settings.ollamaUnreachable', { error: ollama.error ?? '' })}</p>}
+            {ollama.status === 'empty' && (
+              <p className="settings-hint error">{t('settings.ollamaNoModels')}</p>
+            )}
+            {ollama.status === 'error' && (
+              <p className="settings-hint error">
+                {t('settings.ollamaUnreachable', { error: ollama.error ?? '' })}
+              </p>
+            )}
           </div>
           <div className="settings-field">
             <label>{t('settings.ollamaModel')}</label>
             {ollama.status === 'ok' && ollama.models.length > 0 ? (
               <select
-                value={ollama.models.includes(settings.ollamaModel) ? settings.ollamaModel : ollama.models[0]}
+                value={
+                  ollama.models.includes(settings.ollamaModel)
+                    ? settings.ollamaModel
+                    : ollama.models[0]
+                }
                 onChange={(e) => onUpdate({ ollamaModel: e.target.value })}
               >
                 {ollama.models.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
                 ))}
               </select>
             ) : (
-              <input type="text" placeholder="llama3.1:8b" value={settings.ollamaModel} onChange={(e) => onUpdate({ ollamaModel: e.target.value })} />
+              <input
+                type="text"
+                placeholder="llama3.1:8b"
+                value={settings.ollamaModel}
+                onChange={(e) => onUpdate({ ollamaModel: e.target.value })}
+              />
             )}
             <p className="settings-hint">{t('settings.ollamaModelHint')}</p>
           </div>
@@ -334,14 +390,36 @@ function AccountTab({
 
   return (
     <div className="settings-tab-body">
-      <form className="settings-field" onSubmit={(e) => void handlePasswordChange(e)} style={{ gap: '0.5rem' }}>
+      <form
+        className="settings-field"
+        onSubmit={(e) => void handlePasswordChange(e)}
+        style={{ gap: '0.5rem' }}
+      >
         <label>{t('settings.changePassword')}</label>
-        <input type="password" placeholder={t('settings.currentPassword')} value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} className="modal-input" />
-        <input type="password" placeholder={t('settings.newPassword')} value={newPw} onChange={(e) => setNewPw(e.target.value)} className="modal-input" />
+        <input
+          type="password"
+          placeholder={t('settings.currentPassword')}
+          value={currentPw}
+          onChange={(e) => setCurrentPw(e.target.value)}
+          className="modal-input"
+        />
+        <input
+          type="password"
+          placeholder={t('settings.newPassword')}
+          value={newPw}
+          onChange={(e) => setNewPw(e.target.value)}
+          className="modal-input"
+        />
         {pwStatus && (
-          <p className={`settings-hint ${pwStatus.includes('success') ? 'success' : 'error'}`}>{pwStatus}</p>
+          <p className={`settings-hint ${pwStatus.includes('success') ? 'success' : 'error'}`}>
+            {pwStatus}
+          </p>
         )}
-        <button type="submit" className="auth-submit" disabled={pwSubmitting || !currentPw || !newPw}>
+        <button
+          type="submit"
+          className="auth-submit"
+          disabled={pwSubmitting || !currentPw || !newPw}
+        >
           {pwSubmitting ? '...' : t('settings.updatePassword')}
         </button>
       </form>

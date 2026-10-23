@@ -70,10 +70,8 @@ function assembleEventView(
   titleEntry: CachedTranslation,
   descEntry: CachedTranslation | null,
 ): TranslatedEventFields {
-  const anyTranslated =
-    !titleEntry.skipped || (!!descEntry && !descEntry.skipped);
-  const detectedLanguage =
-    descEntry?.detectedLanguage || titleEntry.detectedLanguage;
+  const anyTranslated = !titleEntry.skipped || (!!descEntry && !descEntry.skipped);
+  const detectedLanguage = descEntry?.detectedLanguage || titleEntry.detectedLanguage;
   return {
     title: titleEntry.translatedContent,
     description: descEntry?.translatedContent ?? event.description,
@@ -272,18 +270,14 @@ export function useEventTranslation(
       if (!ev.title) continue;
       const titleHash = hashContent(ev.title);
       const titleEntry =
-        sessionFields.get(titleHash) ??
-        getCachedByHash('event', titleHash, targetLang) ??
-        null;
+        sessionFields.get(titleHash) ?? getCachedByHash('event', titleHash, targetLang) ?? null;
       if (!titleEntry) continue;
 
       let descEntry: CachedTranslation | null = null;
       if (ev.description) {
         const descHash = hashContent(ev.description);
         descEntry =
-          sessionFields.get(descHash) ??
-          getCachedByHash('event', descHash, targetLang) ??
-          null;
+          sessionFields.get(descHash) ?? getCachedByHash('event', descHash, targetLang) ?? null;
         if (!descEntry) continue;
       }
       out.set(ev.id, assembleEventView(ev, titleEntry, descEntry));

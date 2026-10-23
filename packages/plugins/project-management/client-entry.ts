@@ -21,11 +21,7 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   } = await import('./client.js');
   const routeBase = api.routeBase;
 
-  type OpenEmbedPreview = (
-    kind: string,
-    slug: string,
-    serverSlug?: string,
-  ) => void;
+  type OpenEmbedPreview = (kind: string, slug: string, serverSlug?: string) => void;
 
   const PmViewBound = (props: unknown) => {
     const h = (props as { host: unknown }).host as {
@@ -55,8 +51,7 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   api.registerSidebarSlot({
     id: 'project-management-nav',
     Component: PmSidebarSlot,
-    isAvailable: (host) =>
-      (host as { selectedServerId: string | null }).selectedServerId !== null,
+    isAvailable: (host) => (host as { selectedServerId: string | null }).selectedServerId !== null,
   });
 
   // The inline/preview renderers need the plugin routeBase to fetch.

@@ -12,7 +12,12 @@ import type {
   CreateMessageInput,
   WsServerMessage,
 } from '@babelr/shared';
-import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, enqueueDelivery } from '../federation/delivery.ts';
+import {
+  broadcastCreate,
+  broadcastToGroupFollowers,
+  enqueueToFollowers,
+  enqueueDelivery,
+} from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
@@ -57,7 +62,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const [target] = await db
         .select()
         .from(objects)
-        .where(and(eq(objects.id, around), eq(objects.context, channelId), eq(objects.type, 'Note')))
+        .where(
+          and(eq(objects.id, around), eq(objects.context, channelId), eq(objects.type, 'Note')),
+        )
         .limit(1);
       if (!target) return reply.status(404).send({ error: 'Message not found' });
 
@@ -66,7 +73,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         .select({ object: objects, actor: actors })
         .from(objects)
         .innerJoin(actors, eq(objects.attributedTo, actors.id))
-        .where(and(eq(objects.context, channelId), eq(objects.type, 'Note'), lt(objects.published, target.published)))
+        .where(
+          and(
+            eq(objects.context, channelId),
+            eq(objects.type, 'Note'),
+            lt(objects.published, target.published),
+          ),
+        )
         .orderBy(desc(objects.published))
         .limit(half);
 
@@ -74,16 +87,22 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         .select({ object: objects, actor: actors })
         .from(objects)
         .innerJoin(actors, eq(objects.attributedTo, actors.id))
-        .where(and(eq(objects.context, channelId), eq(objects.type, 'Note'), gt(objects.published, target.published)))
+        .where(
+          and(
+            eq(objects.context, channelId),
+            eq(objects.type, 'Note'),
+            gt(objects.published, target.published),
+          ),
+        )
         .orderBy(objects.published)
         .limit(half);
 
-      const [targetAuthor] = await db.select().from(actors).where(eq(actors.id, target.attributedTo!)).limit(1);
-      const allRows = [
-        ...before.reverse(),
-        { object: target, actor: targetAuthor },
-        ...after,
-      ];
+      const [targetAuthor] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, target.attributedTo!))
+        .limit(1);
+      const allRows = [...before.reverse(), { object: target, actor: targetAuthor }, ...after];
       const messages = allRows
         .filter((r) => r.actor)
         .map((r) => ({
@@ -108,7 +127,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const { channelId } = request.params;
     const { content, properties } = request.body;
 
-    const hasAttachments = properties?.attachments && Array.isArray(properties.attachments) && properties.attachments.length > 0;
+    const hasAttachments =
+      properties?.attachments &&
+      Array.isArray(properties.attachments) &&
+      properties.attachments.length > 0;
     if ((!content || content.trim().length === 0) && !hasAttachments) {
       return reply.status(400).send({ error: 'Message content or attachment is required' });
     }
@@ -146,7 +168,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     // settings can also bypass the rate limit, and that's a
     // reasonable intuition for server operators.
     const channelProps = channel.properties as Record<string, unknown> | null;
-    const slowMode = typeof channelProps?.slowMode === 'number' ? (channelProps.slowMode as number) : 0;
+    const slowMode =
+      typeof channelProps?.slowMode === 'number' ? (channelProps.slowMode as number) : 0;
     if (slowMode > 0 && channel.belongsTo) {
       const bypassSlowMode = await hasPermission(
         db,
@@ -173,19 +196,23 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           const ageMs = Date.now() - lastOwn.published.getTime();
           const remainingMs = slowMode * 1000 - ageMs;
           if (remainingMs > 0) {
-            return reply
-              .status(429)
-              .send({
-                error: 'Slow mode',
-                message: `Please wait ${Math.ceil(remainingMs / 1000)}s before sending another message.`,
-                retryAfter: Math.ceil(remainingMs / 1000),
-              });
+            return reply.status(429).send({
+              error: 'Slow mode',
+              message: `Please wait ${Math.ceil(remainingMs / 1000)}s before sending another message.`,
+              retryAfter: Math.ceil(remainingMs / 1000),
+            });
           }
         }
       }
     }
 
-    const result = await createMessageInChannel(fastify, channelId, content, request.actor, properties);
+    const result = await createMessageInChannel(
+      fastify,
+      channelId,
+      content,
+      request.actor,
+      properties,
+    );
     return reply.status(201).send(result);
   });
 
@@ -208,7 +235,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const [message] = await db
       .select()
       .from(objects)
-      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .where(
+        and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+      )
       .limit(1);
 
     if (!message) return reply.status(404).send({ error: 'Message not found' });
@@ -253,11 +282,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     if (actor.local) {
       // Resolve context + inReplyTo URIs for the serialized Note.
       let contextUri: string | undefined;
-      const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, channelId)).limit(1);
+      const [ch] = await db
+        .select({ uri: objects.uri })
+        .from(objects)
+        .where(eq(objects.id, channelId))
+        .limit(1);
       if (ch) contextUri = ch.uri;
       let inReplyToUri: string | undefined;
       if (updated.inReplyTo) {
-        const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, updated.inReplyTo)).limit(1);
+        const [parent] = await db
+          .select({ uri: objects.uri })
+          .from(objects)
+          .where(eq(objects.id, updated.inReplyTo))
+          .limit(1);
         if (parent) inReplyToUri = parent.uri;
       }
 
@@ -266,16 +303,36 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
       if (channel?.belongsTo) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, channel.belongsTo))
+          .limit(1);
         if (group && !group.local && group.inboxUri) {
           // Remote server: deliver to the origin Group's inbox.
-          const activity = serializeActivity(activityUri, 'Update', actor.uri, noteJson, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          const activity = serializeActivity(
+            activityUri,
+            'Update',
+            actor.uri,
+            noteJson,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, actor)
-            .then((actorWithKeys) => enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id))
+            .then((actorWithKeys) =>
+              enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id),
+            )
             .catch((err) => fastify.log.error(err, 'Remote update delivery failed'));
         } else if (group) {
           // Local server: fan out via Group to remote followers.
-          const activity = serializeActivity(activityUri, 'Update', group.uri, noteJson, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          const activity = serializeActivity(
+            activityUri,
+            'Update',
+            group.uri,
+            noteJson,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, group)
             .then((groupWithKeys) => enqueueToFollowers(fastify, groupWithKeys, activity))
             .catch((err) => fastify.log.error(err, 'Update federation enqueue failed'));
@@ -299,7 +356,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const [message] = await db
       .select()
       .from(objects)
-      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .where(
+        and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+      )
       .limit(1);
 
     if (!message) return reply.status(404).send({ error: 'Message not found' });
@@ -352,16 +411,36 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
       if (channel?.belongsTo) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, channel.belongsTo))
+          .limit(1);
         if (group && !group.local && group.inboxUri) {
           // Remote server: deliver to the origin Group's inbox.
-          const activity = serializeActivity(activityUri, 'Delete', actor.uri, message.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          const activity = serializeActivity(
+            activityUri,
+            'Delete',
+            actor.uri,
+            message.uri,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, actor)
-            .then((actorWithKeys) => enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id))
+            .then((actorWithKeys) =>
+              enqueueDelivery(db, activity, group.inboxUri!, actorWithKeys.id),
+            )
             .catch((err) => fastify.log.error(err, 'Remote delete delivery failed'));
         } else if (group) {
           // Local server: fan out via Group to remote followers.
-          const activity = serializeActivity(activityUri, 'Delete', group.uri, message.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+          const activity = serializeActivity(
+            activityUri,
+            'Delete',
+            group.uri,
+            message.uri,
+            ['https://www.w3.org/ns/activitystreams#Public'],
+            [group.followersUri ?? ''],
+          );
           ensureActorKeys(db, group)
             .then((groupWithKeys) => enqueueToFollowers(fastify, groupWithKeys, activity))
             .catch((err) => fastify.log.error(err, 'Delete federation enqueue failed'));
@@ -397,12 +476,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     // admins can now revoke it via role to restrict reactions.
     if (channel?.belongsTo) {
       if (
-        !(await hasPermission(
-          db,
-          channel.belongsTo,
-          request.actor.id,
-          PERMISSIONS.ADD_REACTIONS,
-        ))
+        !(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.ADD_REACTIONS))
       ) {
         return reply.status(403).send({ error: 'Insufficient permissions to add reactions' });
       }
@@ -412,7 +486,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const [message] = await db
       .select()
       .from(objects)
-      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .where(
+        and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+      )
       .limit(1);
 
     if (!message) {
@@ -456,7 +532,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
     // Federation: deliver Like to the appropriate inbox.
     if (request.actor.local && channel?.belongsTo) {
-      const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+      const [group] = await db
+        .select()
+        .from(actors)
+        .where(eq(actors.id, channel.belongsTo))
+        .limit(1);
       if (group) {
         const cfg = fastify.config;
         const proto = cfg.secureCookies ? 'https' : 'http';
@@ -464,7 +544,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         if (!group.local && group.inboxUri) {
           // Remote server: alice signs, alice is the actor.
           const activity = serializeActivity(
-            activityUri, 'Like', request.actor.uri,
+            activityUri,
+            'Like',
+            request.actor.uri,
             { id: message.uri, emoji },
             ['https://www.w3.org/ns/activitystreams#Public'],
             [group.followersUri ?? ''],
@@ -475,7 +557,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         } else {
           // Local server: Group signs and is the outer actor.
           const activity = serializeActivity(
-            activityUri, 'Like', group.uri,
+            activityUri,
+            'Like',
+            group.uri,
             { id: message.uri, emoji, actor: request.actor.uri },
             ['https://www.w3.org/ns/activitystreams#Public'],
             [group.followersUri ?? ''],
@@ -514,7 +598,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const [message] = await db
       .select()
       .from(objects)
-      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .where(
+        and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+      )
       .limit(1);
 
     if (!message) {
@@ -547,7 +633,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     if (request.actor.local) {
       const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
       if (channel?.belongsTo) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, channel.belongsTo))
+          .limit(1);
         if (group) {
           const config = fastify.config;
           const protocol = config.secureCookies ? 'https' : 'http';
@@ -555,7 +645,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           if (!group.local && group.inboxUri) {
             // Remote server: alice signs, alice is the actor.
             const activity = serializeActivity(
-              activityUri, 'Undo', request.actor.uri,
+              activityUri,
+              'Undo',
+              request.actor.uri,
               { type: 'Like', actor: request.actor.uri, object: { id: message.uri, emoji } },
               ['https://www.w3.org/ns/activitystreams#Public'],
               [group.followersUri ?? ''],
@@ -566,7 +658,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           } else {
             // Local server: Group signs and is the outer actor.
             const activity = serializeActivity(
-              activityUri, 'Undo', group.uri,
+              activityUri,
+              'Undo',
+              group.uri,
               { type: 'Like', actor: request.actor.uri, object: { id: message.uri, emoji } },
               ['https://www.w3.org/ns/activitystreams#Public'],
               [group.followersUri ?? ''],
@@ -640,7 +734,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const [parentMessage] = await db
         .select()
         .from(objects)
-        .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+        .where(
+          and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+        )
         .limit(1);
 
       if (!parentMessage) {
@@ -652,9 +748,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         .select({ object: objects, actor: actors })
         .from(objects)
         .innerJoin(actors, eq(objects.attributedTo, actors.id))
-        .where(
-          and(eq(objects.inReplyTo, messageId), eq(objects.type, 'Note')),
-        )
+        .where(and(eq(objects.inReplyTo, messageId), eq(objects.type, 'Note')))
         .orderBy(desc(objects.published));
 
       const messages: MessageWithAuthor[] = rows.map((row) => ({
@@ -686,7 +780,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const [parentMessage] = await db
       .select()
       .from(objects)
-      .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+      .where(
+        and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+      )
       .limit(1);
 
     if (!parentMessage) {
@@ -698,12 +794,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
     // Parse mentions
     const mentionedUsernames = parseMentions(content);
-    const mentionedActors = mentionedUsernames.length > 0
-      ? await db
-          .select({ id: actors.id })
-          .from(actors)
-          .where(inArray(actors.preferredUsername, mentionedUsernames))
-      : [];
+    const mentionedActors =
+      mentionedUsernames.length > 0
+        ? await db
+            .select({ id: actors.id })
+            .from(actors)
+            .where(inArray(actors.preferredUsername, mentionedUsernames))
+        : [];
     const mentionedIds = mentionedActors.map((a) => a.id);
 
     const config = fastify.config;
@@ -747,7 +844,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     if (request.actor.local) {
       const [channel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
       if (channel?.belongsTo) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, channel.belongsTo))
+          .limit(1);
         if (group && !group.local && group.inboxUri) {
           // Remote server: deliver to the origin Group's inbox.
           let contextUri: string | undefined;
@@ -756,7 +857,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           // attach the reply to the correct thread.
           let inReplyToUri: string | undefined;
           if (reply_msg.inReplyTo) {
-            const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, reply_msg.inReplyTo)).limit(1);
+            const [parent] = await db
+              .select({ uri: objects.uri })
+              .from(objects)
+              .where(eq(objects.id, reply_msg.inReplyTo))
+              .limit(1);
             if (parent) inReplyToUri = parent.uri;
           }
           const noteJson = serializeNote(reply_msg, request.actor.uri, contextUri, inReplyToUri);
@@ -781,7 +886,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             .then((actorWithKeys) => broadcastCreate(fastify, reply_msg, actorWithKeys))
             .catch((err) => fastify.log.error(err, 'Reply federation enqueue failed'));
           ensureActorKeys(db, group)
-            .then((groupWithKeys) => broadcastToGroupFollowers(fastify, reply_msg, actor, groupWithKeys))
+            .then((groupWithKeys) =>
+              broadcastToGroupFollowers(fastify, reply_msg, actor, groupWithKeys),
+            )
             .catch((err) => fastify.log.error(err, 'Reply group federation enqueue failed'));
         }
       }
@@ -801,125 +908,118 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   // private-channel access check. For DMs it means being a
   // participant in the DM. Returns 404 on both "not found" and "no
   // access" so embeds don't leak the existence of private messages.
-  fastify.get<{ Params: { slug: string } }>(
-    '/messages/by-slug/:slug',
-    async (request, reply) => {
-      // Auth: session cookie OR HTTP Signature. Signed requests come
-      // from federation proxy calls (remote instance resolving a
-      // [[msg:slug]] embed on behalf of a member). Unauthenticated
-      // requests still fall through to public-channel-only access.
-      const { slug } = request.params;
-      if (!isValidMessageSlug(slug)) {
-        return reply.status(400).send({ error: 'Invalid slug format' });
-      }
+  fastify.get<{ Params: { slug: string } }>('/messages/by-slug/:slug', async (request, reply) => {
+    // Auth: session cookie OR HTTP Signature. Signed requests come
+    // from federation proxy calls (remote instance resolving a
+    // [[msg:slug]] embed on behalf of a member). Unauthenticated
+    // requests still fall through to public-channel-only access.
+    const { slug } = request.params;
+    if (!isValidMessageSlug(slug)) {
+      return reply.status(400).send({ error: 'Invalid slug format' });
+    }
 
-      const [message] = await db
+    const [message] = await db
+      .select()
+      .from(objects)
+      .where(and(eq(objects.slug, slug), eq(objects.type, 'Note')))
+      .limit(1);
+
+    // If the slug isn't found locally and we have an authenticated
+    // user, try proxying to remote servers the user is a member of.
+    if (!message && request.actor) {
+      const memberships = await db
+        .select({ collectionUri: collectionItems.collectionUri })
+        .from(collectionItems)
+        .where(eq(collectionItems.itemUri, request.actor.uri));
+      const followerUris = memberships.map((m) => m.collectionUri);
+      const remoteGroups = await db
         .select()
-        .from(objects)
-        .where(and(eq(objects.slug, slug), eq(objects.type, 'Note')))
-        .limit(1);
+        .from(actors)
+        .where(and(eq(actors.type, 'Group'), eq(actors.local, false)));
+      const memberGroups = remoteGroups.filter(
+        (g) => g.followersUri && followerUris.includes(g.followersUri),
+      );
 
-      // If the slug isn't found locally and we have an authenticated
-      // user, try proxying to remote servers the user is a member of.
-      if (!message && request.actor) {
-        const memberships = await db
-          .select({ collectionUri: collectionItems.collectionUri })
-          .from(collectionItems)
-          .where(eq(collectionItems.itemUri, request.actor.uri));
-        const followerUris = memberships.map((m) => m.collectionUri);
-        const remoteGroups = await db
-          .select()
-          .from(actors)
-          .where(and(eq(actors.type, 'Group'), eq(actors.local, false)));
-        const memberGroups = remoteGroups.filter(
-          (g) => g.followersUri && followerUris.includes(g.followersUri),
-        );
-
-        for (const group of memberGroups) {
-          try {
-            const origin = new URL(group.uri).origin;
-            const result = await signedGet(
-              db,
-              request.actor.id,
-              `${origin}/messages/by-slug/${encodeURIComponent(slug)}`,
-            );
-            if (result) return result;
-          } catch {
-            // Try next origin.
-          }
+      for (const group of memberGroups) {
+        try {
+          const origin = new URL(group.uri).origin;
+          const result = await signedGet(
+            db,
+            request.actor.id,
+            `${origin}/messages/by-slug/${encodeURIComponent(slug)}`,
+          );
+          if (result) return result;
+        } catch {
+          // Try next origin.
         }
+      }
+      return reply.status(404).send({ error: 'Message not found' });
+    }
+
+    if (!message) return reply.status(404).send({ error: 'Message not found' });
+
+    const channelId = message.context;
+    if (!channelId) return reply.status(404).send({ error: 'Message not found' });
+
+    // For unauthenticated (federation proxy) requests, only serve
+    // messages from public (non-private, non-DM) channels.
+    const { channel } = await checkChannelAccess(db, channelId, request.actor?.uri ?? '');
+    if (!channel) return reply.status(404).send({ error: 'Message not found' });
+
+    const channelProps = channel.properties as Record<string, unknown> | null;
+    if (request.actor) {
+      // Authenticated (session): full access check.
+      const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (!allowed) return reply.status(404).send({ error: 'Message not found' });
+    } else {
+      // Unauthenticated or signed: only public channels.
+      // (Signed requests from federation peers are treated the same
+      // as unauthenticated for now — the signature proves identity
+      // but we don't check membership. That's the next step if
+      // private-channel embeds need to cross instances.)
+      if (channelProps?.isPrivate || channelProps?.isDM) {
         return reply.status(404).send({ error: 'Message not found' });
       }
+    }
 
-      if (!message) return reply.status(404).send({ error: 'Message not found' });
+    // Batch-load author + server metadata.
+    const [author] = message.attributedTo
+      ? await db.select().from(actors).where(eq(actors.id, message.attributedTo)).limit(1)
+      : [null];
+    const [server] = channel.belongsTo
+      ? await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1)
+      : [null];
 
-      const channelId = message.context;
-      if (!channelId) return reply.status(404).send({ error: 'Message not found' });
+    const chProps = channel.properties as Record<string, unknown> | null;
+    const serverProps = server?.properties as Record<string, unknown> | null;
 
-      // For unauthenticated (federation proxy) requests, only serve
-      // messages from public (non-private, non-DM) channels.
-      const { channel } = await checkChannelAccess(
-        db,
-        channelId,
-        request.actor?.uri ?? '',
-      );
-      if (!channel) return reply.status(404).send({ error: 'Message not found' });
-
-      const channelProps = channel.properties as Record<string, unknown> | null;
-      if (request.actor) {
-        // Authenticated (session): full access check.
-        const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
-        if (!allowed) return reply.status(404).send({ error: 'Message not found' });
-      } else {
-        // Unauthenticated or signed: only public channels.
-        // (Signed requests from federation peers are treated the same
-        // as unauthenticated for now — the signature proves identity
-        // but we don't check membership. That's the next step if
-        // private-channel embeds need to cross instances.)
-        if (channelProps?.isPrivate || channelProps?.isDM) {
-          return reply.status(404).send({ error: 'Message not found' });
-        }
-      }
-
-      // Batch-load author + server metadata.
-      const [author] = message.attributedTo
-        ? await db.select().from(actors).where(eq(actors.id, message.attributedTo)).limit(1)
-        : [null];
-      const [server] = channel.belongsTo
-        ? await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1)
-        : [null];
-
-      const chProps = channel.properties as Record<string, unknown> | null;
-      const serverProps = server?.properties as Record<string, unknown> | null;
-
-      return {
-        id: message.id,
-        slug: message.slug!,
-        content: message.content ?? '',
-        channelId: channel.id,
-        channelName: (chProps?.name as string | undefined) ?? null,
-        serverId: channel.belongsTo ?? null,
-        serverName:
-          (serverProps?.name as string | undefined) ??
-          server?.displayName ??
-          server?.preferredUsername ??
-          null,
-        author: author
-          ? toAuthorView(author)
-          : {
-              id: message.attributedTo ?? '',
-              preferredUsername: 'unknown',
-              displayName: null,
-              avatarUrl: null,
-            },
-        published: message.published.toISOString(),
-        ...(message.updated &&
-          message.updated.getTime() !== message.published.getTime() && {
-            updated: message.updated.toISOString(),
-          }),
-      };
-    },
-  );
+    return {
+      id: message.id,
+      slug: message.slug!,
+      content: message.content ?? '',
+      channelId: channel.id,
+      channelName: (chProps?.name as string | undefined) ?? null,
+      serverId: channel.belongsTo ?? null,
+      serverName:
+        (serverProps?.name as string | undefined) ??
+        server?.displayName ??
+        server?.preferredUsername ??
+        null,
+      author: author
+        ? toAuthorView(author)
+        : {
+            id: message.attributedTo ?? '',
+            preferredUsername: 'unknown',
+            displayName: null,
+            avatarUrl: null,
+          },
+      published: message.published.toISOString(),
+      ...(message.updated &&
+        message.updated.getTime() !== message.published.getTime() && {
+          updated: message.updated.toISOString(),
+        }),
+    };
+  });
 
   // --- Pinned messages ---
 
@@ -983,7 +1083,14 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       // Permission check
       if (channel?.belongsTo) {
-        if (!(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.MANAGE_MESSAGES))) {
+        if (
+          !(await hasPermission(
+            db,
+            channel.belongsTo,
+            request.actor.id,
+            PERMISSIONS.MANAGE_MESSAGES,
+          ))
+        ) {
           return reply.status(403).send({ error: 'Insufficient permissions' });
         }
       }
@@ -992,7 +1099,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const [msg] = await db
         .select()
         .from(objects)
-        .where(and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')))
+        .where(
+          and(eq(objects.id, messageId), eq(objects.context, channelId), eq(objects.type, 'Note')),
+        )
         .limit(1);
       if (!msg) return reply.status(404).send({ error: 'Message not found' });
 
@@ -1027,14 +1136,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       if (!allowed) return reply.status(403).send({ error: 'Not a member' });
 
       if (channel?.belongsTo) {
-        if (!(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.MANAGE_MESSAGES))) {
+        if (
+          !(await hasPermission(
+            db,
+            channel.belongsTo,
+            request.actor.id,
+            PERMISSIONS.MANAGE_MESSAGES,
+          ))
+        ) {
           return reply.status(403).send({ error: 'Insufficient permissions' });
         }
       }
 
-      await db
-        .delete(pins)
-        .where(and(eq(pins.contextId, channelId), eq(pins.targetId, messageId)));
+      await db.delete(pins).where(and(eq(pins.contextId, channelId), eq(pins.targetId, messageId)));
 
       fastify.broadcastToChannel(channelId, {
         type: 'pin:remove',

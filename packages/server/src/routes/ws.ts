@@ -18,22 +18,10 @@ import {
   resumeConsumer as sfuResumeConsumer,
   closeProducer as sfuCloseProducer,
 } from '../voice/sfu.ts';
-import type {
-  SfuRtpCapabilities,
-  SfuTransportParams,
-  SfuProducerInfo,
-} from '@babelr/shared';
-import type {
-  DtlsParameters,
-  RtpCapabilities,
-  RtpParameters,
-} from 'mediasoup/types';
+import type { SfuRtpCapabilities, SfuTransportParams, SfuProducerInfo } from '@babelr/shared';
+import type { DtlsParameters, RtpCapabilities, RtpParameters } from 'mediasoup/types';
 
-function sendRequestError(
-  socket: WebSocket,
-  requestId: string,
-  message: string,
-) {
+function sendRequestError(socket: WebSocket, requestId: string, message: string) {
   const err: WsServerMessage = {
     type: 'voice:request-error',
     payload: { requestId, message },
@@ -294,8 +282,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             break;
           }
           case 'voice:produce': {
-            const { requestId, channelId, transportId, kind, rtpParameters, slot } =
-              msg.payload;
+            const { requestId, channelId, transportId, kind, rtpParameters, slot } = msg.payload;
             try {
               const { producerId } = await sfuProduce(
                 channelId,
@@ -329,13 +316,7 @@ export default async function wsRoutes(fastify: FastifyInstance) {
             break;
           }
           case 'voice:consume': {
-            const {
-              requestId,
-              channelId,
-              transportId,
-              producerId,
-              rtpCapabilities,
-            } = msg.payload;
+            const { requestId, channelId, transportId, producerId, rtpCapabilities } = msg.payload;
             try {
               const result = await sfuConsume(
                 channelId,

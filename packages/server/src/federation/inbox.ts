@@ -25,7 +25,9 @@ interface APActivity {
   id?: string;
   type: string;
   actor: string;
-  object: string | { id?: string; type?: string; actor?: string; content?: string; [key: string]: unknown };
+  object:
+    | string
+    | { id?: string; type?: string; actor?: string; content?: string; [key: string]: unknown };
   to?: string[];
   cc?: string[];
 }
@@ -81,7 +83,12 @@ export async function verifySignedRequest(
 
 async function verifyInboxRequest(
   fastify: FastifyInstance,
-  request: { headers: Record<string, string | string[] | undefined>; method: string; url: string; body: APActivity },
+  request: {
+    headers: Record<string, string | string[] | undefined>;
+    method: string;
+    url: string;
+    body: APActivity;
+  },
 ) {
   const signatureHeader = request.headers.signature as string | undefined;
   if (!signatureHeader) return null;
@@ -175,9 +182,10 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
         .from(actors)
         .where(and(eq(actors.type, 'Group'), eq(actors.local, true)));
 
-      const localActor = allGroups.find((g) =>
-        g.preferredUsername === request.params.slug ||
-        g.uri.includes(`/groups/${request.params.slug}`),
+      const localActor = allGroups.find(
+        (g) =>
+          g.preferredUsername === request.params.slug ||
+          g.uri.includes(`/groups/${request.params.slug}`),
       );
 
       if (!localActor) return reply.status(404).send({ error: 'Group not found' });
@@ -197,21 +205,25 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
   );
 
   // Shared inbox (instance-level, rate-limited: 60 req/min per IP)
-  fastify.post<{ Body: APActivity }>('/inbox', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const remoteActor = await verifyInboxRequest(fastify, request);
-    if (!remoteActor) return reply.status(401).send({ error: 'Signature verification failed' });
-    if (!isActorAllowed(fastify.config, remoteActor.uri)) {
-      return reply.status(403).send({ error: 'Federation policy: domain not allowed' });
-    }
+  fastify.post<{ Body: APActivity }>(
+    '/inbox',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const remoteActor = await verifyInboxRequest(fastify, request);
+      if (!remoteActor) return reply.status(401).send({ error: 'Signature verification failed' });
+      if (!isActorAllowed(fastify.config, remoteActor.uri)) {
+        return reply.status(403).send({ error: 'Federation policy: domain not allowed' });
+      }
 
-    const config = fastify.config;
-    const protocol = config.secureCookies ? 'https' : 'http';
+      const config = fastify.config;
+      const protocol = config.secureCookies ? 'https' : 'http';
 
-    // For shared inbox, determine the target actor from to/cc fields
-    // For now, just process the activity without a specific local target
-    await routeActivity(fastify, null, remoteActor, request.body, protocol, config.domain);
-    return reply.status(202).send();
-  });
+      // For shared inbox, determine the target actor from to/cc fields
+      // For now, just process the activity without a specific local target
+      await routeActivity(fastify, null, remoteActor, request.body, protocol, config.domain);
+      return reply.status(202).send();
+    },
+  );
 }
 
 async function routeActivity(
@@ -271,7 +283,12 @@ async function handleFollow(
     const [existing] = await db
       .select()
       .from(friendships)
-      .where(and(eq(friendships.ownerActorId, localActor.id), eq(friendships.otherActorId, remoteActor.id)))
+      .where(
+        and(
+          eq(friendships.ownerActorId, localActor.id),
+          eq(friendships.otherActorId, remoteActor.id),
+        ),
+      )
       .limit(1);
 
     if (existing) {
@@ -341,7 +358,14 @@ async function handleFollow(
   if (!actorWithKeys.privateKeyPem) return;
 
   const acceptUri = `${protocol}://${domain}/activities/${crypto.randomUUID()}`;
-  const accept = serializeActivity(acceptUri, 'Accept', localActor.uri, activity, [remoteActor.uri], []);
+  const accept = serializeActivity(
+    acceptUri,
+    'Accept',
+    localActor.uri,
+    activity,
+    [remoteActor.uri],
+    [],
+  );
 
   await enqueueDelivery(db, accept, remoteActor.inboxUri, localActor.id);
 
@@ -465,8 +489,14 @@ async function handleUndo(
     // and emoji. Resolve the author — for Group-relayed Undos, the
     // remoteActor is the Group, but the inner Like's actor is the
     // person who originally reacted.
-    const innerActor = typeof innerObject === 'string' ? null : (innerObject as Record<string, unknown>)?.actor as string | undefined;
-    const innerObj = typeof innerObject === 'string' ? null : (innerObject as Record<string, unknown>)?.object as Record<string, unknown> | undefined;
+    const innerActor =
+      typeof innerObject === 'string'
+        ? null
+        : ((innerObject as Record<string, unknown>)?.actor as string | undefined);
+    const innerObj =
+      typeof innerObject === 'string'
+        ? null
+        : ((innerObject as Record<string, unknown>)?.object as Record<string, unknown> | undefined);
     const noteUri = innerObj?.id as string | undefined;
     const emoji = innerObj?.emoji as string | undefined;
     if (!noteUri || !emoji) return;
@@ -486,7 +516,13 @@ async function handleUndo(
 
     await fastify.db
       .delete(reactions)
-      .where(and(eq(reactions.objectId, note.id), eq(reactions.actorId, reactorId), eq(reactions.emoji, emoji)));
+      .where(
+        and(
+          eq(reactions.objectId, note.id),
+          eq(reactions.actorId, reactorId),
+          eq(reactions.emoji, emoji),
+        ),
+      );
 
     if (note.context) {
       fastify.broadcastToChannel(note.context, {
@@ -672,7 +708,8 @@ async function handleCreateNote(ctx: CreateCtx) {
       id: noteAuthor.id,
       preferredUsername: noteAuthor.preferredUsername,
       displayName: noteAuthor.displayName,
-      avatarUrl: ((noteAuthor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
+      avatarUrl:
+        ((noteAuthor.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
     };
     fastify.broadcastToChannel(channelContextId, {
       type: 'message:new',
@@ -819,7 +856,11 @@ async function handleCreateDocument(ctx: CreateCtx) {
 
   let groupId: string | null = null;
   if (groupUri) {
-    const [group] = await fastify.db.select({ id: actors.id }).from(actors).where(eq(actors.uri, groupUri)).limit(1);
+    const [group] = await fastify.db
+      .select({ id: actors.id })
+      .from(actors)
+      .where(eq(actors.uri, groupUri))
+      .limit(1);
     if (group) groupId = group.id;
   }
   if (!groupId) groupId = remoteActor.type === 'Group' ? remoteActor.id : null;
@@ -835,25 +876,33 @@ async function handleCreateDocument(ctx: CreateCtx) {
     const config = fastify.config;
     const protocol = config.secureCookies ? 'https' : 'http';
     const chatUri = `${protocol}://${config.domain}/files/${crypto.randomUUID()}/chat`;
-    const [chatChannel] = await fastify.db.insert(objects).values({
-      uri: chatUri, type: 'OrderedCollection', belongsTo: null,
-      properties: { name: obj.filename ?? 'File', isFileChat: true },
-    }).returning();
+    const [chatChannel] = await fastify.db
+      .insert(objects)
+      .values({
+        uri: chatUri,
+        type: 'OrderedCollection',
+        belongsTo: null,
+        properties: { name: obj.filename ?? 'File', isFileChat: true },
+      })
+      .returning();
 
-    await fastify.db.insert(serverFiles).values({
-      serverId: groupId,
-      uploaderId: authorId,
-      filename: (obj.filename as string) ?? 'unknown',
-      contentType: (obj.contentType as string) ?? 'application/octet-stream',
-      sizeBytes: (obj.sizeBytes as number) ?? 0,
-      storageUrl: (obj.storageUrl as string) ?? (obj.id as string),
-      slug: (obj.slug as string) ?? generateShortSlug(),
-      title: (obj.name as string) ?? null,
-      description: (obj.description as string) ?? null,
-      tags: Array.isArray(obj.tags) ? (obj.tags as string[]) : [],
-      folderPath: (obj.folderPath as string) ?? null,
-      chatId: chatChannel.id,
-    }).onConflictDoNothing();
+    await fastify.db
+      .insert(serverFiles)
+      .values({
+        serverId: groupId,
+        uploaderId: authorId,
+        filename: (obj.filename as string) ?? 'unknown',
+        contentType: (obj.contentType as string) ?? 'application/octet-stream',
+        sizeBytes: (obj.sizeBytes as number) ?? 0,
+        storageUrl: (obj.storageUrl as string) ?? (obj.id as string),
+        slug: (obj.slug as string) ?? generateShortSlug(),
+        title: (obj.name as string) ?? null,
+        description: (obj.description as string) ?? null,
+        tags: Array.isArray(obj.tags) ? (obj.tags as string[]) : [],
+        folderPath: (obj.folderPath as string) ?? null,
+        chatId: chatChannel.id,
+      })
+      .onConflictDoNothing();
 
     fastify.log.info({ fileId: obj.id }, 'Remote Create(Document) processed');
   }
@@ -887,7 +936,15 @@ async function handleCreate(
       const pluginMatch = findPluginInboxHandler(objType);
       if (pluginMatch?.handler.handleCreate) {
         await pluginMatch.handler.handleCreate(
-          { fastify, remoteActor: { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local } },
+          {
+            fastify,
+            remoteActor: {
+              id: remoteActor.id,
+              uri: remoteActor.uri,
+              type: remoteActor.type,
+              local: remoteActor.local,
+            },
+          },
           obj as Record<string, unknown>,
         );
       }
@@ -999,7 +1056,10 @@ async function handleAdd(
         .from(actors)
         .where(and(eq(actors.uri, uri), eq(actors.local, true)))
         .limit(1);
-      if (local) { targetActor = local; break; }
+      if (local) {
+        targetActor = local;
+        break;
+      }
     }
   }
   if (!targetActor) return;
@@ -1079,11 +1139,7 @@ async function handleRead(
   if (!note?.context) return;
 
   // Find the DM collection this Note belongs to
-  const [dm] = await fastify.db
-    .select()
-    .from(objects)
-    .where(eq(objects.id, note.context))
-    .limit(1);
+  const [dm] = await fastify.db.select().from(objects).where(eq(objects.id, note.context)).limit(1);
   if (!dm) return;
   const dmProps = (dm.properties as Record<string, unknown> | null) ?? {};
   if (!dmProps.isDM) return;
@@ -1169,7 +1225,12 @@ async function handleDelete(
 
   // Plugin inbox handlers — check before falling through to the
   // generic objects-table tombstone below.
-  const actorCtx = { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local };
+  const actorCtx = {
+    id: remoteActor.id,
+    uri: remoteActor.uri,
+    type: remoteActor.type,
+    local: remoteActor.local,
+  };
   for (const handler of allPluginInboxHandlers()) {
     if (handler.handleDelete) {
       await handler.handleDelete({ fastify, remoteActor: actorCtx }, objectUri);
@@ -1178,11 +1239,7 @@ async function handleDelete(
 
   // Find local copy and tombstone it. Accept if the remoteActor is
   // the author OR a Group that owns the channel (Group-relayed delete).
-  const [obj] = await fastify.db
-    .select()
-    .from(objects)
-    .where(eq(objects.uri, objectUri))
-    .limit(1);
+  const [obj] = await fastify.db.select().from(objects).where(eq(objects.uri, objectUri)).limit(1);
 
   if (!obj) return;
 
@@ -1285,12 +1342,7 @@ async function handleUpdate(
       const localFriends = await fastify.db
         .select()
         .from(friendships)
-        .where(
-          and(
-            eq(friendships.otherActorId, refreshed.id),
-            eq(friendships.state, 'accepted'),
-          ),
-        );
+        .where(and(eq(friendships.otherActorId, refreshed.id), eq(friendships.state, 'accepted')));
 
       const otherView = toAuthorView(refreshed);
       for (const f of localFriends) {
@@ -1317,10 +1369,7 @@ async function handleUpdate(
       });
     }
 
-    fastify.log.info(
-      { actor: remoteActor.uri, type: innerType },
-      'Remote Update(Actor) processed',
-    );
+    fastify.log.info({ actor: remoteActor.uri, type: innerType }, 'Remote Update(Actor) processed');
     return;
   }
 
@@ -1328,16 +1377,22 @@ async function handleUpdate(
   if (innerType === 'Document') {
     if (!obj.id) return;
     const objData = obj as Record<string, unknown>;
-    const [existing] = await fastify.db.select().from(serverFiles)
-      .where(eq(serverFiles.storageUrl, obj.id as string)).limit(1);
+    const [existing] = await fastify.db
+      .select()
+      .from(serverFiles)
+      .where(eq(serverFiles.storageUrl, obj.id as string))
+      .limit(1);
     if (existing) {
-      await fastify.db.update(serverFiles).set({
-        title: (objData.name as string) ?? existing.title,
-        description: (objData.description as string) ?? existing.description,
-        tags: Array.isArray(objData.tags) ? (objData.tags as string[]) : existing.tags,
-        folderPath: (objData.folderPath as string) ?? existing.folderPath,
-        updatedAt: new Date(),
-      }).where(eq(serverFiles.id, existing.id));
+      await fastify.db
+        .update(serverFiles)
+        .set({
+          title: (objData.name as string) ?? existing.title,
+          description: (objData.description as string) ?? existing.description,
+          tags: Array.isArray(objData.tags) ? (objData.tags as string[]) : existing.tags,
+          folderPath: (objData.folderPath as string) ?? existing.folderPath,
+          updatedAt: new Date(),
+        })
+        .where(eq(serverFiles.id, existing.id));
       fastify.log.info({ fileId: obj.id }, 'Remote Update(Document) processed');
     }
     return;
@@ -1406,8 +1461,16 @@ async function handleUpdate(
   if (innerType && findPluginInboxHandler(innerType)) {
     const { handler } = findPluginInboxHandler(innerType)!;
     if (handler.handleUpdate) {
-      const actorCtx2 = { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local };
-      await handler.handleUpdate({ fastify, remoteActor: actorCtx2 }, obj as Record<string, unknown>);
+      const actorCtx2 = {
+        id: remoteActor.id,
+        uri: remoteActor.uri,
+        type: remoteActor.type,
+        local: remoteActor.local,
+      };
+      await handler.handleUpdate(
+        { fastify, remoteActor: actorCtx2 },
+        obj as Record<string, unknown>,
+      );
       return;
     }
   }
@@ -1416,8 +1479,16 @@ async function handleUpdate(
   if (Array.isArray(objTypes)) {
     const match = findPluginInboxHandler(objTypes as string[]);
     if (match?.handler.handleUpdate) {
-      const actorCtx2 = { id: remoteActor.id, uri: remoteActor.uri, type: remoteActor.type, local: remoteActor.local };
-      await match.handler.handleUpdate({ fastify, remoteActor: actorCtx2 }, obj as Record<string, unknown>);
+      const actorCtx2 = {
+        id: remoteActor.id,
+        uri: remoteActor.uri,
+        type: remoteActor.type,
+        local: remoteActor.local,
+      };
+      await match.handler.handleUpdate(
+        { fastify, remoteActor: actorCtx2 },
+        obj as Record<string, unknown>,
+      );
       return;
     }
   }

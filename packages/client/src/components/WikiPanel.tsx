@@ -157,8 +157,10 @@ export function WikiPanel({
     typingUsers: chatTyping,
     notifyTyping: chatNotifyTyping,
   } = useChat(actor, currentPage?.chatId ?? null, false);
-  const { translations: chatTranslations, isTranslating: chatIsTranslating } =
-    useTranslation(chatMessages, translationSettings);
+  const { translations: chatTranslations, isTranslating: chatIsTranslating } = useTranslation(
+    chatMessages,
+    translationSettings,
+  );
   const [mode, setMode] = useState<Mode>('view');
   const [backlinks, setBacklinks] = useState<WikiBacklinkView[]>([]);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -213,7 +215,9 @@ export function WikiPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   // Server-side full-text search results (when query >= 2 chars)
-  const [searchResults, setSearchResults] = useState<(WikiPageSummary & { snippet: string })[] | null>(null);
+  const [searchResults, setSearchResults] = useState<
+    (WikiPageSummary & { snippet: string })[] | null
+  >(null);
   const [searching, setSearching] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -226,7 +230,9 @@ export function WikiPanel({
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const filePickerRef = useRef<HTMLInputElement>(null);
   const [revisions, setRevisions] = useState<import('@babelr/shared').WikiPageRevisionView[]>([]);
-  const [viewingRevision, setViewingRevision] = useState<import('@babelr/shared').WikiPageRevisionView | null>(null);
+  const [viewingRevision, setViewingRevision] = useState<
+    import('@babelr/shared').WikiPageRevisionView | null
+  >(null);
   const [draftTags, setDraftTags] = useState<string[]>([]);
   const [draftTagInput, setDraftTagInput] = useState('');
   const [draftSummary, setDraftSummary] = useState('');
@@ -370,9 +376,7 @@ export function WikiPanel({
       const uploaded = await api.uploadFile(serverId, file);
       if (uploaded.slug) {
         const isImage = uploaded.contentType.startsWith('image/');
-        const ref = isImage
-          ? `[[img:${uploaded.slug}]]\n`
-          : `[[file:${uploaded.slug}]]\n`;
+        const ref = isImage ? `[[img:${uploaded.slug}]]\n` : `[[file:${uploaded.slug}]]\n`;
         insertAtCursor(ref);
       }
     } catch (err) {
@@ -508,13 +512,16 @@ export function WikiPanel({
     setSearching(true);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      api.searchWikiPages(serverId, q).then((res) => {
-        setSearchResults(res.results);
-        setSearching(false);
-      }).catch(() => {
-        setSearchResults(null);
-        setSearching(false);
-      });
+      api
+        .searchWikiPages(serverId, q)
+        .then((res) => {
+          setSearchResults(res.results);
+          setSearching(false);
+        })
+        .catch(() => {
+          setSearchResults(null);
+          setSearching(false);
+        });
     }, 300);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -535,9 +542,7 @@ export function WikiPanel({
     });
   }, [pages, searchQuery, activeTag, searchResults]);
 
-  const panelTitle = serverName
-    ? `${t('wiki.serverWiki')} — ${serverName}`
-    : t('wiki.serverWiki');
+  const panelTitle = serverName ? `${t('wiki.serverWiki')} — ${serverName}` : t('wiki.serverWiki');
 
   // Page-level register aggregate for the meta row. Collapses all
   // registers seen across translated prose chunks into a sorted
@@ -552,9 +557,7 @@ export function WikiPanel({
     return Array.from(out).sort();
   }, [translate.chunks]);
 
-  const isCurrentPageHome = Boolean(
-    currentPage && wikiSettings?.homeSlug === currentPage.slug,
-  );
+  const isCurrentPageHome = Boolean(currentPage && wikiSettings?.homeSlug === currentPage.slug);
 
   return (
     <div className="inline-main-view wiki-panel">
@@ -566,646 +569,655 @@ export function WikiPanel({
       </div>
 
       <div className="wiki-body">
-          <aside className="wiki-sidebar">
-            <button className="auth-submit wiki-new-btn" onClick={() => beginCreate()}>
-              + {t('wiki.createPage')}
-            </button>
+        <aside className="wiki-sidebar">
+          <button className="auth-submit wiki-new-btn" onClick={() => beginCreate()}>
+            + {t('wiki.createPage')}
+          </button>
 
-            <input
-              className={`auth-input wiki-search-input ${searching ? 'searching' : ''}`}
-              type="search"
-              placeholder={searching ? t('wiki.searching') : t('wiki.searchPlaceholder')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <input
+            className={`auth-input wiki-search-input ${searching ? 'searching' : ''}`}
+            type="search"
+            placeholder={searching ? t('wiki.searching') : t('wiki.searchPlaceholder')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
 
-            {tagCounts.size > 0 && (
-              <div className="wiki-tag-filter">
-                <h3 className="friends-section-header">{t('wiki.tags')}</h3>
-                <div className="wiki-tag-filter-chips">
-                  {activeTag && (
+          {tagCounts.size > 0 && (
+            <div className="wiki-tag-filter">
+              <h3 className="friends-section-header">{t('wiki.tags')}</h3>
+              <div className="wiki-tag-filter-chips">
+                {activeTag && (
+                  <button
+                    type="button"
+                    className="wiki-tag-chip active clearable"
+                    onClick={() => setActiveTag(null)}
+                    title={t('wiki.clearTagFilter')}
+                  >
+                    ✕ {activeTag}
+                  </button>
+                )}
+                {Array.from(tagCounts.entries())
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([tag, count]) => (
                     <button
                       type="button"
-                      className="wiki-tag-chip active clearable"
-                      onClick={() => setActiveTag(null)}
-                      title={t('wiki.clearTagFilter')}
+                      key={tag}
+                      className={`wiki-tag-chip ${activeTag === tag ? 'active' : ''}`}
+                      onClick={() => setActiveTag(activeTag === tag ? null : tag)}
                     >
-                      ✕ {activeTag}
+                      {tag} <span className="wiki-tag-count">{count}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          <h3 className="friends-section-header">{t('wiki.pages')}</h3>
+          {loading && <div className="sidebar-empty">{t('wiki.loading')}</div>}
+          {error && <div className="dm-lookup-error">{error}</div>}
+          {!loading && !error && pages.length === 0 && (
+            <div className="sidebar-empty">{t('wiki.noPages')}</div>
+          )}
+          {!loading && !error && pages.length > 0 && filteredPages.length === 0 && (
+            <div className="sidebar-empty">{t('wiki.noSearchResults')}</div>
+          )}
+          <ul className="wiki-page-list">
+            {(() => {
+              // Build tree from flat list. Group by parentId, then
+              // render recursively. Pages without a parent (or whose
+              // parent isn't in filteredPages) are roots.
+              const byParent = new Map<string | null, typeof filteredPages>();
+              const idSet = new Set(filteredPages.map((p) => p.id));
+              for (const p of filteredPages) {
+                // If the parent isn't in the filtered set, treat as root.
+                const key = p.parentId && idSet.has(p.parentId) ? p.parentId : null;
+                const group = byParent.get(key) ?? [];
+                group.push(p);
+                byParent.set(key, group);
+              }
+
+              function renderTree(parentId: string | null, depth: number): React.ReactNode[] {
+                const children = byParent.get(parentId);
+                if (!children) return [];
+                return children
+                  .sort((a, b) => a.position - b.position)
+                  .map((p) => {
+                    const isHome = wikiSettings?.homeSlug === p.slug;
+                    const hasChildren = byParent.has(p.id);
+                    return (
+                      <li key={p.id}>
+                        <button
+                          className={`wiki-page-item ${selectedSlug === p.slug ? 'selected' : ''}`}
+                          style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
+                          onClick={() => handleSelect(p)}
+                        >
+                          {hasChildren && <span className="wiki-tree-arrow">&#9662;</span>}
+                          {isHome && (
+                            <span className="wiki-home-indicator" title={t('wiki.home')}>
+                              {t('wiki.homePageBadge')}
+                            </span>
+                          )}
+                          {p.title || t('wiki.untitled')}
+                        </button>
+                        {hasChildren && (
+                          <ul className="wiki-page-list wiki-page-subtree">
+                            {renderTree(p.id, depth + 1)}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  });
+              }
+
+              return renderTree(null, 0);
+            })()}
+          </ul>
+        </aside>
+
+        <main className="wiki-content">
+          {mode === 'view' && !currentPage && (
+            <div className="sidebar-empty">{t('wiki.selectPage')}</div>
+          )}
+
+          {mode === 'view' && currentPage && (
+            <>
+              {/* Breadcrumb trail from root to current page */}
+              {currentPage.parentId && (
+                <div className="wiki-breadcrumb">
+                  {(() => {
+                    const trail: { slug: string; title: string }[] = [];
+                    let pid: string | null = currentPage.parentId;
+                    while (pid) {
+                      const parent = pages.find((p) => p.id === pid);
+                      if (!parent) break;
+                      trail.unshift({ slug: parent.slug, title: parent.title });
+                      pid = parent.parentId;
+                    }
+                    return trail.map((crumb, i) => (
+                      <span key={crumb.slug}>
+                        {i > 0 && <span className="wiki-breadcrumb-sep"> / </span>}
+                        <button
+                          className="wiki-breadcrumb-link"
+                          onClick={() => handleSelect(pages.find((p) => p.slug === crumb.slug)!)}
+                        >
+                          {crumb.title}
+                        </button>
+                      </span>
+                    ));
+                  })()}
+                  <span className="wiki-breadcrumb-sep"> / </span>
+                  <span className="wiki-breadcrumb-current">{currentPage.title}</span>
+                </div>
+              )}
+              <div className="wiki-content-header">
+                <h1 className="wiki-page-title">
+                  {isCurrentPageHome && (
+                    <span className="wiki-home-indicator" title={t('wiki.home')}>
+                      {t('wiki.homePageBadge')}
+                    </span>
+                  )}
+                  {currentPage.title}
+                </h1>
+                <div className="wiki-content-actions">
+                  {isMod && (
+                    <button
+                      className="voice-control-btn"
+                      onClick={handleSetAsHome}
+                      title={isCurrentPageHome ? t('wiki.unsetHome') : t('wiki.setAsHome')}
+                    >
+                      {isCurrentPageHome ? t('wiki.unsetHome') : t('wiki.setAsHome')}
                     </button>
                   )}
-                  {Array.from(tagCounts.entries())
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([tag, count]) => (
-                      <button
-                        type="button"
-                        key={tag}
-                        className={`wiki-tag-chip ${activeTag === tag ? 'active' : ''}`}
-                        onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-                      >
-                        {tag} <span className="wiki-tag-count">{count}</span>
-                      </button>
-                    ))}
+                  <button className="voice-control-btn" onClick={beginEdit}>
+                    {t('wiki.editPage')}
+                  </button>
+                  <button className="voice-control-btn leave" onClick={handleDelete}>
+                    {t('wiki.deletePage')}
+                  </button>
                 </div>
               </div>
-            )}
-
-            <h3 className="friends-section-header">{t('wiki.pages')}</h3>
-            {loading && <div className="sidebar-empty">{t('wiki.loading')}</div>}
-            {error && <div className="dm-lookup-error">{error}</div>}
-            {!loading && !error && pages.length === 0 && (
-              <div className="sidebar-empty">{t('wiki.noPages')}</div>
-            )}
-            {!loading && !error && pages.length > 0 && filteredPages.length === 0 && (
-              <div className="sidebar-empty">{t('wiki.noSearchResults')}</div>
-            )}
-            <ul className="wiki-page-list">
-              {(() => {
-                // Build tree from flat list. Group by parentId, then
-                // render recursively. Pages without a parent (or whose
-                // parent isn't in filteredPages) are roots.
-                const byParent = new Map<string | null, typeof filteredPages>();
-                const idSet = new Set(filteredPages.map((p) => p.id));
-                for (const p of filteredPages) {
-                  // If the parent isn't in the filtered set, treat as root.
-                  const key = p.parentId && idSet.has(p.parentId) ? p.parentId : null;
-                  const group = byParent.get(key) ?? [];
-                  group.push(p);
-                  byParent.set(key, group);
-                }
-
-                function renderTree(parentId: string | null, depth: number): React.ReactNode[] {
-                  const children = byParent.get(parentId);
-                  if (!children) return [];
-                  return children
-                    .sort((a, b) => a.position - b.position)
-                    .map((p) => {
-                      const isHome = wikiSettings?.homeSlug === p.slug;
-                      const hasChildren = byParent.has(p.id);
-                      return (
-                        <li key={p.id}>
-                          <button
-                            className={`wiki-page-item ${selectedSlug === p.slug ? 'selected' : ''}`}
-                            style={{ paddingLeft: `${0.5 + depth * 1}rem` }}
-                            onClick={() => handleSelect(p)}
-                          >
-                            {hasChildren && <span className="wiki-tree-arrow">&#9662;</span>}
-                            {isHome && (
-                              <span className="wiki-home-indicator" title={t('wiki.home')}>
-                                {t('wiki.homePageBadge')}
-                              </span>
-                            )}
-                            {p.title || t('wiki.untitled')}
-                          </button>
-                          {hasChildren && (
-                            <ul className="wiki-page-list wiki-page-subtree">
-                              {renderTree(p.id, depth + 1)}
-                            </ul>
-                          )}
-                        </li>
-                      );
-                    });
-                }
-
-                return renderTree(null, 0);
-              })()}
-            </ul>
-          </aside>
-
-          <main className="wiki-content">
-            {mode === 'view' && !currentPage && (
-              <div className="sidebar-empty">{t('wiki.selectPage')}</div>
-            )}
-
-            {mode === 'view' && currentPage && (
-              <>
-                {/* Breadcrumb trail from root to current page */}
-                {currentPage.parentId && (
-                  <div className="wiki-breadcrumb">
-                    {(() => {
-                      const trail: { slug: string; title: string }[] = [];
-                      let pid: string | null = currentPage.parentId;
-                      while (pid) {
-                        const parent = pages.find((p) => p.id === pid);
-                        if (!parent) break;
-                        trail.unshift({ slug: parent.slug, title: parent.title });
-                        pid = parent.parentId;
-                      }
-                      return trail.map((crumb, i) => (
-                        <span key={crumb.slug}>
-                          {i > 0 && <span className="wiki-breadcrumb-sep"> / </span>}
-                          <button
-                            className="wiki-breadcrumb-link"
-                            onClick={() => handleSelect(pages.find((p) => p.slug === crumb.slug)!)}
-                          >
-                            {crumb.title}
-                          </button>
-                        </span>
-                      ));
-                    })()}
-                    <span className="wiki-breadcrumb-sep"> / </span>
-                    <span className="wiki-breadcrumb-current">{currentPage.title}</span>
-                  </div>
+              <div className="wiki-content-meta">
+                <span className="wiki-slug-display">
+                  <code>
+                    [[{embedPrefix}:{currentPage.slug}]]
+                  </code>
+                  <button
+                    type="button"
+                    className="wiki-slug-copy"
+                    onClick={handleCopyLink}
+                    title={t('wiki.copyLink')}
+                  >
+                    📋
+                  </button>
+                </span>
+                <span className="wiki-meta-sep">·</span>
+                {t('wiki.lastEditedBy', {
+                  user:
+                    currentPage.lastEditedBy.displayName ??
+                    currentPage.lastEditedBy.preferredUsername,
+                })}
+                {translate.isTranslating && (
+                  <>
+                    <span className="wiki-meta-sep">·</span>
+                    <span className="wiki-translating">
+                      {translate.progressTotal > 1
+                        ? t('wiki.translatingProgress', {
+                            done: translate.progressTotal - translate.progressRemaining,
+                            total: translate.progressTotal,
+                          })
+                        : t('wiki.translating')}
+                    </span>
+                  </>
                 )}
-                <div className="wiki-content-header">
-                  <h1 className="wiki-page-title">
-                    {isCurrentPageHome && (
-                      <span className="wiki-home-indicator" title={t('wiki.home')}>
-                        {t('wiki.homePageBadge')}
-                      </span>
-                    )}
-                    {currentPage.title}
-                  </h1>
-                  <div className="wiki-content-actions">
-                    {isMod && (
-                      <button
-                        className="voice-control-btn"
-                        onClick={handleSetAsHome}
-                        title={
-                          isCurrentPageHome
-                            ? t('wiki.unsetHome')
-                            : t('wiki.setAsHome')
-                        }
-                      >
-                        {isCurrentPageHome ? t('wiki.unsetHome') : t('wiki.setAsHome')}
-                      </button>
-                    )}
-                    <button className="voice-control-btn" onClick={beginEdit}>
-                      {t('wiki.editPage')}
-                    </button>
-                    <button className="voice-control-btn leave" onClick={handleDelete}>
-                      {t('wiki.deletePage')}
-                    </button>
-                  </div>
-                </div>
-                <div className="wiki-content-meta">
-                  <span className="wiki-slug-display">
-                    <code>[[{embedPrefix}:{currentPage.slug}]]</code>
+                {translate.anyTranslated && translate.translatedContent && (
+                  <>
+                    <span className="wiki-meta-sep">·</span>
                     <button
                       type="button"
-                      className="wiki-slug-copy"
-                      onClick={handleCopyLink}
-                      title={t('wiki.copyLink')}
+                      className="wiki-translation-toggle"
+                      onClick={() => setShowOriginal((v) => !v)}
+                      title={showOriginal ? t('wiki.showTranslated') : t('wiki.showOriginal')}
                     >
-                      📋
+                      {showOriginal
+                        ? t('wiki.showTranslated')
+                        : t('wiki.translatedBadge', {
+                            langs: Array.from(new Set(translate.detectedLanguages)).join(', '),
+                          })}
                     </button>
-                  </span>
-                  <span className="wiki-meta-sep">·</span>
-                  {t('wiki.lastEditedBy', {
-                    user:
-                      currentPage.lastEditedBy.displayName ??
-                      currentPage.lastEditedBy.preferredUsername,
-                  })}
-                  {translate.isTranslating && (
-                    <>
-                      <span className="wiki-meta-sep">·</span>
-                      <span className="wiki-translating">
-                        {translate.progressTotal > 1
-                          ? t('wiki.translatingProgress', {
-                              done: translate.progressTotal - translate.progressRemaining,
-                              total: translate.progressTotal,
-                            })
-                          : t('wiki.translating')}
-                      </span>
-                    </>
-                  )}
-                  {translate.anyTranslated && translate.translatedContent && (
-                    <>
-                      <span className="wiki-meta-sep">·</span>
-                      <button
-                        type="button"
-                        className="wiki-translation-toggle"
-                        onClick={() => setShowOriginal((v) => !v)}
-                        title={
-                          showOriginal ? t('wiki.showTranslated') : t('wiki.showOriginal')
-                        }
-                      >
-                        {showOriginal
-                          ? t('wiki.showTranslated')
-                          : t('wiki.translatedBadge', {
-                              langs: Array.from(new Set(translate.detectedLanguages)).join(', '),
-                            })}
-                      </button>
-                    </>
-                  )}
-                  {pageRegisters.length > 1 && !showOriginal && translate.anyTranslated && (
-                    <>
-                      <span className="wiki-meta-sep">·</span>
-                      <span className="wiki-page-registers">
-                        {t('wiki.mixedRegisters', { registers: pageRegisters.join(', ') })}
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                {(currentPage.tags ?? []).length > 0 && (
-                  <div className="wiki-page-tags">
-                    {(currentPage.tags ?? []).map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className="wiki-tag-chip"
-                        onClick={() => setActiveTag(tag)}
-                        title={`Filter by ${tag}`}
-                      >
-                        #{tag}
-                      </button>
-                    ))}
-                  </div>
+                  </>
                 )}
+                {pageRegisters.length > 1 && !showOriginal && translate.anyTranslated && (
+                  <>
+                    <span className="wiki-meta-sep">·</span>
+                    <span className="wiki-page-registers">
+                      {t('wiki.mixedRegisters', { registers: pageRegisters.join(', ') })}
+                    </span>
+                  </>
+                )}
+              </div>
 
-                {/* Table of contents — auto-generated from headings.
+              {(currentPage.tags ?? []).length > 0 && (
+                <div className="wiki-page-tags">
+                  {(currentPage.tags ?? []).map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="wiki-tag-chip"
+                      onClick={() => setActiveTag(tag)}
+                      title={`Filter by ${tag}`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Table of contents — auto-generated from headings.
                     Uses translated content when available so the ToC
                     matches what the reader actually sees. */}
-                {(() => {
-                  const tocSource = !showOriginal && translate.anyTranslated
+              {(() => {
+                const tocSource =
+                  !showOriginal && translate.anyTranslated
                     ? translate.chunks
                         .filter((c) => c.kind !== 'blank')
                         .map((c) => c.translated ?? c.original)
                         .join('\n\n')
                     : currentPage.content;
-                  const headings = extractHeadings(tocSource);
-                  if (headings.length < 2) return null;
-                  const minLevel = Math.min(...headings.map((h) => h.level));
-                  return (
-                    <nav className="wiki-toc">
-                      <strong className="wiki-toc-title">{t('wiki.tableOfContents')}</strong>
-                      <ul>
-                        {headings.map((h, i) => (
-                          <li key={i} style={{ marginLeft: `${(h.level - minLevel) * 0.8}rem` }}>
-                            <a href={`#${h.id}`} className="wiki-toc-link">{h.text}</a>
-                          </li>
-                        ))}
-                      </ul>
-                    </nav>
-                  );
-                })()}
+                const headings = extractHeadings(tocSource);
+                if (headings.length < 2) return null;
+                const minLevel = Math.min(...headings.map((h) => h.level));
+                return (
+                  <nav className="wiki-toc">
+                    <strong className="wiki-toc-title">{t('wiki.tableOfContents')}</strong>
+                    <ul>
+                      {headings.map((h, i) => (
+                        <li key={i} style={{ marginLeft: `${(h.level - minLevel) * 0.8}rem` }}>
+                          <a href={`#${h.id}`} className="wiki-toc-link">
+                            {h.text}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </nav>
+                );
+              })()}
 
-                {currentPage.content.trim() ? (
-                  !showOriginal && translate.anyTranslated ? (
-                    // Chunk-by-chunk render with per-chunk indicators.
-                    // Each chunk gets its own rendered markdown block
-                    // followed by the register/idiom metadata row.
-                    <div className="wiki-content-body chunked" onClick={handleContentClick}>
-                      {translate.chunks.map((c, i) => {
-                        if (c.kind === 'blank') return null;
-                        const body = c.translated ?? c.original;
-                        return (
-                          <div key={i} className={`wiki-chunk wiki-chunk-${c.kind}`}>
-                            <div className="wiki-chunk-body">
-                              {renderWithEmbeds(body, {
-                                variant: 'wiki',
-                                onPreviewEmbed,
-                              })}
-                            </div>
-                            <ChunkIndicators chunk={c} t={t} />
+              {currentPage.content.trim() ? (
+                !showOriginal && translate.anyTranslated ? (
+                  // Chunk-by-chunk render with per-chunk indicators.
+                  // Each chunk gets its own rendered markdown block
+                  // followed by the register/idiom metadata row.
+                  <div className="wiki-content-body chunked" onClick={handleContentClick}>
+                    {translate.chunks.map((c, i) => {
+                      if (c.kind === 'blank') return null;
+                      const body = c.translated ?? c.original;
+                      return (
+                        <div key={i} className={`wiki-chunk wiki-chunk-${c.kind}`}>
+                          <div className="wiki-chunk-body">
+                            {renderWithEmbeds(body, {
+                              variant: 'wiki',
+                              onPreviewEmbed,
+                            })}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="wiki-content-body" onClick={handleContentClick}>
-                      {renderWithEmbeds(currentPage.content, {
-                        variant: 'wiki',
-                        onPreviewEmbed,
-                      })}
-                    </div>
-                  )
-                ) : (
-                  <div className="sidebar-empty">{t('wiki.emptyContent')}</div>
-                )}
-
-              </>
-            )}
-
-            {(mode === 'edit' || mode === 'create') && (
-              <div className="wiki-edit-form">
-                <label className="auth-label">
-                  {t('wiki.pageTitle')}
-                  <input
-                    className="auth-input"
-                    type="text"
-                    value={draftTitle}
-                    onChange={(e) => setDraftTitle(e.target.value)}
-                    placeholder={t('wiki.pageTitlePlaceholder')}
-                    autoFocus
-                  />
-                </label>
-
-                <label className="auth-label">
-                  {t('wiki.tagsLabel')}
-                  <div className="wiki-tag-input-row">
-                    {draftTags.map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className="wiki-tag-chip removable"
-                        onClick={() => removeTag(tag)}
-                        title="Remove"
-                      >
-                        {tag} ✕
-                      </button>
-                    ))}
-                    <input
-                      className="auth-input wiki-tag-input"
-                      type="text"
-                      value={draftTagInput}
-                      onChange={(e) => setDraftTagInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ',') {
-                          e.preventDefault();
-                          commitTagFromInput();
-                        } else if (e.key === 'Backspace' && !draftTagInput && draftTags.length) {
-                          setDraftTags(draftTags.slice(0, -1));
-                        }
-                      }}
-                      onBlur={commitTagFromInput}
-                      placeholder={t('wiki.tagInputPlaceholder')}
-                    />
+                          <ChunkIndicators chunk={c} t={t} />
+                        </div>
+                      );
+                    })}
                   </div>
-                </label>
-
-                <div className="wiki-edit-toolbar">
-                  <button
-                    className={`voice-control-btn ${!previewOn ? 'active-on' : ''}`}
-                    onClick={() => setPreviewOn(false)}
-                    type="button"
-                  >
-                    {t('wiki.write')}
-                  </button>
-                  <button
-                    className={`voice-control-btn ${previewOn ? 'active-on' : ''}`}
-                    onClick={() => setPreviewOn(true)}
-                    type="button"
-                  >
-                    {t('wiki.preview')}
-                  </button>
-                  <span className="wiki-toolbar-sep" />
-                  <button
-                    className="voice-control-btn"
-                    onClick={() => filePickerRef.current?.click()}
-                    type="button"
-                    title={t('wiki.attachFile')}
-                  >
-                    {t('wiki.attachFile')}
-                  </button>
-                  <input
-                    ref={filePickerRef}
-                    type="file"
-                    hidden
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) await uploadAndInsert(file);
-                      if (filePickerRef.current) filePickerRef.current.value = '';
-                    }}
-                  />
-                </div>
-
-                {previewOn ? (
-                  <div
-                    className="wiki-content-body wiki-preview"
-                    onClick={handleContentClick}
-                  >
-                    {renderWithEmbeds(draftContent, {
+                ) : (
+                  <div className="wiki-content-body" onClick={handleContentClick}>
+                    {renderWithEmbeds(currentPage.content, {
                       variant: 'wiki',
                       onPreviewEmbed,
                     })}
                   </div>
-                ) : (
-                  <textarea
-                    ref={editorRef}
-                    className="auth-input wiki-content-textarea"
-                    value={draftContent}
-                    onChange={(e) => setDraftContent(e.target.value)}
-                    placeholder={t('wiki.pageContentPlaceholder')}
-                    rows={20}
-                    onDrop={async (e) => {
-                      const file = e.dataTransfer?.files?.[0];
-                      if (file) {
+                )
+              ) : (
+                <div className="sidebar-empty">{t('wiki.emptyContent')}</div>
+              )}
+            </>
+          )}
+
+          {(mode === 'edit' || mode === 'create') && (
+            <div className="wiki-edit-form">
+              <label className="auth-label">
+                {t('wiki.pageTitle')}
+                <input
+                  className="auth-input"
+                  type="text"
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  placeholder={t('wiki.pageTitlePlaceholder')}
+                  autoFocus
+                />
+              </label>
+
+              <label className="auth-label">
+                {t('wiki.tagsLabel')}
+                <div className="wiki-tag-input-row">
+                  {draftTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="wiki-tag-chip removable"
+                      onClick={() => removeTag(tag)}
+                      title="Remove"
+                    >
+                      {tag} ✕
+                    </button>
+                  ))}
+                  <input
+                    className="auth-input wiki-tag-input"
+                    type="text"
+                    value={draftTagInput}
+                    onChange={(e) => setDraftTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
                         e.preventDefault();
-                        await uploadAndInsert(file);
+                        commitTagFromInput();
+                      } else if (e.key === 'Backspace' && !draftTagInput && draftTags.length) {
+                        setDraftTags(draftTags.slice(0, -1));
                       }
                     }}
-                    onDragOver={(e) => {
-                      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
-                    }}
-                    onPaste={async (e) => {
-                      const items = e.clipboardData?.items;
-                      if (!items) return;
-                      for (const item of items) {
-                        if (item.kind === 'file') {
-                          const file = item.getAsFile();
-                          if (file) {
-                            e.preventDefault();
-                            await uploadAndInsert(file);
-                            return;
-                          }
-                        }
-                      }
-                    }}
+                    onBlur={commitTagFromInput}
+                    placeholder={t('wiki.tagInputPlaceholder')}
                   />
-                )}
-
-                {mode === 'edit' && (
-                  <label className="auth-label">
-                    {t('wiki.editSummary')}
-                    <input
-                      className="auth-input"
-                      type="text"
-                      value={draftSummary}
-                      onChange={(e) => setDraftSummary(e.target.value)}
-                      placeholder={t('wiki.editSummaryPlaceholder')}
-                    />
-                  </label>
-                )}
-
-                {saveError && <div className="dm-lookup-error">{saveError}</div>}
-
-                <div className="wiki-edit-actions">
-                  <button className="voice-control-btn" onClick={cancelEdit} disabled={saving}>
-                    {t('wiki.cancel')}
-                  </button>
-                  <button
-                    className="auth-submit"
-                    onClick={handleSave}
-                    disabled={saving || !draftTitle.trim()}
-                  >
-                    {t('wiki.savePage')}
-                  </button>
                 </div>
-              </div>
-            )}
-          </main>
+              </label>
 
-          {/* Right sidebar: tabbed panel for comments, history, backlinks */}
-          {mode === 'view' && currentPage && (
-            <aside className="wiki-right-sidebar">
-              <div className="wiki-right-tabs">
+              <div className="wiki-edit-toolbar">
                 <button
-                  className={`wiki-right-tab ${sidebarTab === 'comments' ? 'active' : ''}`}
-                  onClick={() => setSidebarTab(sidebarTab === 'comments' ? null : 'comments')}
+                  className={`voice-control-btn ${!previewOn ? 'active-on' : ''}`}
+                  onClick={() => setPreviewOn(false)}
+                  type="button"
                 >
-                  {t('wiki.comments')}
+                  {t('wiki.write')}
                 </button>
                 <button
-                  className={`wiki-right-tab ${sidebarTab === 'history' ? 'active' : ''}`}
-                  onClick={async () => {
-                    if (sidebarTab === 'history') {
-                      setSidebarTab(null);
-                    } else {
-                      const res = await api.listWikiRevisions(serverId, currentPage.slug);
-                      setRevisions(res.revisions);
-                      setViewingRevision(null);
-                      setSidebarTab('history');
+                  className={`voice-control-btn ${previewOn ? 'active-on' : ''}`}
+                  onClick={() => setPreviewOn(true)}
+                  type="button"
+                >
+                  {t('wiki.preview')}
+                </button>
+                <span className="wiki-toolbar-sep" />
+                <button
+                  className="voice-control-btn"
+                  onClick={() => filePickerRef.current?.click()}
+                  type="button"
+                  title={t('wiki.attachFile')}
+                >
+                  {t('wiki.attachFile')}
+                </button>
+                <input
+                  ref={filePickerRef}
+                  type="file"
+                  hidden
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) await uploadAndInsert(file);
+                    if (filePickerRef.current) filePickerRef.current.value = '';
+                  }}
+                />
+              </div>
+
+              {previewOn ? (
+                <div className="wiki-content-body wiki-preview" onClick={handleContentClick}>
+                  {renderWithEmbeds(draftContent, {
+                    variant: 'wiki',
+                    onPreviewEmbed,
+                  })}
+                </div>
+              ) : (
+                <textarea
+                  ref={editorRef}
+                  className="auth-input wiki-content-textarea"
+                  value={draftContent}
+                  onChange={(e) => setDraftContent(e.target.value)}
+                  placeholder={t('wiki.pageContentPlaceholder')}
+                  rows={20}
+                  onDrop={async (e) => {
+                    const file = e.dataTransfer?.files?.[0];
+                    if (file) {
+                      e.preventDefault();
+                      await uploadAndInsert(file);
                     }
                   }}
-                >
-                  {t('wiki.history')}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+                  }}
+                  onPaste={async (e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of items) {
+                      if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                          e.preventDefault();
+                          await uploadAndInsert(file);
+                          return;
+                        }
+                      }
+                    }
+                  }}
+                />
+              )}
+
+              {mode === 'edit' && (
+                <label className="auth-label">
+                  {t('wiki.editSummary')}
+                  <input
+                    className="auth-input"
+                    type="text"
+                    value={draftSummary}
+                    onChange={(e) => setDraftSummary(e.target.value)}
+                    placeholder={t('wiki.editSummaryPlaceholder')}
+                  />
+                </label>
+              )}
+
+              {saveError && <div className="dm-lookup-error">{saveError}</div>}
+
+              <div className="wiki-edit-actions">
+                <button className="voice-control-btn" onClick={cancelEdit} disabled={saving}>
+                  {t('wiki.cancel')}
                 </button>
-                {backlinks.length > 0 && (
-                  <button
-                    className={`wiki-right-tab ${sidebarTab === 'backlinks' ? 'active' : ''}`}
-                    onClick={() => setSidebarTab(sidebarTab === 'backlinks' ? null : 'backlinks')}
-                  >
-                    {t('wiki.backlinks')} ({backlinks.length})
-                  </button>
-                )}
+                <button
+                  className="auth-submit"
+                  onClick={handleSave}
+                  disabled={saving || !draftTitle.trim()}
+                >
+                  {t('wiki.savePage')}
+                </button>
               </div>
+            </div>
+          )}
+        </main>
 
-              <div className="wiki-right-content">
-                {sidebarTab === 'comments' && currentPage.chatId && (
-                  <div className="wiki-right-comments">
-                    <div className="event-chat-embed">
-                      <MessageList
-                        messages={chatMessages}
-                        loading={chatLoading}
-                        hasMore={chatHasMore}
-                        onLoadMore={chatLoadMore}
-                        translations={chatTranslations}
-                        isTranslating={chatIsTranslating}
-                        actor={actor}
-                      />
-                      <TypingIndicator users={chatTyping} />
-                      <MessageInput
-                        onSend={chatSend}
-                        disabled={!chatConnected}
-                        onTyping={chatNotifyTyping}
-                      />
-                    </div>
+        {/* Right sidebar: tabbed panel for comments, history, backlinks */}
+        {mode === 'view' && currentPage && (
+          <aside className="wiki-right-sidebar">
+            <div className="wiki-right-tabs">
+              <button
+                className={`wiki-right-tab ${sidebarTab === 'comments' ? 'active' : ''}`}
+                onClick={() => setSidebarTab(sidebarTab === 'comments' ? null : 'comments')}
+              >
+                {t('wiki.comments')}
+              </button>
+              <button
+                className={`wiki-right-tab ${sidebarTab === 'history' ? 'active' : ''}`}
+                onClick={async () => {
+                  if (sidebarTab === 'history') {
+                    setSidebarTab(null);
+                  } else {
+                    const res = await api.listWikiRevisions(serverId, currentPage.slug);
+                    setRevisions(res.revisions);
+                    setViewingRevision(null);
+                    setSidebarTab('history');
+                  }
+                }}
+              >
+                {t('wiki.history')}
+              </button>
+              {backlinks.length > 0 && (
+                <button
+                  className={`wiki-right-tab ${sidebarTab === 'backlinks' ? 'active' : ''}`}
+                  onClick={() => setSidebarTab(sidebarTab === 'backlinks' ? null : 'backlinks')}
+                >
+                  {t('wiki.backlinks')} ({backlinks.length})
+                </button>
+              )}
+            </div>
+
+            <div className="wiki-right-content">
+              {sidebarTab === 'comments' && currentPage.chatId && (
+                <div className="wiki-right-comments">
+                  <div className="event-chat-embed">
+                    <MessageList
+                      messages={chatMessages}
+                      loading={chatLoading}
+                      hasMore={chatHasMore}
+                      onLoadMore={chatLoadMore}
+                      translations={chatTranslations}
+                      isTranslating={chatIsTranslating}
+                      actor={actor}
+                    />
+                    <TypingIndicator users={chatTyping} />
+                    <MessageInput
+                      onSend={chatSend}
+                      disabled={!chatConnected}
+                      onTyping={chatNotifyTyping}
+                    />
                   </div>
-                )}
+                </div>
+              )}
 
-                {sidebarTab === 'history' && (
-                  <div className="wiki-right-history">
-                    {viewingRevision ? (
-                      <div className="wiki-revision-view">
-                        <div className="wiki-revision-view-header">
-                          <button className="voice-control-btn" onClick={() => setViewingRevision(null)}>
-                            {t('files.backToList')}
-                          </button>
-                          <span className="file-meta">
-                            {t('wiki.revisionLabel', { num: String(viewingRevision.revisionNumber) })}
-                            {' · '}
-                            {viewingRevision.editedBy.displayName ?? viewingRevision.editedBy.preferredUsername}
-                            {' · '}
-                            {new Date(viewingRevision.editedAt).toLocaleString()}
-                          </span>
+              {sidebarTab === 'history' && (
+                <div className="wiki-right-history">
+                  {viewingRevision ? (
+                    <div className="wiki-revision-view">
+                      <div className="wiki-revision-view-header">
+                        <button
+                          className="voice-control-btn"
+                          onClick={() => setViewingRevision(null)}
+                        >
+                          {t('files.backToList')}
+                        </button>
+                        <span className="file-meta">
+                          {t('wiki.revisionLabel', { num: String(viewingRevision.revisionNumber) })}
+                          {' · '}
+                          {viewingRevision.editedBy.displayName ??
+                            viewingRevision.editedBy.preferredUsername}
+                          {' · '}
+                          {new Date(viewingRevision.editedAt).toLocaleString()}
+                        </span>
+                        <button
+                          className="friends-btn accept"
+                          onClick={async () => {
+                            const res = await api.restoreWikiRevision(
+                              serverId,
+                              currentPage.slug,
+                              viewingRevision.revisionNumber,
+                            );
+                            setCurrentPage(res.page);
+                            setSidebarTab(null);
+                            setViewingRevision(null);
+                          }}
+                        >
+                          {t('wiki.restoreRevision')}
+                        </button>
+                      </div>
+                      <div className="wiki-content-body">
+                        {renderWithEmbeds(viewingRevision.content, {
+                          variant: 'wiki',
+                          onPreviewEmbed,
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <ul className="wiki-revision-list">
+                      {revisions.map((rev) => (
+                        <li key={rev.id} className="wiki-revision-item">
                           <button
-                            className="friends-btn accept"
+                            className="wiki-revision-btn"
                             onClick={async () => {
-                              const res = await api.restoreWikiRevision(serverId, currentPage.slug, viewingRevision.revisionNumber);
-                              setCurrentPage(res.page);
-                              setSidebarTab(null);
-                              setViewingRevision(null);
+                              const res = await api.getWikiRevision(
+                                serverId,
+                                currentPage.slug,
+                                rev.revisionNumber,
+                              );
+                              setViewingRevision(res.revision);
                             }}
                           >
-                            {t('wiki.restoreRevision')}
+                            <span className="wiki-revision-num">#{rev.revisionNumber}</span>
+                            <span className="wiki-revision-editor">
+                              {rev.editedBy.displayName ?? rev.editedBy.preferredUsername}
+                            </span>
+                            <span className="file-meta">
+                              {new Date(rev.editedAt).toLocaleString()}
+                            </span>
+                            {rev.summary && (
+                              <span className="wiki-revision-summary">{rev.summary}</span>
+                            )}
                           </button>
-                        </div>
-                        <div className="wiki-content-body">
-                          {renderWithEmbeds(viewingRevision.content, {
-                            variant: 'wiki',
-                            onPreviewEmbed,
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <ul className="wiki-revision-list">
-                        {revisions.map((rev) => (
-                          <li key={rev.id} className="wiki-revision-item">
-                            <button
-                              className="wiki-revision-btn"
-                              onClick={async () => {
-                                const res = await api.getWikiRevision(serverId, currentPage.slug, rev.revisionNumber);
-                                setViewingRevision(res.revision);
-                              }}
-                            >
-                              <span className="wiki-revision-num">#{rev.revisionNumber}</span>
-                              <span className="wiki-revision-editor">
-                                {rev.editedBy.displayName ?? rev.editedBy.preferredUsername}
-                              </span>
-                              <span className="file-meta">{new Date(rev.editedAt).toLocaleString()}</span>
-                              {rev.summary && <span className="wiki-revision-summary">{rev.summary}</span>}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
-                {sidebarTab === 'backlinks' && (
-                  <ul className="wiki-backlinks-list">
-                    {backlinks.map((bl, idx) => {
-                      if (bl.sourceType === 'page' && bl.page) {
-                        return (
-                          <li key={`p-${bl.page.id}-${idx}`}>
-                            <button
-                              className="wiki-backlink-item"
-                              onClick={() => {
-                                setSelectedSlug(bl.page!.slug);
-                                void loadPage(bl.page!.slug);
-                              }}
-                            >
-                              <span className="wiki-backlink-icon">📄</span>
-                              <span className="wiki-backlink-title">{bl.page.title}</span>
-                            </button>
-                          </li>
-                        );
-                      }
-                      if (bl.sourceType === 'message' && bl.message) {
-                        const author =
-                          bl.message.author.displayName ?? bl.message.author.preferredUsername;
-                        const channel = bl.message.channelName ?? '?';
-                        return (
-                          <li key={`m-${bl.message.id}-${idx}`}>
-                            <div className="wiki-backlink-item message">
-                              <span className="wiki-backlink-icon">💬</span>
-                              <div className="wiki-backlink-message">
-                                <div className="wiki-backlink-meta">
-                                  {author} · #{channel}
-                                </div>
-                                <div className="wiki-backlink-snippet">
-                                  {bl.message.content.slice(0, 140)}
-                                </div>
+              {sidebarTab === 'backlinks' && (
+                <ul className="wiki-backlinks-list">
+                  {backlinks.map((bl, idx) => {
+                    if (bl.sourceType === 'page' && bl.page) {
+                      return (
+                        <li key={`p-${bl.page.id}-${idx}`}>
+                          <button
+                            className="wiki-backlink-item"
+                            onClick={() => {
+                              setSelectedSlug(bl.page!.slug);
+                              void loadPage(bl.page!.slug);
+                            }}
+                          >
+                            <span className="wiki-backlink-icon">📄</span>
+                            <span className="wiki-backlink-title">{bl.page.title}</span>
+                          </button>
+                        </li>
+                      );
+                    }
+                    if (bl.sourceType === 'message' && bl.message) {
+                      const author =
+                        bl.message.author.displayName ?? bl.message.author.preferredUsername;
+                      const channel = bl.message.channelName ?? '?';
+                      return (
+                        <li key={`m-${bl.message.id}-${idx}`}>
+                          <div className="wiki-backlink-item message">
+                            <span className="wiki-backlink-icon">💬</span>
+                            <div className="wiki-backlink-message">
+                              <div className="wiki-backlink-meta">
+                                {author} · #{channel}
+                              </div>
+                              <div className="wiki-backlink-snippet">
+                                {bl.message.content.slice(0, 140)}
                               </div>
                             </div>
-                          </li>
-                        );
-                      }
-                      return null;
-                    })}
-                  </ul>
-                )}
+                          </div>
+                        </li>
+                      );
+                    }
+                    return null;
+                  })}
+                </ul>
+              )}
 
-                {sidebarTab === null && (
-                  <div className="wiki-right-empty">
-                    {t('wiki.sidebarHint')}
-                  </div>
-                )}
-              </div>
-            </aside>
-          )}
-        </div>
+              {sidebarTab === null && (
+                <div className="wiki-right-empty">{t('wiki.sidebarHint')}</div>
+              )}
+            </div>
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

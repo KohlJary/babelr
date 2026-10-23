@@ -40,11 +40,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
     const manualUri = `${protocol}://${config.domain}/system/manual`;
 
     // Upsert the system manual actor.
-    let [manual] = await db
-      .select()
-      .from(actors)
-      .where(eq(actors.uri, manualUri))
-      .limit(1);
+    let [manual] = await db.select().from(actors).where(eq(actors.uri, manualUri)).limit(1);
 
     if (!manual) {
       [manual] = await db
@@ -175,10 +171,7 @@ async function wikiSeedPlugin(fastify: FastifyInstance) {
       const pageId = slugToId.get(entry.slug);
       const parentId = slugToId.get(entry.parent);
       if (pageId && parentId) {
-        await db
-          .update(wikiPages)
-          .set({ parentId })
-          .where(eq(wikiPages.id, pageId));
+        await db.update(wikiPages).set({ parentId }).where(eq(wikiPages.id, pageId));
       }
     }
 

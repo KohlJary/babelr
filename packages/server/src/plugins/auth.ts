@@ -20,11 +20,7 @@ async function authPlugin(fastify: FastifyInstance) {
     const sid = request.cookies[COOKIE_NAME];
     if (!sid) return;
 
-    const [session] = await db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.sid, sid))
-      .limit(1);
+    const [session] = await db.select().from(sessions).where(eq(sessions.sid, sid)).limit(1);
 
     if (!session || session.expiresAt < new Date()) {
       if (session) {
@@ -33,11 +29,7 @@ async function authPlugin(fastify: FastifyInstance) {
       return;
     }
 
-    const [actor] = await db
-      .select()
-      .from(actors)
-      .where(eq(actors.id, session.actorId))
-      .limit(1);
+    const [actor] = await db.select().from(actors).where(eq(actors.id, session.actorId)).limit(1);
 
     if (actor) {
       request.actor = actor;
@@ -45,29 +37,26 @@ async function authPlugin(fastify: FastifyInstance) {
   });
 
   // Helper: create session and set cookie
-  fastify.decorate(
-    'createSession',
-    async (actorId: string, reply: FastifyReply) => {
-      const sid = randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + SESSION_MAX_AGE);
+  fastify.decorate('createSession', async (actorId: string, reply: FastifyReply) => {
+    const sid = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE);
 
-      await db.insert(sessions).values({
-        sid,
-        actorId,
-        expiresAt,
-      });
+    await db.insert(sessions).values({
+      sid,
+      actorId,
+      expiresAt,
+    });
 
-      reply.setCookie(COOKIE_NAME, sid, {
-        httpOnly: true,
-        secure: config.secureCookies,
-        sameSite: 'strict',
-        maxAge: SESSION_MAX_AGE / 1000,
-        path: '/',
-      });
+    reply.setCookie(COOKIE_NAME, sid, {
+      httpOnly: true,
+      secure: config.secureCookies,
+      sameSite: 'strict',
+      maxAge: SESSION_MAX_AGE / 1000,
+      path: '/',
+    });
 
-      return sid;
-    },
-  );
+    return sid;
+  });
 
   // Helper: destroy session
   fastify.decorate('destroySession', async (request: FastifyRequest, reply: FastifyReply) => {

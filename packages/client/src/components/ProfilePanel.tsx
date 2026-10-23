@@ -12,7 +12,9 @@ interface ProfilePanelProps {
 
 function AvatarDisplay({ actor }: { actor: ActorProfile }) {
   if (actor.avatarUrl) {
-    return <img className="profile-avatar-img" src={actor.avatarUrl} alt={actor.preferredUsername} />;
+    return (
+      <img className="profile-avatar-img" src={actor.avatarUrl} alt={actor.preferredUsername} />
+    );
   }
   // Default: first letter in colored circle
   const colors = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'];
@@ -135,7 +137,9 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
         </div>
 
         {status && (
-          <p className={`settings-hint ${status.includes('saved') || status === t('profile.saved') ? 'success' : 'error'}`}>
+          <p
+            className={`settings-hint ${status.includes('saved') || status === t('profile.saved') ? 'success' : 'error'}`}
+          >
             {status}
           </p>
         )}

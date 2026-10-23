@@ -132,7 +132,9 @@ export function CreateServerModal({
           </form>
         ) : (
           <div className="discover-list">
-            {loadingServers && <div className="sidebar-empty">{t('createServer.loadingServers')}</div>}
+            {loadingServers && (
+              <div className="sidebar-empty">{t('createServer.loadingServers')}</div>
+            )}
             {!loadingServers && discoverable.length === 0 && (
               <div className="sidebar-empty">{t('createServer.noServersAvailable')}</div>
             )}
@@ -170,16 +172,28 @@ export function CreateServerModal({
                   type="text"
                   placeholder={t('createServer.joinRemotePlaceholder')}
                   value={remoteHandle}
-                  onChange={(e) => { setRemoteHandle(e.target.value); setRemoteError(null); setRemoteSuccess(false); }}
+                  onChange={(e) => {
+                    setRemoteHandle(e.target.value);
+                    setRemoteError(null);
+                    setRemoteSuccess(false);
+                  }}
                   className="modal-input"
                   style={{ flex: 1 }}
                 />
-                <button type="submit" className="auth-submit" disabled={submitting || !remoteHandle.trim()}>
+                <button
+                  type="submit"
+                  className="auth-submit"
+                  disabled={submitting || !remoteHandle.trim()}
+                >
                   {t('createServer.joinRemoteButton')}
                 </button>
               </div>
               {remoteError && <div className="auth-error">{remoteError}</div>}
-              {remoteSuccess && <div style={{ color: '#22c55e', fontSize: '0.85rem' }}>{t('createServer.joinRemoteSuccess')}</div>}
+              {remoteSuccess && (
+                <div style={{ color: '#22c55e', fontSize: '0.85rem' }}>
+                  {t('createServer.joinRemoteSuccess')}
+                </div>
+              )}
             </form>
           </div>
         )}

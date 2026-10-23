@@ -12,9 +12,7 @@ import { parseWikiRefs } from '@babelr/shared';
 
 describe('parseWikiRefs plugin kinds', () => {
   it('built-in kinds parse to their canonical WikiRefKind', () => {
-    const refs = parseWikiRefs(
-      'See [[msg:abc]] and [[event:kickoff]] and [[wiki:design]].',
-    );
+    const refs = parseWikiRefs('See [[msg:abc]] and [[event:kickoff]] and [[wiki:design]].');
     expect(refs.map((r) => r.kind)).toEqual(['message', 'event', 'page']);
   });
 

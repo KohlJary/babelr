@@ -13,9 +13,10 @@ import type {
   CreateChannelInput,
 } from '@babelr/shared';
 
-const API_BASE = (typeof window !== 'undefined' && localStorage.getItem('babelr:server-url'))
-  ? localStorage.getItem('babelr:server-url')!
-  : '/api';
+const API_BASE =
+  typeof window !== 'undefined' && localStorage.getItem('babelr:server-url')
+    ? localStorage.getItem('babelr:server-url')!
+    : '/api';
 
 class ApiError extends Error {
   constructor(
@@ -28,7 +29,9 @@ class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { ...((options?.headers as Record<string, string>) ?? {}) };
+  const headers: Record<string, string> = {
+    ...((options?.headers as Record<string, string>) ?? {}),
+  };
   if (options?.body) {
     headers['Content-Type'] = 'application/json';
   }
@@ -76,11 +79,17 @@ export async function complete2faChallenge(
   });
 }
 
-export async function setup2fa(): Promise<{ otpauthUri: string; qrDataUrl: string; secret: string }> {
+export async function setup2fa(): Promise<{
+  otpauthUri: string;
+  qrDataUrl: string;
+  secret: string;
+}> {
   return apiFetch('/auth/2fa/setup', { method: 'POST' });
 }
 
-export async function verify2faSetup(code: string): Promise<{ enabled: boolean; recoveryCodes: string[] }> {
+export async function verify2faSetup(
+  code: string,
+): Promise<{ enabled: boolean; recoveryCodes: string[] }> {
   return apiFetch('/auth/2fa/verify', {
     method: 'POST',
     body: JSON.stringify({ code }),
@@ -267,9 +276,12 @@ export async function removeReaction(
   messageId: string,
   emoji: string,
 ): Promise<{ ok: boolean }> {
-  return apiFetch(`/channels/${channelId}/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`, {
-    method: 'DELETE',
-  });
+  return apiFetch(
+    `/channels/${channelId}/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`,
+    {
+      method: 'DELETE',
+    },
+  );
 }
 
 // Message management
@@ -284,10 +296,7 @@ export async function editMessage(
   });
 }
 
-export async function deleteMessage(
-  channelId: string,
-  messageId: string,
-): Promise<void> {
+export async function deleteMessage(channelId: string, messageId: string): Promise<void> {
   await apiFetch(`/channels/${channelId}/messages/${messageId}`, {
     method: 'DELETE',
   });
@@ -335,7 +344,9 @@ export async function startDM(participantId: string): Promise<DMConversation> {
   return apiFetch('/dms', { method: 'POST', body: JSON.stringify({ participantId }) });
 }
 
-export async function getUsers(): Promise<{ id: string; preferredUsername: string; displayName: string | null }[]> {
+export async function getUsers(): Promise<
+  { id: string; preferredUsername: string; displayName: string | null }[]
+> {
   return apiFetch('/users');
 }
 
@@ -451,10 +462,7 @@ export async function updateWikiPage(
   });
 }
 
-export async function deleteWikiPage(
-  serverId: string,
-  slug: string,
-): Promise<{ ok: boolean }> {
+export async function deleteWikiPage(serverId: string, slug: string): Promise<{ ok: boolean }> {
   return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}`, {
     method: 'DELETE',
   });
@@ -525,10 +533,7 @@ export async function updateServerRole(
   });
 }
 
-export async function deleteServerRole(
-  serverId: string,
-  roleId: string,
-): Promise<{ ok: boolean }> {
+export async function deleteServerRole(serverId: string, roleId: string): Promise<{ ok: boolean }> {
   return apiFetch(`/servers/${serverId}/roles/${roleId}`, { method: 'DELETE' });
 }
 
@@ -576,14 +581,12 @@ export async function changePassword(currentPassword: string, newPassword: strin
   });
 }
 
-export async function updateProfile(
-  profile: {
-    displayName?: string;
-    summary?: string;
-    avatarUrl?: string;
-    preferredLanguage?: string;
-  },
-): Promise<ActorProfile> {
+export async function updateProfile(profile: {
+  displayName?: string;
+  summary?: string;
+  avatarUrl?: string;
+  preferredLanguage?: string;
+}): Promise<ActorProfile> {
   return apiFetch('/auth/profile', {
     method: 'PUT',
     body: JSON.stringify(profile),
@@ -623,7 +626,12 @@ export async function getUserProfile(userId: string): Promise<UserProfile> {
   return apiFetch(`/users/${userId}/profile`);
 }
 
-export async function banUser(serverId: string, userId: string, reason?: string, durationHours?: number): Promise<void> {
+export async function banUser(
+  serverId: string,
+  userId: string,
+  reason?: string,
+  durationHours?: number,
+): Promise<void> {
   await apiFetch(`/servers/${serverId}/ban`, {
     method: 'POST',
     body: JSON.stringify({ userId, reason, durationHours }),
@@ -634,7 +642,17 @@ export async function unbanUser(serverId: string, userId: string): Promise<void>
   await apiFetch(`/servers/${serverId}/ban/${userId}`, { method: 'DELETE' });
 }
 
-export async function getBans(serverId: string): Promise<{ bans: Array<{ id: string; userId: string; username: string; displayName: string | null; reason: string | null; bannedAt: string; expiresAt: string | null }> }> {
+export async function getBans(serverId: string): Promise<{
+  bans: Array<{
+    id: string;
+    userId: string;
+    username: string;
+    displayName: string | null;
+    reason: string | null;
+    bannedAt: string;
+    expiresAt: string | null;
+  }>;
+}> {
   return apiFetch(`/servers/${serverId}/bans`);
 }
 
@@ -668,9 +686,7 @@ export async function setPublicKey(publicKey: JsonWebKey): Promise<void> {
   });
 }
 
-export async function getUserPublicKey(
-  userId: string,
-): Promise<{ publicKey: JsonWebKey | null }> {
+export async function getUserPublicKey(userId: string): Promise<{ publicKey: JsonWebKey | null }> {
   return apiFetch(`/users/${userId}/publickey`);
 }
 
@@ -692,11 +708,7 @@ export async function getMembers(serverId: string): Promise<MemberView[]> {
   return apiFetch(`/servers/${serverId}/members`);
 }
 
-export async function setMemberRole(
-  serverId: string,
-  userId: string,
-  role: string,
-): Promise<void> {
+export async function setMemberRole(serverId: string, userId: string, role: string): Promise<void> {
   await apiFetch(`/servers/${serverId}/members/${userId}/role`, {
     method: 'PUT',
     body: JSON.stringify({ role }),
@@ -711,7 +723,9 @@ export async function kickMember(serverId: string, userId: string): Promise<void
 
 // Glossary
 export async function getGlossary(channelId: string): Promise<Record<string, string>> {
-  const res = await apiFetch<{ glossary: Record<string, string> }>(`/channels/${channelId}/glossary`);
+  const res = await apiFetch<{ glossary: Record<string, string> }>(
+    `/channels/${channelId}/glossary`,
+  );
   return res.glossary;
 }
 
@@ -761,7 +775,9 @@ export async function createServerInvite(
   });
 }
 
-export async function joinViaInvite(code: string): Promise<{ ok: boolean; server: { id: string; name: string } }> {
+export async function joinViaInvite(
+  code: string,
+): Promise<{ ok: boolean; server: { id: string; name: string } }> {
   return apiFetch(`/invites/${code}/join`, { method: 'POST' });
 }
 
@@ -823,7 +839,12 @@ export async function getFile(
 export async function updateFile(
   serverId: string,
   fileId: string,
-  input: { title?: string; description?: string | null; tags?: string[]; folderPath?: string | null },
+  input: {
+    title?: string;
+    description?: string | null;
+    tags?: string[];
+    folderPath?: string | null;
+  },
 ): Promise<import('@babelr/shared').FileView> {
   return apiFetch(`/servers/${serverId}/files/${fileId}`, {
     method: 'PUT',
@@ -831,10 +852,7 @@ export async function updateFile(
   });
 }
 
-export async function deleteFile(
-  serverId: string,
-  fileId: string,
-): Promise<{ ok: boolean }> {
+export async function deleteFile(serverId: string, fileId: string): Promise<{ ok: boolean }> {
   return apiFetch(`/servers/${serverId}/files/${fileId}`, { method: 'DELETE' });
 }
 
@@ -851,7 +869,9 @@ export async function searchWikiPages(
   serverId: string,
   query: string,
   limit = 20,
-): Promise<{ results: (import('@babelr/shared').WikiPageSummary & { snippet: string; rank: number })[] }> {
+): Promise<{
+  results: (import('@babelr/shared').WikiPageSummary & { snippet: string; rank: number })[];
+}> {
   return apiFetch(`/servers/${serverId}/wiki/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }
 
@@ -868,7 +888,9 @@ export async function getWikiRevision(
   slug: string,
   revisionNumber: number,
 ): Promise<{ revision: import('@babelr/shared').WikiPageRevisionView }> {
-  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/revisions/${revisionNumber}`);
+  return apiFetch(
+    `/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/revisions/${revisionNumber}`,
+  );
 }
 
 export async function restoreWikiRevision(
@@ -876,9 +898,12 @@ export async function restoreWikiRevision(
   slug: string,
   revisionNumber: number,
 ): Promise<import('@babelr/shared').WikiPageResponse> {
-  return apiFetch(`/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/restore/${revisionNumber}`, {
-    method: 'POST',
-  });
+  return apiFetch(
+    `/servers/${serverId}/wiki/pages/${encodeURIComponent(slug)}/restore/${revisionNumber}`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 // Manual
@@ -886,9 +911,14 @@ export async function getManualServerId(): Promise<{ serverId: string }> {
   return apiFetch('/manual/id');
 }
 
-export async function getManualPageBySlug(
-  slug: string,
-): Promise<{ id: string; slug: string; title: string; content: string; serverId: string; serverName: string }> {
+export async function getManualPageBySlug(slug: string): Promise<{
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  serverId: string;
+  serverName: string;
+}> {
   return apiFetch(`/manual/by-slug/${encodeURIComponent(slug)}`);
 }
 

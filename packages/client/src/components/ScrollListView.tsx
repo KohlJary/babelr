@@ -44,12 +44,7 @@ export function ScrollListView<T>({
       <header className="scroll-list-header">
         {title && <h2 className="scroll-list-title">{title}</h2>}
         {onClose && (
-          <button
-            type="button"
-            className="scroll-list-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="scroll-list-close" onClick={onClose} aria-label="Close">
             &times;
           </button>
         )}
@@ -65,13 +60,9 @@ export function ScrollListView<T>({
         </div>
       )}
       <div className="scroll-list-body">
-        {loading && items.length === 0 && (
-          <div className="scroll-list-loading">Loading…</div>
-        )}
+        {loading && items.length === 0 && <div className="scroll-list-loading">Loading…</div>}
         {!loading && filtered.length === 0 && (
-          <div className="scroll-list-empty">
-            {emptyMessage ?? 'Nothing here yet.'}
-          </div>
+          <div className="scroll-list-empty">{emptyMessage ?? 'Nothing here yet.'}</div>
         )}
         {filtered.map((item) => (
           <div key={getId(item)} className="scroll-list-item">
@@ -79,11 +70,7 @@ export function ScrollListView<T>({
           </div>
         ))}
         {hasMore && onLoadMore && (
-          <button
-            type="button"
-            className="scroll-list-load-more"
-            onClick={onLoadMore}
-          >
+          <button type="button" className="scroll-list-load-more" onClick={onLoadMore}>
             Load more
           </button>
         )}

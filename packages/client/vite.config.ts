@@ -18,12 +18,7 @@ const proxyWsTarget = proxyHttpTarget.replace(/^http/, 'ws');
 // whitelisted or vite returns a 403 before the page can even render.
 // Safe to hardcode — these names are reserved for local federation
 // testing and never collide with real traffic.
-const allowedHosts = [
-  'localhost',
-  '127.0.0.1',
-  'babelr-a.local',
-  'babelr-b.local',
-];
+const allowedHosts = ['localhost', '127.0.0.1', 'babelr-a.local', 'babelr-b.local'];
 
 export default defineConfig({
   plugins: [

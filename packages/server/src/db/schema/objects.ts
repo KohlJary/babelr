@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, text, varchar, timestamp, jsonb, index, uniqueIndex, customType } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  varchar,
+  timestamp,
+  jsonb,
+  index,
+  uniqueIndex,
+  customType,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { actors } from './actors.ts';
 

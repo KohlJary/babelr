@@ -10,7 +10,7 @@ by hand.
 
 This guide sets up a fully-local two-instance rig on a single machine
 and walks through every scenario that federates today, plus the ones
-that *should* federate so you can spot regressions or missing wiring.
+that _should_ federate so you can spot regressions or missing wiring.
 
 ## One-time setup
 
@@ -77,12 +77,12 @@ which override the values from `.env` via Node's `--env-file` semantics.
 
 This spins up four processes in the foreground with color-prefixed logs:
 
-| Process  | URL                              | Role                      |
-|----------|----------------------------------|---------------------------|
-| server-a | `http://babelr-a.local:3000`     | Instance A backend        |
-| server-b | `http://babelr-b.local:3001`     | Instance B backend        |
-| client-a | `http://babelr-a.local:1111`     | Instance A web client     |
-| client-b | `http://babelr-b.local:1112`     | Instance B web client     |
+| Process  | URL                          | Role                  |
+| -------- | ---------------------------- | --------------------- |
+| server-a | `http://babelr-a.local:3000` | Instance A backend    |
+| server-b | `http://babelr-b.local:3001` | Instance B backend    |
+| client-a | `http://babelr-a.local:1111` | Instance A web client |
+| client-b | `http://babelr-b.local:1112` | Instance B web client |
 
 `Ctrl-C` stops all four cleanly. Each line in the combined output is
 tagged with the instance name so you can tell who's saying what.
@@ -107,7 +107,7 @@ the session cookies don't collide. Register a different user on each:
 
 Everything in the checklist below is wired up and delivering via the
 `delivery_queue` table. If a scenario fails, check the server logs for
-the instance that *sent* the activity (look for
+the instance that _sent_ the activity (look for
 `Delivery failed`, `Signature verification failed`, or the activity's
 queue row with `state = 'failed'`).
 
@@ -118,6 +118,7 @@ via the `/.well-known/webfinger` endpoint before any activity can be
 addressed to them.
 
 **Test:**
+
 - [ ] From bob on B, open the "Add friend" dialog and enter
       `alice@babelr-a.local:3000`.
 - [ ] The client should resolve the handle and show alice's avatar /
@@ -136,6 +137,7 @@ creates a `pending_in` row on the receiver. An `Accept` flips both
 sides to `accepted`. An `Undo(Follow)` removes the friendship.
 
 **Test:**
+
 - [ ] Bob sends friend request to `alice@babelr-a.local:3000`.
 - [ ] On server-b logs: outbound `Follow` activity enqueued.
 - [ ] On server-a logs: inbound `Follow` received at
@@ -163,6 +165,7 @@ instance synthesizes a local DM collection if one doesn't already exist
 and delivers a `message:new` / `conversation:new` WS event.
 
 **Test:**
+
 - [ ] After the friendship from step 2 is accepted, alice opens bob's
       profile and clicks "Send message".
 - [ ] Alice sends a plaintext message.
@@ -193,6 +196,7 @@ auto-accepts (unlike Person→Person) and adds the remote actor to the
 `followers` collection.
 
 **Test:**
+
 - [ ] On instance A, alice creates a server called "Test Server" with
       a `#general` channel.
 - [ ] On instance B, bob looks up the server by handle
@@ -212,6 +216,7 @@ auto-accepts (unlike Person→Person) and adds the remote actor to the
 bob) via `broadcastToGroupFollowers`.
 
 **Test:**
+
 - [ ] Alice posts `hello from A` in `#general`.
 - [ ] Server-a enqueues Create to bob's inbox on instance B.
 - [ ] Bob sees `hello from A` render in `#general` in real time.
@@ -239,6 +244,7 @@ If reactions don't federate yet, this is a known gap — mark it as a
 failure case for the regression tracker.
 
 **Test:**
+
 - [ ] Alice adds a 👍 reaction to one of bob's messages on A.
 - [ ] Does bob see the reaction count update on B?
 - [ ] Alice removes the reaction. Does B see the count decrement?
@@ -252,6 +258,7 @@ a Note whose `inReplyTo` points at the parent. Federation should
 deliver replies the same way top-level posts are delivered.
 
 **Test:**
+
 - [ ] Alice posts a message; bob opens it in a thread and replies.
 - [ ] Alice sees the reply appear in the thread view on A.
 - [ ] Reply count on the parent message increments on both sides.
@@ -267,6 +274,7 @@ changes (display name, avatar, bio) on one side should propagate to
 the other via `Update(Actor)` activities.
 
 **Test:**
+
 - [ ] Alice changes her display name from "Alice" to "Alicia".
 - [ ] On B, bob's friends list should update within a few seconds
       (delivery queue fires every 5s).
@@ -280,6 +288,7 @@ the other via `Update(Actor)` activities.
 changes on A, remote followers on B should see the update.
 
 **Test:**
+
 - [ ] Alice edits Test Server's display name from "Test Server" to
       "Test Server v2".
 - [ ] Does bob see the updated name in his sidebar on B?
@@ -293,6 +302,7 @@ server. In theory a server event should fan out to remote followers
 the same way a channel message does.
 
 **Test:**
+
 - [ ] Alice creates an event on Test Server.
 - [ ] Does the event appear in bob's calendar view on B?
 - [ ] Can bob RSVP from B?
@@ -306,6 +316,7 @@ the same way a channel message does.
 theory. In practice, they almost certainly don't federate yet.
 
 **Test:**
+
 - [ ] Alice creates a wiki page on Test Server.
 - [ ] Does it show up on bob's wiki panel on B?
 - [ ] Alice edits the page. Does B see the update?
@@ -317,11 +328,12 @@ theory. In practice, they almost certainly don't federate yet.
 
 **What it does:** A `[[msg:slug]]` embed on one instance references
 a message that may live on the remote instance. The current lookup
-path hits `/messages/by-slug/:slug` on the *local* server. A
+path hits `/messages/by-slug/:slug` on the _local_ server. A
 cross-instance embed should either resolve via federation or
 gracefully fall back to a "locked" preview.
 
 **Test:**
+
 - [ ] Alice posts a message on A. Its slug is visible via the copy
       button on the message.
 - [ ] Bob pastes `[[msg:that-slug]]` into a message on B.
@@ -337,6 +349,7 @@ gracefully fall back to a "locked" preview.
 marked `failed`.
 
 **Test:**
+
 - [ ] Stop instance B while instance A has unsent activities to
       deliver (send alice a message for bob, then kill server-b
       within the same second).
@@ -356,6 +369,7 @@ Signature covering `(request-target)`, `host`, `date`, and `digest`.
 Any tampering breaks verification.
 
 **Test:**
+
 - [ ] **Clock skew:** manually adjust system clock on A forward by
       10 minutes, send an activity. B should reject it with a
       signature failure (if it has a date-window check) or accept it
@@ -374,6 +388,7 @@ Any tampering breaks verification.
 per IP to prevent a malicious remote from flooding the queue.
 
 **Test:**
+
 - [ ] Spam 50 inbox POSTs to B from a script within 60 seconds. The
       first 30 should be processed; the rest should 429.
 - [ ] Verify legitimate federation traffic from A is not affected
@@ -381,7 +396,7 @@ per IP to prevent a malicious remote from flooding the queue.
 
 ## Known gaps worth tracking
 
-These are features that *should* federate but currently don't, based
+These are features that _should_ federate but currently don't, based
 on the audit. Each is a candidate roadmap item if it matters for
 enterprise adoption:
 

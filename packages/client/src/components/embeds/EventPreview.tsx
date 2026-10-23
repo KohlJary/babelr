@@ -9,10 +9,7 @@ interface EventPreviewProps {
   serverSlug?: string;
 }
 
-type State =
-  | { status: 'loading' }
-  | { status: 'ok'; embed: EventEmbedView }
-  | { status: 'locked' };
+type State = { status: 'loading' } | { status: 'ok'; embed: EventEmbedView } | { status: 'locked' };
 
 function fmtRange(startAt: string, endAt: string): string {
   const s = new Date(startAt);
@@ -56,17 +53,13 @@ export function EventPreview({ slug, serverSlug }: EventPreviewProps) {
       <h3 className="event-preview-title">{embed.title}</h3>
       <div className="event-preview-when">{fmtRange(embed.startAt, embed.endAt)}</div>
       {embed.location && <div className="event-preview-location">📍 {embed.location}</div>}
-      {embed.description && (
-        <div className="event-preview-description">{embed.description}</div>
-      )}
+      {embed.description && <div className="event-preview-description">{embed.description}</div>}
       <div className="event-preview-counts">
         <span>✅ {embed.counts.going} going</span>
         <span>★ {embed.counts.interested} interested</span>
         <span>✗ {embed.counts.declined} declined</span>
       </div>
-      {embed.myRsvp && (
-        <div className="event-preview-myrsvp">Your RSVP: {embed.myRsvp}</div>
-      )}
+      {embed.myRsvp && <div className="event-preview-myrsvp">Your RSVP: {embed.myRsvp}</div>}
     </div>
   );
 }

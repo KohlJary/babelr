@@ -52,10 +52,7 @@ async function createServerWithCreator() {
   return { creator, serverId: server.id };
 }
 
-async function addMemberToServer(
-  cookie: string,
-  serverId: string,
-): Promise<void> {
+async function addMemberToServer(cookie: string, serverId: string): Promise<void> {
   // Use the join-by-invite flow for realism: create invite as admin,
   // join as the new user.
   // But the existing servers.ts route structure is a bit awkward here;
@@ -201,7 +198,10 @@ describe('getEffectivePermissions', () => {
 describe('hasPermission / hasAllPermissions', () => {
   it('hasPermission returns true only for granted permissions', async () => {
     const { creator, serverId } = await createServerWithCreator();
-    const me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: creator.cookie } })).body);
+    const me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: creator.cookie } }))
+        .body,
+    );
 
     expect(await hasPermission(db, serverId, me.id, PERMISSIONS.MANAGE_SERVER)).toBe(true);
     expect(await hasPermission(db, serverId, me.id, PERMISSIONS.SEND_MESSAGES)).toBe(true);
@@ -211,7 +211,10 @@ describe('hasPermission / hasAllPermissions', () => {
     const { serverId } = await createServerWithCreator();
     const member = await createTestUser(app, 'allperms');
     await addMemberToServer(member.cookie, serverId);
-    const me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: member.cookie } })).body);
+    const me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: member.cookie } }))
+        .body,
+    );
 
     // Member has SEND_MESSAGES but not MANAGE_SERVER.
     expect(
@@ -231,7 +234,10 @@ describe('hasPermission / hasAllPermissions', () => {
   it('empty permission array always returns true (trivially satisfied)', async () => {
     const { serverId } = await createServerWithCreator();
     const stranger = await createTestUser(app, 'novoid');
-    const me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: stranger.cookie } })).body);
+    const me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: stranger.cookie } }))
+        .body,
+    );
     expect(await hasAllPermissions(db, serverId, me.id, [])).toBe(true);
   });
 });
@@ -249,8 +255,12 @@ describe('countManageRolesHolders / ensureManageRolesSurvives', () => {
     await addMemberToServer(m1.cookie, serverId);
     await addMemberToServer(m2.cookie, serverId);
 
-    const m1Me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: m1.cookie } })).body);
-    const m2Me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: m2.cookie } })).body);
+    const m1Me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: m1.cookie } })).body,
+    );
+    const m2Me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: m2.cookie } })).body,
+    );
 
     const [adminRole] = await db
       .select()
@@ -268,7 +278,10 @@ describe('countManageRolesHolders / ensureManageRolesSurvives', () => {
 
   it('ensureManageRolesSurvives throws LockoutError when count reaches zero', async () => {
     const { creator, serverId } = await createServerWithCreator();
-    const me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: creator.cookie } })).body);
+    const me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: creator.cookie } }))
+        .body,
+    );
 
     // Simulate the mutation: unassign the creator from Admin.
     const [adminRole] = await db
@@ -299,10 +312,7 @@ describe('countManageRolesHolders / ensureManageRolesSurvives', () => {
 describe('server creation bootstrap', () => {
   it('creates exactly three default roles on new server creation', async () => {
     const { serverId } = await createServerWithCreator();
-    const roles = await db
-      .select()
-      .from(serverRoles)
-      .where(eq(serverRoles.serverId, serverId));
+    const roles = await db.select().from(serverRoles).where(eq(serverRoles.serverId, serverId));
     expect(roles).toHaveLength(3);
     const names = roles.map((r) => r.name).sort();
     expect(names).toEqual(['@everyone', 'Admin', 'Moderator']);
@@ -310,10 +320,7 @@ describe('server creation bootstrap', () => {
 
   it('marks @everyone as isDefault + isSystem, leaves the other two unmarked', async () => {
     const { serverId } = await createServerWithCreator();
-    const roles = await db
-      .select()
-      .from(serverRoles)
-      .where(eq(serverRoles.serverId, serverId));
+    const roles = await db.select().from(serverRoles).where(eq(serverRoles.serverId, serverId));
 
     const everyone = roles.find((r) => r.name === '@everyone');
     const moderator = roles.find((r) => r.name === 'Moderator');
@@ -329,17 +336,17 @@ describe('server creation bootstrap', () => {
 
   it('assigns the creator to the Admin role', async () => {
     const { creator, serverId } = await createServerWithCreator();
-    const me = JSON.parse((await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: creator.cookie } })).body);
+    const me = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: creator.cookie } }))
+        .body,
+    );
 
     const assignments = await db
       .select({ roleName: serverRoles.name })
       .from(serverRoleAssignments)
       .innerJoin(serverRoles, eq(serverRoles.id, serverRoleAssignments.roleId))
       .where(
-        and(
-          eq(serverRoleAssignments.serverId, serverId),
-          eq(serverRoleAssignments.actorId, me.id),
-        ),
+        and(eq(serverRoleAssignments.serverId, serverId), eq(serverRoleAssignments.actorId, me.id)),
       );
 
     expect(assignments).toHaveLength(1);

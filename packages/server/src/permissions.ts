@@ -145,10 +145,7 @@ export async function hasAllPermissions(
  * Evaluated against live DB state, never cached — the caller is
  * about to mutate and needs a fresh answer post-mutation.
  */
-export async function countManageRolesHolders(
-  db: Db,
-  serverId: string,
-): Promise<number> {
+export async function countManageRolesHolders(db: Db, serverId: string): Promise<number> {
   // Case 1: @everyone has MANAGE_ROLES — every server member qualifies.
   const [defaultRole] = await db
     .select({ permissions: serverRoles.permissions })

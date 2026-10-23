@@ -27,7 +27,10 @@ export async function registerFresh(page: Page) {
   await page.goto('/');
   await page.locator('.auth-form').waitFor({ timeout: 5000 });
   // Switch to Register tab
-  await page.locator('.auth-tab').filter({ hasText: /register/i }).click();
+  await page
+    .locator('.auth-tab')
+    .filter({ hasText: /register/i })
+    .click();
   // Fill registration fields
   await page.getByPlaceholder('Username').fill(`e2e_${ts}`);
   await page.getByPlaceholder('Email').fill(`e2e_${ts}@test.babelr.local`);

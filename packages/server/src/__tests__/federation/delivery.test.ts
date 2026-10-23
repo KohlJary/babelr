@@ -40,7 +40,11 @@ describe('enqueueDelivery', () => {
       domain: 'remote.tower',
     });
 
-    const activity = { type: 'Create', actor: alice.uri, object: { type: 'Note', content: 'test' } };
+    const activity = {
+      type: 'Create',
+      actor: alice.uri,
+      object: { type: 'Note', content: 'test' },
+    };
     await enqueueDelivery(db, activity, bob.inboxUri, alice.id);
 
     const items = await db.select().from(deliveryQueue);

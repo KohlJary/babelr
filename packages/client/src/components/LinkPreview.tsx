@@ -8,11 +8,7 @@ interface LinkPreviewData {
   siteName: string | null;
 }
 
-export function LinkPreviewCards({
-  previews,
-}: {
-  previews: LinkPreviewData[];
-}) {
+export function LinkPreviewCards({ previews }: { previews: LinkPreviewData[] }) {
   if (!previews || previews.length === 0) return null;
 
   return (
@@ -25,26 +21,13 @@ export function LinkPreviewCards({
           rel="noopener noreferrer"
           className="link-preview-card"
         >
-          {p.image && (
-            <img
-              src={p.image}
-              alt=""
-              className="link-preview-image"
-              loading="lazy"
-            />
-          )}
+          {p.image && <img src={p.image} alt="" className="link-preview-image" loading="lazy" />}
           <div className="link-preview-body">
-            {p.siteName && (
-              <span className="link-preview-site">{p.siteName}</span>
-            )}
-            {p.title && (
-              <span className="link-preview-title">{p.title}</span>
-            )}
+            {p.siteName && <span className="link-preview-site">{p.siteName}</span>}
+            {p.title && <span className="link-preview-title">{p.title}</span>}
             {p.description && (
               <span className="link-preview-desc">
-                {p.description.length > 200
-                  ? p.description.slice(0, 200) + '…'
-                  : p.description}
+                {p.description.length > 200 ? p.description.slice(0, 200) + '…' : p.description}
               </span>
             )}
           </div>

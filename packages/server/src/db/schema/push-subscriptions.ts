@@ -12,11 +12,7 @@ export const pushSubscriptions = pgTable(
     endpoint: text('endpoint').notNull(),
     p256dh: text('p256dh').notNull(),
     auth: text('auth').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex('push_subs_endpoint_idx').on(table.endpoint),
-  ],
+  (table) => [uniqueIndex('push_subs_endpoint_idx').on(table.endpoint)],
 );

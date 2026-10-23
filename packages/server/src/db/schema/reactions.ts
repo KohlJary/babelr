@@ -7,8 +7,12 @@ export const reactions = pgTable(
   'reactions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    objectId: uuid('object_id').notNull().references(() => objects.id),
-    actorId: uuid('actor_id').notNull().references(() => actors.id),
+    objectId: uuid('object_id')
+      .notNull()
+      .references(() => objects.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
     emoji: varchar('emoji', { length: 32 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

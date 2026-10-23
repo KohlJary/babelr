@@ -46,7 +46,11 @@ export function ServerSidebar({
           )}
         </button>
       ))}
-      <button className="server-icon add-server" onClick={onCreateServer} title={t('serverSidebar.createServer')}>
+      <button
+        className="server-icon add-server"
+        onClick={onCreateServer}
+        title={t('serverSidebar.createServer')}
+      >
         +
       </button>
       {onOpenManual && (

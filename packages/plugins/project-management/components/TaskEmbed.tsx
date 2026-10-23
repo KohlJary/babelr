@@ -57,10 +57,18 @@ export function TaskPreview(props: Record<string, unknown>) {
   const { slug, routeBase } = props as unknown as TaskPreviewProps;
   const state = useTaskItem(slug, routeBase);
   if (state.status === 'loading') {
-    return <div className="embed-preview-loading"><T>Loading work item…</T></div>;
+    return (
+      <div className="embed-preview-loading">
+        <T>Loading work item…</T>
+      </div>
+    );
   }
   if (state.status === 'locked') {
-    return <div className="embed-preview-locked"><T>Work item not found.</T></div>;
+    return (
+      <div className="embed-preview-locked">
+        <T>Work item not found.</T>
+      </div>
+    );
   }
   const { item } = state;
   return (
@@ -72,7 +80,9 @@ export function TaskPreview(props: Record<string, unknown>) {
         <span className={`pm-card-priority priority-${item.priority}`}>
           <T>{item.priority}</T>
         </span>
-        <span className={`pm-card-type type-${item.itemType}`}><T>{item.itemType}</T></span>
+        <span className={`pm-card-type type-${item.itemType}`}>
+          <T>{item.itemType}</T>
+        </span>
       </div>
       {item.description && (
         <div className="pm-task-preview-description">
@@ -82,17 +92,23 @@ export function TaskPreview(props: Record<string, unknown>) {
       <dl className="pm-task-preview-fields">
         {item.storyPoints !== null && (
           <>
-            <dt><T>Points</T></dt>
+            <dt>
+              <T>Points</T>
+            </dt>
             <dd>{item.storyPoints}</dd>
           </>
         )}
         {item.dueDate && (
           <>
-            <dt><T>Due</T></dt>
+            <dt>
+              <T>Due</T>
+            </dt>
             <dd>{new Date(item.dueDate).toLocaleString()}</dd>
           </>
         )}
-        <dt><T>Created</T></dt>
+        <dt>
+          <T>Created</T>
+        </dt>
         <dd>{new Date(item.createdAt).toLocaleString()}</dd>
       </dl>
     </div>

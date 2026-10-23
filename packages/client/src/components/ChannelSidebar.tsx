@@ -85,12 +85,18 @@ export function ChannelSidebar({
               {t('channelSidebar.friends')}
             </button>
           )}
-          {viewEntries?.filter((v) => v.id === 'calendar').map((v) => (
-            <button key={v.id} className="sidebar-item add-channel" onClick={() => onOpenView?.(v.id)}>
-              {v.icon && <span className="sidebar-view-icon">{v.icon}</span>}
-              {v.label}
-            </button>
-          ))}
+          {viewEntries
+            ?.filter((v) => v.id === 'calendar')
+            .map((v) => (
+              <button
+                key={v.id}
+                className="sidebar-item add-channel"
+                onClick={() => onOpenView?.(v.id)}
+              >
+                {v.icon && <span className="sidebar-view-icon">{v.icon}</span>}
+                {v.label}
+              </button>
+            ))}
           {conversations.length === 0 && (
             <div className="sidebar-empty">{t('channelSidebar.noConversations')}</div>
           )}
@@ -161,8 +167,13 @@ export function ChannelSidebar({
             if (isVoice && onJoinVoice) onJoinVoice(ch.id);
           }}
         >
-          <span className="sidebar-item-name">{icon}{ch.name}</span>
-          {unreadCount > 0 && !isMuted && !isVoice && <span className="unread-badge">{unreadCount}</span>}
+          <span className="sidebar-item-name">
+            {icon}
+            {ch.name}
+          </span>
+          {unreadCount > 0 && !isMuted && !isVoice && (
+            <span className="unread-badge">{unreadCount}</span>
+          )}
         </button>
         {onToggleMute && (
           <button

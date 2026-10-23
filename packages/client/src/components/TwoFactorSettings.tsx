@@ -72,11 +72,7 @@ export function TwoFactorSettings({ actor, onActorUpdate }: TwoFactorSettingsPro
     return (
       <div className="settings-field tfa-settings">
         <label>{t('twoFactor.enabled')}</label>
-        <button
-          type="button"
-          className="auth-submit"
-          onClick={() => setPhase('disable')}
-        >
+        <button type="button" className="auth-submit" onClick={() => setPhase('disable')}>
           {t('twoFactor.disable')}
         </button>
         {phase === 'idle' && null}
@@ -155,9 +151,7 @@ export function TwoFactorSettings({ actor, onActorUpdate }: TwoFactorSettingsPro
     return (
       <div className="settings-field tfa-settings">
         <label>{t('twoFactor.setupSubtitle')}</label>
-        {qrDataUrl && (
-          <img src={qrDataUrl} alt="TOTP QR code" className="tfa-qr" />
-        )}
+        {qrDataUrl && <img src={qrDataUrl} alt="TOTP QR code" className="tfa-qr" />}
         {secretKey && (
           <div className="tfa-secret">
             <code>{secretKey}</code>

@@ -208,9 +208,7 @@ export function EventEmbed({ slug, serverSlug, onNavigate }: EventEmbedProps) {
         <span className="event-embed-content">
           <span className="event-embed-title">{displayTitle}</span>
           <span className="event-embed-when">{formatRange(embed.startAt, embed.endAt)}</span>
-          {embed.location && (
-            <span className="event-embed-location">📍 {embed.location}</span>
-          )}
+          {embed.location && <span className="event-embed-location">📍 {embed.location}</span>}
           <span className="event-embed-counts">
             {t('events.embedCountsGoing', { count: String(embed.counts.going) })}
             {embed.counts.interested > 0 && (

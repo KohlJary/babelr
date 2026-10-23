@@ -24,27 +24,27 @@ Your Tower is now running at `http://localhost:3000`.
 
 Set these in your `.env` file or as environment variables:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes* | Set by compose | PostgreSQL connection string |
-| `SESSION_SECRET` | Yes | -- | Random string for signing cookies. Generate with `openssl rand -hex 32` |
-| `BABELR_DOMAIN` | Yes* | `localhost:3000` | Public domain for ActivityPub URIs. **Must be set correctly for federation.** |
-| `PORT` | No | `3000` | Server port inside the container |
-| `BABELR_PORT` | No | `3000` | Host port to expose (for avoiding conflicts with local dev) |
-| `HOST` | No | `0.0.0.0` | Bind address |
-| `NODE_ENV` | No | `production` | Set to `production` for secure cookies |
-| `FEDERATION_MODE` | No | `open` | Federation policy: `open`, `allowlist`, or `blocklist` |
-| `FEDERATION_DOMAINS` | No | -- | Comma-separated domain list for allowlist/blocklist mode |
-| `OIDC_ISSUER` | No | -- | OIDC provider URL (e.g. `https://accounts.google.com`) |
-| `OIDC_CLIENT_ID` | No | -- | OIDC client ID from your identity provider |
-| `OIDC_CLIENT_SECRET` | No | -- | OIDC client secret |
-| `OIDC_REDIRECT_URI` | No | -- | Callback URL: `https://your-domain/api/auth/oidc/callback` |
-| `MEDIASOUP_ANNOUNCED_IP` | Yes for voice | -- | Public IP advertised to browsers for WebRTC. See [Voice channels](#voice-channels) below. |
-| `MEDIASOUP_LISTEN_IP` | No | `0.0.0.0` in prod, `127.0.0.1` in dev | Bind address for RTC sockets. Leave as default unless you know why you're changing it. |
-| `MEDIASOUP_RTC_MIN_PORT` | No | `40000` | Low end of the UDP port range used for voice media. |
-| `MEDIASOUP_RTC_MAX_PORT` | No | `40099` | High end of the UDP port range. |
+| Variable                 | Required      | Default                               | Description                                                                               |
+| ------------------------ | ------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Yes\*         | Set by compose                        | PostgreSQL connection string                                                              |
+| `SESSION_SECRET`         | Yes           | --                                    | Random string for signing cookies. Generate with `openssl rand -hex 32`                   |
+| `BABELR_DOMAIN`          | Yes\*         | `localhost:3000`                      | Public domain for ActivityPub URIs. **Must be set correctly for federation.**             |
+| `PORT`                   | No            | `3000`                                | Server port inside the container                                                          |
+| `BABELR_PORT`            | No            | `3000`                                | Host port to expose (for avoiding conflicts with local dev)                               |
+| `HOST`                   | No            | `0.0.0.0`                             | Bind address                                                                              |
+| `NODE_ENV`               | No            | `production`                          | Set to `production` for secure cookies                                                    |
+| `FEDERATION_MODE`        | No            | `open`                                | Federation policy: `open`, `allowlist`, or `blocklist`                                    |
+| `FEDERATION_DOMAINS`     | No            | --                                    | Comma-separated domain list for allowlist/blocklist mode                                  |
+| `OIDC_ISSUER`            | No            | --                                    | OIDC provider URL (e.g. `https://accounts.google.com`)                                    |
+| `OIDC_CLIENT_ID`         | No            | --                                    | OIDC client ID from your identity provider                                                |
+| `OIDC_CLIENT_SECRET`     | No            | --                                    | OIDC client secret                                                                        |
+| `OIDC_REDIRECT_URI`      | No            | --                                    | Callback URL: `https://your-domain/api/auth/oidc/callback`                                |
+| `MEDIASOUP_ANNOUNCED_IP` | Yes for voice | --                                    | Public IP advertised to browsers for WebRTC. See [Voice channels](#voice-channels) below. |
+| `MEDIASOUP_LISTEN_IP`    | No            | `0.0.0.0` in prod, `127.0.0.1` in dev | Bind address for RTC sockets. Leave as default unless you know why you're changing it.    |
+| `MEDIASOUP_RTC_MIN_PORT` | No            | `40000`                               | Low end of the UDP port range used for voice media.                                       |
+| `MEDIASOUP_RTC_MAX_PORT` | No            | `40099`                               | High end of the UDP port range.                                                           |
 
-*When using `docker compose`, `DATABASE_URL` is set automatically to point at the Postgres container.
+\*When using `docker compose`, `DATABASE_URL` is set automatically to point at the Postgres container.
 
 ### Voice channels
 
@@ -68,6 +68,7 @@ A user on Tower B can join a voice channel that lives on Tower A. The flow:
 4. Browser opens its WebSocket directly to **Tower A** (`wss://tower-a/ws?token=…`) and joins the SFU there. Voice / video / screen-share RTP all flows browser ↔ Tower A's SFU; Tower B is not in the media path.
 
 For this to work end-to-end:
+
 - Both Towers' `MEDIASOUP_ANNOUNCED_IP` values must be reachable from the federating browsers (they are dialed directly).
 - Both Towers' RTC port ranges must be open at their respective firewalls.
 - Federation policy (`FEDERATION_MODE` + `FEDERATION_DOMAINS`) on Tower A must allow Tower B's domain.
@@ -109,6 +110,7 @@ Set `BABELR_DOMAIN=chat.example.com` and `NODE_ENV=production` in your `.env`.
 To federate with other Towers, `BABELR_DOMAIN` must be the publicly-reachable hostname of your Tower (e.g. `chat.example.com`). This value is baked into every ActivityPub URI your Tower generates — changing it after the fact breaks existing federation relationships.
 
 Users on other Towers can:
+
 - Add your users as friends via `username@chat.example.com`
 - Join your servers via the remote join dialog
 - See your channels, wiki pages, calendar events, and files

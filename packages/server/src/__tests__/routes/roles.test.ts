@@ -148,11 +148,13 @@ describe('PUT /servers/:serverId/roles/:roleId', () => {
   it('edits permissions on a system role (but not its name)', async () => {
     const { user, serverId } = await createServerAs('sysrole');
     const { roles } = JSON.parse(
-      (await app.inject({
-        method: 'GET',
-        url: `/servers/${serverId}/roles`,
-        headers: { cookie: user.cookie },
-      })).body,
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/servers/${serverId}/roles`,
+          headers: { cookie: user.cookie },
+        })
+      ).body,
     );
     const everyone = roles.find((r: { name: string }) => r.name === '@everyone');
 
@@ -180,11 +182,13 @@ describe('PUT /servers/:serverId/roles/:roleId', () => {
   it('rejects edit that would empty MANAGE_ROLES holders (lockout guard)', async () => {
     const { user, serverId } = await createServerAs('guard');
     const { roles } = JSON.parse(
-      (await app.inject({
-        method: 'GET',
-        url: `/servers/${serverId}/roles`,
-        headers: { cookie: user.cookie },
-      })).body,
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/servers/${serverId}/roles`,
+          headers: { cookie: user.cookie },
+        })
+      ).body,
     );
     const admin = roles.find((r: { name: string }) => r.name === 'Admin');
     // Try to strip MANAGE_ROLES from the only role that currently grants it.
@@ -203,11 +207,13 @@ describe('DELETE /servers/:serverId/roles/:roleId', () => {
   it('rejects deleting a system role', async () => {
     const { user, serverId } = await createServerAs('delsys');
     const { roles } = JSON.parse(
-      (await app.inject({
-        method: 'GET',
-        url: `/servers/${serverId}/roles`,
-        headers: { cookie: user.cookie },
-      })).body,
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/servers/${serverId}/roles`,
+          headers: { cookie: user.cookie },
+        })
+      ).body,
     );
     const everyone = roles.find((r: { name: string }) => r.name === '@everyone');
     const res = await app.inject({
@@ -221,11 +227,13 @@ describe('DELETE /servers/:serverId/roles/:roleId', () => {
   it('rejects deleting the last MANAGE_ROLES role (lockout)', async () => {
     const { user, serverId } = await createServerAs('lastadmin');
     const { roles } = JSON.parse(
-      (await app.inject({
-        method: 'GET',
-        url: `/servers/${serverId}/roles`,
-        headers: { cookie: user.cookie },
-      })).body,
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/servers/${serverId}/roles`,
+          headers: { cookie: user.cookie },
+        })
+      ).body,
     );
     const admin = roles.find((r: { name: string }) => r.name === 'Admin');
     const res = await app.inject({
@@ -298,11 +306,13 @@ describe('Role assignment endpoints', () => {
     expect(unassignRes.statusCode).toBe(200);
 
     const membersAfter = JSON.parse(
-      (await app.inject({
-        method: 'GET',
-        url: `/servers/${serverId}/members`,
-        headers: { cookie: user.cookie },
-      })).body,
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/servers/${serverId}/members`,
+          headers: { cookie: user.cookie },
+        })
+      ).body,
     );
     const targetAfter = membersAfter.find((m: { id: string }) => m.id === memberId);
     expect(targetAfter.roleIds).not.toContain(role.id);

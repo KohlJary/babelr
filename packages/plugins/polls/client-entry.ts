@@ -11,9 +11,7 @@ import type { PluginClientApi } from '@babelr/plugin-sdk';
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { PollInline, PollPreview, PollsSidebarSlot, PollsView } = await import(
-    './client.js'
-  );
+  const { PollInline, PollPreview, PollsSidebarSlot, PollsView } = await import('./client.js');
   const routeBase = api.routeBase;
 
   // Bind the plugin's routeBase into the embed components once so the
@@ -66,7 +64,6 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   api.registerSidebarSlot({
     id: 'polls-nav',
     Component: PollsSidebarSlot,
-    isAvailable: (host) =>
-      (host as { selectedServerId: string | null }).selectedServerId !== null,
+    isAvailable: (host) => (host as { selectedServerId: string | null }).selectedServerId !== null,
   });
 }

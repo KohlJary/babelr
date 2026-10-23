@@ -256,7 +256,10 @@ function InvitesTab({ serverId }: { serverId: string }) {
   const [expiresHours, setExpiresHours] = useState('');
 
   useEffect(() => {
-    api.listServerInvites(serverId).then(setInvites).finally(() => setLoading(false));
+    api
+      .listServerInvites(serverId)
+      .then(setInvites)
+      .finally(() => setLoading(false));
   }, [serverId]);
 
   const createInvite = async () => {
@@ -301,17 +304,24 @@ function InvitesTab({ serverId }: { serverId: string }) {
       ) : (
         <>
           <div className="discover-list" style={{ maxHeight: '200px' }}>
-            {invites.length === 0 && <div className="sidebar-empty">{t('serverSettings.noInvites')}</div>}
+            {invites.length === 0 && (
+              <div className="sidebar-empty">{t('serverSettings.noInvites')}</div>
+            )}
             {invites.map((inv) => (
               <div key={inv.code} className="discover-item">
                 <div className="discover-info">
-                  <span className="discover-name" style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                  <span
+                    className="discover-name"
+                    style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+                  >
                     {inv.code}
                   </span>
                   <span className="discover-meta">
                     {inv.uses}
                     {inv.maxUses ? `/${inv.maxUses}` : ''} uses
-                    {inv.expiresAt ? ` \u00B7 expires ${new Date(inv.expiresAt).toLocaleDateString()}` : ''}
+                    {inv.expiresAt
+                      ? ` \u00B7 expires ${new Date(inv.expiresAt).toLocaleDateString()}`
+                      : ''}
                   </span>
                 </div>
                 <button className="discover-join-btn" onClick={() => copyLink(inv.url)}>
@@ -423,9 +433,7 @@ function AuditTab({ serverId }: { serverId: string }) {
             <div className="audit-log-entry-header">
               <span className="audit-log-actor">{entry.actorName}</span>
               <span className="audit-log-action">{entry.action}</span>
-              <span className="audit-log-time">
-                {new Date(entry.createdAt).toLocaleString()}
-              </span>
+              <span className="audit-log-time">{new Date(entry.createdAt).toLocaleString()}</span>
             </div>
             <div className="audit-log-summary">{entry.summary}</div>
           </div>

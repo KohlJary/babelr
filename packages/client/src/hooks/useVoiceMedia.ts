@@ -67,12 +67,10 @@ export function useVoiceMedia(
       // through the standard lifecycle, but we explicitly close-broadcast
       // so peers drop the consumer immediately rather than waiting for
       // SCTP-level signaling.
-      await rpc<Extract<WsServerMessage, { type: 'voice:producer-closed-ack' }>>(
-        (requestId) => ({
-          type: 'voice:close-producer',
-          payload: { requestId, channelId, producerId: id },
-        }),
-      ).catch(() => {
+      await rpc<Extract<WsServerMessage, { type: 'voice:producer-closed-ack' }>>((requestId) => ({
+        type: 'voice:close-producer',
+        payload: { requestId, channelId, producerId: id },
+      })).catch(() => {
         // best-effort
       });
       setState((s) => ({ ...s, videoEnabled: false }));
@@ -87,11 +85,7 @@ export function useVoiceMedia(
       if (!track) throw new Error('no video track');
       const producer = await sendTransport.produce({
         track,
-        encodings: [
-          { maxBitrate: 100_000 },
-          { maxBitrate: 300_000 },
-          { maxBitrate: 900_000 },
-        ],
+        encodings: [{ maxBitrate: 100_000 }, { maxBitrate: 300_000 }, { maxBitrate: 900_000 }],
         codecOptions: { videoGoogleStartBitrate: 1000 },
         appData: { slot: 'cam' as VoiceSlot },
       });
@@ -115,12 +109,10 @@ export function useVoiceMedia(
         for (const t of localScreenStreamRef.current.getTracks()) t.stop();
         localScreenStreamRef.current = null;
       }
-      await rpc<Extract<WsServerMessage, { type: 'voice:producer-closed-ack' }>>(
-        (requestId) => ({
-          type: 'voice:close-producer',
-          payload: { requestId, channelId, producerId: id },
-        }),
-      ).catch(() => {});
+      await rpc<Extract<WsServerMessage, { type: 'voice:producer-closed-ack' }>>((requestId) => ({
+        type: 'voice:close-producer',
+        payload: { requestId, channelId, producerId: id },
+      })).catch(() => {});
       setState((s) => ({ ...s, screenShareEnabled: false }));
       return;
     }

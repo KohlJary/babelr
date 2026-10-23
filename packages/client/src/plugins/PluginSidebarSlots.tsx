@@ -12,9 +12,7 @@ interface PluginSidebarSlotsProps {
  * channels, plugin routeBase).
  */
 export function PluginSidebarSlots({ host }: PluginSidebarSlotsProps) {
-  const slots = listSidebarSlots().filter(
-    (slot) => slot.isAvailable?.(host) !== false,
-  );
+  const slots = listSidebarSlots().filter((slot) => slot.isAvailable?.(host) !== false);
   if (slots.length === 0) return null;
   return (
     <div className="plugin-sidebar-slots">

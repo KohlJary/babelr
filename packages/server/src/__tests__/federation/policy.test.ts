@@ -22,21 +22,15 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
 
 describe('extractDomain', () => {
   it('extracts domain from HTTPS URI', () => {
-    expect(extractDomain('https://tower-b.example.com/users/alice')).toBe(
-      'tower-b.example.com',
-    );
+    expect(extractDomain('https://tower-b.example.com/users/alice')).toBe('tower-b.example.com');
   });
 
   it('extracts domain from HTTP URI', () => {
-    expect(extractDomain('http://localhost:3001/groups/test-server')).toBe(
-      'localhost',
-    );
+    expect(extractDomain('http://localhost:3001/groups/test-server')).toBe('localhost');
   });
 
   it('extracts domain from acct: URI', () => {
-    expect(extractDomain('acct:alice@tower-b.example.com')).toBe(
-      'tower-b.example.com',
-    );
+    expect(extractDomain('acct:alice@tower-b.example.com')).toBe('tower-b.example.com');
   });
 
   it('returns null for invalid URI', () => {
@@ -44,9 +38,7 @@ describe('extractDomain', () => {
   });
 
   it('lowercases domain', () => {
-    expect(extractDomain('https://Tower-B.Example.COM/users/alice')).toBe(
-      'tower-b.example.com',
-    );
+    expect(extractDomain('https://Tower-B.Example.COM/users/alice')).toBe('tower-b.example.com');
   });
 });
 
@@ -134,21 +126,15 @@ describe('isActorAllowed', () => {
   });
 
   it('allows actor from allowed domain', () => {
-    expect(
-      isActorAllowed(config, 'https://allowed.example.com/users/alice'),
-    ).toBe(true);
+    expect(isActorAllowed(config, 'https://allowed.example.com/users/alice')).toBe(true);
   });
 
   it('blocks actor from disallowed domain', () => {
-    expect(
-      isActorAllowed(config, 'https://blocked.example.com/users/bob'),
-    ).toBe(false);
+    expect(isActorAllowed(config, 'https://blocked.example.com/users/bob')).toBe(false);
   });
 
   it('allows local actor', () => {
-    expect(
-      isActorAllowed(config, 'https://tower-a.example.com/users/admin'),
-    ).toBe(true);
+    expect(isActorAllowed(config, 'https://tower-a.example.com/users/admin')).toBe(true);
   });
 
   it('returns false for unparseable URI', () => {

@@ -32,10 +32,7 @@ async function i18nSeedPlugin(fastify: FastifyInstance) {
     const seedPath = `${__dirname}/../db/seed-data/ui-translations.json`;
 
     if (!existsSync(seedPath)) {
-      fastify.log.info(
-        { seedPath },
-        'i18n seed file not found; skipping UI translation upsert',
-      );
+      fastify.log.info({ seedPath }, 'i18n seed file not found; skipping UI translation upsert');
       return;
     }
 

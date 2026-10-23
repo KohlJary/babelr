@@ -23,14 +23,8 @@ declare module 'fastify' {
     wsRemoveClient: (ws: WebSocket) => void;
     wsGetChannelSubs: (channelId: string) => Set<WebSocket>;
     wsRegisterActorConnection: (ws: WebSocket, actorId: string) => void;
-    voiceJoin: (
-      channelId: string,
-      participant: VoiceParticipant,
-    ) => VoiceParticipant[] | null;
-    voiceLeave: (
-      channelId: string,
-      actorId: string,
-    ) => { closedProducerIds: string[] } | null;
+    voiceJoin: (channelId: string, participant: VoiceParticipant) => VoiceParticipant[] | null;
+    voiceLeave: (channelId: string, actorId: string) => { closedProducerIds: string[] } | null;
     voiceGetRoom: (channelId: string) => VoiceParticipant[];
     voiceBroadcastToRoom: (
       channelId: string,

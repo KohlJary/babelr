@@ -156,7 +156,7 @@ services:
       DATABASE_URL: postgresql://babelr:babelr@db:5432/babelr
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
     ports:
-      - "3000:3000"
+      - '3000:3000'
     depends_on:
       - db
 ```

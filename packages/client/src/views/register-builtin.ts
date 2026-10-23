@@ -34,8 +34,7 @@ function CalendarView({ host, viewState }: ViewProps) {
     ownerName: dmMode ? undefined : host.selectedServer!.name,
     actor: host.actor,
     channels: dmMode ? undefined : host.channels,
-    canCreate:
-      dmMode || ['owner', 'admin', 'moderator'].includes(host.callerRole),
+    canCreate: dmMode || ['owner', 'admin', 'moderator'].includes(host.callerRole),
     initialEventId: eventId,
     onClose: host.closeView,
     onGoToChannel: (channelId: string) => host.navCtx.selectChannel(channelId),
@@ -45,10 +44,8 @@ function CalendarView({ host, viewState }: ViewProps) {
 function WikiView({ host, viewState }: ViewProps) {
   if (!host.selectedServer) return null;
   const slug = (viewState.slug as string | null | undefined) ?? null;
-  const draft = (viewState.draft as
-    | { title?: string; content?: string }
-    | null
-    | undefined) ?? null;
+  const draft =
+    (viewState.draft as { title?: string; content?: string } | null | undefined) ?? null;
   return createElement(WikiPanel, {
     serverId: host.selectedServer.id,
     serverName: host.selectedServer.name,
@@ -111,7 +108,10 @@ function ServerSettingsView({ host }: ViewProps) {
   if (!host.selectedServer) return null;
   const [server, setServer] = useState<import('@babelr/shared').ServerView | null>(null);
   useEffect(() => {
-    api.getServer(host.selectedServer!.id).then(setServer).catch(() => {});
+    api
+      .getServer(host.selectedServer!.id)
+      .then(setServer)
+      .catch(() => {});
   }, [host.selectedServer]);
   if (!server) return null;
   return createElement(ServerSettingsPanel, {
@@ -140,9 +140,7 @@ function MentionsView({ host }: ViewProps) {
 
 function ChannelSettingsView({ host, viewState }: ViewProps) {
   const channelId = viewState.channelId as string | undefined;
-  const channel = channelId
-    ? host.channels.find((c: { id: string }) => c.id === channelId)
-    : null;
+  const channel = channelId ? host.channels.find((c: { id: string }) => c.id === channelId) : null;
   if (!channel) return null;
   return createElement(ChannelSettingsPanel, {
     channel,

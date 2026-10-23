@@ -72,6 +72,7 @@ Keep the console open in both tabs. You'll see these log lines:
 yet.
 
 **Expected:**
+
 - Each window's `VoicePanel` shows a compact floating widget at the bottom-right
 - Each window sees two tiles in the grid: the self tile and the peer tile
 - Both tiles show the avatar fallback (colored circle with first letter), not
@@ -98,6 +99,7 @@ stuck at 0 while they speak, their mic is dead.
 control row.
 
 **Expected:**
+
 - Browser prompts for camera permission (if first time in this session).
   Click "Allow."
 - The 📷 button changes to 📹 and gains a green "active-on" background
@@ -118,6 +120,7 @@ side (window B), watch for `voice: ontrack video {from, slot: 'video', muted}`.
 **Action:** switch focus to window B, look at the peer tile for user A.
 
 **Expected:**
+
 - User A's peer tile has transitioned from showing their avatar to showing
   their live webcam feed
 - The video is NOT mirrored (peer video should look normal — it's mirrored
@@ -137,6 +140,7 @@ side (window B), watch for `voice: ontrack video {from, slot: 'video', muted}`.
 prompted.
 
 **Expected:**
+
 - Window B's self tile shows user B's mirrored webcam
 - Window A's peer tile now shows user B's (un-mirrored) webcam
 - Both windows now display two webcam tiles each
@@ -151,6 +155,7 @@ prompted.
 **Action:** in window A, click the 📹 button to turn video off.
 
 **Expected:**
+
 - Window A's self tile reverts from video to avatar fallback
 - Window B's peer tile for user A reverts to avatar fallback (via
   `track.onmute` on the remote side)
@@ -172,6 +177,7 @@ on both ends.
 **Action:** in window A, click the 🖥️ (screen) button in the VoicePanel.
 
 **Expected:**
+
 - Browser shows a native screen/window/tab picker. Pick any window
   that has recognizable content (a browser tab, a text editor, etc.)
 - Click "Share"
@@ -199,6 +205,7 @@ window B has a new peer tile showing user A's screen.
 **Action:** switch to window B, look at the peer tiles.
 
 **Expected:**
+
 - User A now appears as TWO tiles in window B: the main tile (webcam or
   avatar) and a separate 🖥️-prefixed screen tile showing user A's
   shared window/screen content
@@ -214,12 +221,14 @@ voice tile and one is the screen share.
 
 **Action:** in window A, click the browser's native "Stop sharing" button.
 Where this appears varies by browser:
+
 - **Chrome**: floating bar at the bottom of the screen
 - **Firefox**: notification near the URL bar
 - Might also be accessible from the screen picker's own UI if you trigger
   it from there
 
 **Expected:**
+
 - Window A's screen tile disappears from its own grid
 - Window B's peer screen tile for user A also disappears
 - The 🖥️ button in window A's VoicePanel reverts to inactive (loses
@@ -241,6 +250,7 @@ stay in sync.
 🖥️ button in the VoicePanel instead of the native bar.
 
 **Expected:**
+
 - Same as test 8: tile disappears on both sides, button deactivates,
   browser's native bar also disappears
 - Both off-paths produce identical state transitions
@@ -254,6 +264,7 @@ stay in sync.
 **Action:** in window A, enable webcam first, then enable screen share.
 
 **Expected:**
+
 - Window A's self tile shows the webcam video
 - Window A has a SECOND self tile for the screen share
 - Window B's peer tiles for user A show BOTH the webcam and screen share
@@ -270,6 +281,7 @@ peer's view of both) are visible at once.
 screen share in window B too.
 
 **Expected:**
+
 - Each window now shows FOUR tiles:
   1. Self webcam
   2. Self screen share
@@ -292,6 +304,7 @@ laptops this works fine. If it doesn't, the SFU roadmap item
 **Action:** in window A, click the "Leave" button in the VoicePanel.
 
 **Expected:**
+
 - Window A's VoicePanel disappears
 - Window A's webcam and screen share stop (check with system tools
   if needed — e.g. the camera LED should turn off, the browser's
@@ -302,6 +315,7 @@ laptops this works fine. If it doesn't, the SFU roadmap item
 **Action:** in window A, click the voice channel again to rejoin.
 
 **Expected:**
+
 - Clean rejoin — new self tile, new peer tile for user B (with whatever
   streams user B still has active)
 - No ghost tiles, no orphan peer entries, no stale "pending" state
@@ -315,6 +329,7 @@ laptops this works fine. If it doesn't, the SFU roadmap item
 **Action:** in window A, click the 🔈 (deafen) button. It should switch to 🙉.
 
 **Expected:**
+
 - Window A stops hearing any audio from window B
 - Window A's mic is also muted (deafen mutes both sides, matching Discord)
 - The self tile in window A gains a 🙉 indicator
@@ -333,11 +348,13 @@ both.
 ## Test 14 — Push-to-talk
 
 **Action:** in window A, click the "PTT" button. Verify:
+
 - Button turns green "active"
 - A "Push-to-talk: hold ` to transmit" hint line appears under the controls
 - User A's mic is now muted by default (the 🎤 button shows muted state)
 
 **Action:** hold the backtick key (`` ` ``). While held:
+
 - Mic is unmuted
 - Window B should hear user A (if mics work)
 
@@ -425,7 +442,7 @@ If you're running this after a code change, also verify:
 - [ ] Typecheck passes: `npx tsc --noEmit -p packages/client`
 - [ ] `npm test` passes (38 tests at the time of writing)
 - [ ] Both tabs can reload and rejoin without leaving orphan peer entries
-  in the server's in-memory voice room state
+      in the server's in-memory voice room state
 
 ## Updates to this doc
 

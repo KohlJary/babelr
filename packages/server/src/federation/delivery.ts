@@ -154,9 +154,7 @@ export async function processQueue(fastify: FastifyInstance) {
   const items = await db
     .select()
     .from(deliveryQueue)
-    .where(
-      and(eq(deliveryQueue.status, 'pending'), lte(deliveryQueue.nextAttemptAt, new Date())),
-    )
+    .where(and(eq(deliveryQueue.status, 'pending'), lte(deliveryQueue.nextAttemptAt, new Date())))
     .limit(BATCH_SIZE);
 
   for (const item of items) {
@@ -282,14 +280,22 @@ export async function broadcastCreate(
   // message into the correct shadow channel on their end.
   let contextUri: string | undefined;
   if (note.context) {
-    const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.context)).limit(1);
+    const [ch] = await db
+      .select({ uri: objects.uri })
+      .from(objects)
+      .where(eq(objects.id, note.context))
+      .limit(1);
     if (ch) contextUri = ch.uri;
   }
 
   // Resolve the parent message URI for threaded replies.
   let inReplyToUri: string | undefined;
   if (note.inReplyTo) {
-    const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.inReplyTo)).limit(1);
+    const [parent] = await db
+      .select({ uri: objects.uri })
+      .from(objects)
+      .where(eq(objects.id, note.inReplyTo))
+      .limit(1);
     if (parent) inReplyToUri = parent.uri;
   }
 
@@ -389,21 +395,11 @@ export async function broadcastActorUpdate(
   const outgoing = await db
     .select({ otherId: friendships.otherActorId })
     .from(friendships)
-    .where(
-      and(
-        eq(friendships.ownerActorId, updatedActor.id),
-        eq(friendships.state, 'accepted'),
-      ),
-    );
+    .where(and(eq(friendships.ownerActorId, updatedActor.id), eq(friendships.state, 'accepted')));
   const incoming = await db
     .select({ ownerId: friendships.ownerActorId })
     .from(friendships)
-    .where(
-      and(
-        eq(friendships.otherActorId, updatedActor.id),
-        eq(friendships.state, 'accepted'),
-      ),
-    );
+    .where(and(eq(friendships.otherActorId, updatedActor.id), eq(friendships.state, 'accepted')));
 
   const friendIds = new Set<string>();
   for (const row of outgoing) friendIds.add(row.otherId);
@@ -454,13 +450,21 @@ export async function broadcastToGroupFollowers(
 
   let contextUri: string | undefined;
   if (note.context) {
-    const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.context)).limit(1);
+    const [ch] = await db
+      .select({ uri: objects.uri })
+      .from(objects)
+      .where(eq(objects.id, note.context))
+      .limit(1);
     if (ch) contextUri = ch.uri;
   }
 
   let inReplyToUri: string | undefined;
   if (note.inReplyTo) {
-    const [parent] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, note.inReplyTo)).limit(1);
+    const [parent] = await db
+      .select({ uri: objects.uri })
+      .from(objects)
+      .where(eq(objects.id, note.inReplyTo))
+      .limit(1);
     if (parent) inReplyToUri = parent.uri;
   }
 

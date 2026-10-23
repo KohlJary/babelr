@@ -2,12 +2,7 @@
 
 export type ActorType = 'Person' | 'Group' | 'Service' | 'Application';
 
-export type ObjectType =
-  | 'Note'
-  | 'Article'
-  | 'OrderedCollection'
-  | 'Image'
-  | 'Tombstone';
+export type ObjectType = 'Note' | 'Article' | 'OrderedCollection' | 'Image' | 'Tombstone';
 
 export type ActivityType =
   | 'Create'

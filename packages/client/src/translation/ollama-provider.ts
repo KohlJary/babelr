@@ -83,11 +83,7 @@ export class OllamaProvider implements TranslationProvider {
       // them on the way back. Same strategy the /api/translate proxy
       // uses for Anthropic/OpenAI calls.
       const { masked, tokens } = maskEmbeds(msg.content);
-      const prompt = buildPrompt(
-        [{ id: msg.id, content: masked }],
-        targetLanguage,
-        sourceLanguage,
-      );
+      const prompt = buildPrompt([{ id: msg.id, content: masked }], targetLanguage, sourceLanguage);
 
       let res: Response;
       try {

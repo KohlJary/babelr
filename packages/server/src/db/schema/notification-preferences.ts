@@ -13,7 +13,5 @@ export const notificationPreferences = pgTable(
     targetType: varchar('target_type', { length: 16 }).notNull(),
     muted: boolean('muted').notNull().default(false),
   },
-  (table) => [
-    uniqueIndex('notification_prefs_unique_idx').on(table.actorId, table.targetId),
-  ],
+  (table) => [uniqueIndex('notification_prefs_unique_idx').on(table.actorId, table.targetId)],
 );

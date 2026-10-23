@@ -87,9 +87,7 @@ export function MessageList({
           {t('messages.loadMore')}
         </button>
       )}
-      {messages.length === 0 && (
-        <div className="no-messages">{t('messages.empty')}</div>
-      )}
+      {messages.length === 0 && <div className="no-messages">{t('messages.empty')}</div>}
       {messages.map((item, i) => {
         const prevItem = i > 0 ? messages[i - 1] : null;
         const compact = prevItem?.author.id === item.author.id;
@@ -107,15 +105,15 @@ export function MessageList({
             }
             onReply={onOpenThread ? () => onOpenThread(item.message.id) : undefined}
             replyCount={item.message.replyCount}
-            onEdit={onEditMessage ? (content) => onEditMessage(item.message.id, content) : undefined}
+            onEdit={
+              onEditMessage ? (content) => onEditMessage(item.message.id, content) : undefined
+            }
             onDelete={onDeleteMessage ? () => onDeleteMessage(item.message.id) : undefined}
             canDelete={
               actor?.id === item.message.authorId ||
               ['owner', 'admin', 'moderator'].includes(callerRole ?? '')
             }
-            onConvertToWikiPage={
-              onConvertToWikiPage ? () => onConvertToWikiPage(item) : undefined
-            }
+            onConvertToWikiPage={onConvertToWikiPage ? () => onConvertToWikiPage(item) : undefined}
             onPreviewEmbed={onPreviewEmbed}
             isPinned={pinnedMessageIds?.has(item.message.id)}
             onPin={onPinMessage ? () => onPinMessage(item.message.id) : undefined}
@@ -126,11 +124,7 @@ export function MessageList({
       })}
       <div ref={bottomRef} />
       {showJumpToPresent && (
-        <button
-          type="button"
-          className="jump-to-present"
-          onClick={scrollToBottom}
-        >
+        <button type="button" className="jump-to-present" onClick={scrollToBottom}>
           {t('messages.jumpToPresent')}
         </button>
       )}

@@ -24,8 +24,12 @@ export const events = pgTable(
 
     // 'user' or 'server'
     ownerType: varchar('owner_type', { length: 16 }).notNull(),
-    ownerId: uuid('owner_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
-    createdById: uuid('created_by_id').notNull().references(() => actors.id),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => actors.id),
 
     /**
      * Short copy-paste-friendly identifier, generated at create
@@ -50,7 +54,9 @@ export const events = pgTable(
     channelId: uuid('channel_id').references(() => objects.id, { onDelete: 'set null' }),
 
     // The OrderedCollection that acts as this event's chat
-    eventChatId: uuid('event_chat_id').notNull().references(() => objects.id, { onDelete: 'cascade' }),
+    eventChatId: uuid('event_chat_id')
+      .notNull()
+      .references(() => objects.id, { onDelete: 'cascade' }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -73,8 +79,12 @@ export const eventAttendees = pgTable(
   'event_attendees',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
-    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     status: varchar('status', { length: 16 }).notNull(),
     respondedAt: timestamp('responded_at', { withTimezone: true }).notNull().defaultNow(),
   },

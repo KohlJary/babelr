@@ -109,9 +109,7 @@ export function EventsWeekView({
               key={d.toISOString()}
               className={`events-week-day-header ${isToday ? 'today' : ''}`}
             >
-              <div className="events-week-day-weekday">
-                {WEEKDAY_HEADERS[d.getDay()]}
-              </div>
+              <div className="events-week-day-weekday">{WEEKDAY_HEADERS[d.getDay()]}</div>
               <div className="events-week-day-date">{d.getDate()}</div>
             </div>
           );
@@ -120,18 +118,8 @@ export function EventsWeekView({
       <div className="events-week-body" style={{ height: TOTAL_HOURS * HOUR_HEIGHT_PX }}>
         <div className="events-week-hour-rail">
           {hours.map((h) => (
-            <div
-              key={h}
-              className="events-week-hour-label"
-              style={{ height: HOUR_HEIGHT_PX }}
-            >
-              {h === 12
-                ? '12 PM'
-                : h === 0
-                  ? '12 AM'
-                  : h < 12
-                    ? `${h} AM`
-                    : `${h - 12} PM`}
+            <div key={h} className="events-week-hour-label" style={{ height: HOUR_HEIGHT_PX }}>
+              {h === 12 ? '12 PM' : h === 0 ? '12 AM' : h < 12 ? `${h} AM` : `${h - 12} PM`}
             </div>
           ))}
         </div>
@@ -144,11 +132,7 @@ export function EventsWeekView({
               className={`events-week-day-column ${isToday ? 'today' : ''}`}
             >
               {hours.map((h) => (
-                <div
-                  key={h}
-                  className="events-week-hour-slot"
-                  style={{ height: HOUR_HEIGHT_PX }}
-                />
+                <div key={h} className="events-week-hour-slot" style={{ height: HOUR_HEIGHT_PX }} />
               ))}
               {dayEvents.map((ev) => {
                 const top = isoToOffsetPx(ev.startAt);
@@ -165,9 +149,7 @@ export function EventsWeekView({
                     title={displayTitle}
                   >
                     <div className="events-week-event-title">{displayTitle}</div>
-                    <div className="events-week-event-time">
-                      {formatHourMinute(ev.startAt)}
-                    </div>
+                    <div className="events-week-event-time">{formatHourMinute(ev.startAt)}</div>
                   </button>
                 );
               })}

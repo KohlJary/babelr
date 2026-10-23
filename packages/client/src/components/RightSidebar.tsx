@@ -27,15 +27,8 @@ interface RightSidebarProps {
  * content; this component owns the tab strip, selected-tab state, and
  * the content slot.
  */
-export function RightSidebar({
-  tabs,
-  defaultTab,
-  className,
-}: RightSidebarProps) {
-  const initial =
-    defaultTab === null
-      ? null
-      : (defaultTab ?? tabs[0]?.id ?? null);
+export function RightSidebar({ tabs, defaultTab, className }: RightSidebarProps) {
+  const initial = defaultTab === null ? null : (defaultTab ?? tabs[0]?.id ?? null);
   const [activeId, setActiveId] = useState<string | null>(initial);
   const active = tabs.find((t) => t.id === activeId);
 
@@ -64,9 +57,7 @@ export function RightSidebar({
           </button>
         ))}
       </div>
-      {active && (
-        <div className="right-sidebar-content">{active.render()}</div>
-      )}
+      {active && <div className="right-sidebar-content">{active.render()}</div>}
     </aside>
   );
 }

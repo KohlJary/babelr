@@ -5,10 +5,29 @@ let highlighterPromise: Promise<HighlighterGeneric<BundledLanguage, BundledTheme
 let highlighterInstance: HighlighterGeneric<BundledLanguage, BundledTheme> | null = null;
 
 const COMMON_LANGS: BundledLanguage[] = [
-  'javascript', 'typescript', 'python', 'rust', 'go', 'java',
-  'c', 'cpp', 'csharp', 'ruby', 'php', 'swift', 'kotlin',
-  'html', 'css', 'json', 'yaml', 'toml', 'sql', 'bash',
-  'markdown', 'dockerfile', 'graphql',
+  'javascript',
+  'typescript',
+  'python',
+  'rust',
+  'go',
+  'java',
+  'c',
+  'cpp',
+  'csharp',
+  'ruby',
+  'php',
+  'swift',
+  'kotlin',
+  'html',
+  'css',
+  'json',
+  'yaml',
+  'toml',
+  'sql',
+  'bash',
+  'markdown',
+  'dockerfile',
+  'graphql',
 ];
 
 async function getHighlighter() {
@@ -30,10 +49,7 @@ async function getHighlighter() {
  * Falls back to plain escaped text if the language isn't loaded or
  * the highlighter hasn't initialized yet.
  */
-export async function highlightCode(
-  code: string,
-  lang: string,
-): Promise<string> {
+export async function highlightCode(code: string, lang: string): Promise<string> {
   try {
     const hl = await getHighlighter();
     const loadedLangs = hl.getLoadedLanguages();
@@ -54,10 +70,7 @@ export async function highlightCode(
  * highlighter is already loaded, otherwise returns null so the
  * caller can show plain text and upgrade later.
  */
-export function highlightCodeSync(
-  code: string,
-  lang: string,
-): string | null {
+export function highlightCodeSync(code: string, lang: string): string | null {
   if (!highlighterInstance) return null;
   try {
     const loadedLangs = highlighterInstance.getLoadedLanguages();

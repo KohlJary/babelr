@@ -15,10 +15,7 @@ codeRenderer.code = ({ text, lang }: { text: string; lang?: string | null }) => 
     const highlighted = highlightCodeSync(text, language);
     if (highlighted) return highlighted;
   }
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const langClass = language ? ` class="language-${language}"` : '';
   return `<pre><code${langClass}>${escaped}</code></pre>`;
 };
@@ -72,8 +69,19 @@ export function renderMarkdown(content: string): string {
   const raw = marked.parse(preprocessWikiRefs(content), { async: false }) as string;
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
-      'p', 'br', 'strong', 'em', 'del', 'code', 'pre',
-      'ul', 'ol', 'li', 'blockquote', 'a', 'span',
+      'p',
+      'br',
+      'strong',
+      'em',
+      'del',
+      'code',
+      'pre',
+      'ul',
+      'ol',
+      'li',
+      'blockquote',
+      'a',
+      'span',
     ],
     ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style'],
   });
@@ -109,10 +117,32 @@ export function renderWikiMarkdown(content: string): string {
   const raw = marked.parse(preprocessWikiRefs(content), { async: false, renderer }) as string;
   return DOMPurify.sanitize(raw, {
     ALLOWED_TAGS: [
-      'p', 'br', 'hr', 'strong', 'em', 'del', 'code', 'pre',
-      'ul', 'ol', 'li', 'blockquote', 'a', 'span',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'p',
+      'br',
+      'hr',
+      'strong',
+      'em',
+      'del',
+      'code',
+      'pre',
+      'ul',
+      'ol',
+      'li',
+      'blockquote',
+      'a',
+      'span',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
       'img',
     ],
     ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'src', 'alt', 'title', 'id'],

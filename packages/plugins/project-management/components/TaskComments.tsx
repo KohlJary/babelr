@@ -13,13 +13,7 @@ import type { ActorProfile } from '@babelr/shared';
  * work out-of-the-box — translation, reactions, and threading all
  * come for free via the core chat pipeline.
  */
-export function TaskComments({
-  actor,
-  chatId,
-}: {
-  actor: ActorProfile;
-  chatId: string;
-}) {
+export function TaskComments({ actor, chatId }: { actor: ActorProfile; chatId: string }) {
   const {
     messages,
     loading,
@@ -43,11 +37,7 @@ export function TaskComments({
         isTranslating={isTranslating}
         actor={actor}
       />
-      <MessageInput
-        onSend={sendMessage}
-        disabled={loading}
-        onTyping={notifyTyping}
-      />
+      <MessageInput onSend={sendMessage} disabled={loading} onTyping={notifyTyping} />
     </div>
   );
 }

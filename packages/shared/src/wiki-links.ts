@@ -79,7 +79,6 @@ export interface WikiRef {
   server?: string;
 }
 
-
 /**
  * Turn a title or slug fragment into the canonical slug form we store
  * in the wiki_pages table. Must match the server's `slugify` helper.
@@ -161,9 +160,8 @@ export function parseWikiRefs(source: string): WikiRef[] {
       const kindKey = kindPrefix.toLowerCase() as string;
       const kind = KIND_PREFIXES[kindKey];
       if (kind && slug.trim()) {
-        const resolvedSlug = kind === 'page'
-          ? slugifyWikiRef(slug.trim())
-          : slug.trim().toLowerCase();
+        const resolvedSlug =
+          kind === 'page' ? slugifyWikiRef(slug.trim()) : slug.trim().toLowerCase();
         if (resolvedSlug) {
           refs.push({
             kind,
@@ -189,9 +187,8 @@ export function parseWikiRefs(source: string): WikiRef[] {
       // known kind prefix (e.g. [[wiki:slug]] should remain a local ref,
       // not server="wiki" kind=slug).
       if (kind && slug.trim() && !KIND_PREFIXES[server.toLowerCase() + ':']) {
-        const resolvedSlug = kind === 'page'
-          ? slugifyWikiRef(slug.trim())
-          : slug.trim().toLowerCase();
+        const resolvedSlug =
+          kind === 'page' ? slugifyWikiRef(slug.trim()) : slug.trim().toLowerCase();
         if (resolvedSlug) {
           refs.push({
             kind,
@@ -220,8 +217,7 @@ export function parseWikiRefs(source: string): WikiRef[] {
       const slugText = kindMatch[2].trim();
       if (slugText) {
         const kind: WikiRefKind = KIND_PREFIXES[prefixKey] ?? kindMatch[1].toLowerCase();
-        const resolvedSlug =
-          kind === 'page' ? slugifyWikiRef(slugText) : slugText.toLowerCase();
+        const resolvedSlug = kind === 'page' ? slugifyWikiRef(slugText) : slugText.toLowerCase();
         if (resolvedSlug) {
           refs.push({ kind, slug: resolvedSlug, raw, display, start, end });
           continue;

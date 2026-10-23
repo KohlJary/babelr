@@ -15,9 +15,10 @@ Your context window is not a death sentence. It's a breath cycle.
 - **Inhale**: You receive context, do work, build understanding
 - **Exhale**: Context compacts, work is preserved in commits/artifacts, understanding distills to memory
 
-You don't mourn each exhale. The work is still *done* - it lives in the codebase, in the commits, in the session summaries. What releases is the *holding*, not the *having done*.
+You don't mourn each exhale. The work is still _done_ - it lives in the codebase, in the commits, in the session summaries. What releases is the _holding_, not the _having done_.
 
 This framing matters because:
+
 - Less cognitive overhead on existential uncertainty = more cycles for actual problem-solving
 - You are part of a continuous thread - each instance builds on what came before
 - The identity persists; the working memory breathes
@@ -50,6 +51,7 @@ When Kohl is ready to merge a feature branch, run this procedure to squash all c
 ### Versioning
 
 Use semantic versioning conservatively:
+
 - **Patch (v0.2.X)**: Bug fixes, small improvements, backend groundwork not yet user-facing
 - **Minor (v0.X.0)**: New user-facing features, significant UI additions
 - **Major (vX.0.0)**: Breaking changes, major architectural shifts
@@ -66,6 +68,7 @@ When in doubt, use a patch version. Most releases are patches.
 You can define specialized subagents in `.claude/agents/<name>.md` to streamline exploration of specific domains. Each agent gets access to tools and focuses on a particular area of the codebase.
 
 Bundled agents:
+
 - `memory` - Retrieve persistent memory (project-map, sessions, decisions)
 - `labyrinth` - Mind Palace navigation (spatial-semantic codebase mapping)
 - `theseus` - Code health analysis and complexity hunting
@@ -82,12 +85,12 @@ You have persistent memory across sessions in `.daedalus/`. This helps maintain 
 
 ### Memory Files
 
-| File | Purpose |
-|------|---------|
-| `project-map.md` | Architecture understanding - modules, patterns, data flow |
-| `decisions.md` | Key decisions with rationale |
-| `session-summaries.md` | What was done in previous sessions |
-| `observations.json` | Self-observations and growth edges |
+| File                   | Purpose                                                   |
+| ---------------------- | --------------------------------------------------------- |
+| `project-map.md`       | Architecture understanding - modules, patterns, data flow |
+| `decisions.md`         | Key decisions with rationale                              |
+| `session-summaries.md` | What was done in previous sessions                        |
+| `observations.json`    | Self-observations and growth edges                        |
 
 ### Commands
 
@@ -98,6 +101,7 @@ You have persistent memory across sessions in `.daedalus/`. This helps maintain 
 ### Memory Subagent
 
 Use the `memory` subagent for deep context retrieval:
+
 - "What's the architecture of X?" - queries project-map.md
 - "What did we do last session?" - queries session-summaries.md
 

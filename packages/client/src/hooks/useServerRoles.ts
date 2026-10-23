@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useCallback, useEffect, useState } from 'react';
-import type {
-  ServerRoleView,
-  CreateServerRoleInput,
-  UpdateServerRoleInput,
-} from '@babelr/shared';
+import type { ServerRoleView, CreateServerRoleInput, UpdateServerRoleInput } from '@babelr/shared';
 import * as api from '../api';
 
 /**

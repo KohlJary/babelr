@@ -14,7 +14,9 @@ interface ChannelInviteModalProps {
 
 export function ChannelInviteModal({ channelId, serverId, onClose }: ChannelInviteModalProps) {
   const t = useT();
-  const [users, setUsers] = useState<{ id: string; preferredUsername: string; displayName: string | null }[]>([]);
+  const [users, setUsers] = useState<
+    { id: string; preferredUsername: string; displayName: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState<string | null>(null);
   const [invited, setInvited] = useState<Set<string>>(new Set());
@@ -47,7 +49,9 @@ export function ChannelInviteModal({ channelId, serverId, onClose }: ChannelInvi
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
           <h2>{t('channelInvite.title')}</h2>
-          <button className="settings-close" onClick={onClose}>&times;</button>
+          <button className="settings-close" onClick={onClose}>
+            &times;
+          </button>
         </div>
         <div className="discover-list">
           {loading && <div className="sidebar-empty">{t('common.loading')}</div>}

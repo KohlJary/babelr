@@ -39,10 +39,7 @@ declare module 'fastify' {
      *  request, and enqueues to each remote inbox. No-op if the group
      *  isn't local. Plugins call this instead of importing server
      *  federation internals directly. */
-    deliverToGroupFollowers: (
-      groupId: string,
-      activity: Record<string, unknown>,
-    ) => Promise<void>;
+    deliverToGroupFollowers: (groupId: string, activity: Record<string, unknown>) => Promise<void>;
   }
 
   interface FastifyRequest {

@@ -2,11 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { sql } from 'drizzle-orm';
-import type {
-  PluginManifest,
-  FederationHandler,
-  PluginInboxHandler,
-} from '@babelr/plugin-sdk';
+import type { PluginManifest, FederationHandler, PluginInboxHandler } from '@babelr/plugin-sdk';
 import { eq } from 'drizzle-orm';
 import { actors } from '../db/schema/actors.ts';
 import { enqueueToFollowers } from '../federation/delivery.ts';
@@ -36,9 +32,7 @@ const BABELR_VERSION = '0.1.0';
 // queried by routes/embeds.ts when it sees an unknown kind.
 const federationHandlers = new Map<string, FederationHandler>();
 
-export function getPluginFederationHandler(
-  kind: string,
-): FederationHandler | undefined {
+export function getPluginFederationHandler(kind: string): FederationHandler | undefined {
   return federationHandlers.get(kind);
 }
 
@@ -47,9 +41,7 @@ export function getPluginFederationHandler(
 // whose object type doesn't match any built-in handler.
 const inboxHandlers = new Map<string, PluginInboxHandler>();
 
-export function getPluginInboxHandler(
-  objectType: string,
-): PluginInboxHandler | undefined {
+export function getPluginInboxHandler(objectType: string): PluginInboxHandler | undefined {
   return inboxHandlers.get(objectType);
 }
 

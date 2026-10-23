@@ -9,10 +9,7 @@ interface ImagePreviewProps {
   serverSlug?: string;
 }
 
-type State =
-  | { status: 'loading' }
-  | { status: 'ok'; embed: FileEmbedView }
-  | { status: 'locked' };
+type State = { status: 'loading' } | { status: 'ok'; embed: FileEmbedView } | { status: 'locked' };
 
 /**
  * Image-focused preview — the image fills the available space; metadata
@@ -62,9 +59,7 @@ export function ImagePreview({ slug, serverSlug }: ImagePreviewProps) {
           by {embed.uploader.displayName ?? embed.uploader.preferredUsername}
         </span>
       </div>
-      {embed.description && (
-        <div className="image-preview-description">{embed.description}</div>
-      )}
+      {embed.description && <div className="image-preview-description">{embed.description}</div>}
     </div>
   );
 }

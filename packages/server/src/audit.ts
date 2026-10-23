@@ -2,7 +2,9 @@
 import { auditLogs } from './db/schema/audit-logs.ts';
 
 // Loose DB type to avoid circular imports with createDb
-type AnyDb = { insert: (table: typeof auditLogs) => { values: (v: typeof auditLogs.$inferInsert) => unknown } };
+type AnyDb = {
+  insert: (table: typeof auditLogs) => { values: (v: typeof auditLogs.$inferInsert) => unknown };
+};
 
 export interface AuditEntry {
   serverId: string;

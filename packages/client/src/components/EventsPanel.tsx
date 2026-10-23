@@ -186,11 +186,7 @@ export function EventsPanel({
           const trans = eventTranslations.get(ev.id);
           const displayTitle = trans?.title ?? ev.title;
           return (
-            <button
-              key={ev.id}
-              className="event-row"
-              onClick={() => setDetailEvent(ev)}
-            >
+            <button key={ev.id} className="event-row" onClick={() => setDetailEvent(ev)}>
               <div className="event-row-main">
                 <span className="event-row-title">{displayTitle}</span>
                 {ev.rrule && (
@@ -217,129 +213,143 @@ export function EventsPanel({
         </button>
       </div>
 
-        <div className="events-view-toolbar">
-          <div className="events-view-tabs" role="tablist">
+      <div className="events-view-toolbar">
+        <div className="events-view-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            className={`events-view-tab ${viewMode === 'agenda' ? 'active' : ''}`}
+            onClick={() => setViewMode('agenda')}
+          >
+            {t('events.viewAgenda')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`events-view-tab ${viewMode === 'week' ? 'active' : ''}`}
+            onClick={() => setViewMode('week')}
+          >
+            {t('events.viewWeek')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`events-view-tab ${viewMode === 'month' ? 'active' : ''}`}
+            onClick={() => setViewMode('month')}
+          >
+            {t('events.viewMonth')}
+          </button>
+        </div>
+        {viewMode !== 'agenda' && (
+          <div className="events-view-nav">
             <button
               type="button"
-              role="tab"
-              className={`events-view-tab ${viewMode === 'agenda' ? 'active' : ''}`}
-              onClick={() => setViewMode('agenda')}
+              className="events-view-nav-btn"
+              onClick={goPrev}
+              title={t('events.previous')}
             >
-              {t('events.viewAgenda')}
+              ‹
             </button>
             <button
               type="button"
-              role="tab"
-              className={`events-view-tab ${viewMode === 'week' ? 'active' : ''}`}
-              onClick={() => setViewMode('week')}
+              className="events-view-nav-btn events-view-today"
+              onClick={goToday}
             >
-              {t('events.viewWeek')}
+              {t('events.today')}
             </button>
             <button
               type="button"
-              role="tab"
-              className={`events-view-tab ${viewMode === 'month' ? 'active' : ''}`}
-              onClick={() => setViewMode('month')}
+              className="events-view-nav-btn"
+              onClick={goNext}
+              title={t('events.next')}
             >
-              {t('events.viewMonth')}
+              ›
             </button>
+            <span className="events-view-range-label">{rangeHeader}</span>
           </div>
-          {viewMode !== 'agenda' && (
-            <div className="events-view-nav">
-              <button type="button" className="events-view-nav-btn" onClick={goPrev} title={t('events.previous')}>
-                ‹
-              </button>
-              <button type="button" className="events-view-nav-btn events-view-today" onClick={goToday}>
-                {t('events.today')}
-              </button>
-              <button type="button" className="events-view-nav-btn" onClick={goNext} title={t('events.next')}>
-                ›
-              </button>
-              <span className="events-view-range-label">{rangeHeader}</span>
-            </div>
-          )}
-          {canCreate && (
-            <button
-              className="auth-submit events-view-create-btn"
-              onClick={() => setShowCreate(true)}
-            >
-              + {t('events.createEvent')}
-            </button>
-          )}
-        </div>
+        )}
+        {canCreate && (
+          <button
+            className="auth-submit events-view-create-btn"
+            onClick={() => setShowCreate(true)}
+          >
+            + {t('events.createEvent')}
+          </button>
+        )}
+      </div>
 
-        <div className="settings-tab-content events-panel-content">
-          {loading && <div className="sidebar-empty">{t('events.loading')}</div>}
-          {error && <div className="dm-lookup-error">{error}</div>}
+      <div className="settings-tab-content events-panel-content">
+        {loading && <div className="sidebar-empty">{t('events.loading')}</div>}
+        {error && <div className="dm-lookup-error">{error}</div>}
 
-          {viewMode === 'agenda' && (
-            <>
-              {!loading && !error && events.length === 0 && (
-                <div className="sidebar-empty">{t('events.upcomingEmpty')}</div>
-              )}
-              {renderBucket(t('events.today'), buckets.today)}
-              {renderBucket(t('events.tomorrow'), buckets.tomorrow)}
-              {renderBucket(t('events.thisWeek'), buckets.thisWeek)}
-              {renderBucket(t('events.later'), buckets.later)}
-            </>
-          )}
+        {viewMode === 'agenda' && (
+          <>
+            {!loading && !error && events.length === 0 && (
+              <div className="sidebar-empty">{t('events.upcomingEmpty')}</div>
+            )}
+            {renderBucket(t('events.today'), buckets.today)}
+            {renderBucket(t('events.tomorrow'), buckets.tomorrow)}
+            {renderBucket(t('events.thisWeek'), buckets.thisWeek)}
+            {renderBucket(t('events.later'), buckets.later)}
+          </>
+        )}
 
-          {viewMode === 'week' && !loading && !error && (
-            <EventsWeekView
-              anchor={anchor}
-              events={events}
-              translations={eventTranslations}
-              onSelectEvent={setDetailEvent}
-            />
-          )}
-
-          {viewMode === 'month' && !loading && !error && (
-            <EventsMonthView
-              anchor={anchor}
-              events={events}
-              translations={eventTranslations}
-              onSelectEvent={setDetailEvent}
-            />
-          )}
-        </div>
-
-        {showCreate && (
-          <CreateEventModal
-            scope={scope}
-            ownerId={ownerId}
-            channels={scope === 'server' ? channels : undefined}
-            onCreate={async (input) => {
-              await createEvent(input);
-            }}
-            onClose={() => setShowCreate(false)}
+        {viewMode === 'week' && !loading && !error && (
+          <EventsWeekView
+            anchor={anchor}
+            events={events}
+            translations={eventTranslations}
+            onSelectEvent={setDetailEvent}
           />
         )}
 
-        {detailEvent && (
-          <EventDetailPanel
-            event={detailEvent}
-            actor={actor}
-            channels={channels}
-            onClose={() => setDetailEvent(null)}
-            onRsvp={async (status) => {
-              const updated = await rsvpEvent(detailEvent.id, status);
-              setDetailEvent({ ...detailEvent, ...updated });
-            }}
-            onDelete={
-              detailEvent.createdBy.id === actor.id
-                ? async () => {
-                    await deleteEvent(detailEvent.id);
-                    setDetailEvent(null);
-                  }
-                : undefined
-            }
-            onGoToChannel={(channelId) => {
-              onGoToChannel?.(channelId);
-              setDetailEvent(null);
-              onClose();
-            }}
+        {viewMode === 'month' && !loading && !error && (
+          <EventsMonthView
+            anchor={anchor}
+            events={events}
+            translations={eventTranslations}
+            onSelectEvent={setDetailEvent}
           />
         )}
+      </div>
+
+      {showCreate && (
+        <CreateEventModal
+          scope={scope}
+          ownerId={ownerId}
+          channels={scope === 'server' ? channels : undefined}
+          onCreate={async (input) => {
+            await createEvent(input);
+          }}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
+
+      {detailEvent && (
+        <EventDetailPanel
+          event={detailEvent}
+          actor={actor}
+          channels={channels}
+          onClose={() => setDetailEvent(null)}
+          onRsvp={async (status) => {
+            const updated = await rsvpEvent(detailEvent.id, status);
+            setDetailEvent({ ...detailEvent, ...updated });
+          }}
+          onDelete={
+            detailEvent.createdBy.id === actor.id
+              ? async () => {
+                  await deleteEvent(detailEvent.id);
+                  setDetailEvent(null);
+                }
+              : undefined
+          }
+          onGoToChannel={(channelId) => {
+            onGoToChannel?.(channelId);
+            setDetailEvent(null);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

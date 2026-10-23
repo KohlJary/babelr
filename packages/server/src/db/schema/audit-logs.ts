@@ -15,9 +15,13 @@ export const auditLogs = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     /** Server this action occurred in. */
-    serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     /** Actor who performed the action. */
-    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     /** Action category — groups related actions for filtering. */
     category: varchar('category', { length: 32 }).notNull(),
     /** Specific action identifier, e.g. 'server.update', 'role.create'. */

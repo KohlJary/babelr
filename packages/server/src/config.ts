@@ -52,7 +52,9 @@ export function loadConfig(): Config {
     secureCookies: process.env.NODE_ENV === 'production',
     federationMode: (process.env.FEDERATION_MODE as FederationMode) ?? 'open',
     federationDomains: process.env.FEDERATION_DOMAINS
-      ? process.env.FEDERATION_DOMAINS.split(',').map((d) => d.trim().toLowerCase()).filter(Boolean)
+      ? process.env.FEDERATION_DOMAINS.split(',')
+          .map((d) => d.trim().toLowerCase())
+          .filter(Boolean)
       : [],
     oidcIssuer: process.env.OIDC_ISSUER || undefined,
     oidcClientId: process.env.OIDC_CLIENT_ID || undefined,

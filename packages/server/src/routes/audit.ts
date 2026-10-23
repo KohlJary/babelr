@@ -32,10 +32,7 @@ export default async function auditRoutes(fastify: FastifyInstance) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 
-    const limit = Math.min(
-      parseInt(request.query.limit ?? String(DEFAULT_LIMIT), 10),
-      100,
-    );
+    const limit = Math.min(parseInt(request.query.limit ?? String(DEFAULT_LIMIT), 10), 100);
 
     const conditions = [eq(auditLogs.serverId, request.params.serverId)];
 

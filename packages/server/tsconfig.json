@@ -7,8 +7,5 @@
     "jsx": "react-jsx"
   },
   "include": ["src"],
-  "references": [
-    { "path": "../shared" },
-    { "path": "../plugin-sdk" }
-  ]
+  "references": [{ "path": "../shared" }, { "path": "../plugin-sdk" }]
 }

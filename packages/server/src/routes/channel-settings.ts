@@ -39,7 +39,9 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
       const [readPosition] = await db
         .select()
         .from(readPositions)
-        .where(and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)))
+        .where(
+          and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)),
+        )
         .limit(1);
 
       // Count messages after read position (or all messages if never read)
@@ -83,7 +85,9 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
       const [existing] = await db
         .select()
         .from(readPositions)
-        .where(and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)))
+        .where(
+          and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)),
+        )
         .limit(1);
 
       if (existing) {
@@ -110,7 +114,13 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
               .select({ object: objects, actor: actors })
               .from(objects)
               .innerJoin(actors, eq(objects.attributedTo, actors.id))
-              .where(and(eq(objects.context, channelId), eq(objects.type, 'Note'), eq(actors.local, false)))
+              .where(
+                and(
+                  eq(objects.context, channelId),
+                  eq(objects.type, 'Note'),
+                  eq(actors.local, false),
+                ),
+              )
               .orderBy(desc(objects.published))
               .limit(1);
 
@@ -242,9 +252,7 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
           [],
         );
         ensureActorKeys(db, request.actor)
-          .then((actorWithKeys) =>
-            enqueueDelivery(db, activity, user.inboxUri!, actorWithKeys.id),
-          )
+          .then((actorWithKeys) => enqueueDelivery(db, activity, user.inboxUri!, actorWithKeys.id))
           .catch((err) => fastify.log.error(err, 'Channel invite federation failed'));
       }
 

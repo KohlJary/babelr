@@ -3,7 +3,11 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { WsServerMessage, MessageWithAuthor } from '@babelr/shared';
 import * as api from '../api';
 
-export function useReactions(channelId: string | null, actorId: string, messages: MessageWithAuthor[]) {
+export function useReactions(
+  channelId: string | null,
+  actorId: string,
+  messages: MessageWithAuthor[],
+) {
   const [messageReactions, setMessageReactions] = useState<Map<string, Record<string, string[]>>>(
     () => new Map(),
   );
@@ -20,7 +24,11 @@ export function useReactions(channelId: string | null, actorId: string, messages
       setMessageReactions((prev) => {
         const next = new Map(prev);
         for (const m of messages) {
-          if (m.message.reactions && Object.keys(m.message.reactions).length > 0 && !next.has(m.message.id)) {
+          if (
+            m.message.reactions &&
+            Object.keys(m.message.reactions).length > 0 &&
+            !next.has(m.message.id)
+          ) {
             next.set(m.message.id, m.message.reactions);
           }
         }

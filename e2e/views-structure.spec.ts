@@ -11,8 +11,11 @@ test.describe('View registry — surfaces render in correct containers', () => {
     await login(page);
 
     // Click the settings gear button in the channel header
-    const settingsBtn = page.locator('button').filter({ hasText: /⚙|settings/i }).first();
-    if (!await settingsBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+    const settingsBtn = page
+      .locator('button')
+      .filter({ hasText: /⚙|settings/i })
+      .first();
+    if (!(await settingsBtn.isVisible({ timeout: 2000 }).catch(() => false))) {
       // Try the gear icon button (may be an icon-only button)
       await page.locator('.channel-header button').last().click();
     } else {
@@ -30,7 +33,9 @@ test.describe('View registry — surfaces render in correct containers', () => {
     await login(page);
 
     // Click a server icon (not the DM icon) to switch to server mode
-    const serverIcon = page.locator('.server-sidebar .server-icon:not(.dm-icon):not(.add-server):not(.manual-icon)').first();
+    const serverIcon = page
+      .locator('.server-sidebar .server-icon:not(.dm-icon):not(.add-server):not(.manual-icon)')
+      .first();
     await expect(serverIcon).toBeVisible({ timeout: 3000 });
     await serverIcon.click();
     await page.waitForTimeout(500);
@@ -52,7 +57,10 @@ test.describe('View registry — surfaces render in correct containers', () => {
     await login(page);
 
     // Friends button is in the DM sidebar
-    const friendsBtn = page.locator('button').filter({ hasText: /friends/i }).first();
+    const friendsBtn = page
+      .locator('button')
+      .filter({ hasText: /friends/i })
+      .first();
     if (await friendsBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await friendsBtn.click();
       await expect(page.locator('.friends-view')).toBeVisible({ timeout: 3000 });

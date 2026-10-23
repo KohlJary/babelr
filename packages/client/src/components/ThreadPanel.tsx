@@ -12,21 +12,13 @@ interface ThreadPanelProps {
   onClose: () => void;
 }
 
-export function ThreadPanel({
-  parentMessage,
-  replies,
-  loading,
-  onSendReply,
-}: ThreadPanelProps) {
+export function ThreadPanel({ parentMessage, replies, loading, onSendReply }: ThreadPanelProps) {
   const t = useT();
   return (
     <div className="thread-panel-body">
       <div className="thread-content">
         <div className="parent-message">
-          <MessageItem
-            data={parentMessage}
-            compact={false}
-          />
+          <MessageItem data={parentMessage} compact={false} />
         </div>
 
         <div className="thread-divider" />
@@ -39,11 +31,7 @@ export function ThreadPanel({
 
         <div className="thread-replies">
           {replies.map((item) => (
-            <MessageItem
-              key={item.message.id}
-              data={item}
-              compact={false}
-            />
+            <MessageItem key={item.message.id} data={item} compact={false} />
           ))}
         </div>
       </div>

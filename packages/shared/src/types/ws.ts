@@ -45,7 +45,10 @@ export interface SfuConsumerParams {
 export type WsServerMessage =
   | { type: 'connected'; payload: { actorId: string } }
   | { type: 'message:new'; payload: { message: MessageView; author: AuthorView } }
-  | { type: 'message:updated'; payload: { messageId: string; channelId: string; content: string; updatedAt: string } }
+  | {
+      type: 'message:updated';
+      payload: { messageId: string; channelId: string; content: string; updatedAt: string };
+    }
   | { type: 'message:deleted'; payload: { messageId: string; channelId: string } }
   | { type: 'typing:start'; payload: { channelId: string; actor: AuthorView } }
   | { type: 'presence:update'; payload: { actorId: string; status: PresenceStatus } }
@@ -57,7 +60,10 @@ export type WsServerMessage =
   | { type: 'friend:accepted'; payload: { friendship: FriendshipView } }
   | { type: 'friend:removed'; payload: { friendshipId: string } }
   | { type: 'friend:updated'; payload: { friendship: FriendshipView } }
-  | { type: 'wiki:page-changed'; payload: { serverId: string; action: 'created' | 'updated' | 'deleted'; slug: string } }
+  | {
+      type: 'wiki:page-changed';
+      payload: { serverId: string; action: 'created' | 'updated' | 'deleted'; slug: string };
+    }
   | { type: 'server:updated'; payload: { serverId: string } }
   | { type: 'voice:room-state'; payload: { channelId: string; participants: AuthorView[] } }
   | { type: 'voice:participant-joined'; payload: { channelId: string; participant: AuthorView } }

@@ -48,14 +48,11 @@ export function useEvents({ scope, ownerId, rangeStart, rangeEnd }: UseEventsOpt
     reload();
   }, [reload]);
 
-  const createEvent = useCallback(
-    async (input: CreateEventInput) => {
-      const row = await api.createEvent(input);
-      setEvents((prev) => [row, ...prev].sort((a, b) => a.startAt.localeCompare(b.startAt)));
-      return row;
-    },
-    [],
-  );
+  const createEvent = useCallback(async (input: CreateEventInput) => {
+    const row = await api.createEvent(input);
+    setEvents((prev) => [row, ...prev].sort((a, b) => a.startAt.localeCompare(b.startAt)));
+    return row;
+  }, []);
 
   const updateEvent = useCallback(
     async (eventId: string, input: UpdateEventInput) => {
@@ -68,30 +65,22 @@ export function useEvents({ scope, ownerId, rangeStart, rangeEnd }: UseEventsOpt
     [reload],
   );
 
-  const deleteEvent = useCallback(
-    async (eventId: string) => {
-      const baseId = splitBaseId(eventId);
-      await api.deleteEvent(baseId);
-      setEvents((prev) => prev.filter((e) => splitBaseId(e.id) !== baseId));
-    },
-    [],
-  );
+  const deleteEvent = useCallback(async (eventId: string) => {
+    const baseId = splitBaseId(eventId);
+    await api.deleteEvent(baseId);
+    setEvents((prev) => prev.filter((e) => splitBaseId(e.id) !== baseId));
+  }, []);
 
-  const rsvpEvent = useCallback(
-    async (eventId: string, status: EventRsvpStatus) => {
-      const baseId = splitBaseId(eventId);
-      const row = await api.rsvpEvent(baseId, status);
-      setEvents((prev) =>
-        prev.map((e) =>
-          splitBaseId(e.id) === baseId
-            ? { ...row, id: e.id, startAt: e.startAt, endAt: e.endAt }
-            : e,
-        ),
-      );
-      return row;
-    },
-    [],
-  );
+  const rsvpEvent = useCallback(async (eventId: string, status: EventRsvpStatus) => {
+    const baseId = splitBaseId(eventId);
+    const row = await api.rsvpEvent(baseId, status);
+    setEvents((prev) =>
+      prev.map((e) =>
+        splitBaseId(e.id) === baseId ? { ...row, id: e.id, startAt: e.startAt, endAt: e.endAt } : e,
+      ),
+    );
+    return row;
+  }, []);
 
   return { events, loading, error, reload, createEvent, updateEvent, deleteEvent, rsvpEvent };
 }
