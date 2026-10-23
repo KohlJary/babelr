@@ -176,11 +176,13 @@ async function authPlugin(fastify: FastifyInstance) {
   }
 
   // Audit every token request, allowed or denied, once the response
-  // status is known. Awaited so a test (or a sponsor) reading the log
-  // right after sees the row; a failure is logged, never thrown.
-  fastify.addHook('onResponse', async (request, reply) => {
+  // status is known. onSend, not onResponse: the row is written before
+  // the response goes out, so whoever gets the response (a sponsor, a
+  // test) can already read it, and nothing writes after the request is
+  // over. A failure is logged, never thrown.
+  fastify.addHook('onSend', async (request, reply, payload) => {
     const a = request.agentAuth;
-    if (!a) return;
+    if (!a) return payload;
     const denied = !!a.denial || reply.statusCode === 401 || reply.statusCode === 403;
     try {
       await db.insert(auditLogs).values({
@@ -203,6 +205,7 @@ async function authPlugin(fastify: FastifyInstance) {
     } catch (err) {
       request.log.error({ err }, 'Failed to write agent audit log');
     }
+    return payload;
   });
 
   // Helper: create session and set cookie
