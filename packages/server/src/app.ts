@@ -25,6 +25,7 @@ import wsRoutes from './routes/ws.ts';
 import translateRoutes from './routes/translate.ts';
 import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
+import dmConsentRoutes from './routes/dm-consent.ts';
 import friendsRoutes from './routes/friends.ts';
 import i18nRoutes from './routes/i18n.ts';
 import eventRoutes from './routes/events.ts';
@@ -167,6 +168,7 @@ export async function buildApp() {
   await app.register(translateRoutes);
   await app.register(serverRoutes);
   await app.register(dmRoutes);
+  await app.register(dmConsentRoutes);
   await app.register(friendsRoutes);
   await app.register(i18nRoutes);
   await app.register(eventRoutes);

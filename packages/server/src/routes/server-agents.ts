@@ -23,8 +23,9 @@ type Actor = typeof actors.$inferSelect;
  *
  * A person who is a member of the server and holds CREATE_INVITES picks
  * an agent and adds it. That writes a grant, joins the agent, and adds
- * `servers:join:<serverId>` to the agent's live tokens, so it can leave
- * and come back without anyone minting anything. A human on the
+ * `servers:join:<serverId>` to the agent's live tokens. Leaving (any
+ * token may) or being kicked gives up both, so coming back takes a
+ * member adding it again. A human on the
  * server's side is always in the loop; nobody can add an agent to a
  * server they don't belong to. Every add is audited with the inviter,
  * the agent and its sponsor. Kicking the agent deletes the grant.

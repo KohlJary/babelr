@@ -136,6 +136,11 @@ export interface DMConversation {
   lastMessage?: MessageView;
   /** Map of actorUri → ISO timestamp of last read position (federated read receipts) */
   readBy?: Record<string, string>;
+  /** Participants who left. They no longer receive this conversation. */
+  left?: AuthorView[];
+  /** Present when the conversation started as a message request.
+   *  `incoming` is true for the person who has to accept it. */
+  request?: { state: 'pending' | 'accepted'; incoming: boolean };
 }
 
 export interface MessageWithAuthor {

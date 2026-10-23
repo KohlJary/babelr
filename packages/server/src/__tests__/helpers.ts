@@ -12,6 +12,7 @@ import messageRoutes from '../routes/messages.ts';
 import channelSettingsRoutes from '../routes/channel-settings.ts';
 import serverRoutes from '../routes/servers.ts';
 import dmRoutes from '../routes/dms.ts';
+import dmConsentRoutes from '../routes/dm-consent.ts';
 import friendsRoutes from '../routes/friends.ts';
 import eventRoutes from '../routes/events.ts';
 import wikiRoutes from '../routes/wiki.ts';
@@ -96,6 +97,9 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
         });
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});
+        fastify.decorate('wsUnsubscribeActor', (actorId: string, channelId: string) => {
+          wsSent.push({ to: `unsubscribe:${actorId}`, message: { channelId } });
+        });
         fastify.decorate('wsRemoveClient', () => {});
         fastify.decorate('voiceJoin', () => null);
         fastify.decorate('voiceLeave', () => null);
@@ -118,6 +122,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(channelSettingsRoutes);
   await app.register(serverRoutes);
   await app.register(dmRoutes);
+  await app.register(dmConsentRoutes);
   await app.register(friendsRoutes);
   await app.register(eventRoutes);
   await app.register(wikiRoutes);

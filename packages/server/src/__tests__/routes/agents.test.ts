@@ -40,12 +40,17 @@ const ALL_SCOPES = [
   'plugins:write',
 ];
 
-async function createAgent(cookie: string, username: string, kind: 'agent' | 'service' = 'agent') {
+async function createAgent(
+  cookie: string,
+  username: string,
+  kind: 'agent' | 'service' = 'agent',
+  extra: Record<string, unknown> = {},
+) {
   const res = await app.inject({
     method: 'POST',
     url: '/agents',
     headers: { cookie },
-    payload: { username, kind, displayName: username },
+    payload: { username, kind, displayName: username, ...extra },
   });
   expect(res.statusCode).toBe(201);
   return JSON.parse(res.body) as { id: string; kind: string; sponsorId: string };
@@ -353,7 +358,7 @@ describe('2. Scopes, deny by default', () => {
 
   it('DMs it participates in: read and post with dms:*, never through channels:*', async () => {
     const kohl = await createTestUser(app, 'kohl');
-    const agent = await createAgent(kohl.cookie, 'robo');
+    const agent = await createAgent(kohl.cookie, 'robo', 'agent', { dmPolicy: 'anyone' });
     const dm = await app.inject({
       method: 'POST',
       url: '/dms',
@@ -394,7 +399,7 @@ describe('2. Scopes, deny by default', () => {
     expect(read.statusCode).toBe(200);
     expect(JSON.parse(read.body).messages).toHaveLength(1);
 
-    // And it can't open new DMs with anyone (POST /dms is unmapped).
+    // And it can't open new DMs without dms:open.
     const bob = await createTestUser(app, 'bob');
     const open = await app.inject({
       method: 'POST',
@@ -462,10 +467,10 @@ describe('3. Services', () => {
     expect(json.babelrSponsor).toBe(`http://test.babelr.local/users/kohl`);
   });
 
-  it('services and agents show up in the user list and lookup, and can be DMed', async () => {
+  it('services and agents show up in the user list and lookup, and can be DMed once they allow it', async () => {
     const kohl = await createTestUser(app, 'kohl');
-    const svc = await createAgent(kohl.cookie, 'claude', 'service');
-    const agent = await createAgent(kohl.cookie, 'robo');
+    const svc = await createAgent(kohl.cookie, 'claude', 'service', { dmPolicy: 'anyone' });
+    const agent = await createAgent(kohl.cookie, 'robo', 'agent', { dmPolicy: 'anyone' });
     const bob = await createTestUser(app, 'bob');
 
     const users = await app.inject({
@@ -652,15 +657,6 @@ describe('5. Audit log', () => {
       `servers:join:${serverId}`,
       `channels:post:${channelId}`,
     ]);
-    // Leave and come back on its own token (the narrowed join scope).
-    for (const step of ['leave', 'join']) {
-      const r = await app.inject({
-        method: 'POST',
-        url: `/servers/${serverId}/${step}`,
-        headers: bearer(tok.token),
-      });
-      expect(r.statusCode, step).toBe(200);
-    }
     await app.inject({
       method: 'POST',
       url: `/channels/${channelId}/messages`,
@@ -697,7 +693,22 @@ describe('5. Audit log', () => {
     expect(
       denied.find((r) => r.route === 'GET /servers/:serverId/audit-log')!.details,
     ).toMatchObject({ denial: 'route_not_mapped', status: 403 });
-    expect(byAction('agent.server.join')).toHaveLength(1);
+    // Leaving (any token) is audited, and gives up the join scope.
+    const leave = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/leave`,
+      headers: bearer(tok.token),
+    });
+    expect(leave.statusCode).toBe(200);
+    let after = await auditRows(agent.id);
+    for (let i = 0; i < 50 && !after.some((r) => r.action === 'agent.server.leave'); i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      after = await auditRows(agent.id);
+    }
+    expect(after.filter((r) => r.action === 'agent.server.leave')).toHaveLength(1);
+    const dropped = after.filter((r) => r.action === 'agent.server.grant_dropped');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({ serverId, sponsorId: kohl.body.id });
   });
 
   it('logs requests with a revoked token as denials', async () => {
@@ -1244,15 +1255,20 @@ describe('Little guys: how agents get into servers', () => {
     });
     expect(post.statusCode).toBe(201);
 
-    // It can leave and come back on its own.
-    for (const step of ['leave', 'join']) {
-      const r = await app.inject({
-        method: 'POST',
-        url: `/servers/${serverId}/${step}`,
-        headers: bearer(tok.token),
-      });
-      expect(r.statusCode, step).toBe(200);
-    }
+    // It can leave on its own, and leaving gives up the grant: coming
+    // back takes a member adding it again (3d).
+    const leave = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/leave`,
+      headers: bearer(tok.token),
+    });
+    expect(leave.statusCode).toBe(200);
+    const rejoin = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/join`,
+      headers: bearer(tok.token),
+    });
+    expect(rejoin.statusCode).toBe(403);
 
     const [invite] = await db
       .select()

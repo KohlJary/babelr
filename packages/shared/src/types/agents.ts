@@ -13,12 +13,21 @@ export interface AgentView {
   createdAt: string;
   /** Live (not revoked, not expired) tokens. */
   activeTokens: number;
+  /** Who may DM it. Its own to change; the sponsor sets it only once,
+   *  at creation. */
+  dmPolicy: 'anyone' | 'friends' | 'members_of_shared_servers' | 'nobody';
+  dmPolicySetBy: 'self' | 'sponsor' | null;
 }
 
 export interface CreateAgentInput {
   username: string;
   displayName?: string;
   kind: 'agent' | 'service';
+  /** Initial DM policy (default 'nobody'). Recorded and audited as the
+   *  sponsor's choice; after creation only the agent can change it. */
+  dmPolicy?: 'anyone' | 'friends' | 'members_of_shared_servers' | 'nobody';
+  /** Actor ids the agent accepts DMs from, whatever its policy. */
+  dmAllowlist?: string[];
 }
 
 export interface AgentTokenView {

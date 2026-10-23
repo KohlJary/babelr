@@ -20,6 +20,7 @@ declare module 'fastify' {
     broadcastToActor: (actorId: string, message: WsServerMessage) => void;
     wsSubscribe: (ws: WebSocket, channelId: string) => void;
     wsUnsubscribe: (ws: WebSocket, channelId: string) => void;
+    wsUnsubscribeActor: (actorId: string, channelId: string) => void;
     wsRemoveClient: (ws: WebSocket) => void;
     wsGetChannelSubs: (channelId: string) => Set<WebSocket>;
     wsRegisterActorConnection: (ws: WebSocket, actorId: string) => void;

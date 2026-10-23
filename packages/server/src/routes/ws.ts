@@ -7,6 +7,7 @@ import { PERMISSIONS } from '@babelr/shared';
 import { eq } from 'drizzle-orm';
 import { objects } from '../db/schema/objects.ts';
 import { hasPermission } from '../permissions.ts';
+import { checkChannelAccess } from '../serializers.ts';
 import { verifyVoiceFederationToken } from '../voice/federation-jwt.ts';
 import { actors } from '../db/schema/actors.ts';
 import {
@@ -84,9 +85,20 @@ export default async function wsRoutes(fastify: FastifyInstance) {
         const msg = JSON.parse(raw.toString()) as WsClientMessage;
 
         switch (msg.type) {
-          case 'channel:subscribe':
-            fastify.wsSubscribe(socket, msg.payload.channelId);
+          case 'channel:subscribe': {
+            // Only channels this actor may read. (This used to subscribe
+            // any socket to any channel id, DMs included.) A socket
+            // authenticated by a voice federation token may follow only
+            // the channel its token names.
+            const channelId = msg.payload.channelId;
+            if (federationScope) {
+              if (federationScope.channelId === channelId) fastify.wsSubscribe(socket, channelId);
+              break;
+            }
+            const { allowed } = await checkChannelAccess(fastify.db, channelId, actor.uri);
+            if (allowed) fastify.wsSubscribe(socket, channelId);
             break;
+          }
           case 'channel:unsubscribe':
             fastify.wsUnsubscribe(socket, msg.payload.channelId);
             break;

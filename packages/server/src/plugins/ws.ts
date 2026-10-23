@@ -296,6 +296,11 @@ async function wsPlugin(fastify: FastifyInstance) {
   // Export subscribe/unsubscribe for the WS route
   fastify.decorate('wsSubscribe', subscribe);
   fastify.decorate('wsUnsubscribe', unsubscribe);
+  // Drop every socket an actor has open from one channel: used when
+  // they leave a DM or a server, so delivery stops at once.
+  fastify.decorate('wsUnsubscribeActor', (actorId: string, channelId: string) => {
+    for (const ws of actorConnections.get(actorId) ?? []) unsubscribe(ws, channelId);
+  });
   fastify.decorate('wsRemoveClient', (ws: WebSocket) => removeClient(ws, fastify));
   fastify.decorate('wsRegisterActorConnection', (ws: WebSocket, actorId: string) => {
     registerActorConnection(ws, actorId, fastify);

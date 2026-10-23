@@ -29,6 +29,7 @@ import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
 import { actorLikeType, isActorLike } from '../actor-kind.ts';
+import { handleRemoteLeave, inboundDMTarget } from '../dm-consent.ts';
 
 interface APActivity {
   id?: string;
@@ -285,6 +286,9 @@ async function routeActivity(
       break;
     case 'Read':
       await handleRead(fastify, remoteActor, body);
+      break;
+    case 'Leave':
+      await handleLeave(fastify, remoteActor, body);
       break;
     default:
       fastify.log.info({ type: body.type }, 'Unhandled activity type');
@@ -589,81 +593,6 @@ async function handleUndo(
   }
 }
 
-/**
- * Look up (or create) a local DM collection between a local Person and a remote actor.
- * Returns the local DM object id.
- */
-async function findOrCreateDM(
-  fastify: FastifyInstance,
-  localActor: typeof actors.$inferSelect,
-  remoteActor: typeof actors.$inferSelect,
-): Promise<{ dmId: string; isNew: boolean }> {
-  const db = fastify.db;
-
-  // Search for an existing DM containing both actors
-  const localMemberships = await db
-    .select({ collectionUri: collectionItems.collectionUri })
-    .from(collectionItems)
-    .where(eq(collectionItems.itemUri, localActor.uri));
-
-  for (const m of localMemberships) {
-    const [otherEntry] = await db
-      .select({ id: collectionItems.id })
-      .from(collectionItems)
-      .where(
-        and(
-          eq(collectionItems.collectionUri, m.collectionUri),
-          eq(collectionItems.itemUri, remoteActor.uri),
-        ),
-      )
-      .limit(1);
-    if (!otherEntry) continue;
-
-    const [channel] = await db
-      .select()
-      .from(objects)
-      .where(eq(objects.uri, m.collectionUri))
-      .limit(1);
-    if (!channel) continue;
-    const props = channel.properties as Record<string, unknown> | null;
-    if (channel.belongsTo === null && props?.isDM) {
-      return { dmId: channel.id, isNew: false };
-    }
-  }
-
-  // Create a new local DM collection
-  const config = fastify.config;
-  const protocol = config.secureCookies ? 'https' : 'http';
-  const dmUri = `${protocol}://${config.domain}/dms/${crypto.randomUUID()}`;
-
-  const [channel] = await db
-    .insert(objects)
-    .values({
-      uri: dmUri,
-      type: 'OrderedCollection',
-      belongsTo: null,
-      properties: { name: null, isDM: true },
-    })
-    .returning();
-
-  await db.insert(collectionItems).values([
-    {
-      collectionUri: channel.uri,
-      collectionId: channel.id,
-      itemUri: localActor.uri,
-      itemId: localActor.id,
-    },
-    {
-      collectionUri: channel.uri,
-      collectionId: channel.id,
-      itemUri: remoteActor.uri,
-      itemId: remoteActor.id,
-    },
-  ]);
-
-  return { dmId: channel.id, isNew: true };
-}
-
 type CreateCtx = {
   fastify: FastifyInstance;
   remoteActor: typeof actors.$inferSelect;
@@ -677,6 +606,7 @@ async function handleCreateNote(ctx: CreateCtx) {
 
   let localDMId: string | null = null;
   let dmIsNew = false;
+  let dmIsRequest = false;
   let dmLocalRecipient: typeof actors.$inferSelect | null = null;
   if (!isPublic) {
     for (const uri of toList) {
@@ -686,9 +616,20 @@ async function handleCreateNote(ctx: CreateCtx) {
         .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
         .limit(1);
       if (target) {
-        const result = await findOrCreateDM(fastify, target, remoteActor);
+        // DM consent: the recipient's policy, blocks, pending requests
+        // and departures apply to remote senders exactly as to local
+        // ones. A refused DM is dropped whole: not stored anywhere.
+        const result = await inboundDMTarget(fastify, target, remoteActor);
+        if (!result) {
+          fastify.log.info(
+            { from: remoteActor.uri, to: target.uri },
+            'Inbound DM refused by DM consent',
+          );
+          return;
+        }
         localDMId = result.dmId;
         dmIsNew = result.isNew;
+        dmIsRequest = result.isRequest;
         dmLocalRecipient = target;
         break;
       }
@@ -781,7 +722,7 @@ async function handleCreateNote(ctx: CreateCtx) {
           null,
       };
       fastify.broadcastToActor(dmLocalRecipient.id, {
-        type: 'conversation:new',
+        type: dmIsRequest ? 'dm:request' : 'conversation:new',
         payload: {
           conversation: {
             id: localDMId,
@@ -1597,4 +1538,30 @@ async function handleUpdate(
 
     fastify.log.info({ objectUri: obj.id }, 'Remote Update processed');
   }
+}
+
+/**
+ * A remote participant left a DM (Babelr extension: `Leave` whose
+ * object is their tower's DM collection, marked `babelrDM`). Each tower
+ * has its own copy of a DM, so match ours by the pair: the remote actor
+ * and the local actors it addressed.
+ */
+async function handleLeave(
+  fastify: FastifyInstance,
+  remoteActor: typeof actors.$inferSelect,
+  activity: APActivity,
+) {
+  const obj = activity.object as Record<string, unknown> | string | undefined;
+  if (!obj || typeof obj === 'string' || obj.babelrDM !== true) return;
+  const toList = Array.isArray(activity.to) ? (activity.to as string[]) : [];
+  const targets: Array<typeof actors.$inferSelect> = [];
+  for (const uri of toList) {
+    const [t] = await fastify.db
+      .select()
+      .from(actors)
+      .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
+      .limit(1);
+    if (t) targets.push(t);
+  }
+  await handleRemoteLeave(fastify, remoteActor, targets);
 }

@@ -42,6 +42,9 @@ const mockActor = {
   sponsorId: null,
   suspendedAt: null,
   suspendedBy: null,
+  dmPolicy: 'anyone',
+  dmPolicySetBy: null,
+  dmPolicySetAt: null,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
 };

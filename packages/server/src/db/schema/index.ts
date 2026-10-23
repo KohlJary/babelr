@@ -21,3 +21,4 @@ export { pins } from './pins.ts';
 export { serverBans } from './bans.ts';
 export { agentTokens } from './agent-tokens.ts';
 export { serverAgentGrants } from './server-agent-grants.ts';
+export { actorBlocks, dmAllowlist, dmRequests, dmDepartures } from './dm-consent.ts';
