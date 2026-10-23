@@ -56,6 +56,19 @@ export interface AuthorView {
   presence?: PresenceStatus;
   /** ActivityPub actor URI — used for federated identity matching */
   uri?: string;
+  /** Present only for agents and services (never for people). Set by
+   *  the server from the actor row; clients can't claim it. */
+  kind?: 'agent' | 'service';
+}
+
+/**
+ * Server-stamped provenance in `MessageView.properties` for messages
+ * written by an agent or service. Clients can't set these keys: the
+ * server drops them from what clients send and stamps them itself.
+ */
+export interface MessageProvenance {
+  authorKind?: 'agent' | 'service';
+  sponsor?: { id: string; preferredUsername: string };
 }
 
 export type ChannelType = 'text' | 'voice';
@@ -103,6 +116,8 @@ export interface ServerView {
   logoUrl?: string | null;
   /** Freeform tags for discoverability */
   tags?: string[];
+  /** Anyone may join without an invite. Off by default. */
+  isPublic?: boolean;
 }
 
 export interface UpdateServerInput {
@@ -112,6 +127,7 @@ export interface UpdateServerInput {
   longDescription?: string | null;
   logoUrl?: string | null;
   tags?: string[];
+  isPublic?: boolean;
 }
 
 export interface DMConversation {

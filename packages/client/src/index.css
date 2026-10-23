@@ -7250,3 +7250,112 @@ textarea.modal-input {
     padding: 0 1rem;
   }
 }
+
+/* Agent / service badge (server-stamped provenance) */
+.author-kind-badge {
+  display: inline-block;
+  margin: 0 0.35rem;
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+.author-kind-service {
+  background: #3b2a5c;
+  color: #c4b5fd;
+}
+
+/* Agents tab: the kill switch. Large tap targets for phones. */
+.agents-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.agents-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  background: #161616;
+}
+
+.agents-row-suspended {
+  opacity: 0.7;
+}
+
+.agents-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agents-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.agents-meta {
+  color: #888;
+  font-size: 0.8rem;
+}
+
+.agents-suspend,
+.agents-unsuspend {
+  flex-shrink: 0;
+  min-height: 44px;
+  min-width: 96px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agents-suspend {
+  background: #b91c1c;
+  color: white;
+}
+
+.agents-unsuspend {
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.agents-suspend:disabled,
+.agents-unsuspend:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.agents-error {
+  color: #f87171;
+  font-size: 0.85rem;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.agents-tab h4 {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #aaa;
+}

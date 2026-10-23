@@ -31,7 +31,9 @@ async function seedPlugin(fastify: FastifyInstance) {
           followersUri: `${serverUri}/followers`,
           followingUri: `${serverUri}/following`,
           local: true,
-          properties: {},
+          // The default server is the one everyone lands in: public.
+          // (Servers are invite-only unless marked public.)
+          properties: { public: true },
         })
         .returning();
     }

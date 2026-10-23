@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { eq, and, desc, gt, lt, inArray } from 'drizzle-orm';
+import { eq, and, desc, gt, lt, inArray, sql } from 'drizzle-orm';
 import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
@@ -27,6 +27,8 @@ import { signedGet } from '../federation/delivery.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { pins } from '../db/schema/pins.ts';
 import { createMessageInChannel, parseMentions } from './channels.ts';
+import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
+import { assertNotSuspended } from '../agent-tokens.ts';
 import {
   toMessageView,
   toAuthorView,
@@ -125,12 +127,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     }
 
     const { channelId } = request.params;
-    const { content, properties } = request.body;
+    const { content } = request.body;
+    const properties = sanitizeClientProperties(request.body?.properties);
 
-    const hasAttachments =
-      properties?.attachments &&
-      Array.isArray(properties.attachments) &&
-      properties.attachments.length > 0;
+    const hasAttachments = Array.isArray(properties.attachments);
     if ((!content || content.trim().length === 0) && !hasAttachments) {
       return reply.status(400).send({ error: 'Message content or attachment is required' });
     }
@@ -245,11 +245,16 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       return reply.status(403).send({ error: 'Can only edit your own messages' });
     }
 
-    const [updated] = await db
-      .update(objects)
-      .set({ content: content.trim(), updated: new Date() })
-      .where(eq(objects.id, messageId))
-      .returning();
+    const editor = request.actor;
+    const updated = await db.transaction(async (tx) => {
+      await assertNotSuspended(tx, editor.id);
+      const [row] = await tx
+        .update(objects)
+        .set({ content: content.trim(), updated: new Date() })
+        .where(eq(objects.id, messageId))
+        .returning();
+      return row;
+    });
 
     // Re-sync [[slug]] wiki refs after edit
     await syncMessageOutboundLinks(db, updated.id, channelId, updated.content ?? '');
@@ -685,8 +690,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       const limit = Math.min(parseInt(request.query.limit ?? String(DEFAULT_LIMIT), 10), 100);
+      const me = request.actor;
 
-      const conditions = [eq(objects.type, 'Note')];
+      // Mentions are stored in objects.properties.mentions (never in
+      // the client-facing view, so filter in SQL, not on the view).
+      const conditions = [
+        eq(objects.type, 'Note'),
+        sql`(${objects.properties}->'mentions') @> ${JSON.stringify([me.id])}::jsonb`,
+      ];
+      if (request.query.cursor) {
+        const c = new Date(request.query.cursor);
+        if (!Number.isNaN(c.getTime())) conditions.push(lt(objects.published, c));
+      }
 
       const rows = await db
         .select({ object: objects, actor: actors })
@@ -696,25 +711,30 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         .orderBy(desc(objects.published))
         .limit(limit + 1);
 
-      // Filter for messages that mention the current actor
-      const messages: MessageWithAuthor[] = rows
-        .map((row) => ({
-          message: toMessageView(row.object),
-          author: toAuthorView(row.actor),
-        }))
-        .filter((item) => {
-          const props = (item.message.properties as Record<string, unknown>) ?? {};
-          const mentions = (props.mentions as string[]) ?? [];
-          return mentions.includes(request.actor!.id);
-        });
+      // Being mentioned is not access: keep only messages in channels
+      // (or DMs) the caller can read right now.
+      const access = new Map<string, boolean>();
+      const readable: typeof rows = [];
+      for (const row of rows) {
+        const channelId = row.object.context;
+        if (!channelId) continue;
+        if (!access.has(channelId)) {
+          const { allowed } = await checkChannelAccess(db, channelId, me.uri);
+          access.set(channelId, allowed);
+        }
+        if (access.get(channelId)) readable.push(row);
+      }
 
       const hasMore = rows.length > limit;
-      const response: MessageListResponse = {
-        messages: messages.slice(0, limit),
-        hasMore,
-      };
-      if (hasMore && messages.length > 0) {
-        response.cursor = messages[Math.min(limit - 1, messages.length - 1)].message.published;
+      const page = readable.slice(0, limit);
+      const messages: MessageWithAuthor[] = page.map((row) => ({
+        message: toMessageView(row.object),
+        author: toAuthorView(row.actor),
+      }));
+      const response: MessageListResponse = { messages, hasMore };
+      if (hasMore) {
+        // Continue after the last row scanned, readable or not.
+        response.cursor = rows[Math.min(limit, rows.length) - 1].object.published.toISOString();
       }
       return response;
     },
@@ -742,6 +762,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       if (!parentMessage) {
         return reply.status(404).send({ error: 'Message not found' });
       }
+
+      // Same access rule as reading the channel: server members (and
+      // private-channel members) or, for a DM, its participants.
+      const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
 
       // Get all replies to this message
       const rows = await db
@@ -806,29 +831,49 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const config = fastify.config;
     const protocol = config.secureCookies ? 'https' : 'http';
 
-    const [reply_msg] = await db
-      .insert(objects)
-      .values({
-        uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
-        type: 'Note',
-        attributedTo: request.actor.id,
-        content: content.trim(),
-        context: channelId,
-        inReplyTo: messageId,
+    if (request.actor.suspendedAt) {
+      return reply.status(403).send({ error: 'Actor is suspended' });
+    }
+    const provenance = await provenanceFor(request.actor, async (id) => {
+      const [s] = await db
+        .select({ id: actors.id, preferredUsername: actors.preferredUsername })
+        .from(actors)
+        .where(eq(actors.id, id))
+        .limit(1);
+      return s ?? null;
+    });
+
+    const author = request.actor;
+    const reply_msg = await db.transaction(async (tx) => {
+      // Kill switch, re-checked under a row lock at insert time.
+      await assertNotSuspended(tx, author.id);
+      const [row] = await tx
+        .insert(objects)
+        .values({
+          uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
+          type: 'Note',
+          attributedTo: author.id,
+          content: content.trim(),
+          context: channelId,
+          inReplyTo: messageId,
+          to: [],
+          cc: [],
+          properties: {
+            ...(mentionedIds.length > 0 ? { mentions: mentionedIds } : {}),
+            ...provenance,
+          },
+        })
+        .returning();
+      await tx.insert(activities).values({
+        uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
+        type: 'Create',
+        actorId: author.id,
+        objectUri: row.uri,
+        objectId: row.id,
         to: [],
         cc: [],
-        properties: mentionedIds.length > 0 ? { mentions: mentionedIds } : {},
-      })
-      .returning();
-
-    await db.insert(activities).values({
-      uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
-      type: 'Create',
-      actorId: request.actor.id,
-      objectUri: reply_msg.uri,
-      objectId: reply_msg.id,
-      to: [],
-      cc: [],
+      });
+      return row;
     });
 
     const messageView = toMessageView(reply_msg);

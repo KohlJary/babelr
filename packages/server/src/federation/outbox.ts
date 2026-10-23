@@ -11,6 +11,7 @@ import {
   serializeNote,
   serializeActivity,
 } from './jsonld.ts';
+import { actorLikeType } from '../actor-kind.ts';
 
 export default async function outboxRoutes(fastify: FastifyInstance) {
   // Person outbox
@@ -24,7 +25,7 @@ export default async function outboxRoutes(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, request.params.username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
+            actorLikeType(actors.type),
           ),
         )
         .limit(1);

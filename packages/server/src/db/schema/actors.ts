@@ -8,6 +8,8 @@ import {
   jsonb,
   boolean,
   uniqueIndex,
+  index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -35,6 +37,24 @@ export const actors = pgTable(
     totpEnabled: boolean('totp_enabled').notNull().default(false),
     totpRecoveryCodes: jsonb('totp_recovery_codes').default([]),
     properties: jsonb('properties').default({}),
+    /**
+     * Who this actor is: 'person' (a human with a password or SSO),
+     * 'agent' (software acting as itself, AS2 type Person) or
+     * 'service' (a bot anyone can message, AS2 type Service). Agents
+     * and services authenticate only with API tokens and always have
+     * a sponsor. Remote actors keep the default unless they arrive
+     * as AS2 Service.
+     */
+    kind: varchar('kind', { length: 16 }).notNull().default('person'),
+    /** The local person responsible for an agent or service. */
+    sponsorId: uuid('sponsor_id').references((): AnyPgColumn => actors.id, {
+      onDelete: 'restrict',
+    }),
+    /** Set by the kill switch: tokens revoked, posting blocked. */
+    suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+    suspendedBy: uuid('suspended_by').references((): AnyPgColumn => actors.id, {
+      onDelete: 'set null',
+    }),
     local: boolean('local').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -43,5 +63,6 @@ export const actors = pgTable(
     uniqueIndex('actors_preferred_username_local_idx')
       .on(table.preferredUsername)
       .where(sql`${table.local} = true`),
+    index('actors_sponsor_idx').on(table.sponsorId),
   ],
 );

@@ -13,6 +13,7 @@ import {
   sendFriendAccept,
   sendFriendUndo,
 } from '../federation/friends-delivery.ts';
+import { actorLikeType } from '../actor-kind.ts';
 
 function toFriendshipView(
   row: typeof friendships.$inferSelect,
@@ -63,7 +64,7 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
+            actorLikeType(actors.type),
           ),
         )
         .limit(1);

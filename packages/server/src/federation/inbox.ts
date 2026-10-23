@@ -6,6 +6,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { serverBans } from '../db/schema/bans.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { reactions } from '../db/schema/reactions.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
@@ -27,6 +28,7 @@ import { serializeActivity } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
+import { actorLikeType, isActorLike } from '../actor-kind.ts';
 
 interface APActivity {
   id?: string;
@@ -172,7 +174,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, request.params.username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
+            actorLikeType(actors.type),
           ),
         )
         .limit(1);
@@ -301,7 +303,7 @@ async function handleFollow(
 
   // Person→Person Follow is a friend request — do NOT auto-accept.
   // Create a pending_in friendship row and notify the local user.
-  if (localActor.type === 'Person') {
+  if (isActorLike(localActor.type)) {
     const [existing] = await db
       .select()
       .from(friendships)
@@ -354,8 +356,39 @@ async function handleFollow(
     return;
   }
 
-  // Group follow (server join) — preserve existing auto-accept behavior.
+  // Group follow (server join). Same rules as a local join: a banned
+  // actor is always refused, and only a public server auto-accepts.
+  // An invite-only server refuses remote Follows with a Reject (remote
+  // invites don't exist yet), so federation can't route around invites
+  // or bans.
   if (!localActor.followersUri) return;
+
+  const [ban] = await db
+    .select()
+    .from(serverBans)
+    .where(and(eq(serverBans.serverId, localActor.id), eq(serverBans.userId, remoteActor.id)))
+    .limit(1);
+  const banned = !!ban && !(ban.expiresAt && new Date() > ban.expiresAt);
+  const isPublic = (localActor.properties as Record<string, unknown> | null)?.public === true;
+  if (banned || !isPublic) {
+    const keyed = await ensureActorKeys(db, localActor);
+    if (keyed.privateKeyPem) {
+      const reject = serializeActivity(
+        `${protocol}://${domain}/activities/${crypto.randomUUID()}`,
+        'Reject',
+        localActor.uri,
+        activity,
+        [remoteActor.uri],
+        [],
+      );
+      await enqueueDelivery(db, reject, remoteActor.inboxUri, localActor.id);
+    }
+    fastify.log.info(
+      { follower: remoteActor.uri, followed: localActor.uri, banned },
+      'Follow rejected',
+    );
+    return;
+  }
 
   await db
     .insert(collectionItems)
@@ -466,7 +499,7 @@ async function handleUndo(
   if (innerType === 'Follow') {
     // Person → Person Undo: remove any friendship row owned by the local user
     // with the remote as other.
-    if (localActor.type === 'Person') {
+    if (isActorLike(localActor.type)) {
       const [row] = await fastify.db
         .select()
         .from(friendships)
@@ -650,7 +683,7 @@ async function handleCreateNote(ctx: CreateCtx) {
       const [target] = await fastify.db
         .select()
         .from(actors)
-        .where(and(eq(actors.uri, uri), eq(actors.local, true), eq(actors.type, 'Person')))
+        .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
         .limit(1);
       if (target) {
         const result = await findOrCreateDM(fastify, target, remoteActor);
@@ -1310,7 +1343,7 @@ async function handleUpdate(
   // not letting a remote actor update anyone's profile but their
   // own.
   const innerType = (obj as { type?: string }).type;
-  if (innerType === 'Person' || innerType === 'Group') {
+  if (isActorLike(innerType) || innerType === 'Group') {
     if (obj.id !== remoteActor.uri) {
       fastify.log.warn(
         { sender: remoteActor.uri, claimed: obj.id },

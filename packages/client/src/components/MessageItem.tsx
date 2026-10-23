@@ -88,6 +88,35 @@ function IdiomGlosses({ idioms }: { idioms: IdiomAnnotation[] }) {
   );
 }
 
+/**
+ * "agent" / "service" next to the author's name. Reads the provenance
+ * the server stamped on the message (or the author's kind from the
+ * server), never anything a client could claim.
+ */
+function AuthorKindBadge({
+  author,
+  message,
+}: {
+  author: MessageWithAuthor['author'];
+  message: MessageWithAuthor['message'];
+}) {
+  const t = useT();
+  const props = message.properties as
+    | { authorKind?: string; sponsor?: { preferredUsername?: string } }
+    | undefined;
+  const kind = props?.authorKind ?? author.kind;
+  if (kind !== 'agent' && kind !== 'service') return null;
+  const sponsor = props?.sponsor?.preferredUsername;
+  return (
+    <span
+      className={`author-kind-badge author-kind-${kind}`}
+      title={sponsor ? t('agents.sponsoredBy', { name: sponsor }) : undefined}
+    >
+      {kind === 'service' ? t('agents.badgeService') : t('agents.badgeAgent')}
+    </span>
+  );
+}
+
 export function MessageItem({
   data,
   compact,
@@ -410,6 +439,7 @@ export function MessageItem({
         >
           {author.displayName ?? author.preferredUsername}
         </button>
+        <AuthorKindBadge author={author} message={message} />
         <span className="message-time">
           {formatTime(message.published, t)}
           {message.updated && <span className="edited-badge"> {t('messages.edited')}</span>}

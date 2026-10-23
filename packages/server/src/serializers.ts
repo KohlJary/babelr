@@ -42,6 +42,12 @@ export function toMessageView(
   if (props?.encrypted) messageProps.encrypted = true;
   if (props?.iv) messageProps.iv = props.iv;
   if (props?.attachments) messageProps.attachments = props.attachments;
+  // Server-stamped provenance (message-provenance.ts). Only shown for
+  // agents and services, so person messages look exactly as before.
+  if (props?.authorKind === 'agent' || props?.authorKind === 'service') {
+    messageProps.authorKind = props.authorKind;
+    if (props.sponsor) messageProps.sponsor = props.sponsor;
+  }
 
   return {
     id: obj.id,
@@ -67,6 +73,7 @@ export function toAuthorView(actor: typeof actors.$inferSelect): AuthorView {
     displayName: actor.displayName,
     avatarUrl: (props?.avatarUrl as string) ?? null,
     uri: actor.uri,
+    ...(actor.kind === 'agent' || actor.kind === 'service' ? { kind: actor.kind } : {}),
   };
 }
 
@@ -135,7 +142,19 @@ export async function checkChannelAccess(
     .limit(1);
 
   if (!channel) return { allowed: false, channel: null };
-  if (!channel.belongsTo) return { allowed: true, channel };
+  if (!channel.belongsTo) {
+    // No server: a DM. Only its participants may use it. (This used
+    // to return allowed for anyone, which let any signed-in actor read
+    // or post into any DM through the /channels/:channelId routes.)
+    const [participant] = await db
+      .select({ id: collectionItems.id })
+      .from(collectionItems)
+      .where(
+        and(eq(collectionItems.collectionUri, channel.uri), eq(collectionItems.itemUri, actorUri)),
+      )
+      .limit(1);
+    return { allowed: !!participant, channel };
+  }
 
   const [server] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
 

@@ -9,6 +9,7 @@ import { wikiPages } from '../db/schema/wiki.ts';
 import { events } from '../db/schema/events.ts';
 import { serverFiles } from '../db/schema/files.ts';
 import { serializeOrderedCollection } from './jsonld.ts';
+import { actorLikeType } from '../actor-kind.ts';
 
 async function getActorByUsername(fastify: FastifyInstance, username: string) {
   const [actor] = await fastify.db
@@ -18,7 +19,7 @@ async function getActorByUsername(fastify: FastifyInstance, username: string) {
       and(
         eq(actors.preferredUsername, username),
         eq(actors.local, true),
-        eq(actors.type, 'Person'),
+        actorLikeType(actors.type),
       ),
     )
     .limit(1);

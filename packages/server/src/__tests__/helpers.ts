@@ -19,6 +19,9 @@ import roleRoutes from '../routes/roles.ts';
 import translateRoutes from '../routes/translate.ts';
 import fileRoutes from '../routes/files.ts';
 import auditRoutes from '../routes/audit.ts';
+import agentRoutes from '../routes/agents.ts';
+import serverAgentRoutes from '../routes/server-agents.ts';
+import actorRoutes from '../federation/actor.ts';
 import embedRoutes from '../routes/embeds.ts';
 import pluginLoader from '../plugins/plugin-loader.ts';
 import multipart from '@fastify/multipart';
@@ -51,11 +54,20 @@ export const wsSent: Array<{ to: string; message: unknown }> = [];
  * `plugins: true` also mounts the real plugin loader (the in-tree
  * plugins from registered.ts, with their migrations) and the embed
  * proxy, for tests of plugin routes and their access checks.
+ * `actorProfiles: true` mounts the federation actor document route.
  */
-export async function createTestApp(opts: { plugins?: boolean } = {}) {
+export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: boolean } = {}) {
   const db = createDb(testConfig.databaseUrl);
 
   const app = Fastify({ logger: false });
+  // Every route the app mounts, for tests that walk the whole table
+  // (e.g. the agent scope map's deny-by-default check).
+  const routes: Array<{ method: string; url: string }> = [];
+  app.addHook('onRoute', (r) => {
+    for (const m of Array.isArray(r.method) ? r.method : [r.method]) {
+      routes.push({ method: m, url: r.url });
+    }
+  });
 
   app.register(
     fp(
@@ -114,13 +126,19 @@ export async function createTestApp(opts: { plugins?: boolean } = {}) {
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(fileRoutes);
   await app.register(auditRoutes);
+  await app.register(agentRoutes);
+  await app.register(serverAgentRoutes);
+  if (opts.actorProfiles) {
+    // GET /users/:username (the AS2 actor document), for Service tests.
+    await app.register(actorRoutes);
+  }
   if (opts.plugins) {
     await app.register(embedRoutes);
     await app.register(pluginLoader);
   }
 
   await app.ready();
-  return { app, db };
+  return { app, db, routes };
 }
 
 export async function createTestUser(

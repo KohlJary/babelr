@@ -19,6 +19,8 @@ import { enqueueDelivery } from '../federation/delivery.ts';
 import { serializeActivity, serializeActor } from '../federation/jsonld.ts';
 import { enqueueToFollowers } from '../federation/delivery.ts';
 import { writeAuditLog } from '../audit.ts';
+import { serverAgentGrants } from '../db/schema/server-agent-grants.ts';
+import { isSponsoredKind } from '../actor-kind.ts';
 
 function slugify(name: string): string {
   return name
@@ -39,7 +41,13 @@ function toServerView(server: typeof actors.$inferSelect, memberCount: number): 
     longDescription: (props.longDescription as string | undefined) ?? null,
     logoUrl: (props.logoUrl as string | undefined) ?? null,
     tags: Array.isArray(props.tags) ? (props.tags as string[]) : [],
+    isPublic: props.public === true,
   };
+}
+
+/** A server anyone may join without an invite (properties.public). */
+function isPublicServer(server: typeof actors.$inferSelect): boolean {
+  return (server.properties as Record<string, unknown> | null)?.public === true;
 }
 
 async function getCallerRole(
@@ -224,6 +232,8 @@ export default async function serverRoutes(fastify: FastifyInstance) {
     const results = [];
     for (const server of servers) {
       if (!server.followersUri) continue;
+      // Invite-only servers stay out of discovery unless you're in.
+      if (!isPublicServer(server) && !memberUris.has(server.followersUri)) continue;
 
       const [count] = await db
         .select({ count: sql<number>`count(*)::int` })
@@ -285,7 +295,8 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
-      const { name, description, tagline, longDescription, logoUrl, tags } = request.body ?? {};
+      const { name, description, tagline, longDescription, logoUrl, tags, isPublic } =
+        request.body ?? {};
       const updates: Record<string, unknown> = {};
 
       if (name !== undefined) {
@@ -307,6 +318,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       if (longDescription !== undefined)
         nextProps.longDescription = longDescription?.trim() || null;
       if (logoUrl !== undefined) nextProps.logoUrl = logoUrl || null;
+      if (isPublic !== undefined) nextProps.public = isPublic === true;
       if (tags !== undefined) {
         const cleaned = Array.from(
           new Set(
@@ -418,6 +430,31 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
       if (existing) {
         return { ok: true };
+      }
+
+      // Who may walk in. Before 3c anyone holding a server's id could
+      // join any server. Now:
+      // - an agent or service only after a member with invite rights
+      //   granted it (POST /servers/:id/agents);
+      // - a person only if the server is marked public; otherwise they
+      //   need an invite code (POST /invites/:code/join).
+      if (isSponsoredKind(actor.kind)) {
+        const [grant] = await db
+          .select({ id: serverAgentGrants.id })
+          .from(serverAgentGrants)
+          .where(
+            and(eq(serverAgentGrants.serverId, server.id), eq(serverAgentGrants.agentId, actor.id)),
+          )
+          .limit(1);
+        if (!grant) {
+          return reply
+            .status(403)
+            .send({ error: 'An agent joins only when a member of the server invites it' });
+        }
+      } else if (!isPublicServer(server)) {
+        return reply
+          .status(403)
+          .send({ error: 'This server is invite-only; join with an invite code' });
       }
 
       await db.insert(collectionItems).values({
@@ -875,6 +912,12 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
       try {
         await db.transaction(async (tx) => {
+          // A kicked agent loses its grant, so it can't walk back in.
+          await tx
+            .delete(serverAgentGrants)
+            .where(
+              and(eq(serverAgentGrants.serverId, serverId), eq(serverAgentGrants.agentId, userId)),
+            );
           // Remove membership from the server's followers collection.
           await tx
             .delete(collectionItems)
@@ -1002,6 +1045,22 @@ export default async function serverRoutes(fastify: FastifyInstance) {
     const [server] = await db.select().from(actors).where(eq(actors.id, invite.serverId)).limit(1);
 
     if (!server?.followersUri) return reply.status(404).send({ error: 'Server not found' });
+
+    // Invite codes are for people; agents come in through a member's
+    // grant (POST /servers/:id/agents).
+    if (isSponsoredKind(request.actor.kind)) {
+      return reply.status(403).send({ error: 'Agents join through a member invite, not a code' });
+    }
+
+    // A ban outranks an invite (this route never checked bans before).
+    const [ban] = await db
+      .select()
+      .from(serverBans)
+      .where(and(eq(serverBans.serverId, server.id), eq(serverBans.userId, request.actor.id)))
+      .limit(1);
+    if (ban && !(ban.expiresAt && new Date() > ban.expiresAt)) {
+      return reply.status(403).send({ error: 'You are banned from this server' });
+    }
 
     // Add member (idempotent)
     await db
