@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { definePlugin, canAccess, canManage, requireMember } from '@babelr/plugin-sdk';
+import type { PluginInboxHandler } from '@babelr/plugin-sdk';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -119,6 +120,50 @@ interface WorkItemView {
 
 function randomSlug(): string {
   return Math.random().toString(36).slice(2, 12);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type InboxCtx = Parameters<NonNullable<PluginInboxHandler['handleDelete']>>[0];
+
+/** May this federated actor write to boards of `serverId`? It must be
+ *  a member of that server, or the server's own Group actor. */
+async function remoteMayWrite(ctx: InboxCtx, serverId: string): Promise<boolean> {
+  if (ctx.remoteActor.id === serverId) return true;
+  return canAccess(ctx.fastify, ctx.remoteActor, serverId);
+}
+
+/** The work item `slug`, if the federated actor reported it and may
+ *  still write to its board's server; otherwise null. */
+async function remoteOwnedItem(
+  ctx: InboxCtx,
+  slug: string,
+): Promise<{ id: string; chat_id: string | null; server_id: string; board_slug: string } | null> {
+  const rows = (await ctx.fastify.db.execute(
+    sql`SELECT w.id, w.chat_id, w.reporter_id, b.server_id, b.slug AS board_slug
+          FROM plugin_pm_work_items w
+          JOIN plugin_pm_boards b ON b.id = w.board_id
+         WHERE w.slug = ${slug}
+         LIMIT 1`,
+  )) as unknown as {
+    id: string;
+    chat_id: string | null;
+    reporter_id: string;
+    server_id: string;
+    board_slug: string;
+  }[];
+  const item = rows[0];
+  if (!item || item.reporter_id !== ctx.remoteActor.id) return null;
+  if (!(await remoteMayWrite(ctx, item.server_id))) return null;
+  return item;
+}
+
+/** Tell the board's server members (only) that an item changed. */
+function broadcastToBoard(ctx: InboxCtx, serverId: string, boardSlug: string, slug: string) {
+  void ctx.fastify.broadcastToServerMembers(serverId, {
+    type: 'plugin:pm:updated' as never,
+    payload: { boardSlug, kind: 'work-item', slug } as never,
+  });
 }
 
 /** PATCH fields that change what a work item says, as opposed to
@@ -737,18 +782,28 @@ export default definePlugin({
     });
   },
 
+  // Federated writes. The inbox has already verified the HTTP
+  // Signature and that the activity's actor is the signer; these
+  // handlers decide whether that actor may write. The rules mirror the
+  // HTTP routes: the actor must belong to the board's server (be a
+  // member, or be that server's own Group actor, which is who
+  // deliverWorkItem sends as), and only an item's reporter may update
+  // or delete it. Anything else is dropped without a trace.
   inboxHandlers: {
     WorkItem: {
       handleCreate: async (ctx, objData) => {
         const boardId = objData['babelr:boardId'] as string | undefined;
         const slug = objData['babelr:slug'] as string | undefined;
-        if (!boardId || !slug) return;
+        if (typeof boardId !== 'string' || !UUID_RE.test(boardId)) return;
+        if (typeof slug !== 'string' || !slug) return;
 
         // Verify the board exists on this tower.
         const boards = (await ctx.fastify.db.execute(
-          sql`SELECT id FROM plugin_pm_boards WHERE id = ${boardId} LIMIT 1`,
-        )) as unknown as { id: string }[];
-        if (!boards[0]) return;
+          sql`SELECT id, slug, server_id FROM plugin_pm_boards WHERE id = ${boardId} LIMIT 1`,
+        )) as unknown as { id: string; slug: string; server_id: string }[];
+        const board = boards[0];
+        if (!board) return;
+        if (!(await remoteMayWrite(ctx, board.server_id))) return;
 
         const columnId = objData['babelr:columnId'] as string | undefined;
         const title = (objData.content as string) ?? '';
@@ -758,7 +813,9 @@ export default definePlugin({
         const itemType = (objData['babelr:itemType'] as string) ?? 'task';
 
         // Upsert — the same work item may arrive more than once via
-        // Group-relay redelivery.
+        // Group-relay redelivery. A redelivery may refresh the item,
+        // but a Create can never take over a slug that belongs to
+        // another board or another reporter.
         await ctx.fastify.db.execute(
           sql`INSERT INTO plugin_pm_work_items
                 (board_id, column_id, slug, title, description, priority,
@@ -772,25 +829,20 @@ export default definePlugin({
                     description = EXCLUDED.description,
                     priority = EXCLUDED.priority,
                     item_type = EXCLUDED.item_type,
-                    updated_at = NOW()`,
+                    updated_at = NOW()
+                WHERE plugin_pm_work_items.board_id = EXCLUDED.board_id
+                  AND plugin_pm_work_items.reporter_id = EXCLUDED.reporter_id`,
         );
 
-        // Look up board slug for WS broadcast.
-        const bs = (await ctx.fastify.db.execute(
-          sql`SELECT slug FROM plugin_pm_boards WHERE id = ${boardId} LIMIT 1`,
-        )) as unknown as { slug: string }[];
-        if (bs[0]) {
-          ctx.fastify.broadcastToAllSubscribers({
-            type: 'plugin:pm:updated' as never,
-            payload: { boardSlug: bs[0].slug, kind: 'work-item', slug } as never,
-          });
-        }
+        broadcastToBoard(ctx, board.server_id, board.slug, slug);
         ctx.fastify.log.info({ slug }, 'Remote Create(WorkItem) processed');
       },
 
       handleUpdate: async (ctx, objData) => {
         const slug = objData['babelr:slug'] as string | undefined;
-        if (!slug) return;
+        if (typeof slug !== 'string' || !slug) return;
+        const item = await remoteOwnedItem(ctx, slug);
+        if (!item) return;
 
         const title = (objData.content as string) ?? undefined;
         const source = objData.source as { content?: string } | undefined;
@@ -805,23 +857,10 @@ export default definePlugin({
                   priority = COALESCE(${priority ?? null}, priority),
                   item_type = COALESCE(${itemType ?? null}, item_type),
                   updated_at = NOW()
-              WHERE slug = ${slug}`,
+              WHERE id = ${item.id}`,
         );
 
-        const items = (await ctx.fastify.db.execute(
-          sql`SELECT board_id FROM plugin_pm_work_items WHERE slug = ${slug} LIMIT 1`,
-        )) as unknown as { board_id: string }[];
-        if (items[0]) {
-          const bs = (await ctx.fastify.db.execute(
-            sql`SELECT slug FROM plugin_pm_boards WHERE id = ${items[0].board_id} LIMIT 1`,
-          )) as unknown as { slug: string }[];
-          if (bs[0]) {
-            ctx.fastify.broadcastToAllSubscribers({
-              type: 'plugin:pm:updated' as never,
-              payload: { boardSlug: bs[0].slug, kind: 'work-item', slug } as never,
-            });
-          }
-        }
+        broadcastToBoard(ctx, item.server_id, item.board_slug, slug);
         ctx.fastify.log.info({ slug }, 'Remote Update(WorkItem) processed');
       },
 
@@ -830,27 +869,15 @@ export default definePlugin({
         const match = objectUri.match(/\/plugins\/project-management\/tasks\/([^/]+)$/);
         if (!match) return;
         const slug = match[1];
-
-        const items = (await ctx.fastify.db.execute(
-          sql`SELECT board_id, chat_id FROM plugin_pm_work_items WHERE slug = ${slug} LIMIT 1`,
-        )) as unknown as { board_id: string; chat_id: string | null }[];
-        const item = items[0];
+        const item = await remoteOwnedItem(ctx, slug);
         if (!item) return;
 
-        await ctx.fastify.db.execute(sql`DELETE FROM plugin_pm_work_items WHERE slug = ${slug}`);
+        await ctx.fastify.db.execute(sql`DELETE FROM plugin_pm_work_items WHERE id = ${item.id}`);
         if (item.chat_id) {
           await ctx.fastify.db.execute(sql`DELETE FROM objects WHERE id = ${item.chat_id}`);
         }
 
-        const bs = (await ctx.fastify.db.execute(
-          sql`SELECT slug FROM plugin_pm_boards WHERE id = ${item.board_id} LIMIT 1`,
-        )) as unknown as { slug: string }[];
-        if (bs[0]) {
-          ctx.fastify.broadcastToAllSubscribers({
-            type: 'plugin:pm:updated' as never,
-            payload: { boardSlug: bs[0].slug, kind: 'work-item', slug } as never,
-          });
-        }
+        broadcastToBoard(ctx, item.server_id, item.board_slug, slug);
         ctx.fastify.log.info({ slug }, 'Remote Delete(WorkItem) processed');
       },
     },
