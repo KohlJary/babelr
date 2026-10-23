@@ -95,6 +95,11 @@ export async function verifySignedRequest(
   const signatureHeader = request.headers.signature as string | undefined;
   if (!signatureHeader) return null;
   if (!signedHeadersAcceptable(signatureHeader, request.headers, request.rawBody)) return null;
+  // The signed Host must be us. Otherwise a request signed for (or
+  // captured on its way to) another Tower could be replayed here.
+  // config.domain is the host[:port] this Tower is reached at.
+  const host = String(request.headers.host ?? '').toLowerCase();
+  if (!host || host !== String(fastify.config.domain ?? '').toLowerCase()) return null;
 
   const keyId = getKeyIdFromSignature(signatureHeader);
   const headerParts = {

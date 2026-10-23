@@ -202,6 +202,31 @@ describe('inbox signature checks', () => {
     expect((await postRaw(zed, ping(), { omitDate: true })).statusCode).toBe(401);
   });
 
+  it('rejects a signature made for another Tower', async () => {
+    const activity = ping();
+    const body = JSON.stringify(activity);
+    const date = new Date().toUTCString();
+    const digest = digestOf(body);
+    const target = '(request-target): post /inbox';
+    for (const host of ['evil.example', `${HOST}:4444`]) {
+      const str = [target, `host: ${host}`, `date: ${date}`, `digest: ${digest}`].join('\n');
+      const sig = createSign('sha256').update(str).sign(zed.privateKeyPem, 'base64');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/inbox',
+        payload: body,
+        headers: {
+          'content-type': 'application/activity+json',
+          host,
+          date,
+          digest,
+          signature: `keyId="${zed.actor.uri}#main-key",algorithm="rsa-sha256",headers="(request-target) host date digest",signature="${sig}"`,
+        },
+      });
+      expect(res.statusCode, host).toBe(401);
+    }
+  });
+
   it('rejects a signature that leaves out date or digest', async () => {
     for (const headers of ['(request-target) host digest', '(request-target) host date']) {
       expect((await postRaw(zed, ping(), { headers })).statusCode, headers).toBe(401);
