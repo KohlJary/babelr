@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { eq, and, lte, inArray } from 'drizzle-orm';
+import { eq, and, lte, inArray, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
@@ -155,7 +155,10 @@ export async function processQueue(fastify: FastifyInstance) {
   const items = await db
     .select()
     .from(deliveryQueue)
-    .where(and(eq(deliveryQueue.status, 'pending'), lte(deliveryQueue.nextAttemptAt, new Date())))
+    // Compare on the database's clock: next_attempt_at defaults to the
+    // DB's now(), and a Node clock even slightly behind it skipped
+    // fresh items (flaky in CI).
+    .where(and(eq(deliveryQueue.status, 'pending'), lte(deliveryQueue.nextAttemptAt, sql`now()`)))
     .limit(BATCH_SIZE);
 
   for (const item of items) {
