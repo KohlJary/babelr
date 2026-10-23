@@ -20,6 +20,7 @@ import translateRoutes from '../routes/translate.ts';
 import fileRoutes from '../routes/files.ts';
 import auditRoutes from '../routes/audit.ts';
 import agentRoutes from '../routes/agents.ts';
+import serverAgentRoutes from '../routes/server-agents.ts';
 import actorRoutes from '../federation/actor.ts';
 import embedRoutes from '../routes/embeds.ts';
 import pluginLoader from '../plugins/plugin-loader.ts';
@@ -126,6 +127,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(fileRoutes);
   await app.register(auditRoutes);
   await app.register(agentRoutes);
+  await app.register(serverAgentRoutes);
   if (opts.actorProfiles) {
     // GET /users/:username (the AS2 actor document), for Service tests.
     await app.register(actorRoutes);

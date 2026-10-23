@@ -29,9 +29,17 @@ export const AGENT_SCOPES = [
   'dms:post',
   'plugins:read',
   'plugins:write',
-  'servers:join',
 ] as const;
-export type AgentScope = (typeof AGENT_SCOPES)[number];
+
+/**
+ * Scopes that exist only narrowed to one resource. `servers:join` must
+ * name its server (`servers:join:<serverId>`): POST /servers/:id/join
+ * has no invite check, so a bare scope would let an agent join any
+ * server whose id it learns.
+ */
+export const NARROW_ONLY_SCOPES = ['servers:join'] as const;
+
+export type AgentScope = (typeof AGENT_SCOPES)[number] | (typeof NARROW_ONLY_SCOPES)[number];
 
 /**
  * A route entry. `scope: null` means any valid token may call it (only
@@ -107,7 +115,7 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'POST /dms/:dmId/messages': { scope: 'dms:post', param: 'dmId', action: 'dm.post' },
 
   // Joining and leaving servers, through the same route people use
-  // (with its ban check). Narrow it with servers:join:<serverId>.
+  // (with its ban check). Only as servers:join:<serverId>.
   'POST /servers/:serverId/join': {
     scope: 'servers:join',
     param: 'serverId',
@@ -184,7 +192,10 @@ export function checkScopes(
   const rule = ruleForRoute(method, routeUrl);
   if (!rule) return { allowed: false, rule: null, reason: 'route_not_mapped' };
   if (rule.scope === null) return { allowed: true, rule, grantedBy: null };
-  if (scopes.includes(rule.scope)) return { allowed: true, rule, grantedBy: rule.scope };
+  const narrowOnly = (NARROW_ONLY_SCOPES as readonly string[]).includes(rule.scope);
+  if (!narrowOnly && scopes.includes(rule.scope)) {
+    return { allowed: true, rule, grantedBy: rule.scope };
+  }
   if (rule.param) {
     const value = params?.[rule.param];
     if (typeof value === 'string') {

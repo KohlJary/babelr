@@ -6,6 +6,12 @@ import { actors } from '../db/schema/actors.ts';
 import { agentTokens } from '../db/schema/agent-tokens.ts';
 import { auditLogs } from '../db/schema/audit-logs.ts';
 import { writeAuditLog } from '../audit.ts';
+import { objects } from '../db/schema/objects.ts';
+import { collectionItems } from '../db/schema/collections.ts';
+import { serverAgentGrants } from '../db/schema/server-agent-grants.ts';
+import { checkChannelAccess } from '../serializers.ts';
+import { hasPermission } from '../permissions.ts';
+import { PERMISSIONS } from '@babelr/shared';
 import { as2TypeForKind, isSponsoredKind } from '../actor-kind.ts';
 import { isValidScope } from '../agent-scopes.ts';
 import {
@@ -130,6 +136,65 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     return { me, agent };
   }
 
+  /**
+   * A sponsor can't grant more than they could do themselves. Bare
+   * scopes name kinds of action, and the routes still check the agent's
+   * own membership, so the cap applies to the resources a narrowed
+   * scope names:
+   *   channels:read:<id> / channels:post:<id>: a server channel the
+   *     sponsor can read (and, for post, send to);
+   *   servers:join:<id>: a server a member has let this agent into;
+   *   dms:read:<id> / dms:post:<id>: a DM the agent is already in. The
+   *     sponsor needn't be in it: an agent's private rooms stay private.
+   */
+  async function scopesBeyondSponsor(me: Actor, agent: Actor, scopes: string[]) {
+    const beyond: string[] = [];
+    for (const scope of scopes) {
+      const i = scope.lastIndexOf(':');
+      const base = scope.slice(0, i);
+      const id = scope.slice(i + 1);
+      if (base === 'channels:read' || base === 'channels:post') {
+        const { allowed, channel } = await checkChannelAccess(db, id, me.uri);
+        let ok = allowed && !!channel?.belongsTo;
+        if (ok && base === 'channels:post') {
+          ok = await hasPermission(db, channel!.belongsTo!, me.id, PERMISSIONS.SEND_MESSAGES);
+        }
+        if (!ok) beyond.push(scope);
+      } else if (base === 'servers:join') {
+        // Only for a server a member has let this agent into
+        // (POST /servers/:id/agents). Being a member yourself isn't
+        // enough: someone with invite rights on the server's side
+        // decides.
+        const [grant] = await db
+          .select({ id: serverAgentGrants.id })
+          .from(serverAgentGrants)
+          .where(and(eq(serverAgentGrants.serverId, id), eq(serverAgentGrants.agentId, agent.id)))
+          .limit(1);
+        if (!grant) beyond.push(scope);
+      } else if (base === 'dms:read' || base === 'dms:post') {
+        const [dm] = await db
+          .select({ uri: objects.uri })
+          .from(objects)
+          .where(and(eq(objects.id, id), isNull(objects.belongsTo)))
+          .limit(1);
+        const [participant] = dm
+          ? await db
+              .select({ id: collectionItems.id })
+              .from(collectionItems)
+              .where(
+                and(
+                  eq(collectionItems.collectionUri, dm.uri),
+                  eq(collectionItems.itemUri, agent.uri),
+                ),
+              )
+              .limit(1)
+          : [];
+        if (!participant) beyond.push(scope);
+      }
+    }
+    return beyond;
+  }
+
   function audit(me: Actor, agent: Actor, action: string, summary: string, details = {}) {
     return writeAuditLog(db, {
       serverId: null,
@@ -241,6 +306,12 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       const bad = scopes.filter((s) => !isValidScope(s));
       if (bad.length > 0) {
         return reply.status(400).send({ error: 'Unknown scopes', scopes: bad });
+      }
+      const beyond = await scopesBeyondSponsor(me, agent, scopes);
+      if (beyond.length > 0) {
+        return reply
+          .status(403)
+          .send({ error: 'Scopes go beyond what the sponsor can grant', scopes: beyond });
       }
       let expiresAt: Date | null = null;
       if (expiresInDays !== undefined) {
@@ -361,6 +432,28 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     },
   );
 
+  // Admins only: requests with tokens that matched no agent (logged by
+  // a hash prefix of the token, never the token).
+  fastify.get('/agents/audit/unattributed', async (request, reply) => {
+    const me = requirePerson(request, reply);
+    if (!me) return;
+    if (!isInstanceAdmin(me)) return reply.status(403).send({ error: 'Admins only' });
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.category, 'agent'), isNull(auditLogs.actorId)))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(200);
+    return rows.map((r) => ({
+      id: r.id,
+      action: r.action,
+      summary: r.summary,
+      route: r.route,
+      details: r.details ?? undefined,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  });
+
   // Everything the agent did with a token, and everything done to it.
   fastify.get<{ Params: { agentId: string }; Querystring: { cursor?: string; limit?: string } }>(
     '/agents/:agentId/audit',
@@ -388,7 +481,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         .limit(limit + 1);
       const entries: AuditLogEntry[] = rows.slice(0, limit).map((r) => ({
         id: r.log.id,
-        actorId: r.log.actorId,
+        actorId: r.log.actorId ?? r.actor.id,
         actorName: r.actor.displayName ?? r.actor.preferredUsername,
         category: r.log.category,
         action: r.log.action,

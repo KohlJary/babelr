@@ -48,3 +48,20 @@ export interface SuspendAgentResult {
   revokedTokens: number;
   cancelledDeliveries: number;
 }
+
+/** An agent as a server's inviters see it ("Add a little guy"). */
+export interface ServerAgentView {
+  id: string;
+  preferredUsername: string;
+  displayName: string | null;
+  kind: 'agent' | 'service';
+  sponsorUsername: string | null;
+  suspended: boolean;
+}
+
+export interface ServerAgentsResponse {
+  /** Agents already in the server. */
+  members: ServerAgentView[];
+  /** Agents on this Tower that could be added (not suspended). */
+  candidates: ServerAgentView[];
+}

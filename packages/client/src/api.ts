@@ -13,6 +13,7 @@ import type {
   CreateChannelInput,
   AgentView,
   SuspendAgentResult,
+  ServerAgentsResponse,
 } from '@babelr/shared';
 
 const API_BASE =
@@ -962,4 +963,16 @@ export async function suspendAgent(agentId: string): Promise<SuspendAgentResult>
 
 export async function unsuspendAgent(agentId: string): Promise<AgentView> {
   return apiFetch(`/agents/${agentId}/unsuspend`, { method: 'POST' });
+}
+
+// "Little guys": agents and services in a server
+export async function getServerAgents(serverId: string): Promise<ServerAgentsResponse> {
+  return apiFetch(`/servers/${serverId}/agents`);
+}
+
+export async function addServerAgent(serverId: string, agentId: string): Promise<void> {
+  await apiFetch(`/servers/${serverId}/agents`, {
+    method: 'POST',
+    body: JSON.stringify({ agentId }),
+  });
 }

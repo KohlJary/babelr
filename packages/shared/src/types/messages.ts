@@ -116,6 +116,8 @@ export interface ServerView {
   logoUrl?: string | null;
   /** Freeform tags for discoverability */
   tags?: string[];
+  /** Anyone may join without an invite. Off by default. */
+  isPublic?: boolean;
 }
 
 export interface UpdateServerInput {
@@ -125,6 +127,7 @@ export interface UpdateServerInput {
   longDescription?: string | null;
   logoUrl?: string | null;
   tags?: string[];
+  isPublic?: boolean;
 }
 
 export interface DMConversation {

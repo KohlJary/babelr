@@ -7345,3 +7345,17 @@ textarea.modal-input {
   color: #f87171;
   font-size: 0.85rem;
 }
+
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.agents-tab h4 {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #aaa;
+}

@@ -38,6 +38,7 @@ import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
 import auditRoutes from './routes/audit.ts';
 import agentRoutes from './routes/agents.ts';
+import serverAgentRoutes from './routes/server-agents.ts';
 import ssoRoutes from './routes/sso.ts';
 import voiceRoutes from './routes/voice.ts';
 import { initSfu, shutdownSfu } from './voice/sfu.ts';
@@ -178,6 +179,7 @@ export async function buildApp() {
   await app.register(embedRoutes);
   await app.register(auditRoutes);
   await app.register(agentRoutes);
+  await app.register(serverAgentRoutes);
   await app.register(ssoRoutes);
   await app.register(voiceRoutes);
   const { default: pushRoutes } = await import('./routes/push.ts');

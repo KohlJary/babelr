@@ -105,3 +105,22 @@ export async function activityFromSuspendedActor(
   }
   return false;
 }
+
+export type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/**
+ * Closes the kill-switch race. A request loads its actor at the start;
+ * if the sponsor suspends the agent while the request is in flight,
+ * that row is stale. Call this inside the write's transaction: it
+ * takes a share lock on the actor row, which waits for (or blocks) the
+ * suspend transaction's update, and re-reads suspended_at.
+ */
+export async function assertNotSuspended(tx: Tx, actorId: string): Promise<void> {
+  const rows = await tx.execute<{ suspended_at: Date | null }>(
+    sql`SELECT suspended_at FROM actors WHERE id = ${actorId} FOR SHARE`,
+  );
+  const row = (rows as unknown as Array<{ suspended_at: Date | null }>)[0];
+  if (row?.suspended_at) {
+    throw Object.assign(new Error('Actor is suspended'), { statusCode: 403 });
+  }
+}

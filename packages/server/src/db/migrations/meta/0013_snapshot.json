@@ -1,5 +1,5 @@
 {
-  "id": "4fe73dbd-d999-4b65-9548-57b8dd5b279e",
+  "id": "ed534858-8998-46a9-9f04-927a4e7535cf",
   "prevId": "f9f6d658-d702-4480-bafc-6c3f9eaa6d01",
   "version": "7",
   "dialect": "postgresql",
@@ -578,7 +578,7 @@
           "name": "actor_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "category": {
           "name": "category",
@@ -2250,6 +2250,113 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.server_agent_grants": {
+      "name": "server_agent_grants",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "server_id": {
+          "name": "server_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invited_by": {
+          "name": "invited_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "server_agent_grants_server_agent_idx": {
+          "name": "server_agent_grants_server_agent_idx",
+          "columns": [
+            {
+              "expression": "server_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "agent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "server_agent_grants_server_id_actors_id_fk": {
+          "name": "server_agent_grants_server_id_actors_id_fk",
+          "tableFrom": "server_agent_grants",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "server_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "server_agent_grants_agent_id_actors_id_fk": {
+          "name": "server_agent_grants_agent_id_actors_id_fk",
+          "tableFrom": "server_agent_grants",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "agent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "server_agent_grants_invited_by_actors_id_fk": {
+          "name": "server_agent_grants_invited_by_actors_id_fk",
+          "tableFrom": "server_agent_grants",
+          "tableTo": "actors",
+          "columnsFrom": [
+            "invited_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

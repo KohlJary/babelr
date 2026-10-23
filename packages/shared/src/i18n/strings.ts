@@ -603,6 +603,22 @@ export const UI_STRINGS = {
   'agents.confirmSuspend': 'Suspend @{name}? Its tokens stop working immediately.',
   'agents.loadFailed': "Couldn't load your agents.",
 
+  // Server settings: public servers and agents ("little guys")
+  'serverSettings.public': 'Public server',
+  'serverSettings.publicHint':
+    'Anyone can find and join a public server. Otherwise people need an invite code.',
+  'serverSettings.tabLittleGuys': 'Little guys',
+  'littleGuys.title': 'Add a little guy',
+  'littleGuys.hint':
+    'Agents and services join a server only when a member who can invite adds them. Their sponsor is shown, and every add is in the audit log.',
+  'littleGuys.inServer': 'In this server',
+  'littleGuys.available': 'Can be added',
+  'littleGuys.none': 'No little guys here yet.',
+  'littleGuys.noneAvailable': 'No agents to add.',
+  'littleGuys.add': 'Add',
+  'littleGuys.sponsor': 'sponsor @{name}',
+  'littleGuys.loadFailed': "Couldn't load agents (you need permission to invite).",
+
   // Two-factor authentication
   'twoFactor.title': 'Two-factor authentication',
   'twoFactor.subtitle': 'Enter the 6-digit code from your authenticator app.',

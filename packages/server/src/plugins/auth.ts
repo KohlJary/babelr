@@ -66,30 +66,49 @@ async function authPlugin(fastify: FastifyInstance) {
   async function authenticateToken(request: FastifyRequest, reply: FastifyReply, raw: string) {
     const deny = (status: 401 | 403, error: string) => reply.status(status).send({ error });
 
+    const route = `${request.method === 'HEAD' ? 'GET' : request.method} ${request.routeOptions.url ?? request.url.split('?')[0]}`;
+    // Every token request is audited, bad ones included. A token that
+    // matches no agent is logged by a short hash prefix, never itself.
+    request.agentAuth = {
+      tokenId: null,
+      actorId: null,
+      sponsorId: null,
+      scope: null,
+      route,
+      action: 'denied',
+      fingerprint: hashSecret(raw).slice(0, 12),
+    };
+
     const parsed = parseToken(raw);
-    if (!parsed) return deny(401, 'Invalid token');
+    if (!parsed) {
+      request.agentAuth.denial = 'malformed_token';
+      return deny(401, 'Invalid token');
+    }
 
     const [token] = await db
       .select()
       .from(agentTokens)
       .where(eq(agentTokens.id, parsed.id))
       .limit(1);
-    if (!token || !hashesMatch(hashSecret(parsed.secret), token.tokenHash)) {
+    if (!token) {
+      request.agentAuth.denial = 'unknown_token';
       return deny(401, 'Invalid token');
     }
 
     const [agent] = await db.select().from(actors).where(eq(actors.id, token.actorId)).limit(1);
-    if (!agent) return deny(401, 'Invalid token');
-
-    const route = `${request.method === 'HEAD' ? 'GET' : request.method} ${request.routeOptions.url ?? request.url.split('?')[0]}`;
-    request.agentAuth = {
-      tokenId: token.id,
-      actorId: agent.id,
-      sponsorId: agent.sponsorId,
-      scope: null,
-      route,
-      action: 'denied',
-    };
+    request.agentAuth.tokenId = token.id;
+    request.agentAuth.actorId = agent?.id ?? null;
+    request.agentAuth.sponsorId = agent?.sponsorId ?? null;
+    if (!hashesMatch(hashSecret(parsed.secret), token.tokenHash)) {
+      // Someone holds this token's id but not its secret: the agent's
+      // sponsor will want to see that.
+      request.agentAuth.denial = 'bad_secret';
+      return deny(401, 'Invalid token');
+    }
+    if (!agent) {
+      request.agentAuth.denial = 'unknown_token';
+      return deny(401, 'Invalid token');
+    }
 
     // Revoked, expired, suspended, unsponsored, or a sponsor who is
     // gone or suspended: 401 on this request, logged as a denial.
@@ -175,6 +194,7 @@ async function authPlugin(fastify: FastifyInstance) {
         route: a.route,
         details: {
           tokenId: a.tokenId,
+          ...(a.actorId ? {} : { tokenFingerprint: a.fingerprint }),
           status: reply.statusCode,
           ...(a.denial ? { denial: a.denial } : {}),
           ...(denied ? { attempted: a.action } : {}),

@@ -5,6 +5,7 @@ import { createTestApp, createTestUser, cleanDb } from './helpers.ts';
 import type { createDb } from '../db/index.ts';
 import {
   AGENT_SCOPES,
+  NARROW_ONLY_SCOPES,
   ROUTE_SCOPES,
   checkScopes,
   isValidScope,
@@ -152,7 +153,12 @@ describe('every mounted route, walked with an all-scopes token', () => {
         // Let through by the hook; the route itself answers (it may
         // still refuse: not a member, not found, bad input).
         expect(res.statusCode, key).not.toBe(401);
-        if (res.statusCode === 403) {
+        // Narrow-only scopes (servers:join) need an id-specific grant
+        // that an all-bare-scopes token can't hold, so those are denied.
+        const narrowOnly = (NARROW_ONLY_SCOPES as readonly string[]).includes(
+          ruleForRoute(r.method, r.url)!.scope ?? '',
+        );
+        if (res.statusCode === 403 && !narrowOnly) {
           expect(JSON.parse(res.body).error, key).not.toBe('Token scope does not allow this');
         }
       } else {

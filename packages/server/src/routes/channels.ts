@@ -22,6 +22,7 @@ import { writeAuditLog } from '../audit.ts';
 import { broadcastPushToChannel } from '../push.ts';
 import { unfurlLinks } from '../unfurl.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
+import { assertNotSuspended } from '../agent-tokens.ts';
 
 // Parse @mentions from content and return array of mentioned usernames
 export function parseMentions(content: string): string[] {
@@ -96,24 +97,39 @@ export async function createMessageInChannel(
   while (!note) {
     slugAttempts += 1;
     try {
-      const [inserted] = await db
-        .insert(objects)
-        .values({
-          uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
-          type: 'Note',
-          attributedTo: actor.id,
-          content: content.trim(),
-          context: channelId,
+      // Re-check suspension under a row lock in the same transaction
+      // as the insert, so a kill switch that lands mid-request wins.
+      const inserted = await db.transaction(async (tx) => {
+        await assertNotSuspended(tx, actor.id);
+        const [row] = await tx
+          .insert(objects)
+          .values({
+            uri: `${protocol}://${config.domain}/objects/${crypto.randomUUID()}`,
+            type: 'Note',
+            attributedTo: actor.id,
+            content: content.trim(),
+            context: channelId,
+            to: [],
+            cc: [],
+            properties: {
+              ...clientProps,
+              ...(mentionedIds.length > 0 && { mentions: mentionedIds }),
+              ...provenance,
+            },
+            slug: generateMessageSlug(),
+          })
+          .returning();
+        await tx.insert(activities).values({
+          uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
+          type: 'Create',
+          actorId: actor.id,
+          objectUri: row.uri,
+          objectId: row.id,
           to: [],
           cc: [],
-          properties: {
-            ...clientProps,
-            ...(mentionedIds.length > 0 && { mentions: mentionedIds }),
-            ...provenance,
-          },
-          slug: generateMessageSlug(),
-        })
-        .returning();
+        });
+        return row;
+      });
       note = inserted;
     } catch (err) {
       // Retry on unique-index violation — but only the slug index,
@@ -125,16 +141,6 @@ export async function createMessageInChannel(
       throw err;
     }
   }
-
-  await db.insert(activities).values({
-    uri: `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`,
-    type: 'Create',
-    actorId: actor.id,
-    objectUri: note.uri,
-    objectId: note.id,
-    to: [],
-    cc: [],
-  });
 
   // Sync [[slug]] wiki refs — no-op for DMs, only runs for server channels
   await syncMessageOutboundLinks(db, note.id, channelId, note.content ?? '');

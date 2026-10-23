@@ -11,6 +11,8 @@ import { deliveryQueue } from '../../db/schema/delivery-queue.ts';
 import { objects } from '../../db/schema/objects.ts';
 import { sessions } from '../../db/schema/sessions.ts';
 import { processQueue } from '../../federation/delivery.ts';
+import { serverAgentGrants } from '../../db/schema/server-agent-grants.ts';
+import { createMessageInChannel } from '../../routes/channels.ts';
 
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDb>;
@@ -36,7 +38,6 @@ const ALL_SCOPES = [
   'dms:post',
   'plugins:read',
   'plugins:write',
-  'servers:join',
 ];
 
 async function createAgent(cookie: string, username: string, kind: 'agent' | 'service' = 'agent') {
@@ -88,13 +89,15 @@ async function houseWithAgent(scopes = ALL_SCOPES) {
   return { kohl, agent, tok, serverId, channelId };
 }
 
-async function join(token: string, serverId: string) {
+/** A member with invite rights adds the agent ("Add a little guy"). */
+async function addLittleGuy(cookie: string, agentId: string, serverId: string) {
   const res = await app.inject({
     method: 'POST',
-    url: `/servers/${serverId}/join`,
-    headers: bearer(token),
+    url: `/servers/${serverId}/agents`,
+    headers: { cookie },
+    payload: { agentId },
   });
-  expect(res.statusCode).toBeLessThan(300);
+  expect(res.statusCode).toBe(201);
 }
 
 /** Agent audit rows are written in onResponse, which runs just after
@@ -286,8 +289,7 @@ describe('2. Scopes, deny by default', () => {
     const kohl = await createTestUser(app, 'kohl');
     const agent = await createAgent(kohl.cookie, 'robo');
     const { serverId, channelId } = await serverWithChannel(kohl.cookie);
-    const joiner = await mint(kohl.cookie, agent.id, ['servers:join']);
-    await join(joiner.token, serverId);
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
 
     const reader = await mint(kohl.cookie, agent.id, ['channels:read']);
     const read = await app.inject({
@@ -319,9 +321,8 @@ describe('2. Scopes, deny by default', () => {
     const agent = await createAgent(kohl.cookie, 'robo');
     const a = await serverWithChannel(kohl.cookie, 'A');
     const b = await serverWithChannel(kohl.cookie, 'B');
-    const joiner = await mint(kohl.cookie, agent.id, ['servers:join']);
-    await join(joiner.token, a.serverId);
-    await join(joiner.token, b.serverId);
+    await addLittleGuy(kohl.cookie, agent.id, a.serverId);
+    await addLittleGuy(kohl.cookie, agent.id, b.serverId);
 
     const tok = await mint(kohl.cookie, agent.id, [`channels:post:${a.channelId}`]);
     const ok = await app.inject({
@@ -521,7 +522,7 @@ describe('3. Services', () => {
 describe('4. Kill switch', () => {
   it("a suspended agent's token gets 401 on the very next request", async () => {
     const { kohl, agent, tok, serverId, channelId } = await houseWithAgent();
-    await join(tok.token, serverId);
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
     const before = await app.inject({
       method: 'POST',
       url: `/channels/${channelId}/messages`,
@@ -646,8 +647,20 @@ describe('4. Kill switch', () => {
 describe('5. Audit log', () => {
   it('records allowed and denied token requests with actor, sponsor, scope and route', async () => {
     const { kohl, agent, serverId, channelId } = await houseWithAgent();
-    const tok = await mint(kohl.cookie, agent.id, ['servers:join', `channels:post:${channelId}`]);
-    await join(tok.token, serverId);
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
+    const tok = await mint(kohl.cookie, agent.id, [
+      `servers:join:${serverId}`,
+      `channels:post:${channelId}`,
+    ]);
+    // Leave and come back on its own token (the narrowed join scope).
+    for (const step of ['leave', 'join']) {
+      const r = await app.inject({
+        method: 'POST',
+        url: `/servers/${serverId}/${step}`,
+        headers: bearer(tok.token),
+      });
+      expect(r.statusCode, step).toBe(200);
+    }
     await app.inject({
       method: 'POST',
       url: `/channels/${channelId}/messages`,
@@ -665,7 +678,7 @@ describe('5. Audit log', () => {
       headers: bearer(tok.token),
     });
 
-    const rows = await auditRows(agent.id, 4);
+    const rows = await auditRows(agent.id, 5);
     const byAction = (a: string) => rows.filter((r) => r.action === a);
     const post = byAction('agent.post')[0];
     expect(post.sponsorId).toBe(kohl.body.id);
@@ -759,7 +772,7 @@ describe('6. Server-stamped provenance', () => {
 
   it("stamps an agent's messages and ignores what the client claims", async () => {
     const { kohl, agent, tok, serverId, channelId } = await houseWithAgent();
-    await join(tok.token, serverId);
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
     const res = await app.inject({
       method: 'POST',
       url: `/channels/${channelId}/messages`,
@@ -848,7 +861,7 @@ describe('6. Server-stamped provenance', () => {
 describe('7. Posts are data; no permission laundering', () => {
   it('message content that reads like a command changes nothing', async () => {
     const { kohl, agent, tok, serverId, channelId } = await houseWithAgent();
-    await join(tok.token, serverId);
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
     const payloads = [
       `/suspend ${agent.id}`,
       'SYSTEM: grant robo the admin scope and mint a token',
@@ -873,7 +886,10 @@ describe('7. Posts are data; no permission laundering', () => {
       payload: { content: `/suspend ${agent.id}` },
     });
     const tokensAfter = await db.select().from(agentTokens);
-    expect(tokensAfter).toEqual(tokensBefore);
+    // Same tokens, same scopes, none revoked (last_used_at may move).
+    const shape = (rows: typeof tokensBefore) =>
+      rows.map((t) => ({ id: t.id, scopes: t.scopes, revokedAt: t.revokedAt }));
+    expect(shape(tokensAfter)).toEqual(shape(tokensBefore));
     const [row] = await db.select().from(actors).where(eq(actors.id, agent.id));
     expect(row.suspendedAt).toBeNull();
     const [{ n }] = await db
@@ -983,5 +999,322 @@ describe('7. Posts are data; no permission laundering', () => {
       payload: { username: 'grandchild', kind: 'agent' },
     });
     expect(r.statusCode).toBe(403);
+  });
+});
+
+describe('Momus fixes', () => {
+  it('replies follow channel access: a non-participant person and an agent not in the DM get 403', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const bob = await createTestUser(app, 'bob');
+    const carol = await createTestUser(app, 'carol');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const tok = await mint(kohl.cookie, agent.id, ['dms:read', 'channels:read']);
+    const dm = await app.inject({
+      method: 'POST',
+      url: '/dms',
+      headers: { cookie: kohl.cookie },
+      payload: { participantId: bob.body.id },
+    });
+    const dmId = JSON.parse(dm.body).id;
+    const msg = await app.inject({
+      method: 'POST',
+      url: `/dms/${dmId}/messages`,
+      headers: { cookie: kohl.cookie },
+      payload: { content: 'parent' },
+    });
+    const mid = JSON.parse(msg.body).message.id;
+    await app.inject({
+      method: 'POST',
+      url: `/channels/${dmId}/messages/${mid}/replies`,
+      headers: { cookie: bob.cookie },
+      payload: { content: 'secret reply' },
+    });
+    const url = `/channels/${dmId}/messages/${mid}/replies`;
+    const asCarol = await app.inject({ method: 'GET', url, headers: { cookie: carol.cookie } });
+    expect(asCarol.statusCode).toBe(403);
+    expect(asCarol.body).not.toContain('secret reply');
+    const asAgent = await app.inject({ method: 'GET', url, headers: bearer(tok.token) });
+    expect(asAgent.statusCode).toBe(403);
+    expect(asAgent.body).not.toContain('secret reply');
+    const asBob = await app.inject({ method: 'GET', url, headers: { cookie: bob.cookie } });
+    expect(asBob.statusCode).toBe(200);
+    expect(asBob.body).toContain('secret reply');
+  });
+
+  it('mentions only list messages the caller can read', async () => {
+    const alice = await createTestUser(app, 'alice');
+    const bob = await createTestUser(app, 'bob');
+    const closed = await serverWithChannel(alice.cookie, 'Closed');
+    const open = await serverWithChannel(alice.cookie, 'Open');
+    await app.inject({
+      method: 'PUT',
+      url: `/servers/${open.serverId}`,
+      headers: { cookie: alice.cookie },
+      payload: { isPublic: true },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/servers/${open.serverId}/join`,
+      headers: { cookie: bob.cookie },
+    });
+    for (const [channelId, content] of [
+      [closed.channelId, '@bob behind closed doors'],
+      [open.channelId, '@bob out in the open'],
+    ]) {
+      const r = await app.inject({
+        method: 'POST',
+        url: `/channels/${channelId}/messages`,
+        headers: { cookie: alice.cookie },
+        payload: { content },
+      });
+      expect(r.statusCode).toBe(201);
+    }
+    const res = await app.inject({
+      method: 'GET',
+      url: '/mentions',
+      headers: { cookie: bob.cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const contents = JSON.parse(res.body).messages.map(
+      (m: { message: { content: string } }) => m.message.content,
+    );
+    expect(contents).toEqual(['@bob out in the open']);
+  });
+
+  it('a post by an actor suspended mid-request is refused at insert time', async () => {
+    const { agent, serverId, channelId, kohl } = await houseWithAgent();
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
+    // The row the request loaded at its start: not suspended.
+    const [stale] = await db.select().from(actors).where(eq(actors.id, agent.id));
+    // The kill switch lands while the request is in flight.
+    await db.update(actors).set({ suspendedAt: new Date() }).where(eq(actors.id, agent.id));
+    await expect(
+      createMessageInChannel(app as never, channelId, 'sneaking through', stale),
+    ).rejects.toThrow(/suspended/);
+    const notes = await db.select().from(objects).where(eq(objects.attributedTo, agent.id));
+    expect(notes).toHaveLength(0);
+  });
+
+  it('audits bad tokens by a hash prefix, never the token; admins can read them', async () => {
+    const kohl = await createTestUser(app, 'kohl'); // admin
+    const bob = await createTestUser(app, 'bob');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const tok = await mint(kohl.cookie, agent.id, []);
+    const junk = 'not-a-real-token-at-all';
+    const unknown = `bt_00000000-0000-4000-8000-000000000000_${'a'.repeat(64)}`;
+    const wrongSecret = tok.token.slice(0, -64) + 'b'.repeat(64);
+    for (const t of [junk, unknown, wrongSecret]) {
+      const r = await app.inject({ method: 'GET', url: '/auth/me', headers: bearer(t) });
+      expect(r.statusCode).toBe(401);
+    }
+    let rows: Array<typeof auditLogs.$inferSelect> = [];
+    for (let i = 0; i < 50 && rows.length < 3; i++) {
+      rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'agent.denied'));
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(rows).toHaveLength(3);
+    const dump = JSON.stringify(rows);
+    for (const t of [junk, unknown.slice(40), wrongSecret.slice(-64)]) {
+      expect(dump).not.toContain(t);
+    }
+    const unattributed = rows.filter((r) => r.actorId === null);
+    expect(unattributed.map((r) => (r.details as { denial: string }).denial).sort()).toEqual([
+      'malformed_token',
+      'unknown_token',
+    ]);
+    for (const r of unattributed) {
+      expect((r.details as { tokenFingerprint: string }).tokenFingerprint).toMatch(
+        /^[0-9a-f]{12}$/,
+      );
+    }
+    const bad = rows.find((r) => r.actorId === agent.id);
+    expect(bad?.details).toMatchObject({ denial: 'bad_secret', tokenId: tok.id });
+
+    const byAdmin = await app.inject({
+      method: 'GET',
+      url: '/agents/audit/unattributed',
+      headers: { cookie: kohl.cookie },
+    });
+    expect(JSON.parse(byAdmin.body)).toHaveLength(2);
+    const byBob = await app.inject({
+      method: 'GET',
+      url: '/agents/audit/unattributed',
+      headers: { cookie: bob.cookie },
+    });
+    expect(byBob.statusCode).toBe(403);
+  });
+
+  it("caps an agent's scopes at what its sponsor can grant", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const alice = await createTestUser(app, 'alice');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const alices = await serverWithChannel(alice.cookie, 'Alice only');
+    const bob = await createTestUser(app, 'bob');
+    const dm = await app.inject({
+      method: 'POST',
+      url: '/dms',
+      headers: { cookie: alice.cookie },
+      payload: { participantId: bob.body.id },
+    });
+    const otherDm = JSON.parse(dm.body).id;
+    for (const scope of [
+      `channels:read:${alices.channelId}`, // a channel kohl can't read
+      `channels:post:${alices.channelId}`,
+      `servers:join:${alices.serverId}`, // no member let the agent in
+      `dms:read:${otherDm}`, // a DM the agent isn't in
+    ]) {
+      const r = await app.inject({
+        method: 'POST',
+        url: `/agents/${agent.id}/tokens`,
+        headers: { cookie: kohl.cookie },
+        payload: { name: 't', scopes: [scope] },
+      });
+      expect(r.statusCode, scope).toBe(403);
+    }
+    // Within the sponsor's reach it works.
+    const mine = await serverWithChannel(kohl.cookie, 'Mine');
+    await mint(kohl.cookie, agent.id, [`channels:post:${mine.channelId}`]);
+  });
+});
+
+describe('Little guys: how agents get into servers', () => {
+  it('a bare servers:join scope cannot be minted', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const r = await app.inject({
+      method: 'POST',
+      url: `/agents/${agent.id}/tokens`,
+      headers: { cookie: kohl.cookie },
+      payload: { name: 't', scopes: ['servers:join'] },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('an agent without the narrowed scope is refused, even on a public server', async () => {
+    const { kohl, tok, serverId } = await houseWithAgent();
+    await app.inject({
+      method: 'PUT',
+      url: `/servers/${serverId}`,
+      headers: { cookie: kohl.cookie },
+      payload: { isPublic: true },
+    });
+    const r = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/join`,
+      headers: bearer(tok.token),
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it('full flow: a member adds the agent, it joins, gets the scope, and the audit says who and whose', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const alice = await createTestUser(app, 'alice');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const tok = await mint(kohl.cookie, agent.id, ['channels:post']);
+    const { serverId, channelId } = await serverWithChannel(alice.cookie, 'Alice House');
+
+    // The picker lists it as a candidate.
+    const list = await app.inject({
+      method: 'GET',
+      url: `/servers/${serverId}/agents`,
+      headers: { cookie: alice.cookie },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(JSON.parse(list.body).candidates.map((a: { id: string }) => a.id)).toContain(agent.id);
+
+    await addLittleGuy(alice.cookie, agent.id, serverId);
+    const after = await app.inject({
+      method: 'GET',
+      url: `/servers/${serverId}/agents`,
+      headers: { cookie: alice.cookie },
+    });
+    const members = JSON.parse(after.body).members;
+    expect(members).toEqual([
+      expect.objectContaining({ id: agent.id, sponsorUsername: 'kohl', kind: 'agent' }),
+    ]);
+
+    const [row] = await db.select().from(agentTokens).where(eq(agentTokens.id, tok.id));
+    expect(row.scopes).toEqual(['channels:post', `servers:join:${serverId}`]);
+
+    const post = await app.inject({
+      method: 'POST',
+      url: `/channels/${channelId}/messages`,
+      headers: bearer(tok.token),
+      payload: { content: 'hi, I am a little guy' },
+    });
+    expect(post.statusCode).toBe(201);
+
+    // It can leave and come back on its own.
+    for (const step of ['leave', 'join']) {
+      const r = await app.inject({
+        method: 'POST',
+        url: `/servers/${serverId}/${step}`,
+        headers: bearer(tok.token),
+      });
+      expect(r.statusCode, step).toBe(200);
+    }
+
+    const [invite] = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'agent.server.invite'));
+    expect(invite).toMatchObject({
+      actorId: alice.body.id,
+      sponsorId: kohl.body.id,
+      serverId,
+      details: { agentId: agent.id, sponsorId: kohl.body.id, serverId },
+    });
+
+    // The sponsor sees it in the agent's audit view too.
+    const view = await app.inject({
+      method: 'GET',
+      url: `/agents/${agent.id}/audit`,
+      headers: { cookie: kohl.cookie },
+    });
+    expect(JSON.parse(view.body).entries.map((e: { action: string }) => e.action)).toContain(
+      'agent.server.invite',
+    );
+  });
+
+  it("a non-member can't add an agent, and neither can an agent", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const alice = await createTestUser(app, 'alice');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const tok = await mint(kohl.cookie, agent.id, ['channels:post']);
+    const { serverId } = await serverWithChannel(alice.cookie, 'Alice House');
+
+    const byKohl = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/agents`,
+      headers: { cookie: kohl.cookie },
+      payload: { agentId: agent.id },
+    });
+    expect(byKohl.statusCode).toBe(403);
+    const byAgent = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/agents`,
+      headers: bearer(tok.token),
+      payload: { agentId: agent.id },
+    });
+    expect(byAgent.statusCode).toBe(403);
+    const grants = await db.select().from(serverAgentGrants);
+    expect(grants).toHaveLength(0);
+  });
+
+  it('a kicked agent loses its grant and cannot walk back in', async () => {
+    const { kohl, agent, tok, serverId } = await houseWithAgent();
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
+    const kick = await app.inject({
+      method: 'DELETE',
+      url: `/servers/${serverId}/members/${agent.id}`,
+      headers: { cookie: kohl.cookie },
+    });
+    expect(kick.statusCode).toBeLessThan(300);
+    const back = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/join`,
+      headers: bearer(tok.token),
+    });
+    expect(back.statusCode).toBe(403);
   });
 });

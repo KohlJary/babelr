@@ -17,10 +17,9 @@ export const auditLogs = pgTable(
     /** Server this action occurred in. Null for account-level
      *  events, e.g. agent-token requests and agent management. */
     serverId: uuid('server_id').references(() => actors.id, { onDelete: 'cascade' }),
-    /** Actor who performed the action. */
-    actorId: uuid('actor_id')
-      .notNull()
-      .references(() => actors.id, { onDelete: 'cascade' }),
+    /** Actor who performed the action. Null only for a request with
+     *  a token that matches no agent (logged by a hash prefix). */
+    actorId: uuid('actor_id').references(() => actors.id, { onDelete: 'cascade' }),
     /** Action category — groups related actions for filtering. */
     category: varchar('category', { length: 32 }).notNull(),
     /** Specific action identifier, e.g. 'server.update', 'role.create'. */
