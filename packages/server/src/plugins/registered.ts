@@ -14,10 +14,11 @@ import type { PluginManifest } from '@babelr/plugin-sdk';
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+import blindsManifest from '@babelr/plugin-blinds';
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
 import pmManifest from '@babelr/plugin-project-management';
 
-const manifests: PluginManifest[] = [helloManifest, pollsManifest, pmManifest];
+const manifests: PluginManifest[] = [blindsManifest, helloManifest, pollsManifest, pmManifest];
 
 export const registeredPlugins: PluginManifest[] = manifests;
