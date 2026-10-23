@@ -29,7 +29,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build -w packages/shared
       - run: npm run typecheck
 
   test:

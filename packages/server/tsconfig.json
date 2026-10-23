@@ -8,6 +8,7 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../shared" }
+    { "path": "../shared" },
+    { "path": "../plugin-sdk" }
   ]
 }
