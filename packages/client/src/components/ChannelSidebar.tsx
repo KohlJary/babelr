@@ -111,7 +111,12 @@ export function ChannelSidebar({
                 className={`sidebar-item ${selectedDMId === dm.id ? 'active' : ''}`}
                 onClick={() => onSelectDM(dm.id)}
               >
-                <span className="sidebar-item-name">{name}</span>
+                <span className="sidebar-item-name">
+                  {name}
+                  {dm.request?.state === 'pending' && dm.request.incoming && (
+                    <span className="dm-request-badge">{t('dm.requestBadge')}</span>
+                  )}
+                </span>
                 {dm.lastMessage && (
                   <span className="sidebar-item-preview">
                     {dm.lastMessage.content.slice(0, 30)}

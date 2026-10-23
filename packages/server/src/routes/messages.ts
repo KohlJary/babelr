@@ -27,6 +27,13 @@ import { signedGet } from '../federation/delivery.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { pins } from '../db/schema/pins.ts';
 import { createMessageInChannel, parseMentions } from './channels.ts';
+import {
+  assertCanPostInDM,
+  checkDMEdit,
+  checkDMPost,
+  isDMRow,
+  mentionableIds,
+} from '../dm-consent.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 import { assertNotSuspended } from '../agent-tokens.ts';
 import {
@@ -243,6 +250,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     if (!message) return reply.status(404).send({ error: 'Message not found' });
     if (message.attributedTo !== request.actor.id) {
       return reply.status(403).send({ error: 'Can only edit your own messages' });
+    }
+    // In a DM: only while still in it, unblocked, and not as an
+    // unanswered request.
+    const [editChannel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+    if (isDMRow(editChannel)) {
+      const decision = await checkDMEdit(db, editChannel, request.actor);
+      if (!decision.ok) return reply.status(decision.status).send({ error: decision.error });
     }
 
     const editor = request.actor;
@@ -476,6 +490,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
 
+    // DM consent: blocks and requests apply to reactions as to posts.
+    if (isDMRow(channel)) {
+      const decision = await checkDMPost(db, channel, request.actor, 'react');
+      if (!decision.ok) return reply.status(decision.status).send({ error: decision.error });
+    }
+
     // ADD_REACTIONS permission check — server-scoped channels only.
     // @everyone has this by default so existing behavior is unchanged;
     // admins can now revoke it via role to restrict reactions.
@@ -697,6 +717,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const conditions = [
         eq(objects.type, 'Note'),
         sql`(${objects.properties}->'mentions') @> ${JSON.stringify([me.id])}::jsonb`,
+        // Nothing from people I've blocked, including mentions from
+        // before the block.
+        sql`${objects.attributedTo} NOT IN (SELECT blocked_id FROM actor_blocks WHERE blocker_id = ${me.id})`,
       ];
       if (request.query.cursor) {
         const c = new Date(request.query.cursor);
@@ -817,7 +840,16 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const { allowed } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this server' });
 
-    // Parse mentions
+    // DM consent applies to thread replies too.
+    try {
+      await assertCanPostInDM(db, channelId, request.actor);
+    } catch (err) {
+      const e = err as { statusCode?: number; message: string };
+      if (e.statusCode) return reply.status(e.statusCode).send({ error: e.message });
+      throw err;
+    }
+
+    // Parse mentions (not of anyone who blocked the author)
     const mentionedUsernames = parseMentions(content);
     const mentionedActors =
       mentionedUsernames.length > 0
@@ -826,7 +858,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             .from(actors)
             .where(inArray(actors.preferredUsername, mentionedUsernames))
         : [];
-    const mentionedIds = mentionedActors.map((a) => a.id);
+    const mentionedIds = await mentionableIds(
+      db,
+      request.actor.id,
+      mentionedActors.map((a) => a.id),
+    );
 
     const config = fastify.config;
     const protocol = config.secureCookies ? 'https' : 'http';

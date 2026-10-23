@@ -65,12 +65,30 @@ describe('agent scope map', () => {
       'PUT /auth/profile',
       'PUT /auth/password',
       'POST /auth/login',
-      'POST /dms',
       'GET /ws',
       'POST /upload',
     ]) {
       const [m, u] = key.split(' ');
       expect(ruleForRoute(m, u), key).toBeNull();
+    }
+  });
+
+  it('opening a DM needs dms:open; saying no and leaving need no scope at all', () => {
+    expect(ruleForRoute('POST', '/dms')?.scope).toBe('dms:open');
+    for (const key of [
+      'POST /dms/:dmId/leave',
+      'POST /dms/:dmId/request/decline',
+      'POST /servers/:serverId/leave',
+      'GET /auth/dm-settings',
+      'PUT /auth/dm-settings',
+      'POST /auth/dm-allowlist',
+      'DELETE /auth/dm-allowlist/:actorId',
+      'GET /blocks',
+      'POST /blocks',
+      'DELETE /blocks/:actorId',
+    ]) {
+      const [m, u] = key.split(' ');
+      expect(checkScopes(m, u, {}, []), key).toMatchObject({ allowed: true });
     }
   });
 

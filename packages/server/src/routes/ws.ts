@@ -7,6 +7,7 @@ import { PERMISSIONS } from '@babelr/shared';
 import { eq } from 'drizzle-orm';
 import { objects } from '../db/schema/objects.ts';
 import { hasPermission } from '../permissions.ts';
+import { checkChannelAccess } from '../serializers.ts';
 import { verifyVoiceFederationToken } from '../voice/federation-jwt.ts';
 import { actors } from '../db/schema/actors.ts';
 import {
@@ -84,13 +85,26 @@ export default async function wsRoutes(fastify: FastifyInstance) {
         const msg = JSON.parse(raw.toString()) as WsClientMessage;
 
         switch (msg.type) {
-          case 'channel:subscribe':
-            fastify.wsSubscribe(socket, msg.payload.channelId);
+          case 'channel:subscribe': {
+            // Only channels this actor may read. (This used to subscribe
+            // any socket to any channel id, DMs included.) A socket
+            // authenticated by a voice federation token may follow only
+            // the channel its token names.
+            const channelId = msg.payload.channelId;
+            if (federationScope) {
+              if (federationScope.channelId === channelId) fastify.wsSubscribe(socket, channelId);
+              break;
+            }
+            const { allowed } = await checkChannelAccess(fastify.db, channelId, actor.uri);
+            if (allowed) fastify.wsSubscribe(socket, channelId);
             break;
+          }
           case 'channel:unsubscribe':
             fastify.wsUnsubscribe(socket, msg.payload.channelId);
             break;
           case 'typing:start': {
+            // Only into a channel this socket was allowed to subscribe to.
+            if (!fastify.wsGetChannelSubs(msg.payload.channelId).has(socket)) break;
             // Broadcast to channel subscribers, excluding sender
             const typingMsg: WsServerMessage = {
               type: 'typing:start',
@@ -136,6 +150,19 @@ export default async function wsRoutes(fastify: FastifyInstance) {
               .from(objects)
               .where(eq(objects.id, channelId))
               .limit(1);
+            // A DM (no server): participants only. Federation sockets
+            // were already held to their token's channel above.
+            if (voiceCh && !voiceCh.belongsTo && !federationScope) {
+              const { allowed } = await checkChannelAccess(db, channelId, actor.uri);
+              if (!allowed) {
+                const errMsg: WsServerMessage = {
+                  type: 'error',
+                  payload: { message: 'Insufficient permissions to join voice' },
+                };
+                socket.send(JSON.stringify(errMsg));
+                break;
+              }
+            }
             if (voiceCh?.belongsTo) {
               const allowed = await hasPermission(
                 db,

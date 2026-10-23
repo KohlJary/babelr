@@ -5,6 +5,7 @@ import type { Database } from './db/index.ts';
 import { actors } from './db/schema/actors.ts';
 import { agentTokens } from './db/schema/agent-tokens.ts';
 import { deliveryQueue } from './db/schema/delivery-queue.ts';
+import { serverAgentGrants } from './db/schema/server-agent-grants.ts';
 
 /** Tokens look like `bt_<uuid>_<64 hex chars>`. */
 const TOKEN_RE =
@@ -123,4 +124,29 @@ export async function assertNotSuspended(tx: Tx, actorId: string): Promise<void>
   if (row?.suspended_at) {
     throw Object.assign(new Error('Actor is suspended'), { statusCode: 403 });
   }
+}
+
+/**
+ * An agent is out of a server (it left, or was kicked): delete the
+ * grant that let it in and take `servers:join:<serverId>` off its
+ * tokens, so coming back needs a member to add it again.
+ */
+export async function dropAgentServerGrant(
+  db: Pick<Database, 'delete' | 'update'>,
+  serverId: string,
+  agentId: string,
+) {
+  const scope = `servers:join:${serverId}`;
+  await db
+    .delete(serverAgentGrants)
+    .where(and(eq(serverAgentGrants.serverId, serverId), eq(serverAgentGrants.agentId, agentId)));
+  await db
+    .update(agentTokens)
+    .set({ scopes: sql`${agentTokens.scopes} - ${scope}::text` })
+    .where(
+      and(
+        eq(agentTokens.actorId, agentId),
+        sql`${agentTokens.scopes} @> ${JSON.stringify([scope])}::jsonb`,
+      ),
+    );
 }
