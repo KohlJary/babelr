@@ -647,10 +647,17 @@ async function handleCreateNote(ctx: CreateCtx) {
   if (!channelContextId && obj.context) {
     const contextUri = obj.context as string;
     const [shadow] = await fastify.db
-      .select({ id: objects.id })
+      .select()
       .from(objects)
       .where(eq(objects.uri, contextUri))
       .limit(1);
+    // A DM is reached only through `to` (and the consent gate above),
+    // never by naming its collection as the context.
+    const shadowProps = (shadow?.properties as Record<string, unknown> | null) ?? null;
+    if (shadow && shadow.belongsTo === null && shadowProps?.isDM === true) {
+      fastify.log.info({ from: remoteActor.uri }, 'Inbound Note into a DM by context refused');
+      return;
+    }
     if (shadow) channelContextId = shadow.id;
   }
 

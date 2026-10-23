@@ -159,6 +159,11 @@ export default async function dmRoutes(fastify: FastifyInstance) {
 
     const decision = await decideOpen(db, me, other);
     if (decision === 'refuse') {
+      // A declined requester gets their conversation back, as before
+      // the decline (still "pending"): a 403 here would tell them.
+      if (theirs && !(await blockedEitherWay(db, me.id, other.id))) {
+        return conversationView(db, theirs.dm, me);
+      }
       return reply.status(403).send({ error: REFUSED_OPEN });
     }
 
@@ -235,7 +240,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
     '/dms/:dmId/request/accept',
     async (request, reply) => {
       const ctx = await loadMyDM(request, reply);
-      if (!ctx) return;
+      if (!ctx) return reply;
       const { me, dm } = ctx;
       const req = await requestFor(db, dm.id);
       if (!req || req.toId !== me.id || req.state !== 'pending') {
@@ -259,7 +264,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
     '/dms/:dmId/request/decline',
     async (request, reply) => {
       const ctx = await loadMyDM(request, reply);
-      if (!ctx) return;
+      if (!ctx) return reply;
       const { me, dm } = ctx;
       const req = await requestFor(db, dm.id);
       if (!req || req.toId !== me.id || req.state !== 'pending') {
@@ -278,7 +283,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{ Params: { dmId: string } }>('/dms/:dmId/leave', async (request, reply) => {
     const ctx = await loadMyDM(request, reply);
-    if (!ctx) return;
+    if (!ctx) return reply;
     await leaveDM(fastify, ctx.dm, ctx.me, 'left');
     return { ok: true };
   });
@@ -289,7 +294,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
     Querystring: { cursor?: string; limit?: string };
   }>('/dms/:dmId/messages', async (request, reply) => {
     const ctx = await loadMyDM(request, reply);
-    if (!ctx) return;
+    if (!ctx) return reply;
     const limit = Math.min(parseInt(request.query.limit ?? String(DEFAULT_LIMIT), 10), 100);
     return getMessagesForChannel(db, ctx.dm.id, request.query.cursor, limit);
   });
@@ -309,7 +314,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Message content is required' });
     }
     const ctx = await loadMyDM(request, reply);
-    if (!ctx) return;
+    if (!ctx) return reply;
 
     const { properties } = request.body;
     const result = await createMessageInChannel(fastify, ctx.dm.id, content, ctx.me, properties);

@@ -76,13 +76,13 @@ export default async function dmConsentRoutes(fastify: FastifyInstance) {
 
   fastify.get('/auth/dm-settings', async (request, reply) => {
     const me = requireActor(request, reply);
-    if (!me) return;
+    if (!me) return reply;
     return settingsFor(me);
   });
 
   fastify.put<{ Body: { dmPolicy?: unknown } }>('/auth/dm-settings', async (request, reply) => {
     const me = requireActor(request, reply);
-    if (!me) return;
+    if (!me) return reply;
     const policy = request.body?.dmPolicy;
     if (!isDmPolicy(policy)) {
       return reply.status(400).send({
@@ -104,9 +104,9 @@ export default async function dmConsentRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Body: { actorId?: unknown } }>('/auth/dm-allowlist', async (request, reply) => {
     const me = requireActor(request, reply);
-    if (!me) return;
+    if (!me) return reply;
     const other = await loadOther(request.body?.actorId, reply);
-    if (!other) return;
+    if (!other) return reply;
     if (other.id === me.id) return reply.status(400).send({ error: 'That is you' });
     await db
       .insert(dmAllowlist)
@@ -127,7 +127,7 @@ export default async function dmConsentRoutes(fastify: FastifyInstance) {
     '/auth/dm-allowlist/:actorId',
     async (request, reply) => {
       const me = requireActor(request, reply);
-      if (!me) return;
+      if (!me) return reply;
       if (!UUID_RE.test(request.params.actorId)) {
         return reply.status(404).send({ error: 'Not on your list' });
       }
@@ -147,7 +147,7 @@ export default async function dmConsentRoutes(fastify: FastifyInstance) {
 
   fastify.get('/blocks', async (request, reply) => {
     const me = requireActor(request, reply);
-    if (!me) return;
+    if (!me) return reply;
     const rows = await db
       .select({ actor: actors, createdAt: actorBlocks.createdAt })
       .from(actorBlocks)
@@ -168,9 +168,9 @@ export default async function dmConsentRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{ Body: { actorId?: unknown } }>('/blocks', async (request, reply) => {
     const me = requireActor(request, reply);
-    if (!me) return;
+    if (!me) return reply;
     const other = await loadOther(request.body?.actorId, reply);
-    if (!other) return;
+    if (!other) return reply;
     if (other.id === me.id) return reply.status(400).send({ error: "You can't block yourself" });
     await db
       .insert(actorBlocks)
@@ -199,7 +199,7 @@ export default async function dmConsentRoutes(fastify: FastifyInstance) {
 
   fastify.delete<{ Params: { actorId: string } }>('/blocks/:actorId', async (request, reply) => {
     const me = requireActor(request, reply);
-    if (!me) return;
+    if (!me) return reply;
     if (!UUID_RE.test(request.params.actorId)) {
       return reply.status(404).send({ error: 'Not blocked' });
     }

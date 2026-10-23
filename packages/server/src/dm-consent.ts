@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { and, eq, gt, gte, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, lt, or, sql } from 'drizzle-orm';
 import './types.ts';
 import type { Database } from './db/index.ts';
 import { actors } from './db/schema/actors.ts';
@@ -220,21 +220,6 @@ export async function requestFor(db: Db, dmId: string) {
   return row ?? null;
 }
 
-async function countNotesBy(db: Db, dmId: string, actorId: string, since: Date) {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(objects)
-    .where(
-      and(
-        eq(objects.context, dmId),
-        eq(objects.type, 'Note'),
-        eq(objects.attributedTo, actorId),
-        gte(objects.published, since),
-      ),
-    );
-  return row?.n ?? 0;
-}
-
 export async function acceptRequest(db: Db, requestId: string) {
   await db
     .update(dmRequests)
@@ -250,18 +235,14 @@ export type PostDecision = { ok: true } | { ok: false; status: number; error: st
  * pending request answering it accepts it.
  */
 export async function checkDMPost(db: Db, dm: DmRow, actor: Actor): Promise<PostDecision> {
+  const others = (await dmMembers(db, dm)).filter((m) => m.id !== actor.id);
   const request = await requestFor(db, dm.id);
-  if (request && request.fromId === actor.id && request.state !== 'accepted') {
-    // Pending, or declined (which the requester isn't told about).
-    if (
-      request.state === 'declined' ||
-      (await countNotesBy(db, dm.id, actor.id, request.createdAt)) >= PENDING_MESSAGE_LIMIT
-    ) {
-      return { ok: false, status: 403, error: REQUEST_WAITING };
-    }
+  const asRequester = request && request.fromId === actor.id && request.state !== 'accepted';
+  // A declined requester hears the same thing as a pending one.
+  if (asRequester && request.state === 'declined') {
+    return { ok: false, status: 403, error: REQUEST_WAITING };
   }
 
-  const others = (await dmMembers(db, dm)).filter((m) => m.id !== actor.id);
   if (others.length === 0) return { ok: false, status: 403, error: EVERYONE_LEFT };
   for (const other of others) {
     if (await blockedEitherWay(db, actor.id, other.id)) {
@@ -269,8 +250,48 @@ export async function checkDMPost(db: Db, dm: DmRow, actor: Actor): Promise<Post
     }
   }
 
+  if (asRequester) {
+    // Take one of the pending request's message slots, atomically. A
+    // counter rather than counting notes: deleting a message doesn't
+    // give the slot back, and a remote can't dodge it by backdating.
+    const [slot] = await db
+      .update(dmRequests)
+      .set({ sentCount: sql`${dmRequests.sentCount} + 1` })
+      .where(
+        and(
+          eq(dmRequests.id, request.id),
+          eq(dmRequests.state, 'pending'),
+          lt(dmRequests.sentCount, PENDING_MESSAGE_LIMIT),
+        ),
+      )
+      .returning({ id: dmRequests.id });
+    if (!slot) return { ok: false, status: 403, error: REQUEST_WAITING };
+  }
+
   if (request && request.toId === actor.id && request.state === 'pending') {
     await acceptRequest(db, request.id);
+  }
+  return { ok: true };
+}
+
+/**
+ * May `actor` edit their own message in this DM? Only while they're
+ * still in it, nobody in it has a block either way, and not while it's
+ * an unanswered request (no rewriting the one message after the fact).
+ */
+export async function checkDMEdit(db: Db, dm: DmRow, actor: Actor): Promise<PostDecision> {
+  const members = await dmMembers(db, dm);
+  if (!members.some((m) => m.id === actor.id)) {
+    return { ok: false, status: 403, error: REFUSED_POST };
+  }
+  for (const other of members) {
+    if (other.id !== actor.id && (await blockedEitherWay(db, actor.id, other.id))) {
+      return { ok: false, status: 403, error: REFUSED_POST };
+    }
+  }
+  const request = await requestFor(db, dm.id);
+  if (request && request.fromId === actor.id && request.state !== 'accepted') {
+    return { ok: false, status: 403, error: REQUEST_WAITING };
   }
   return { ok: true };
 }
@@ -455,9 +476,10 @@ export async function reopenDeclined(
   requester: Actor,
   recipient: Actor,
   decision: 'open' | 'request',
+  sentCount = 0,
 ) {
   await rejoinDM(db, dm, recipient);
-  await createRequest(db, dm.id, requester.id, recipient.id);
+  await createRequest(db, dm.id, requester.id, recipient.id, sentCount);
   if (decision === 'open') {
     const req = await requestFor(db, dm.id);
     if (req) await acceptRequest(db, req.id);
@@ -465,13 +487,26 @@ export async function reopenDeclined(
 }
 
 /** Insert or reuse the (from, to) request row for a new DM. */
-export async function createRequest(db: Db, dmId: string, fromId: string, toId: string) {
+export async function createRequest(
+  db: Db,
+  dmId: string,
+  fromId: string,
+  toId: string,
+  sentCount = 0,
+) {
   await db
     .insert(dmRequests)
-    .values({ dmId, fromId, toId, state: 'pending' })
+    .values({ dmId, fromId, toId, state: 'pending', sentCount })
     .onConflictDoUpdate({
       target: [dmRequests.fromId, dmRequests.toId],
-      set: { dmId, state: 'pending', createdAt: new Date(), decidedAt: null, cooldownUntil: null },
+      set: {
+        dmId,
+        state: 'pending',
+        sentCount,
+        createdAt: new Date(),
+        decidedAt: null,
+        cooldownUntil: null,
+      },
     });
 }
 
@@ -531,11 +566,13 @@ export async function inboundDMTarget(
   const decision = await decideOpen(db, remote, local);
   if (decision === 'refuse') return null;
   if (departed) {
-    await reopenDeclined(db, departed.dm, remote, local, decision);
+    // The message carrying this request is its one message.
+    await reopenDeclined(db, departed.dm, remote, local, decision, 1);
     return { dmId: departed.dm.id, isNew: true, isRequest: decision === 'request' };
   }
   const dm = await createDM(fastify, local, remote);
-  if (decision === 'request') await createRequest(db, dm.id, remote.id, local.id);
+  // The message carrying this request is its one message.
+  if (decision === 'request') await createRequest(db, dm.id, remote.id, local.id, 1);
   return { dmId: dm.id, isNew: true, isRequest: decision === 'request' };
 }
 

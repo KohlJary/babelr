@@ -199,7 +199,7 @@ describe("An agent's DMs are its own", () => {
 });
 
 describe('Neutral refusals', () => {
-  it('nobody, a block and a declined cooldown all look the same', async () => {
+  it('nobody and a block look the same; a decline looks like nothing happened', async () => {
     const alice = await createTestUser(app, 'alice');
     const bob = await createTestUser(app, 'bob');
     const carol = await createTestUser(app, 'carol');
@@ -217,10 +217,17 @@ describe('Neutral refusals', () => {
     await call(dave, 'POST', `/dms/${req.body.id}/request/decline`);
     const d = await openDM(bob, dave.body.id);
 
-    for (const r of [a, c, d]) {
+    for (const r of [a, c]) {
       expect(r.status).toBe(403);
       expect(r.body).toEqual({ error: REFUSED_OPEN });
     }
+    // Bob asked dave and was declined: he gets his conversation back,
+    // still pending, exactly as before the decline.
+    expect(d.status).toBe(200);
+    expect(d.body).toMatchObject({
+      id: req.body.id,
+      request: { state: 'pending', incoming: false },
+    });
   });
 });
 
@@ -315,7 +322,10 @@ describe('Message requests', () => {
     expect(mine.participants.map((p) => p.id)).toContain(alice.body.id);
     expect(mine.left).toBeUndefined();
     expect((await say(carol, dmId, 'hello?')).status).toBe(403);
-    expect((await openDM(carol, alice.body.id)).status).toBe(403);
+    const reask = await openDM(carol, alice.body.id);
+    expect(reask.status).toBe(200);
+    expect(reask.body.request).toEqual({ state: 'pending', incoming: false });
+    expect((await call(alice, 'GET', '/dms/requests')).body).toEqual([]);
 
     // Alice no longer has it at all, and gets nothing more from it.
     expect((await call(alice, 'GET', `/dms/${dmId}/messages`)).status).toBe(403);
@@ -332,6 +342,20 @@ describe('Message requests', () => {
     const again = await openDM(carol, alice.body.id);
     expect(again.status).toBe(201);
     expect(again.body.request).toEqual({ state: 'pending', incoming: false });
+  });
+
+  it("deleting the one message doesn't free the slot, and it can't be rewritten while pending", async () => {
+    const alice = await createTestUser(app, 'alice');
+    const bob = await createTestUser(app, 'bob');
+    await setPolicy(alice, 'friends');
+    const req = await openDM(bob, alice.body.id);
+    const dmId = req.body.id as string;
+    const sent = await say(bob, dmId, 'hi');
+    const msgId = (sent.body as unknown as { message: { id: string } }).message.id;
+    const edit = await call(bob, 'PUT', `/channels/${dmId}/messages/${msgId}`, { content: 'BUY' });
+    expect(edit.status).toBe(403);
+    expect((await call(bob, 'DELETE', `/channels/${dmId}/messages/${msgId}`)).status).toBe(200);
+    expect((await say(bob, dmId, 'hi again')).status).toBe(403);
   });
 
   it('the allowlist opens directly whatever the policy', async () => {

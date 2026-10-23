@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, varchar, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  integer,
+  timestamp,
+  uniqueIndex,
+  index,
+} from 'drizzle-orm/pg-core';
 import { actors } from './actors.ts';
 import { objects } from './objects.ts';
 
@@ -51,7 +59,8 @@ export const dmAllowlist = pgTable(
  * A stranger's first message to someone whose policy is `friends` or
  * `members_of_shared_servers`. One row per (from, to): a later request
  * after the cooldown reuses it.
- *   pending:  `to` hasn't answered; `from` may send one message.
+ *   pending:  `to` hasn't answered; `from` may send one message
+ *             (sent_count).
  *   accepted: an ordinary DM.
  *   declined: `to` left it; `from` can't ask again until cooldown_until.
  */
@@ -69,6 +78,8 @@ export const dmRequests = pgTable(
       .notNull()
       .references(() => actors.id, { onDelete: 'cascade' }),
     state: varchar('state', { length: 16 }).notNull().default('pending'),
+    /** Messages the requester has sent while pending (limit: 1). */
+    sentCount: integer('sent_count').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
     cooldownUntil: timestamp('cooldown_until', { withTimezone: true }),

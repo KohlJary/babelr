@@ -27,7 +27,7 @@ import { signedGet } from '../federation/delivery.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { pins } from '../db/schema/pins.ts';
 import { createMessageInChannel, parseMentions } from './channels.ts';
-import { assertCanPostInDM, mentionableIds } from '../dm-consent.ts';
+import { assertCanPostInDM, checkDMEdit, isDMRow, mentionableIds } from '../dm-consent.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 import { assertNotSuspended } from '../agent-tokens.ts';
 import {
@@ -244,6 +244,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     if (!message) return reply.status(404).send({ error: 'Message not found' });
     if (message.attributedTo !== request.actor.id) {
       return reply.status(403).send({ error: 'Can only edit your own messages' });
+    }
+    // In a DM: only while still in it, unblocked, and not as an
+    // unanswered request.
+    const [editChannel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+    if (isDMRow(editChannel)) {
+      const decision = await checkDMEdit(db, editChannel, request.actor);
+      if (!decision.ok) return reply.status(decision.status).send({ error: decision.error });
     }
 
     const editor = request.actor;

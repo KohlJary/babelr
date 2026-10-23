@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS "dm_requests" (
 	"from_id" uuid NOT NULL,
 	"to_id" uuid NOT NULL,
 	"state" varchar(16) DEFAULT 'pending' NOT NULL,
+	"sent_count" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"decided_at" timestamp with time zone,
 	"cooldown_until" timestamp with time zone
@@ -39,6 +40,8 @@ ALTER TABLE "actors" ADD COLUMN IF NOT EXISTS "dm_policy" varchar(32) DEFAULT 'a
 ALTER TABLE "actors" ADD COLUMN IF NOT EXISTS "dm_policy_set_by" uuid;
 --> statement-breakpoint
 ALTER TABLE "actors" ADD COLUMN IF NOT EXISTS "dm_policy_set_at" timestamp with time zone;
+--> statement-breakpoint
+ALTER TABLE "dm_requests" ADD COLUMN IF NOT EXISTS "sent_count" integer DEFAULT 0 NOT NULL;
 --> statement-breakpoint
 -- Agents and services start at 'nobody' until their own config allows
 -- DMs. Only rows nobody has set yet, so a re-run changes nothing.

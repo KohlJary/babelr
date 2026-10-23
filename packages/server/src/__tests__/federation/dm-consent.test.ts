@@ -133,6 +133,78 @@ describe('Inbound DMs respect DM consent', () => {
   });
 });
 
+describe('A DM is reachable only through the consent gate', () => {
+  it("a Note naming a local DM as its context (and no local 'to') is dropped", async () => {
+    const alice = await createTestUser(app, 'alice');
+    const carol = await createTestUser(app, 'carol');
+    const dm = await app.inject({
+      method: 'POST',
+      url: '/dms',
+      headers: { cookie: alice.cookie },
+      payload: { participantId: carol.body.id },
+    });
+    const dmId = JSON.parse(dm.body).id as string;
+    const [row] = await db.select().from(objects).where(eq(objects.id, dmId));
+    const eve = await createRemoteActor(db, { username: 'eve', domain: 'evil.tower' });
+    const noteId = `${eve.actor.uri}/notes/ctx-1`;
+    const res = await postToInbox(
+      app,
+      '/inbox',
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${noteId}/activity`,
+        type: 'Create',
+        actor: eve.actor.uri,
+        to: [],
+        object: {
+          id: noteId,
+          type: 'Note',
+          attributedTo: eve.actor.uri,
+          content: 'hi',
+          to: [],
+          context: row.uri,
+        },
+      },
+      eve.actor.uri,
+      eve.privateKeyPem,
+    );
+    expect(res.statusCode).toBe(202);
+    const [stored] = await db.select().from(objects).where(eq(objects.uri, noteId));
+    expect(stored).toBeUndefined();
+  });
+
+  it("a backdated second message doesn't slip past a pending request", async () => {
+    const alice = await createTestUser(app, 'alice');
+    await put(alice.cookie, '/auth/dm-settings', { dmPolicy: 'friends' });
+    const bob = await createRemoteActor(db, { username: 'bob', domain: 'remote.tower' });
+    expect(await remoteDM(bob, 'one')).not.toBeNull();
+    const noteId = `${bob.actor.uri}/notes/backdated`;
+    await postToInbox(
+      app,
+      '/users/alice/inbox',
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${noteId}/activity`,
+        type: 'Create',
+        actor: bob.actor.uri,
+        to: [ALICE_URI],
+        object: {
+          id: noteId,
+          type: 'Note',
+          attributedTo: bob.actor.uri,
+          content: 'two',
+          to: [ALICE_URI],
+          published: '2001-01-01T00:00:00Z',
+        },
+      },
+      bob.actor.uri,
+      bob.privateKeyPem,
+    );
+    const [stored] = await db.select().from(objects).where(eq(objects.uri, noteId));
+    expect(stored).toBeUndefined();
+  });
+});
+
 describe('Leaving stops federation delivery', () => {
   it('after a local person leaves, remote messages are dropped and no new DM is made', async () => {
     const alice = await createTestUser(app, 'alice');

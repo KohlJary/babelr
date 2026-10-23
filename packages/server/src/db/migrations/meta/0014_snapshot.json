@@ -1,5 +1,5 @@
 {
-  "id": "5959f066-5c85-4b7f-b702-528131a4e260",
+  "id": "c4f9de31-394c-4cdc-86fc-138da14add8f",
   "prevId": "ed534858-8998-46a9-9f04-927a4e7535cf",
   "version": "7",
   "dialect": "postgresql",
@@ -1389,6 +1389,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
+        },
+        "sent_count": {
+          "name": "sent_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
