@@ -19,7 +19,7 @@ import { enqueueDelivery } from '../federation/delivery.ts';
 import { serializeActivity, serializeActor } from '../federation/jsonld.ts';
 import { enqueueToFollowers } from '../federation/delivery.ts';
 import { writeAuditLog } from '../audit.ts';
-import { serverAgentGrants } from '../db/schema/server-agent-grants.ts';
+import { serverAgentGrants, agentServerDepartures } from '../db/schema/server-agent-grants.ts';
 import { isSponsoredKind } from '../actor-kind.ts';
 import { dropAgentServerGrant } from '../agent-tokens.ts';
 
@@ -512,7 +512,17 @@ export default async function serverRoutes(fastify: FastifyInstance) {
           );
         // An agent that leaves gives up the grant that let it in, so
         // coming back takes a member adding it again.
-        if (isSponsoredKind(me.kind)) await dropAgentServerGrant(tx, server.id, me.id);
+        if (isSponsoredKind(me.kind)) {
+          await dropAgentServerGrant(tx, server.id, me.id);
+          // It left by choice: from now on only it can bring itself back.
+          await tx
+            .insert(agentServerDepartures)
+            .values({ serverId: server.id, agentId: me.id })
+            .onConflictDoUpdate({
+              target: [agentServerDepartures.serverId, agentServerDepartures.agentId],
+              set: { leftAt: new Date() },
+            });
+        }
       });
 
       // Stop live delivery of the server's channels to this actor.

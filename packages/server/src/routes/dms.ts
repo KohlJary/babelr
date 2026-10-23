@@ -106,8 +106,10 @@ export default async function dmRoutes(fastify: FastifyInstance) {
     if (!participantId || typeof participantId !== 'string') {
       return reply.status(400).send({ error: 'participantId is required' });
     }
+    // Unknown ids get the same answer as a refusal, so this route can't
+    // be used to learn who exists or what their policy is.
     if (!UUID_RE.test(participantId)) {
-      return reply.status(404).send({ error: 'User not found' });
+      return reply.status(403).send({ error: REFUSED_OPEN });
     }
 
     const me = request.actor;
@@ -115,7 +117,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
 
     // People, agents and services; not servers (Group actors).
     if (!other || !isActorLike(other.type)) {
-      return reply.status(404).send({ error: 'User not found' });
+      return reply.status(403).send({ error: REFUSED_OPEN });
     }
     if (other.id === me.id) {
       return reply.status(400).send({ error: 'Cannot DM yourself' });

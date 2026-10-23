@@ -13,7 +13,7 @@ import { wikiPages } from '../db/schema/wiki.ts';
 import { events } from '../db/schema/events.ts';
 import { serverFiles } from '../db/schema/files.ts';
 import { generateShortSlug } from '@babelr/shared';
-import { toAuthorView } from '../serializers.ts';
+import { checkChannelAccess, toAuthorView } from '../serializers.ts';
 import { timingSafeEqual } from 'node:crypto';
 import {
   verifySignatureFromParts,
@@ -29,7 +29,7 @@ import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
 import { actorLikeType, isActorLike } from '../actor-kind.ts';
-import { handleRemoteLeave, inboundDMTarget } from '../dm-consent.ts';
+import { checkDMPost, handleRemoteLeave, inboundDMTarget, isDMRow } from '../dm-consent.ts';
 
 interface APActivity {
   id?: string;
@@ -999,7 +999,36 @@ async function handleLike(
     .from(objects)
     .where(eq(objects.uri, noteUri))
     .limit(1);
-  if (!note) return;
+  if (!note?.context) return;
+
+  // The reactor must be able to read the channel, and in a DM the
+  // consent rules apply (blocks, requests) as they do to posts.
+  const [reactorRow] = await fastify.db
+    .select()
+    .from(actors)
+    .where(eq(actors.id, reactorId))
+    .limit(1);
+  if (!reactorRow) return;
+  // Membership is ours to check for DMs and for our own servers; a
+  // remote server's channel follows its origin's member list.
+  const { allowed, channel } = await checkChannelAccess(fastify.db, note.context, reactorRow.uri);
+  let ownsMembership = !channel?.belongsTo;
+  if (channel?.belongsTo) {
+    const [group] = await fastify.db
+      .select({ local: actors.local })
+      .from(actors)
+      .where(eq(actors.id, channel.belongsTo))
+      .limit(1);
+    ownsMembership = !!group?.local;
+  }
+  if (!allowed && ownsMembership) {
+    fastify.log.info({ reactor: reactorRow.uri }, 'Remote Like refused: no access');
+    return;
+  }
+  if (isDMRow(channel) && !(await checkDMPost(fastify.db, channel, reactorRow, 'react')).ok) {
+    fastify.log.info({ reactor: reactorRow.uri }, 'Remote Like refused by DM consent');
+    return;
+  }
 
   // Upsert the reaction.
   await fastify.db

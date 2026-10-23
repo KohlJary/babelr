@@ -562,3 +562,113 @@ describe('Blocking', () => {
     expect((await openDM(bob, agent.id)).status).toBe(403);
   });
 });
+
+describe('Momus trial 2', () => {
+  it('reactions go through the same consent checks as posts', async () => {
+    const alice = await createTestUser(app, 'alice');
+    const bob = await createTestUser(app, 'bob');
+    const carol = await createTestUser(app, 'carol');
+    // A pending requester can't react (their one message is a message).
+    await setPolicy(alice, 'friends');
+    const req = await openDM(bob, alice.body.id);
+    const reqId = req.body.id as string;
+    const sent = await say(bob, reqId, 'hi');
+    const m1 = (sent.body as unknown as { message: { id: string } }).message.id;
+    const r1 = await call(bob, 'POST', `/channels/${reqId}/messages/${m1}/reactions`, {
+      emoji: '👍',
+    });
+    expect(r1.status).toBe(403);
+
+    // A blocked participant can't react in an existing DM.
+    const dm = await openDM(carol, bob.body.id);
+    const dmId = dm.body.id as string;
+    const s2 = await say(carol, dmId, 'hello');
+    const m2 = (s2.body as unknown as { message: { id: string } }).message.id;
+    await call(carol, 'POST', '/blocks', { actorId: bob.body.id });
+    const r2 = await call(bob, 'POST', `/channels/${dmId}/messages/${m2}/reactions`, {
+      emoji: '👍',
+    });
+    expect(r2.status).toBe(403);
+  });
+
+  it("after an agent leaves a server, a member's re-add is only an invite the agent must accept", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const agent = await createAgent(kohl, 'robo');
+    const s = await call(kohl, 'POST', '/servers', { name: 'House' });
+    const serverId = s.body.id as string;
+    const tok = await mint(kohl, agent.id, []);
+    expect(
+      (await call(kohl, 'POST', `/servers/${serverId}/agents`, { agentId: agent.id })).status,
+    ).toBe(201);
+    expect((await call(tok, 'POST', `/servers/${serverId}/leave`)).status).toBe(200);
+
+    const readd = await call(kohl, 'POST', `/servers/${serverId}/agents`, { agentId: agent.id });
+    expect(readd.status).toBe(202);
+    expect(readd.body).toMatchObject({ pending: true });
+    const listed = await call(kohl, 'GET', `/servers/${serverId}/agents`);
+    expect(
+      (listed.body.members as unknown as Array<{ id: string }>).map((a) => a.id),
+    ).not.toContain(agent.id);
+    // Not in the server, no grant, no scope until the agent says yes.
+    expect(
+      await db.select().from(serverAgentGrants).where(eq(serverAgentGrants.agentId, agent.id)),
+    ).toHaveLength(0);
+
+    const invites = await call(tok, 'GET', '/agent-invites');
+    expect(invites.status).toBe(200);
+    expect(invites.body).toEqual([expect.objectContaining({ serverId })]);
+    const accept = await call(tok, 'POST', `/agent-invites/${serverId}/accept`);
+    expect(accept.status).toBe(200);
+    const after = await call(kohl, 'GET', `/servers/${serverId}/agents`);
+    expect((after.body.members as unknown as Array<{ id: string }>).map((a) => a.id)).toContain(
+      agent.id,
+    );
+
+    // Leave again; this time it declines the invite.
+    expect((await call(tok, 'POST', `/servers/${serverId}/leave`)).status).toBe(200);
+    await call(kohl, 'POST', `/servers/${serverId}/agents`, { agentId: agent.id });
+    expect((await call(tok, 'POST', `/agent-invites/${serverId}/decline`)).status).toBe(200);
+    expect((await call(tok, 'GET', '/agent-invites')).body).toEqual([]);
+  });
+
+  it('a suspended agent can still leave, decline and block', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const bob = await createTestUser(app, 'bob');
+    const agent = await createAgent(kohl, 'robo', { dmPolicy: 'anyone' });
+    const tok = await mint(kohl, agent.id, ['dms:read', 'dms:post']);
+    const dm = await openDM(bob, agent.id);
+    const dmId = dm.body.id as string;
+    expect((await call(kohl, 'POST', `/agents/${agent.id}/suspend`)).status).toBe(200);
+
+    // It can't act...
+    expect((await call(tok, 'GET', '/dms')).status).toBe(401);
+    expect((await say(tok, dmId, 'hi')).status).toBe(401);
+    // ...but it can still say no and walk out.
+    expect((await call(tok, 'POST', '/blocks', { actorId: bob.body.id })).status).toBe(201);
+    expect((await call(tok, 'PUT', '/auth/dm-settings', { dmPolicy: 'nobody' })).status).toBe(200);
+    expect((await call(tok, 'POST', `/dms/${dmId}/leave`)).status).toBe(200);
+  });
+
+  it('an unknown id and a refusal look the same', async () => {
+    const alice = await createTestUser(app, 'alice');
+    const bob = await createTestUser(app, 'bob');
+    await setPolicy(bob, 'nobody');
+    const refused = await openDM(alice, bob.body.id);
+    const unknown = await openDM(alice, '44444444-4444-4444-4444-444444444444');
+    const junk = await openDM(alice, 'not-an-id');
+    for (const r of [unknown, junk]) {
+      expect(r.status).toBe(refused.status);
+      expect(r.body).toEqual(refused.body);
+    }
+  });
+
+  it('token audit rows name the token and the sponsor who minted it', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const agent = await createAgent(kohl, 'robo');
+    const res = await call(kohl, 'POST', `/agents/${agent.id}/tokens`, { name: 't', scopes: [] });
+    const { token, id: tokenId } = res.body as unknown as { token: string; id: string };
+    await call(token, 'GET', '/auth/dm-settings');
+    const [row] = await auditFor(agent.id, 'agent.dm.settings.read');
+    expect(row.details).toMatchObject({ tokenId, mintedBy: kohl.body.id });
+  });
+});

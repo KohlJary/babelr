@@ -136,6 +136,9 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'GET /blocks': { scope: null, action: 'block.list' },
   'POST /blocks': { scope: null, action: 'block.add' },
   'DELETE /blocks/:actorId': { scope: null, action: 'block.remove' },
+  'GET /agent-invites': { scope: null, action: 'server.invites' },
+  'POST /agent-invites/:serverId/accept': { scope: null, action: 'server.invite.accept' },
+  'POST /agent-invites/:serverId/decline': { scope: null, action: 'server.invite.decline' },
 
   // Joining servers, through the same route people use (with its ban
   // check). Only as servers:join:<serverId>. Leaving needs no scope.
@@ -160,6 +163,32 @@ const PREFIX_SCOPES: Array<{ prefix: string; methods: Method[]; rule: ScopeRule 
     rule: { scope: 'plugins:write', action: 'plugin.write' },
   },
 ];
+
+/**
+ * Consent routes: saying no and walking out. They stay open to a
+ * suspended agent (plugins/auth.ts): suspension stops what an agent can
+ * do, not its right to refuse or leave. Accepting an invite back isn't
+ * one of them; that's acting.
+ */
+export const CONSENT_ROUTES: ReadonlySet<string> = new Set([
+  'POST /dms/:dmId/leave',
+  'POST /dms/:dmId/request/decline',
+  'POST /servers/:serverId/leave',
+  'GET /auth/dm-settings',
+  'PUT /auth/dm-settings',
+  'POST /auth/dm-allowlist',
+  'DELETE /auth/dm-allowlist/:actorId',
+  'GET /blocks',
+  'POST /blocks',
+  'DELETE /blocks/:actorId',
+  'GET /agent-invites',
+  'POST /agent-invites/:serverId/decline',
+]);
+
+export function isConsentRoute(method: string, routeUrl: string | undefined): boolean {
+  const m = (method === 'HEAD' ? 'GET' : method).toUpperCase();
+  return !!routeUrl && CONSENT_ROUTES.has(`${m} ${routeUrl}`);
+}
 
 /** The rule for a route, or null when the route is closed to tokens. */
 export function ruleForRoute(method: string, routeUrl: string | undefined): ScopeRule | null {

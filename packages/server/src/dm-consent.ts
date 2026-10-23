@@ -234,7 +234,12 @@ export type PostDecision = { ok: true } | { ok: false; status: number; error: st
  * DM message (local routes and inbound federation). The recipient of a
  * pending request answering it accepts it.
  */
-export async function checkDMPost(db: Db, dm: DmRow, actor: Actor): Promise<PostDecision> {
+export async function checkDMPost(
+  db: Db,
+  dm: DmRow,
+  actor: Actor,
+  kind: 'post' | 'react' = 'post',
+): Promise<PostDecision> {
   const others = (await dmMembers(db, dm)).filter((m) => m.id !== actor.id);
   const request = await requestFor(db, dm.id);
   const asRequester = request && request.fromId === actor.id && request.state !== 'accepted';
@@ -248,6 +253,11 @@ export async function checkDMPost(db: Db, dm: DmRow, actor: Actor): Promise<Post
     if (await blockedEitherWay(db, actor.id, other.id)) {
       return { ok: false, status: 403, error: REFUSED_POST };
     }
+  }
+
+  // A pending request's one slot is for a message, not a reaction.
+  if (asRequester && kind === 'react') {
+    return { ok: false, status: 403, error: REQUEST_WAITING };
   }
 
   if (asRequester) {
@@ -557,8 +567,13 @@ export async function inboundDMTarget(
 
   // The remote actor left one with us and is writing again: coming
   // back is the leaver's own call.
+  // Re-entry still passes consent: the recipient's policy as it is now,
+  // and the post check (blocks, a pending request's one message) before
+  // the leaver is put back.
   const theirs = await findDepartedDM(db, remote, local);
   if (theirs && theirs.reason === 'left') {
+    if ((await decideOpen(db, remote, local)) === 'refuse') return null;
+    if (!(await checkDMPost(db, theirs.dm, remote)).ok) return null;
     await rejoinDM(db, theirs.dm, remote);
     return { dmId: theirs.dm.id, isNew: false, isRequest: false };
   }

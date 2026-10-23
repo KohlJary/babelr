@@ -512,7 +512,8 @@ describe('3. Services', () => {
       headers: { cookie: kohl.cookie },
       payload: { participantId: serverId },
     });
-    expect(r.statusCode).toBe(404);
+    // The same neutral refusal as any id that isn't someone (3d).
+    expect(r.statusCode).toBe(403);
   });
 
   it('agents do not count toward first-user admin', async () => {

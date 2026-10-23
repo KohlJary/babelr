@@ -27,7 +27,13 @@ import { signedGet } from '../federation/delivery.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { pins } from '../db/schema/pins.ts';
 import { createMessageInChannel, parseMentions } from './channels.ts';
-import { assertCanPostInDM, checkDMEdit, isDMRow, mentionableIds } from '../dm-consent.ts';
+import {
+  assertCanPostInDM,
+  checkDMEdit,
+  checkDMPost,
+  isDMRow,
+  mentionableIds,
+} from '../dm-consent.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 import { assertNotSuspended } from '../agent-tokens.ts';
 import {
@@ -483,6 +489,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     // Check channel access
     const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
     if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
+
+    // DM consent: blocks and requests apply to reactions as to posts.
+    if (isDMRow(channel)) {
+      const decision = await checkDMPost(db, channel, request.actor, 'react');
+      if (!decision.ok) return reply.status(decision.status).send({ error: decision.error });
+    }
 
     // ADD_REACTIONS permission check — server-scoped channels only.
     // @everyone has this by default so existing behavior is unchanged;

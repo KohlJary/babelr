@@ -43,6 +43,8 @@ declare module 'fastify' {
      *  onResponse hook can write the agent audit row. */
     agentAuth?: {
       tokenId: string | null;
+      /** The sponsor (or admin) who minted the token. */
+      mintedBy: string | null;
       /** Null when the token matches no agent. */
       actorId: string | null;
       sponsorId: string | null;

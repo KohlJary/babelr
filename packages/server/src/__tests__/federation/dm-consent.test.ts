@@ -11,6 +11,7 @@ import type { createDb } from '../../db/index.ts';
 import { objects } from '../../db/schema/objects.ts';
 import { deliveryQueue } from '../../db/schema/delivery-queue.ts';
 import { dmRequests } from '../../db/schema/dm-consent.ts';
+import { reactions } from '../../db/schema/reactions.ts';
 import {
   createFederationTestApp,
   createTestUser,
@@ -284,5 +285,92 @@ describe('Leaving stops federation delivery', () => {
       payload: { participantId: bob.actor.id },
     });
     expect(reopen.statusCode).toBe(403);
+  });
+});
+
+describe('Momus trial 2: federation', () => {
+  async function leaveAs(remote: Awaited<ReturnType<typeof createRemoteActor>>, k: number) {
+    return postToInbox(
+      app,
+      '/users/alice/inbox',
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${remote.actor.uri}/activities/leave-${k}-${Date.now()}`,
+        type: 'Leave',
+        actor: remote.actor.uri,
+        to: [ALICE_URI],
+        object: { type: 'OrderedCollection', id: 'http://remote.tower/dms/x', babelrDM: true },
+      },
+      remote.actor.uri,
+      remote.privateKeyPem,
+    );
+  }
+
+  it('Leave then Note keeps the pending one-message limit', async () => {
+    const alice = await createTestUser(app, 'alice');
+    await put(alice.cookie, '/auth/dm-settings', { dmPolicy: 'friends' });
+    const bob = await createRemoteActor(db, { username: 'bob', domain: 'remote.tower' });
+    expect(await remoteDM(bob, 'one')).not.toBeNull();
+    for (let k = 0; k < 3; k++) {
+      await leaveAs(bob, k);
+      expect(await remoteDM(bob, `again ${k}`)).toBeNull();
+    }
+  });
+
+  it("re-entry after Leave follows the recipient's policy now", async () => {
+    const alice = await createTestUser(app, 'alice');
+    const bob = await createRemoteActor(db, { username: 'bob', domain: 'remote.tower' });
+    expect(await remoteDM(bob, 'hi')).not.toBeNull();
+    await leaveAs(bob, 9);
+    await put(alice.cookie, '/auth/dm-settings', { dmPolicy: 'nobody' });
+    expect(await remoteDM(bob, 'back')).toBeNull();
+  });
+
+  it('a Like needs membership, and a block stops it', async () => {
+    const alice = await createTestUser(app, 'alice');
+    const carol = await createTestUser(app, 'carol');
+    const bob = await createRemoteActor(db, { username: 'bob', domain: 'remote.tower' });
+    const eve = await createRemoteActor(db, { username: 'eve', domain: 'evil.tower' });
+    // A DM alice shares with bob, and one with carol that neither remote is in.
+    const fromBob = await remoteDM(bob, 'hi');
+    const dm = await app.inject({
+      method: 'POST',
+      url: '/dms',
+      headers: { cookie: alice.cookie },
+      payload: { participantId: carol.body.id },
+    });
+    const dmId = JSON.parse(dm.body).id as string;
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/dms/${dmId}/messages`,
+      headers: { cookie: alice.cookie },
+      payload: { content: 'private' },
+    });
+    const privateNote = JSON.parse(sent.body).message.id as string;
+    const [pn] = await db.select().from(objects).where(eq(objects.id, privateNote));
+
+    const like = (who: typeof bob, noteUri: string, k: string) =>
+      postToInbox(
+        app,
+        '/inbox',
+        {
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          id: `${who.actor.uri}/likes/${k}`,
+          type: 'Like',
+          actor: who.actor.uri,
+          object: { id: noteUri, emoji: '👍' },
+        },
+        who.actor.uri,
+        who.privateKeyPem,
+      );
+    const count = async (noteId: string) =>
+      (await db.select().from(reactions).where(eq(reactions.objectId, noteId))).length;
+
+    await like(eve, pn.uri, 'e1');
+    expect(await count(pn.id)).toBe(0);
+
+    await put(alice.cookie, '/blocks', { actorId: bob.actor.id }, 'POST');
+    await like(bob, fromBob!.uri, 'b1');
+    expect(await count(fromBob!.id)).toBe(0);
   });
 });
