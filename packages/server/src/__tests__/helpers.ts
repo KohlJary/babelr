@@ -42,6 +42,11 @@ const testConfig: Config = {
   mediasoupRtcMaxPort: 40099,
 };
 
+/** Every WS send the stubbed decorators were asked to make, in order.
+ *  `to` is an actor id, a channel id prefixed `channel:`, or `*` for
+ *  broadcastToAllSubscribers. Tests may clear it (`length = 0`). */
+export const wsSent: Array<{ to: string; message: unknown }> = [];
+
 /**
  * `plugins: true` also mounts the real plugin loader (the in-tree
  * plugins from registered.ts, with their migrations) and the embed
@@ -68,9 +73,15 @@ export async function createTestApp(opts: { plugins?: boolean } = {}) {
   app.register(
     fp(
       async (fastify) => {
-        fastify.decorate('broadcastToChannel', () => {});
-        fastify.decorate('broadcastToAllSubscribers', () => {});
-        fastify.decorate('broadcastToActor', () => {});
+        fastify.decorate('broadcastToChannel', (channelId: string, message: unknown) => {
+          wsSent.push({ to: `channel:${channelId}`, message });
+        });
+        fastify.decorate('broadcastToAllSubscribers', (message: unknown) => {
+          wsSent.push({ to: '*', message });
+        });
+        fastify.decorate('broadcastToActor', (actorId: string, message: unknown) => {
+          wsSent.push({ to: actorId, message });
+        });
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});

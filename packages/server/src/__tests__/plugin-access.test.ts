@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
-import { createTestApp, createTestUser, cleanDb } from './helpers.ts';
+import { createTestApp, createTestUser, cleanDb, wsSent } from './helpers.ts';
 import { createRemoteActor } from './federation/helpers.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
-import { signRequest } from '../federation/signatures.ts';
+import { signRequest, createDigest } from '../federation/signatures.ts';
+import { createSign } from 'node:crypto';
 
 /**
  * Access checks on plugin routes, through the real plugin loader.
@@ -327,6 +328,32 @@ describe('a member', () => {
   });
 });
 
+describe('live updates', () => {
+  it("go to the server's local members only, never to every socket", async () => {
+    const ids: Record<string, string> = {};
+    for (const name of ['alice', 'bob', 'carol', 'dan']) {
+      const [row] = await db.select().from(actors).where(eq(actors.preferredUsername, name));
+      ids[name] = row.id;
+    }
+    wsSent.length = 0;
+    const res = await call(
+      'POST',
+      `/plugins/project-management/boards/${boardSlug}/work-items`,
+      c.dan,
+      { columnId: todoColumnId, title: 'Dan task' },
+    );
+    expect(res.status).toBe(200);
+    // broadcastPm is fire-and-forget; let it finish.
+    await new Promise((r) => setTimeout(r, 50));
+    const to = new Set(wsSent.map((w) => w.to));
+    expect(to).toEqual(new Set([ids.alice, ids.carol, ids.dan]));
+
+    wsSent.length = 0;
+    await call('POST', `/plugins/polls/polls/${pollSlug}/vote`, c.dan, { optionId });
+    expect(new Set(wsSent.map((w) => w.to))).toEqual(new Set([ids.alice, ids.carol, ids.dan]));
+  });
+});
+
 describe('ownership', () => {
   it("stops a plain member editing, deleting or closing someone else's item", async () => {
     const edit = await call(
@@ -422,6 +449,30 @@ describe('federated by-slug callers', () => {
       new Date(Date.now() - 60 * 60 * 1000).toUTCString(),
     );
     expect(stale.statusCode).toBe(401);
+  });
+
+  it('refuses a signature that does not cover the Date', async () => {
+    const [zed] = await db.select().from(actors).where(eq(actors.preferredUsername, 'zed'));
+    const path = `/plugins/project-management/board/by-slug/${boardSlug}`;
+    const digest = createDigest('');
+    const headerList = '(request-target) host digest';
+    const signingString = [
+      `(request-target): get ${path}`,
+      'host: test.babelr.local',
+      `digest: ${digest}`,
+    ].join('\n');
+    const sig = createSign('sha256').update(signingString).sign(zed.privateKeyPem!, 'base64');
+    const res = await app.inject({
+      method: 'GET',
+      url: path,
+      headers: {
+        host: 'test.babelr.local',
+        date: new Date().toUTCString(),
+        digest,
+        signature: `keyId="${zed.uri}#main-key",algorithm="rsa-sha256",headers="${headerList}",signature="${sig}"`,
+      },
+    });
+    expect(res.statusCode).toBe(401);
   });
 
   it('does not let a signature stand in for a session on ordinary plugin routes', async () => {

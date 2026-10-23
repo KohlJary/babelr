@@ -221,11 +221,6 @@ function decorateAccess(fastify: FastifyInstance): void {
   }
 }
 
-/** How far a signed request's Date header may drift from our clock.
- *  The signature covers the Date, so this bounds replay of a captured
- *  by-slug request. */
-const SIGNATURE_MAX_SKEW_MS = 5 * 60 * 1000;
-
 /**
  * Who is calling a by-slug route: the local session actor, or a
  * federated actor whose HTTP Signature verifies (and whose domain the
@@ -238,8 +233,10 @@ async function resolveBySlugCaller(
   const a = request.actor;
   if (a && a.local === true) return { id: a.id, uri: a.uri, local: true };
   if (!request.headers.signature) return null;
-  const date = Date.parse(String(request.headers.date ?? ''));
-  if (!Number.isFinite(date) || Math.abs(Date.now() - date) > SIGNATURE_MAX_SKEW_MS) return null;
+  // verifySignedRequest requires the signature to cover
+  // (request-target), host, date and digest, the Date to be within 5
+  // minutes, and the Digest to match the (empty) body, so a captured
+  // by-slug request can be replayed for 5 minutes at most.
   let remote;
   try {
     remote = await verifySignedRequest(fastify, {
