@@ -43,6 +43,20 @@ export interface PluginManifest {
   serverRoutes?: (fastify: FastifyInstance) => Promise<void> | void;
 
   /**
+   * Routes that may be called without logging in. Everything a plugin
+   * mounts is closed by default: the loader wraps the plugin's scope
+   * with a hook that answers 401 unless the caller has a local session.
+   * List a route here to open it, as `'<METHOD> <path>'` with the path
+   * relative to `/plugins/<id>` exactly as registered, e.g.
+   * `'GET /ping'` or `'GET /items/:slug'`. A public GET also opens HEAD.
+   *
+   * The auto-mounted `/<kind>/by-slug/:slug` routes are not affected:
+   * they always need a local session or a verified HTTP Signature
+   * from a federated actor (see FederationHandlerContext.caller).
+   */
+  publicRoutes?: string[];
+
+  /**
    * Schema migrations to run at Tower boot. Each migration gets a
    * namespaced transaction; table/index names should be prefixed
    * `plugin_<id>_` by convention. Migrations are applied in order and
@@ -126,11 +140,28 @@ export interface InboxHandlerContext {
   };
 }
 
+/**
+ * Who is calling a plugin. For a local session this is the logged-in
+ * actor; for a federated by-slug request it is the remote actor whose
+ * HTTP Signature verified.
+ */
+export interface PluginCaller {
+  id: string;
+  uri: string;
+  local: boolean;
+}
+
 export interface FederationHandlerContext {
-  /** ActivityPub URI of the remote actor making the request, if any.
-   *  Used for permission checks (is this actor a member of the Group
-   *  whose board they're trying to embed?). */
+  /** ActivityPub URI of the caller. Always set when the handler is
+   *  reached through the loader's by-slug route, which refuses
+   *  callers it can't authenticate. Same as `caller.uri`. */
   callerUri?: string;
+  /** The authenticated caller: a local session actor, or a federated
+   *  actor with a verified HTTP Signature. Check it against the
+   *  item's server with `canAccess(ctx.fastify, ctx.caller, serverId)`
+   *  and return null on a miss, so the caller can't tell a locked
+   *  item from a missing one. */
+  caller?: PluginCaller;
   /** Fastify instance, so the handler can query the DB or call other
    *  internal helpers. */
   fastify: FastifyInstance;

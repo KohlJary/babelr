@@ -35,5 +35,8 @@ declare module 'fastify' {
 
   interface FastifyRequest {
     actor?: typeof actors.$inferSelect;
+    /** Exact request body, set only on routes that call
+     *  captureRawBody (signature-verified federation routes). */
+    rawBody?: string;
   }
 }
