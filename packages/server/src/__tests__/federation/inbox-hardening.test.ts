@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createHash, createSign } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import {
@@ -242,7 +242,8 @@ describe('WorkItem activities from federated actors', () => {
     wsSent.length = 0;
     await send(zed, workItem(zed, 'Create', 'zeditem001', 'from zed'));
     expect((await item('zeditem001')).reporter_id).toBe(zed.actor.id);
-    expect(wsSent.length).toBeGreaterThan(0);
+    // The handler's broadcast is fire-and-forget; wait for it.
+    await vi.waitFor(() => expect(wsSent.length).toBeGreaterThan(0));
     // alice is the only local member; nothing goes to every socket.
     expect(new Set(wsSent.map((w) => w.to))).toEqual(new Set([alice.id]));
 

@@ -343,10 +343,11 @@ describe('live updates', () => {
       { columnId: todoColumnId, title: 'Dan task' },
     );
     expect(res.status).toBe(200);
-    // broadcastPm is fire-and-forget; let it finish.
-    await new Promise((r) => setTimeout(r, 50));
-    const to = new Set(wsSent.map((w) => w.to));
-    expect(to).toEqual(new Set([ids.alice, ids.carol, ids.dan]));
+    // broadcastPm is fire-and-forget; wait until all three are sent.
+    await vi.waitFor(() =>
+      expect(new Set(wsSent.map((w) => w.to))).toEqual(new Set([ids.alice, ids.carol, ids.dan])),
+    );
+    expect(wsSent).toHaveLength(3);
 
     wsSent.length = 0;
     await call('POST', `/plugins/polls/polls/${pollSlug}/vote`, c.dan, { optionId });
