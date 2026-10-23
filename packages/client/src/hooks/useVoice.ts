@@ -516,7 +516,7 @@ export function useVoice(selfActorId: string) {
       wsRef.current = null;
       channelIdRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately empty deps: tear down only on unmount.
   }, []);
 
   return {

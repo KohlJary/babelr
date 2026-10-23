@@ -121,7 +121,7 @@ export function useTranslateStrings(
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deps are deliberately limited to the inputs that change the result.
   }, [digest, provider, settings.preferredLanguage, settings.provider]);
 
   // Build the output map: translated where available, original otherwise.

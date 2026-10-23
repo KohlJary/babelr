@@ -13,7 +13,6 @@ import type { PluginManifest } from '@babelr/plugin-sdk';
  * Keep the list alphabetized.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
 import pmManifest from '@babelr/plugin-project-management';

@@ -41,13 +41,6 @@ interface PollOptionRow {
   label: string;
 }
 
-interface PollVoteRow {
-  poll_id: string;
-  actor_uri: string;
-  option_id: string;
-  voted_at: string;
-}
-
 interface PollPayload {
   slug: string;
   question: string;

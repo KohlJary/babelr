@@ -90,7 +90,7 @@ describe('Outbound message federation', () => {
   });
 
   it('enqueues Update(Note) when editing a message', async () => {
-    const { cookie, channel, remoteUser } = await setupServerWithRemoteFollower();
+    const { cookie, channel } = await setupServerWithRemoteFollower();
 
     // Create a message first
     const createRes = await app.inject({

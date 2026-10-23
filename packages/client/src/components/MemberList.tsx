@@ -26,7 +26,6 @@ export function MemberList({
   callerRole,
   presenceStatus,
   onKick,
-  onClose,
   onRolesChanged,
 }: MemberListProps) {
   const t = useT();

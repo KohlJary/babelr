@@ -17,7 +17,6 @@ export function ThreadPanel({
   replies,
   loading,
   onSendReply,
-  onClose,
 }: ThreadPanelProps) {
   const t = useT();
   return (

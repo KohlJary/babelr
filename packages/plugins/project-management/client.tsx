@@ -4,8 +4,7 @@ import { ListDetailView } from '../../client/src/components/ListDetailView.js';
 import { T } from '../../client/src/components/T.js';
 import { onWsMessage } from '../../client/src/plugins/ws-helper.js';
 import { BoardKanban } from './components/Board.js';
-import { TaskPreview, TaskInline, EDIT_EVENT } from './components/TaskEmbed.js';
-import { BoardPreview, BoardInline, OPEN_BOARD_EVENT } from './components/BoardEmbed.js';
+import { OPEN_BOARD_EVENT } from './components/BoardEmbed.js';
 import type { ActorProfile } from '@babelr/shared';
 import type {
   BoardSummary,

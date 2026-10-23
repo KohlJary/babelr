@@ -33,7 +33,7 @@ export type WikiRefKind =
   | 'file'
   | 'image'
   | 'manual'
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // `string & {}` keeps literal autocompletion while allowing any string.
   | (string & {});
 
 /**

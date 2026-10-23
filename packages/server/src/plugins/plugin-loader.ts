@@ -122,7 +122,7 @@ async function runPluginMigrations(
         await fastify.db.execute(sql.raw(stmt));
       }
     } else {
-      await m.up(async (q, _params) => {
+      await m.up(async (q) => {
         // Functional form is a safety valve for plugins that need
         // procedural migrations; most plugins pass a SQL string.
         const r = await fastify.db.execute(sql.raw(q));

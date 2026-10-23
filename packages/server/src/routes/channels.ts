@@ -1,33 +1,25 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { eq, and, desc, gt, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
-import { readPositions } from '../db/schema/read-positions.ts';
-import { reactions } from '../db/schema/reactions.ts';
-import { notificationPreferences } from '../db/schema/notification-preferences.ts';
 import type {
   MessageWithAuthor,
-  MessageListResponse,
-  CreateMessageInput,
   CreateChannelInput,
   UpdateChannelInput,
-  WsServerMessage,
 } from '@babelr/shared';
-import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, enqueueDelivery, deliverDMCreate, deliverDMRead, signedGet } from '../federation/delivery.ts';
+import { broadcastCreate, broadcastToGroupFollowers, enqueueDelivery, deliverDMCreate } from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
-import { PERMISSIONS, generateMessageSlug, isValidMessageSlug } from '@babelr/shared';
+import { PERMISSIONS, generateMessageSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 import { writeAuditLog } from '../audit.ts';
 import { broadcastPushToChannel } from '../push.ts';
 import { unfurlLinks } from '../unfurl.ts';
-
-const DEFAULT_LIMIT = 50;
 
 // Parse @mentions from content and return array of mentioned usernames
 export function parseMentions(content: string): string[] {

@@ -102,8 +102,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [threadReplies, setThreadReplies] = useState<MessageWithAuthor[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
 
-  const { servers, selectedServer, selectServer, createServer, joinServer, leaveServer, updateServer, refreshServers } = useServers();
-  const { channels, selectedChannel, selectChannel, createChannel, updateChannel } = useChannels(
+  const { servers, selectedServer, selectServer, createServer, joinServer, leaveServer, refreshServers } = useServers();
+  const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
     dmMode ? null : selectedServer?.id ?? null,
   );
   const { conversations, selectedDM, selectDM, startDM } = useDMs();

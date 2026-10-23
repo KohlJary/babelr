@@ -120,7 +120,7 @@ describe('Follow lifecycle', () => {
   });
 
   it('rejects activities from blocked domains in allowlist mode', async () => {
-    const { body: alice } = await createTestUser(app, 'alice');
+    await createTestUser(app, 'alice');
     const { actor: eve, privateKeyPem } = await createRemoteActor(db, {
       username: 'eve',
       domain: 'evil.tower',
