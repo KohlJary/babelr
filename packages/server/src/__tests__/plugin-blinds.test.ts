@@ -392,6 +392,58 @@ describe('lock', () => {
   });
 });
 
+describe('lock: failure and races', () => {
+  it('deletes ratings.json and stays unlocked when the commit fails, so a retry works', async () => {
+    const d = await writeRound('r1');
+    await req('PUT', '/rounds/r1/ratings/P1-A', grader, { field: 'stunt', value: true });
+    // Simulate COMMIT failing: run the callback in a real transaction,
+    // then throw so it rolls back after the file was written.
+    const realTx = db.transaction.bind(db);
+    const patched = db as unknown as { transaction: unknown };
+    patched.transaction = async (fn: (tx: unknown) => Promise<unknown>) =>
+      realTx(async (tx) => {
+        await fn(tx);
+        throw new Error('simulated commit failure');
+      });
+    try {
+      const res = await req('POST', '/rounds/r1/lock', grader);
+      expect(res.statusCode).toBe(500);
+    } finally {
+      patched.transaction = realTx;
+    }
+    await expect(stat(join(d, 'ratings.json'))).rejects.toThrow(/ENOENT/);
+    const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    expect(body.lockedAt).toBeNull();
+    expect((await req('POST', '/rounds/r1/lock', grader)).statusCode).toBe(200);
+    expect(JSON.parse(await readFile(join(d, 'ratings.json'), 'utf8')).ratings['P1-A'].fields).toEqual({
+      stunt: true,
+    });
+  });
+
+  it('no write racing the lock lands after the export', async () => {
+    const d = await writeRound('r1');
+    const writes = Array.from({ length: 40 }, (_, i) =>
+      i % 2
+        ? req('PUT', '/rounds/r1/ratings/P1-A', grader, { note: `n${i}` })
+        : req('PUT', '/rounds/r1/ratings/P1-B', grader, { field: 'would_do', value: i % 3 }),
+    );
+    const results = await Promise.all([
+      ...writes.slice(0, 20),
+      req('POST', '/rounds/r1/lock', grader),
+      ...writes.slice(20),
+    ]);
+    for (const r of results) expect([200, 409]).toContain(r.statusCode);
+    const exported = JSON.parse(await readFile(join(d, 'ratings.json'), 'utf8'));
+    const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    // What's in the DB now is exactly what was exported: nothing
+    // committed after the export read.
+    for (const label of ['P1-A', 'P1-B']) {
+      expect(exported.ratings[label].fields).toEqual(body.ratings[label]?.fields ?? {});
+      expect(exported.ratings[label].note).toEqual(body.ratings[label]?.note ?? '');
+    }
+  });
+});
+
 describe('sanitizeBundle', () => {
   it('rejects malformed rubrics and mismatched rounds', () => {
     const bad = (patch: Record<string, unknown>) => () =>

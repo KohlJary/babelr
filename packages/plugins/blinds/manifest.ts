@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { definePlugin } from '@babelr/plugin-sdk';
 import { sql, type SQL } from 'drizzle-orm';
-import { lstat, open, readdir } from 'node:fs/promises';
+import { lstat, open, readdir, unlink } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
@@ -35,8 +35,11 @@ import { join, resolve, sep } from 'node:path';
  *   - Ratings live in Postgres, autosaved per field. POST .../lock
  *     freezes the round (409 on any later write) and exports
  *     `ratings.json` keyed by opaque label, with locked_at.
- *     Unblinding never happens in Babelr: robokohl's `blinds unblind`
- *     joins ratings.json with the key, outside this server.
+ *     Babelr never unblinds: robokohl's `blinds unblind` joins
+ *     ratings.json with the key, outside this server. unblind refuses
+ *     unless ratings.json has locked_at. That is a check, not a
+ *     guarantee: a hand-written ratings.json with locked_at passes it,
+ *     and key.json is readable on disk by anyone with file access.
  *
  * blind.json (written by robokohl/blinds.py `export`):
  *   {
@@ -150,7 +153,8 @@ export function bundleFile(round: string, name: string, mode: 'read' | 'write'):
 }
 
 function str(v: unknown, what: string, max = 100_000): string {
-  if (typeof v !== 'string' || v.length > max) throw new BundleError(`${what} must be a string`, 422);
+  if (typeof v !== 'string' || v.length > max)
+    throw new BundleError(`${what} must be a string`, 422);
   return v;
 }
 
@@ -164,7 +168,8 @@ function ident(v: unknown, what: string): string {
 export function sanitizeBundle(raw: unknown, round: string): BlindBundle {
   if (!raw || typeof raw !== 'object') throw new BundleError('blind.json is not an object', 422);
   const r = raw as Record<string, unknown>;
-  if (r.round !== round) throw new BundleError('blind.json round does not match its directory', 422);
+  if (r.round !== round)
+    throw new BundleError('blind.json round does not match its directory', 422);
   if (!Array.isArray(r.prompts) || !Array.isArray(r.answers) || !Array.isArray(r.rubric)) {
     throw new BundleError('blind.json needs prompts, answers and rubric arrays', 422);
   }
@@ -177,7 +182,8 @@ export function sanitizeBundle(raw: unknown, round: string): BlindBundle {
 
   const answers: BlindAnswer[] = r.answers.map((a: Record<string, unknown>, i: number) => {
     const prompt_id = ident(a?.prompt_id, `answers[${i}].prompt_id`);
-    if (!promptIds.has(prompt_id)) throw new BundleError(`answers[${i}] has unknown prompt_id`, 422);
+    if (!promptIds.has(prompt_id))
+      throw new BundleError(`answers[${i}] has unknown prompt_id`, 422);
     return {
       label: ident(a?.label, `answers[${i}].label`),
       prompt_id,
@@ -196,15 +202,28 @@ export function sanitizeBundle(raw: unknown, round: string): BlindBundle {
     if (f?.type === 'scale') {
       const min = f.min;
       const max = f.max;
-      if (!Number.isInteger(min) || !Number.isInteger(max) || (min as number) >= (max as number) || (max as number) - (min as number) > 10) {
+      if (
+        !Number.isInteger(min) ||
+        !Number.isInteger(max) ||
+        (min as number) >= (max as number) ||
+        (max as number) - (min as number) > 10
+      ) {
         throw new BundleError(`rubric[${i}] scale needs integer min < max (span <= 10)`, 422);
       }
-      return { id, label, type: 'scale', min: min as number, max: max as number, ...(help ? { help } : {}) };
+      return {
+        id,
+        label,
+        type: 'scale',
+        min: min as number,
+        max: max as number,
+        ...(help ? { help } : {}),
+      };
     }
     throw new BundleError(`rubric[${i}].type must be bool or scale`, 422);
   });
   if (rubric.length === 0) throw new BundleError('rubric is empty', 422);
-  if (new Set(rubric.map((f) => f.id)).size !== rubric.length) throw new BundleError('duplicate rubric id', 422);
+  if (new Set(rubric.map((f) => f.id)).size !== rubric.length)
+    throw new BundleError('duplicate rubric id', 422);
 
   return {
     round,
@@ -275,7 +294,11 @@ export function checkValue(field: BlindRubricField, value: unknown): RatingValue
     if (typeof value !== 'boolean') throw new BundleError(`${field.id} takes true/false`, 400);
     return value;
   }
-  if (!Number.isInteger(value) || (value as number) < field.min! || (value as number) > field.max!) {
+  if (
+    !Number.isInteger(value) ||
+    (value as number) < field.min! ||
+    (value as number) > field.max!
+  ) {
     throw new BundleError(`${field.id} takes an integer ${field.min}–${field.max}`, 400);
   }
   return value as number;
@@ -294,7 +317,10 @@ export function buildRatingsExport(
   lockedAt: string,
   grader: string,
 ) {
-  const out: Record<string, { prompt_id: string; fields: Record<string, RatingValue>; note: string }> = {};
+  const out: Record<
+    string,
+    { prompt_id: string; fields: Record<string, RatingValue>; note: string }
+  > = {};
   for (const a of bundle.answers) {
     const r = ratings[a.label];
     out[a.label] = { prompt_id: a.prompt_id, fields: r?.fields ?? {}, note: r?.note ?? '' };
@@ -338,7 +364,8 @@ export default definePlugin({
   id: 'blinds',
   name: 'Blinds',
   version: '0.1.0',
-  description: 'Grade blind eval answers, one grader, one answer at a time. [[blind:<round>]] embeds.',
+  description:
+    'Grade blind eval answers, one grader, one answer at a time. [[blind:<round>]] embeds.',
   dependencies: { babelr: '^0.1.0' },
 
   migrations: [
@@ -385,7 +412,10 @@ export default definePlugin({
       reply.header('Cache-Control', 'no-store');
     });
 
-    function fail(reply: { status: (n: number) => { send: (b: unknown) => unknown } }, err: unknown) {
+    function fail(
+      reply: { status: (n: number) => { send: (b: unknown) => unknown } },
+      err: unknown,
+    ) {
       if (err instanceof BundleError) return reply.status(err.status).send({ error: err.message });
       throw err;
     }
@@ -430,8 +460,26 @@ export default definePlugin({
       };
     }
 
-    async function assertWritable(round: string) {
-      if (await lockedAt(round)) throw new BundleError('Round is locked', 409);
+    type Tx = { execute: (q: SQL) => PromiseLike<unknown> };
+
+    /**
+     * Run a write in a transaction that holds the round row FOR UPDATE
+     * and checks locked_at under that lock. The lock route takes the
+     * same row lock, so a write either commits before the lock's
+     * export reads the ratings (and is in ratings.json) or waits and
+     * then sees locked_at (409). No write can land after the export.
+     */
+    async function withRoundLock<T>(round: string, fn: (tx: Tx) => PromiseLike<T>): Promise<T> {
+      return fastify.db.transaction(async (tx: Tx) => {
+        await tx.execute(
+          sql`INSERT INTO plugin_blinds_rounds (round) VALUES (${round}) ON CONFLICT (round) DO NOTHING`,
+        );
+        const rows = (await tx.execute(
+          sql`SELECT round, locked_at FROM plugin_blinds_rounds WHERE round = ${round} FOR UPDATE`,
+        )) as unknown as RoundRow[];
+        if (rows[0]?.locked_at) throw new BundleError('Round is locked', 409);
+        return fn(tx);
+      });
     }
 
     fastify.get('/rounds', async () => {
@@ -439,7 +487,13 @@ export default definePlugin({
       for (const round of await listRoundDirs()) {
         try {
           const p = await payload(round);
-          out.push({ round, title: p.bundle.title, graded: p.graded, total: p.total, lockedAt: p.lockedAt });
+          out.push({
+            round,
+            title: p.bundle.title,
+            graded: p.graded,
+            total: p.total,
+            lockedAt: p.lockedAt,
+          });
         } catch {
           // malformed bundle — skip in the list; GET /rounds/:round reports why
         }
@@ -463,40 +517,48 @@ export default definePlugin({
       try {
         const { round, label } = request.params;
         const bundle = await loadBundle(round);
-        if (!bundle.answers.some((a) => a.label === label)) throw new BundleError('unknown answer label', 404);
-        await assertWritable(round);
+        if (!bundle.answers.some((a) => a.label === label))
+          throw new BundleError('unknown answer label', 404);
         const body = request.body ?? {};
         const hasField = typeof body.field === 'string';
         const hasNote = body.note !== undefined;
-        if (hasField === hasNote) throw new BundleError('send exactly one of {field, value} or {note}', 400);
+        if (hasField === hasNote)
+          throw new BundleError('send exactly one of {field, value} or {note}', 400);
         if (hasField) {
           const field = bundle.rubric.find((f) => f.id === body.field);
           if (!field) throw new BundleError('unknown rubric field', 400);
-          if (body.value === undefined) throw new BundleError('value is required (null clears)', 400);
+          if (body.value === undefined)
+            throw new BundleError('value is required (null clears)', 400);
           const v = checkValue(field, body.value);
           if (v === null) {
-            await fastify.db.execute(
-              sql`UPDATE plugin_blinds_ratings SET fields = fields - ${field.id}, updated_at = NOW()
+            await withRoundLock(round, (tx) =>
+              tx.execute(
+                sql`UPDATE plugin_blinds_ratings SET fields = fields - ${field.id}, updated_at = NOW()
                   WHERE round = ${round} AND label = ${label}`,
+              ),
             );
           } else {
             const patch = JSON.stringify({ [field.id]: v });
-            await fastify.db.execute(
-              sql`INSERT INTO plugin_blinds_ratings (round, label, fields)
+            await withRoundLock(round, (tx) =>
+              tx.execute(
+                sql`INSERT INTO plugin_blinds_ratings (round, label, fields)
                   VALUES (${round}, ${label}, ${patch}::jsonb)
                   ON CONFLICT (round, label) DO UPDATE
                   SET fields = plugin_blinds_ratings.fields || EXCLUDED.fields, updated_at = NOW()`,
+              ),
             );
           }
         } else {
           if (typeof body.note !== 'string' || body.note.length > MAX_NOTE) {
             throw new BundleError(`note must be a string up to ${MAX_NOTE} chars`, 400);
           }
-          await fastify.db.execute(
-            sql`INSERT INTO plugin_blinds_ratings (round, label, note)
+          await withRoundLock(round, (tx) =>
+            tx.execute(
+              sql`INSERT INTO plugin_blinds_ratings (round, label, note)
                 VALUES (${round}, ${label}, ${body.note})
                 ON CONFLICT (round, label) DO UPDATE
                 SET note = EXCLUDED.note, updated_at = NOW()`,
+            ),
           );
         }
         const ratings = await loadRatings(round);
@@ -514,8 +576,8 @@ export default definePlugin({
           const { round, promptId } = request.params;
           const bundle = await loadBundle(round);
           if (!bundle.rank) throw new BundleError('this round has no rank step', 400);
-          if (!bundle.prompts.some((p) => p.id === promptId)) throw new BundleError('unknown prompt', 404);
-          await assertWritable(round);
+          if (!bundle.prompts.some((p) => p.id === promptId))
+            throw new BundleError('unknown prompt', 404);
           const order = request.body?.order;
           const labels = bundle.answers.filter((a) => a.prompt_id === promptId).map((a) => a.label);
           if (
@@ -526,11 +588,13 @@ export default definePlugin({
           ) {
             throw new BundleError("order must list each of this prompt's answer labels once", 400);
           }
-          await fastify.db.execute(
-            sql`INSERT INTO plugin_blinds_ranks (round, prompt_id, ordering)
+          await withRoundLock(round, (tx) =>
+            tx.execute(
+              sql`INSERT INTO plugin_blinds_ranks (round, prompt_id, ordering)
                 VALUES (${round}, ${promptId}, ${JSON.stringify(order)}::jsonb)
                 ON CONFLICT (round, prompt_id) DO UPDATE
                 SET ordering = EXCLUDED.ordering, updated_at = NOW()`,
+            ),
           );
           return { promptId, order };
         } catch (err) {
@@ -541,52 +605,65 @@ export default definePlugin({
 
     // Freeze the round and export ratings.json. The DB lock and the
     // file write share a transaction: if the file can't be written
-    // (including because one already exists) the lock rolls back.
+    // (including because one already exists) the lock rolls back, and
+    // if the transaction fails after the file was created (say, at
+    // COMMIT), the file is deleted so a retry can succeed.
     fastify.post<{ Params: { round: string } }>('/rounds/:round/lock', async (request, reply) => {
       try {
         const { round } = request.params;
         const bundle = await loadBundle(round);
         const grader = request.actor!.preferredUsername;
         const target = bundleFile(round, RATINGS_FILE, 'write');
-        const lockedIso = await fastify.db.transaction(async (tx: { execute: (q: SQL) => PromiseLike<unknown> }) => {
-          await tx.execute(
-            sql`INSERT INTO plugin_blinds_rounds (round) VALUES (${round}) ON CONFLICT (round) DO NOTHING`,
-          );
-          const rows = (await tx.execute(
-            sql`UPDATE plugin_blinds_rounds SET locked_at = NOW(), locked_by = ${grader}
-                WHERE round = ${round} AND locked_at IS NULL
+        let created = false;
+        let lockedIso: string;
+        try {
+          lockedIso = await withRoundLock(round, async (tx) => {
+            const rows = (await tx.execute(
+              sql`UPDATE plugin_blinds_rounds SET locked_at = NOW(), locked_by = ${grader}
+                WHERE round = ${round}
                 RETURNING round, locked_at`,
-          )) as unknown as RoundRow[];
-          if (rows.length === 0) throw new BundleError('Round is already locked', 409);
-          const at = iso(rows[0].locked_at)!;
-          const all = (await tx.execute(
-            sql`SELECT label, fields, note FROM plugin_blinds_ratings WHERE round = ${round}`,
-          )) as unknown as RatingRow[];
-          const ratings: Record<string, AnswerRating> = {};
-          for (const r of all) ratings[r.label] = { fields: jsonCol(r.fields), note: r.note };
-          const rankRows = (await tx.execute(
-            sql`SELECT prompt_id, ordering FROM plugin_blinds_ranks WHERE round = ${round}`,
-          )) as unknown as RankRow[];
-          const ranks: Record<string, string[]> = {};
-          for (const r of rankRows) ranks[r.prompt_id] = jsonCol(r.ordering);
-          const doc = buildRatingsExport(bundle, ratings, ranks, at, grader);
-          let fh;
-          try {
-            // 'wx' semantics: never overwrite an existing ratings.json.
-            fh = await open(target, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW, 0o600);
-          } catch (e) {
-            if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
-              throw new BundleError('ratings.json already exists; refusing to overwrite', 409);
+            )) as unknown as RoundRow[];
+            const at = iso(rows[0].locked_at)!;
+            const all = (await tx.execute(
+              sql`SELECT label, fields, note FROM plugin_blinds_ratings WHERE round = ${round}`,
+            )) as unknown as RatingRow[];
+            const ratings: Record<string, AnswerRating> = {};
+            for (const r of all) ratings[r.label] = { fields: jsonCol(r.fields), note: r.note };
+            const rankRows = (await tx.execute(
+              sql`SELECT prompt_id, ordering FROM plugin_blinds_ranks WHERE round = ${round}`,
+            )) as unknown as RankRow[];
+            const ranks: Record<string, string[]> = {};
+            for (const r of rankRows) ranks[r.prompt_id] = jsonCol(r.ordering);
+            const doc = buildRatingsExport(bundle, ratings, ranks, at, grader);
+            let fh;
+            try {
+              // 'wx' semantics: never overwrite an existing ratings.json.
+              fh = await open(
+                target,
+                fsConstants.O_WRONLY |
+                  fsConstants.O_CREAT |
+                  fsConstants.O_EXCL |
+                  fsConstants.O_NOFOLLOW,
+                0o600,
+              );
+              created = true;
+            } catch (e) {
+              if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
+                throw new BundleError('ratings.json already exists; refusing to overwrite', 409);
+              }
+              throw e;
             }
-            throw e;
-          }
-          try {
-            await fh.writeFile(JSON.stringify(doc, null, 2) + '\n', 'utf8');
-          } finally {
-            await fh.close();
-          }
-          return at;
-        });
+            try {
+              await fh.writeFile(JSON.stringify(doc, null, 2) + '\n', 'utf8');
+            } finally {
+              await fh.close();
+            }
+            return at;
+          });
+        } catch (err) {
+          if (created) await unlink(target).catch(() => {});
+          throw err;
+        }
         return { round, lockedAt: lockedIso, file: RATINGS_FILE };
       } catch (err) {
         return fail(reply, err);
