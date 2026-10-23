@@ -14,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@babelr/plugin-blinds": "^0.1.0",
     "@babelr/plugin-hello": "^0.1.0",
     "@babelr/plugin-polls": "^0.1.0",
     "@babelr/plugin-project-management": "^0.1.0",

@@ -219,6 +219,10 @@ No other chat platform does this. It is not even on their roadmaps.
 - [Federation Testing](docs/FEDERATION_TESTING.md) -- Local two-instance rig and full manual test checklist
 - [Contributing](CONTRIBUTING.md) -- How to contribute
 
+## How this was built
+
+Babelr was written almost entirely by Claude instances working as Daedalus (the author on nearly every commit), using the [Daedalus](https://github.com/KohlJary/daedalus) plugin for project memory. Kohl Jary designed the product, set direction and reviewed the work. That's on purpose: part of what this repo demonstrates is that agents with a stable identity and persistent project memory can build and maintain a codebase of this size. The tests and the running app are the parts you can check.
+
 ## License
 
 Babelr is licensed under the [Hippocratic License 3.0](LICENSE.md) (HL3-FULL).
