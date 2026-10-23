@@ -6,6 +6,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { serverBans } from '../db/schema/bans.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { reactions } from '../db/schema/reactions.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
@@ -355,8 +356,39 @@ async function handleFollow(
     return;
   }
 
-  // Group follow (server join) — preserve existing auto-accept behavior.
+  // Group follow (server join). Same rules as a local join: a banned
+  // actor is always refused, and only a public server auto-accepts.
+  // An invite-only server refuses remote Follows with a Reject (remote
+  // invites don't exist yet), so federation can't route around invites
+  // or bans.
   if (!localActor.followersUri) return;
+
+  const [ban] = await db
+    .select()
+    .from(serverBans)
+    .where(and(eq(serverBans.serverId, localActor.id), eq(serverBans.userId, remoteActor.id)))
+    .limit(1);
+  const banned = !!ban && !(ban.expiresAt && new Date() > ban.expiresAt);
+  const isPublic = (localActor.properties as Record<string, unknown> | null)?.public === true;
+  if (banned || !isPublic) {
+    const keyed = await ensureActorKeys(db, localActor);
+    if (keyed.privateKeyPem) {
+      const reject = serializeActivity(
+        `${protocol}://${domain}/activities/${crypto.randomUUID()}`,
+        'Reject',
+        localActor.uri,
+        activity,
+        [remoteActor.uri],
+        [],
+      );
+      await enqueueDelivery(db, reject, remoteActor.inboxUri, localActor.id);
+    }
+    fastify.log.info(
+      { follower: remoteActor.uri, followed: localActor.uri, banned },
+      'Follow rejected',
+    );
+    return;
+  }
 
   await db
     .insert(collectionItems)
