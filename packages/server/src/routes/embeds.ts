@@ -2,7 +2,7 @@
 import type { FastifyInstance } from 'fastify';
 import '../types.ts';
 import { signedGet } from '../federation/delivery.ts';
-import { getPluginFederationHandler } from '../plugins/plugin-loader.ts';
+import { pluginBySlugPath } from '../plugins/plugin-loader.ts';
 
 /**
  * Cross-tower embed resolution. Resolves [[server@tower:kind:slug]]
@@ -46,14 +46,14 @@ export default async function embedRoutes(fastify: FastifyInstance) {
       return result;
     }
 
-    // Plugin-provided kind: fetch via the plugin's own cross-Tower
-    // endpoint at /plugins/<id>/by-slug/<slug>. Each plugin registers
-    // that route via its serverRoutes hook; the resolveBySlug handler
-    // on this Tower is the same contract a remote Tower would call.
-    const pluginHandler = getPluginFederationHandler(kind);
-    if (pluginHandler) {
+    // Plugin-provided kind: the remote Tower mounts it at
+    // /plugins/<plugin-id>/<kind>/by-slug/<slug>. The kind alone isn't
+    // the path (polls owns `poll`), so look up the plugin that owns the
+    // kind here and assume the remote runs the same plugin.
+    const pluginPath = pluginBySlugPath(kind, slug);
+    if (pluginPath) {
       const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-      const url = `${protocol}://${tower}/plugins/${kind}/by-slug/${encodeURIComponent(slug)}`;
+      const url = `${protocol}://${tower}${pluginPath}`;
       const result = await signedGet(db, request.actor.id, url);
       if (!result) {
         return reply.status(404).send({ error: 'Content not found or not accessible' });

@@ -19,6 +19,8 @@ import roleRoutes from '../routes/roles.ts';
 import translateRoutes from '../routes/translate.ts';
 import fileRoutes from '../routes/files.ts';
 import auditRoutes from '../routes/audit.ts';
+import embedRoutes from '../routes/embeds.ts';
+import pluginLoader from '../plugins/plugin-loader.ts';
 import multipart from '@fastify/multipart';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
@@ -40,7 +42,17 @@ const testConfig: Config = {
   mediasoupRtcMaxPort: 40099,
 };
 
-export async function createTestApp() {
+/** Every WS send the stubbed decorators were asked to make, in order.
+ *  `to` is an actor id, a channel id prefixed `channel:`, or `*` for
+ *  broadcastToAllSubscribers. Tests may clear it (`length = 0`). */
+export const wsSent: Array<{ to: string; message: unknown }> = [];
+
+/**
+ * `plugins: true` also mounts the real plugin loader (the in-tree
+ * plugins from registered.ts, with their migrations) and the embed
+ * proxy, for tests of plugin routes and their access checks.
+ */
+export async function createTestApp(opts: { plugins?: boolean } = {}) {
   const db = createDb(testConfig.databaseUrl);
 
   const app = Fastify({ logger: false });
@@ -61,9 +73,15 @@ export async function createTestApp() {
   app.register(
     fp(
       async (fastify) => {
-        fastify.decorate('broadcastToChannel', () => {});
-        fastify.decorate('broadcastToAllSubscribers', () => {});
-        fastify.decorate('broadcastToActor', () => {});
+        fastify.decorate('broadcastToChannel', (channelId: string, message: unknown) => {
+          wsSent.push({ to: `channel:${channelId}`, message });
+        });
+        fastify.decorate('broadcastToAllSubscribers', (message: unknown) => {
+          wsSent.push({ to: '*', message });
+        });
+        fastify.decorate('broadcastToActor', (actorId: string, message: unknown) => {
+          wsSent.push({ to: actorId, message });
+        });
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});
@@ -96,6 +114,10 @@ export async function createTestApp() {
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(fileRoutes);
   await app.register(auditRoutes);
+  if (opts.plugins) {
+    await app.register(embedRoutes);
+    await app.register(pluginLoader);
+  }
 
   await app.ready();
   return { app, db };

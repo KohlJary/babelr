@@ -5,7 +5,8 @@ import { definePlugin } from '@babelr/plugin-sdk';
  * Hello-world reference plugin. Exercises the full plugin surface in
  * the smallest possible way:
  *
- *   - registers a server route (GET /plugins/hello/ping)
+ *   - registers a server route (GET /plugins/hello/ping), declared
+ *     public so it answers without a login
  *   - registers a federation handler for `hello:*` that echoes
  *   - registers a `[[hello:name]]` embed kind client-side
  *
@@ -22,6 +23,10 @@ export default definePlugin({
   version: '0.1.0',
   description: 'Reference plugin demonstrating the plugin SDK.',
   dependencies: { babelr: '^0.1.0' },
+
+  // Plugin routes need a login unless listed here. /ping is a health
+  // check with nothing to hide, so it is the one public route.
+  publicRoutes: ['GET /ping'],
 
   serverRoutes: async (fastify) => {
     fastify.get('/ping', async () => ({ pong: true, ts: Date.now() }));

@@ -38,6 +38,8 @@ import webfingerRoute from '../../federation/webfinger.ts';
 import actorRoutes from '../../federation/actor.ts';
 import inboxRoutes from '../../federation/inbox.ts';
 import collectionRoutes from '../../federation/collections.ts';
+import pluginLoader from '../../plugins/plugin-loader.ts';
+import { wsSent } from '../helpers.ts';
 
 const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? 'postgresql://babelr:babelr@localhost:5432/babelr_test';
@@ -60,7 +62,7 @@ export const testConfig: Config = {
  * Create a test app with federation routes registered (inbox, webfinger,
  * actor profiles, collections). Does NOT start the delivery queue processor.
  */
-export async function createFederationTestApp() {
+export async function createFederationTestApp(opts: { plugins?: boolean } = {}) {
   const db = createDb(testConfig.databaseUrl);
 
   const app = Fastify({ logger: false });
@@ -81,9 +83,15 @@ export async function createFederationTestApp() {
   app.register(
     fp(
       async (fastify) => {
-        fastify.decorate('broadcastToChannel', () => {});
-        fastify.decorate('broadcastToAllSubscribers', () => {});
-        fastify.decorate('broadcastToActor', () => {});
+        fastify.decorate('broadcastToChannel', (channelId: string, message: unknown) => {
+          wsSent.push({ to: `channel:${channelId}`, message });
+        });
+        fastify.decorate('broadcastToAllSubscribers', (message: unknown) => {
+          wsSent.push({ to: '*', message });
+        });
+        fastify.decorate('broadcastToActor', (actorId: string, message: unknown) => {
+          wsSent.push({ to: actorId, message });
+        });
         fastify.decorate('wsSubscribe', () => {});
         fastify.decorate('wsUnsubscribe', () => {});
         fastify.decorate('wsRemoveClient', () => {});
@@ -91,6 +99,7 @@ export async function createFederationTestApp() {
         fastify.decorate('voiceLeave', () => null);
         fastify.decorate('voiceGetRoom', () => []);
         fastify.decorate('voiceBroadcastToRoom', () => {});
+        fastify.decorate('deliverToGroupFollowers', async () => {});
       },
       { name: 'ws', dependencies: ['db', 'config-plugin'] },
     ),
@@ -128,6 +137,9 @@ export async function createFederationTestApp() {
   await app.register(actorRoutes);
   await app.register(inboxRoutes);
   await app.register(collectionRoutes);
+  // `plugins: true` mounts the real plugin loader too, so plugin inbox
+  // handlers receive federated activities.
+  if (opts.plugins) await app.register(pluginLoader);
 
   await app.ready();
   return { app, db };

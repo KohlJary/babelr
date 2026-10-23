@@ -372,8 +372,11 @@ Any tampering breaks verification.
 
 - [ ] **Clock skew:** manually adjust system clock on A forward by
       10 minutes, send an activity. B should reject it with a
-      signature failure (if it has a date-window check) or accept it
-      (if it doesn't — note this as a hardening target).
+      signature failure: a signed Date more than 5 minutes from B's
+      clock is refused. Within 5 minutes it is accepted.
+- [ ] **Body tampering:** B also refuses a request whose `Digest`
+      doesn't match the body it received, and a signature that
+      doesn't cover all of `(request-target) host date digest`.
 - [ ] **Key rotation:** rotate alice's actor key on A by clearing
       the cached key and re-issuing. Subsequent deliveries to B
       should refetch the new key via the `keyId` URI before
