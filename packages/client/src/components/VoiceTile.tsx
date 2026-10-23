@@ -79,10 +79,12 @@ export function VoiceTile({
       )}
 
       <div className="voice-tile-overlay">
-        <span className="voice-tile-name">
-          {isScreen ? `🖥️ ${label}` : label}
-        </span>
-        {muted && <span className="voice-tile-badge" title={t('voice.youAreMuted')}>🔇</span>}
+        <span className="voice-tile-name">{isScreen ? `🖥️ ${label}` : label}</span>
+        {muted && (
+          <span className="voice-tile-badge" title={t('voice.youAreMuted')}>
+            🔇
+          </span>
+        )}
       </div>
 
       {onVolumeChange && typeof volume === 'number' && (

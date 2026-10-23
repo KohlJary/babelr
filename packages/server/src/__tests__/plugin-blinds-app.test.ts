@@ -60,7 +60,11 @@ async function register(username: string): Promise<string> {
   const res = await app.inject({
     method: 'POST',
     url: '/auth/register',
-    payload: { username, email: `${username}@test.babelr.local`, password: 'test-password-12chars' },
+    payload: {
+      username,
+      email: `${username}@test.babelr.local`,
+      password: 'test-password-12chars',
+    },
   });
   const raw = res.headers['set-cookie'];
   const c = Array.isArray(raw) ? raw[0] : (raw as string);
@@ -71,7 +75,11 @@ describe('blinds via the real plugin loader', () => {
   it('mounts no by-slug federation route for blind rounds', async () => {
     const grader = await register('kohl');
     for (const headers of [{}, { cookie: grader }]) {
-      const res = await app.inject({ method: 'GET', url: '/plugins/blinds/blind/by-slug/r1', headers });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/plugins/blinds/blind/by-slug/r1',
+        headers,
+      });
       expect([403, 404]).toContain(res.statusCode);
       expect(res.body).not.toContain('P1-A');
     }
@@ -79,16 +87,26 @@ describe('blinds via the real plugin loader', () => {
 
   it('403s a non-grader on a real route and serves the grader', async () => {
     const other = await register('mallory');
-    const grader = (await app.inject({
-      method: 'POST',
-      url: '/auth/login',
-      payload: { email: 'kohl@test.babelr.local', password: 'test-password-12chars' },
-    })).headers['set-cookie'];
+    const grader = (
+      await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'kohl@test.babelr.local', password: 'test-password-12chars' },
+      })
+    ).headers['set-cookie'];
     const graderCookie = (Array.isArray(grader) ? grader[0] : (grader as string)).split(';')[0];
-    const denied = await app.inject({ method: 'GET', url: '/plugins/blinds/rounds/r1', headers: { cookie: other } });
+    const denied = await app.inject({
+      method: 'GET',
+      url: '/plugins/blinds/rounds/r1',
+      headers: { cookie: other },
+    });
     expect(denied.statusCode).toBe(403);
     expect(denied.body).not.toContain('P1-A');
-    const ok = await app.inject({ method: 'GET', url: '/plugins/blinds/rounds/r1', headers: { cookie: graderCookie } });
+    const ok = await app.inject({
+      method: 'GET',
+      url: '/plugins/blinds/rounds/r1',
+      headers: { cookie: graderCookie },
+    });
     expect(ok.statusCode).toBe(200);
     expect(JSON.parse(ok.body).total).toBe(1);
   });

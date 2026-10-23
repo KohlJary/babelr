@@ -1,33 +1,26 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance } from 'fastify';
-import { eq, and, desc, gt, inArray } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
-import { readPositions } from '../db/schema/read-positions.ts';
-import { reactions } from '../db/schema/reactions.ts';
-import { notificationPreferences } from '../db/schema/notification-preferences.ts';
-import type {
-  MessageWithAuthor,
-  MessageListResponse,
-  CreateMessageInput,
-  CreateChannelInput,
-  UpdateChannelInput,
-  WsServerMessage,
-} from '@babelr/shared';
-import { broadcastCreate, broadcastToGroupFollowers, enqueueToFollowers, enqueueDelivery, deliverDMCreate, deliverDMRead, signedGet } from '../federation/delivery.ts';
+import type { MessageWithAuthor, CreateChannelInput, UpdateChannelInput } from '@babelr/shared';
+import {
+  broadcastCreate,
+  broadcastToGroupFollowers,
+  enqueueDelivery,
+  deliverDMCreate,
+} from '../federation/delivery.ts';
 import { ensureActorKeys } from '../federation/keys.ts';
 import { serializeActivity, serializeNote } from '../federation/jsonld.ts';
 import { syncMessageOutboundLinks } from '../wiki-link-sync.ts';
-import { PERMISSIONS, generateMessageSlug, isValidMessageSlug } from '@babelr/shared';
+import { PERMISSIONS, generateMessageSlug } from '@babelr/shared';
 import { hasPermission } from '../permissions.ts';
 import { writeAuditLog } from '../audit.ts';
 import { broadcastPushToChannel } from '../push.ts';
 import { unfurlLinks } from '../unfurl.ts';
-
-const DEFAULT_LIMIT = 50;
 
 // Parse @mentions from content and return array of mentioned usernames
 export function parseMentions(content: string): string[] {
@@ -49,14 +42,7 @@ import {
   getMessagesForChannel,
   checkChannelAccess,
 } from '../serializers.ts';
-export {
-  toChannelView,
-  toMessageView,
-  toAuthorView,
-  getMessagesForChannel,
-  checkChannelAccess,
-};
-
+export { toChannelView, toMessageView, toAuthorView, getMessagesForChannel, checkChannelAccess };
 
 export async function createMessageInChannel(
   fastify: FastifyInstance,
@@ -73,12 +59,13 @@ export async function createMessageInChannel(
   const mentionedUsernames = parseMentions(content);
 
   // Look up mentioned actors
-  const mentionedActors = mentionedUsernames.length > 0
-    ? await db
-        .select({ id: actors.id })
-        .from(actors)
-        .where(inArray(actors.preferredUsername, mentionedUsernames))
-    : [];
+  const mentionedActors =
+    mentionedUsernames.length > 0
+      ? await db
+          .select({ id: actors.id })
+          .from(actors)
+          .where(inArray(actors.preferredUsername, mentionedUsernames))
+      : [];
 
   const mentionedIds = mentionedActors.map((a) => a.id);
 
@@ -183,11 +170,12 @@ export async function createMessageInChannel(
       srvName = srv?.displayName ?? srv?.preferredUsername ?? undefined;
     }
     const sender = actor.displayName ?? actor.preferredUsername;
-    const pushTitle = srvName && chName
-      ? `${sender} · #${chName} · ${srvName}`
-      : chName
-        ? `${sender} · #${chName}`
-        : sender;
+    const pushTitle =
+      srvName && chName
+        ? `${sender} · #${chName} · ${srvName}`
+        : chName
+          ? `${sender} · #${chName}`
+          : sender;
     void broadcastPushToChannel(fastify, channelId, actor.id, {
       title: pushTitle,
       body: content.trim().slice(0, 200),
@@ -219,7 +207,11 @@ export async function createMessageInChannel(
       }
     } else if (!messageProperties?.encrypted) {
       if (channel?.belongsTo) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, channel.belongsTo)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, channel.belongsTo))
+          .limit(1);
         if (group && !group.local) {
           // Remote server: deliver the Create to the origin Group's
           // inbox so the origin can relay it to all members. Fanning
@@ -227,7 +219,11 @@ export async function createMessageInChannel(
           // for the remote Group only contains bob (the sender).
           if (group.inboxUri) {
             let contextUri: string | undefined;
-            const [ch] = await db.select({ uri: objects.uri }).from(objects).where(eq(objects.id, channelId)).limit(1);
+            const [ch] = await db
+              .select({ uri: objects.uri })
+              .from(objects)
+              .where(eq(objects.id, channelId))
+              .limit(1);
             if (ch) contextUri = ch.uri;
             const noteJson = serializeNote(note, actor.uri, contextUri);
             const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
@@ -357,7 +353,12 @@ export default async function channelRoutes(fastify: FastifyInstance) {
           const [membership] = await db
             .select({ id: collectionItems.id })
             .from(collectionItems)
-            .where(and(eq(collectionItems.collectionUri, ch.uri), eq(collectionItems.itemUri, request.actor!.uri)))
+            .where(
+              and(
+                eq(collectionItems.collectionUri, ch.uri),
+                eq(collectionItems.itemUri, request.actor!.uri),
+              ),
+            )
             .limit(1);
           if (membership) visible.push(ch);
         } else {
@@ -397,9 +398,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       // AUDIT BUG FIX: channel creation previously had no permission
       // check at all — any member could create a channel. Now gated
       // on MANAGE_CHANNELS.
-      if (
-        !(await hasPermission(db, server.id, request.actor.id, PERMISSIONS.MANAGE_CHANNELS))
-      ) {
+      if (!(await hasPermission(db, server.id, request.actor.id, PERMISSIONS.MANAGE_CHANNELS))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -469,12 +468,7 @@ export default async function channelRoutes(fastify: FastifyInstance) {
       if (!channel.belongsTo) return reply.status(400).send({ error: 'Not a server channel' });
 
       if (
-        !(await hasPermission(
-          db,
-          channel.belongsTo,
-          request.actor.id,
-          PERMISSIONS.MANAGE_CHANNELS,
-        ))
+        !(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.MANAGE_CHANNELS))
       ) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }

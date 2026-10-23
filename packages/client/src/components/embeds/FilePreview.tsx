@@ -9,10 +9,7 @@ interface FilePreviewProps {
   serverSlug?: string;
 }
 
-type State =
-  | { status: 'loading' }
-  | { status: 'ok'; embed: FileEmbedView }
-  | { status: 'locked' };
+type State = { status: 'loading' } | { status: 'ok'; embed: FileEmbedView } | { status: 'locked' };
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -65,15 +62,8 @@ export function FilePreview({ slug, serverSlug }: FilePreviewProps) {
         <span>{formatBytes(embed.sizeBytes)}</span>
         <span>by {embed.uploader.displayName ?? embed.uploader.preferredUsername}</span>
       </div>
-      {embed.description && (
-        <div className="file-preview-description">{embed.description}</div>
-      )}
-      <a
-        className="file-preview-download"
-        href={embed.storageUrl}
-        target="_blank"
-        rel="noreferrer"
-      >
+      {embed.description && <div className="file-preview-description">{embed.description}</div>}
+      <a className="file-preview-download" href={embed.storageUrl} target="_blank" rel="noreferrer">
         ⬇ Download
       </a>
     </div>

@@ -44,66 +44,64 @@ _This section lists conditions the Licensee must comply with in order to have ri
 
 The rights granted to the Licensee by this License are expressly made subject to the Licensee's ongoing compliance with the following conditions:
 
-* [3.1.](#3.1) The Licensee SHALL NOT, whether directly or indirectly, through agents or assigns:
+- [3.1.](#3.1) The Licensee SHALL NOT, whether directly or indirectly, through agents or assigns:
+  - [3.1.1.](#3.1.1) Infringe upon any person's right to life or security of person, engage in extrajudicial killings, or commit murder, without lawful cause (See Article 3, _United Nations Universal Declaration of Human Rights_; Article 6, _International Covenant on Civil and Political Rights_)
+  - [3.1.2.](#3.1.2) Hold any person in slavery, servitude, or forced labor (See Article 4, _United Nations Universal Declaration of Human Rights_; Article 8, _International Covenant on Civil and Political Rights_);
+  - [3.1.3.](#3.1.3) Contribute to the institution of slavery, slave trading, forced labor, or unlawful child labor (See Article 4, _United Nations Universal Declaration of Human Rights_; Article 8, _International Covenant on Civil and Political Rights_);
+  - [3.1.4.](#3.1.4) Torture or subject any person to cruel, inhumane, or degrading treatment or punishment (See Article 5, _United Nations Universal Declaration of Human Rights_; Article 7, _International Covenant on Civil and Political Rights_);
+  - [3.1.5.](#3.1.5) Discriminate on the basis of sex, gender, sexual orientation, race, ethnicity, nationality, religion, caste, age, medical disability or impairment, and/or any other like circumstances (See Article 7, _United Nations Universal Declaration of Human Rights_; Article 2, _International Covenant on Economic, Social and Cultural Rights_; Article 26, _International Covenant on Civil and Political Rights_);
+  - [3.1.6.](#3.1.6) Prevent any person from exercising his/her/their right to seek an effective remedy by a competent court or national tribunal (including domestic judicial systems, international courts, arbitration bodies, and other adjudicating bodies) for actions violating the fundamental rights granted to him/her/them by applicable constitutions, applicable laws, or by this License (See Article 8, _United Nations Universal Declaration of Human Rights_; Articles 9 and 14, _International Covenant on Civil and Political Rights_);
+  - [3.1.7.](#3.1.7) Subject any person to arbitrary arrest, detention, or exile (See Article 9, _United Nations Universal Declaration of Human Rights_; Article 9, _International Covenant on Civil and Political Rights_);
+  - [3.1.8.](#3.1.8) Subject any person to arbitrary interference with a person's privacy, family, home, or correspondence without the express written consent of the person (See Article 12, _United Nations Universal Declaration of Human Rights_; Article 17, _International Covenant on Civil and Political Rights_);
+  - [3.1.9.](#3.1.9) Arbitrarily deprive any person of his/her/their property (See Article 17, _United Nations Universal Declaration of Human Rights_);
+  - [3.1.10.](#3.1.10) Forcibly remove indigenous peoples from their lands or territories or take any action with the aim or effect of dispossessing indigenous peoples from their lands, territories, or resources, including without limitation the intellectual property or traditional knowledge of indigenous peoples, without the free, prior, and informed consent of indigenous peoples concerned (See Articles 8 and 10, _United Nations Declaration on the Rights of Indigenous Peoples_);
+  - [3.1.11.](#3.1.11) _Fossil Fuel Divestment_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, on the [FFI Solutions Carbon Underground 200 list](https://www.ffisolutions.com/research-analytics-index-solutions/research-screening/the-carbon-underground-200/?cn-reloaded=1);
+  - [3.1.12.](#3.1.12) _Ecocide_: Commit ecocide:
+    - [3.1.12.1.](#3.1.12.1) For the purpose of this section, "ecocide" means unlawful or wanton acts committed with knowledge that there is a substantial likelihood of severe and either widespread or long-term damage to the environment being caused by those acts;
+    - [3.1.12.2.](#3.1.12.2) For the purpose of further defining ecocide and the terms contained in the previous paragraph:
+      - [3.1.12.2.1.](#3.1.12.2.1) "Wanton" means with reckless disregard for damage which would be clearly excessive in relation to the social and economic benefits anticipated;
+      - [3.1.12.2.2.](#3.1.12.2.2) "Severe" means damage which involves very serious adverse changes, disruption, or harm to any element of the environment, including grave impacts on human life or natural, cultural, or economic resources;
+      - [3.1.12.2.3.](#3.1.12.2.3) "Widespread" means damage which extends beyond a limited geographic area, crosses state boundaries, or is suffered by an entire ecosystem or species or a large number of human beings;
+      - [3.1.12.2.4.](#3.1.12.2.4) "Long-term" means damage which is irreversible or which cannot be redressed through natural recovery within a reasonable period of time; and
+      - [3.1.12.2.5.](#3.1.12.2.5) "Environment" means the earth, its biosphere, cryosphere, lithosphere, hydrosphere, and atmosphere, as well as outer space
+        (See Section II, _Independent Expert Panel for the Legal Definition of Ecocide_, Stop Ecocide Foundation and the Promise Institute for Human Rights at UCLA School of Law, June 2021);
 
-  * [3.1.1.](#3.1.1) Infringe upon any person's right to life or security of person, engage in extrajudicial killings, or commit murder, without lawful cause (See Article 3, _United Nations Universal Declaration of Human Rights_; Article 6, _International Covenant on Civil and Political Rights_)
-  * [3.1.2.](#3.1.2) Hold any person in slavery, servitude, or forced labor (See Article 4, _United Nations Universal Declaration of Human Rights_; Article 8, _International Covenant on Civil and Political Rights_);
-  * [3.1.3.](#3.1.3) Contribute to the institution of slavery, slave trading, forced labor, or unlawful child labor (See Article 4, _United Nations Universal Declaration of Human Rights_; Article 8, _International Covenant on Civil and Political Rights_);
-  * [3.1.4.](#3.1.4) Torture or subject any person to cruel, inhumane, or degrading treatment or punishment (See Article 5, _United Nations Universal Declaration of Human Rights_; Article 7, _International Covenant on Civil and Political Rights_);
-  * [3.1.5.](#3.1.5) Discriminate on the basis of sex, gender, sexual orientation, race, ethnicity, nationality, religion, caste, age, medical disability or impairment, and/or any other like circumstances (See Article 7, _United Nations Universal Declaration of Human Rights_; Article 2, _International Covenant on Economic, Social and Cultural Rights_; Article 26, _International Covenant on Civil and Political Rights_);
-  * [3.1.6.](#3.1.6) Prevent any person from exercising his/her/their right to seek an effective remedy by a competent court or national tribunal (including domestic judicial systems, international courts, arbitration bodies, and other adjudicating bodies) for actions violating the fundamental rights granted to him/her/them by applicable constitutions, applicable laws, or by this License (See Article 8, _United Nations Universal Declaration of Human Rights_; Articles 9 and 14, _International Covenant on Civil and Political Rights_);
-  * [3.1.7.](#3.1.7) Subject any person to arbitrary arrest, detention, or exile (See Article 9, _United Nations Universal Declaration of Human Rights_; Article 9, _International Covenant on Civil and Political Rights_);
-  * [3.1.8.](#3.1.8) Subject any person to arbitrary interference with a person's privacy, family, home, or correspondence without the express written consent of the person (See Article 12, _United Nations Universal Declaration of Human Rights_; Article 17, _International Covenant on Civil and Political Rights_);
-  * [3.1.9.](#3.1.9) Arbitrarily deprive any person of his/her/their property (See Article 17, _United Nations Universal Declaration of Human Rights_);
-  * [3.1.10.](#3.1.10) Forcibly remove indigenous peoples from their lands or territories or take any action with the aim or effect of dispossessing indigenous peoples from their lands, territories, or resources, including without limitation the intellectual property or traditional knowledge of indigenous peoples, without the free, prior, and informed consent of indigenous peoples concerned (See Articles 8 and 10, _United Nations Declaration on the Rights of Indigenous Peoples_);
-  * [3.1.11.](#3.1.11) _Fossil Fuel Divestment_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, on the [FFI Solutions Carbon Underground 200 list](https://www.ffisolutions.com/research-analytics-index-solutions/research-screening/the-carbon-underground-200/?cn-reloaded=1);
-  * [3.1.12.](#3.1.12) _Ecocide_: Commit ecocide:
+  - [3.1.13.](#3.1.13) _Extractive Industries_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, that engages in fossil fuel or mineral exploration, extraction, development, or sale;
+  - [3.1.14.](#3.1.14) _Boycott / Divestment / Sanctions_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, identified by the Boycott, Divestment, Sanctions ("BDS") movement on its website (<https://bdsmovement.net/> and <https://bdsmovement.net/get-involved/what-to-boycott>) as a target for boycott;
+  - [3.1.15.](#3.1.15) _Taliban_: Be an individual or entity that:
+    - [3.1.15.1.](#3.1.15.1) engages in any commercial transactions with the Taliban; or
+    - [3.1.15.2.](#3.1.15.2) is a representative, agent, affiliate, successor, attorney, or assign of the Taliban;
 
-    * [3.1.12.1.](#3.1.12.1) For the purpose of this section, "ecocide" means unlawful or wanton acts committed with knowledge that there is a substantial likelihood of severe and either widespread or long-term damage to the environment being caused by those acts;
-    * [3.1.12.2.](#3.1.12.2) For the purpose of further defining ecocide and the terms contained in the previous paragraph:
+  - [3.1.16.](#3.1.16) _Myanmar_: Be an individual or entity that:
+    - [3.1.16.1.](#3.1.16.1) engages in any commercial transactions with the Myanmar/Burmese military junta; or
+    - [3.1.16.2.](#3.1.16.2) is a representative, agent, affiliate, successor, attorney, or assign of the Myanmar/Burmese government;
 
-      * [3.1.12.2.1.](#3.1.12.2.1) "Wanton" means with reckless disregard for damage which would be clearly excessive in relation to the social and economic benefits anticipated;
-      * [3.1.12.2.2.](#3.1.12.2.2) "Severe" means damage which involves very serious adverse changes, disruption, or harm to any element of the environment, including grave impacts on human life or natural, cultural, or economic resources;
-      * [3.1.12.2.3.](#3.1.12.2.3) "Widespread" means damage which extends beyond a limited geographic area, crosses state boundaries, or is suffered by an entire ecosystem or species or a large number of human beings;
-      * [3.1.12.2.4.](#3.1.12.2.4) "Long-term" means damage which is irreversible or which cannot be redressed through natural recovery within a reasonable period of time; and
-      * [3.1.12.2.5.](#3.1.12.2.5) "Environment" means the earth, its biosphere, cryosphere, lithosphere, hydrosphere, and atmosphere, as well as outer space
-            (See Section II, _Independent Expert Panel for the Legal Definition of Ecocide_, Stop Ecocide Foundation and the Promise Institute for Human Rights at UCLA School of Law, June 2021);
-  * [3.1.13.](#3.1.13) _Extractive Industries_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, that engages in fossil fuel or mineral exploration, extraction, development, or sale;
-  * [3.1.14.](#3.1.14) _Boycott / Divestment / Sanctions_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, identified by the Boycott, Divestment, Sanctions ("BDS") movement on its website (<https://bdsmovement.net/> and <https://bdsmovement.net/get-involved/what-to-boycott>) as a target for boycott;
-  * [3.1.15.](#3.1.15) _Taliban_: Be an individual or entity that:
+  - [3.1.17.](#3.1.17) _Xinjiang Uygur Autonomous Region_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of any individual or entity, that does business in, purchases goods from, or otherwise benefits from goods produced in the Xinjiang Uygur Autonomous Region of China;
+  - [3.1.18.](#3.1.18) _US Tariff Act_: Be an individual or entity:
+    - [3.1.18.1.](#3.1.18.1) which U.S. Customs and Border Protection (CBP) has currently issued a Withhold Release Order (WRO) or finding against based on reasonable suspicion of forced labor; or
+    - [3.1.18.2.](#3.1.18.2) that is a representative, agent, affiliate, successor, attorney, or assign of an individual or entity that does business with an individual or entity which currently has a WRO or finding from CBP issued against it based on reasonable suspicion of forced labor;
 
-    * [3.1.15.1.](#3.1.15.1) engages in any commercial transactions with the Taliban; or
-    * [3.1.15.2.](#3.1.15.2) is a representative, agent, affiliate, successor, attorney, or assign of the Taliban;
-  * [3.1.16.](#3.1.16) _Myanmar_: Be an individual or entity that:
+  - [3.1.19.](#3.1.19) _Mass Surveillance_: Be a government agency or multinational corporation, or a representative, agent, affiliate, successor, attorney, or assign of a government or multinational corporation, which participates in mass surveillance programs;
+  - [3.1.20.](#3.1.20) _Military Activities_: Be an entity or a representative, agent, affiliate, successor, attorney, or assign of an entity which conducts military activities;
+  - [3.1.21.](#3.1.21) _Law Enforcement_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, that provides good or services to, or otherwise enters into any commercial contracts with, any local, state, or federal law enforcement agency;
+  - [3.1.22.](#3.1.22) _Media_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, that broadcasts messages promoting killing, torture, or other forms of extreme violence;
+  - [3.1.23.](#3.1.23) Interfere with Workers' free exercise of the right to organize and associate (See Article 20, United Nations Universal Declaration of Human Rights; C087 - Freedom of Association and Protection of the Right to Organise Convention, 1948 (No. 87), International Labour Organization; Article 8, International Covenant on Economic, Social and Cultural Rights); and
+  - [3.1.24.](#3.1.24) Harm the environment in a manner inconsistent with local, state, national, or international law.
 
-    * [3.1.16.1.](#3.1.16.1) engages in any commercial transactions with the Myanmar/Burmese military junta; or
-    * [3.1.16.2.](#3.1.16.2) is a representative, agent, affiliate, successor, attorney, or assign of the Myanmar/Burmese government;
-  * [3.1.17.](#3.1.17) _Xinjiang Uygur Autonomous Region_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of any individual or entity, that does business in, purchases goods from, or otherwise benefits from goods produced in the Xinjiang Uygur Autonomous Region of China;
-  * [3.1.18.](#3.1.18) _US Tariff Act_: Be an individual or entity:
+- [3.2.](#3.2) The Licensee SHALL:
+  - [3.2.1.](#3.2.1) _Social Auditing_: Only use social auditing mechanisms that adhere to Worker-Driven Social Responsibility Network's Statement of Principles (<https://wsr-network.org/what-is-wsr/statement-of-principles/>) over traditional social auditing mechanisms, to the extent the Licensee uses any social auditing mechanisms at all;
+  - [3.2.2.](#3.2.2) _Workers on Board of Directors_: Ensure that if the Licensee has a Board of Directors, 30% of Licensee's board seats are held by Workers paid no more than 200% of the compensation of the lowest paid Worker of the Licensee;
+  - [3.2.3.](#3.2.3) _Supply Chain_: Provide clear, accessible supply chain data to the public in accordance with the following conditions:
+    - [3.2.3.1.](#3.2.3.1) All data will be on Licensee's website and/or, to the extent Licensee is a representative, agent, affiliate, successor, attorney, subsidiary, or assign, on Licensee's principal's or parent's website or some other online platform accessible to the public via an internet search on a common internet search engine; and
+    - [3.2.3.2.](#3.2.3.2) Data published will include, where applicable, manufacturers, top tier suppliers, subcontractors, cooperatives, component parts producers, and farms;
 
-    * [3.1.18.1.](#3.1.18.1) which U.S. Customs and Border Protection (CBP) has currently issued a Withhold Release Order (WRO) or finding against based on reasonable suspicion of forced labor; or
-    * [3.1.18.2.](#3.1.18.2) that is a representative, agent, affiliate, successor, attorney, or assign of an individual or entity that does business with an individual or entity which currently has a WRO or finding from CBP issued against it based on reasonable suspicion of forced labor;
-  * [3.1.19.](#3.1.19) _Mass Surveillance_: Be a government agency or multinational corporation, or a representative, agent, affiliate, successor, attorney, or assign of a government or multinational corporation, which participates in mass surveillance programs;
-  * [3.1.20.](#3.1.20) _Military Activities_: Be an entity or a representative, agent, affiliate, successor, attorney, or assign of an entity which conducts military activities;
-  * [3.1.21.](#3.1.21) _Law Enforcement_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, that provides good or services to, or otherwise enters into any commercial contracts with, any local, state, or federal law enforcement agency;
-  * [3.1.22.](#3.1.22) _Media_: Be an individual or entity, or a representative, agent, affiliate, successor, attorney, or assign of an individual or entity, that broadcasts messages promoting killing, torture, or other forms of extreme violence;
-  * [3.1.23.](#3.1.23) Interfere with Workers' free exercise of the right to organize and associate (See Article 20, United Nations Universal Declaration of Human Rights; C087 - Freedom of Association and Protection of the Right to Organise Convention, 1948 (No. 87), International Labour Organization; Article 8, International Covenant on Economic, Social and Cultural Rights); and
-  * [3.1.24.](#3.1.24) Harm the environment in a manner inconsistent with local, state, national, or international law.
-* [3.2.](#3.2) The Licensee SHALL:
+  - [3.2.4.](#3.2.4) Provide equal pay for equal work where the performance of such work requires equal skill, effort, and responsibility, and which are performed under similar working conditions, except where such payment is made pursuant to:
+    - [3.2.4.1.](#3.2.4.1) A seniority system;
+    - [3.2.4.2.](#3.2.4.2) A merit system;
+    - [3.2.4.3.](#3.2.4.3) A system which measures earnings by quantity or quality of production; or
+    - [3.2.4.4.](#3.2.4.4) A differential based on any other factor other than sex, gender, sexual orientation, race, ethnicity, nationality, religion, caste, age, medical disability or impairment, and/or any other like circumstances (See 29 U.S.C.A. § 206(d)(1); Article 23, _United Nations Universal Declaration of Human Rights_; Article 7, _International Covenant on Economic, Social and Cultural Rights_; Article 26, _International Covenant on Civil and Political Rights_); and
 
-  * [3.2.1.](#3.2.1) _Social Auditing_: Only use social auditing mechanisms that adhere to Worker-Driven Social Responsibility Network's Statement of Principles (<https://wsr-network.org/what-is-wsr/statement-of-principles/>) over traditional social auditing mechanisms, to the extent the Licensee uses any social auditing mechanisms at all;
-  * [3.2.2.](#3.2.2) _Workers on Board of Directors_: Ensure that if the Licensee has a Board of Directors, 30% of Licensee's board seats are held by Workers paid no more than 200% of the compensation of the lowest paid Worker of the Licensee;
-  * [3.2.3.](#3.2.3) _Supply Chain_: Provide clear, accessible supply chain data to the public in accordance with the following conditions:
-
-    * [3.2.3.1.](#3.2.3.1) All data will be on Licensee's website and/or, to the extent Licensee is a representative, agent, affiliate, successor, attorney, subsidiary, or assign, on Licensee's principal's or parent's website or some other online platform accessible to the public via an internet search on a common internet search engine; and
-    * [3.2.3.2.](#3.2.3.2) Data published will include, where applicable, manufacturers, top tier suppliers, subcontractors, cooperatives, component parts producers, and farms;
-  * [3.2.4.](#3.2.4) Provide equal pay for equal work where the performance of such work requires equal skill, effort, and responsibility, and which are performed under similar working conditions, except where such payment is made pursuant to:
-
-    * [3.2.4.1.](#3.2.4.1) A seniority system;
-    * [3.2.4.2.](#3.2.4.2) A merit system;
-    * [3.2.4.3.](#3.2.4.3) A system which measures earnings by quantity or quality of production; or
-    * [3.2.4.4.](#3.2.4.4) A differential based on any other factor other than sex, gender, sexual orientation, race, ethnicity, nationality, religion, caste, age, medical disability or impairment, and/or any other like circumstances (See 29 U.S.C.A. § 206(d)(1); Article 23, _United Nations Universal Declaration of Human Rights_; Article 7, _International Covenant on Economic, Social and Cultural Rights_; Article 26, _International Covenant on Civil and Political Rights_); and
-  * [3.2.5.](#3.2.5) Allow for reasonable limitation of working hours and periodic holidays with pay (See Article 24, _United Nations Universal Declaration of Human Rights_; Article 7, _International Covenant on Economic, Social and Cultural Rights_).
+  - [3.2.5.](#3.2.5) Allow for reasonable limitation of working hours and periodic holidays with pay (See Article 24, _United Nations Universal Declaration of Human Rights_; Article 7, _International Covenant on Economic, Social and Cultural Rights_).
 
 **[4.](#4) SUPPLY CHAIN IMPACTED PARTIES:**
 

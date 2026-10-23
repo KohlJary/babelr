@@ -87,9 +87,7 @@ export function AuditLogPanel({ serverId, onClose }: AuditLogPanelProps) {
               <div className="audit-log-entry-header">
                 <span className="audit-log-actor">{entry.actorName}</span>
                 <span className="audit-log-action">{entry.action}</span>
-                <span className="audit-log-time">
-                  {new Date(entry.createdAt).toLocaleString()}
-                </span>
+                <span className="audit-log-time">{new Date(entry.createdAt).toLocaleString()}</span>
               </div>
               <div className="audit-log-summary">{entry.summary}</div>
             </div>

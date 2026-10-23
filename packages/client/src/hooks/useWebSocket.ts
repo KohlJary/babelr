@@ -4,10 +4,7 @@ import type { WsServerMessage, WsClientMessage } from '@babelr/shared';
 
 const MAX_RECONNECT_DELAY = 30_000;
 
-export function useWebSocket(
-  enabled: boolean,
-  onMessage: (msg: WsServerMessage) => void,
-) {
+export function useWebSocket(enabled: boolean, onMessage: (msg: WsServerMessage) => void) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onMessage);

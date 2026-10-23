@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { describe, it, expect } from 'vitest';
-import {
-  issueVoiceFederationToken,
-  verifyVoiceFederationToken,
-} from '../voice/federation-jwt.ts';
+import { issueVoiceFederationToken, verifyVoiceFederationToken } from '../voice/federation-jwt.ts';
 
 describe('voice federation JWT', () => {
   const secret = 'test-secret-not-for-production';

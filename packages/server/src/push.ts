@@ -9,10 +9,7 @@ import { actors } from './db/schema/actors.ts';
 /**
  * Check if an actor is currently in DND mode (explicit or quiet hours).
  */
-async function isActorDnd(
-  db: FastifyInstance['db'],
-  actorId: string,
-): Promise<boolean> {
+async function isActorDnd(db: FastifyInstance['db'], actorId: string): Promise<boolean> {
   const [actor] = await db
     .select({ properties: actors.properties })
     .from(actors)
@@ -26,7 +23,9 @@ async function isActorDnd(
   if (props.dnd === true) return true;
 
   // Quiet hours: { enabled, startHour, endHour } (24h format, local time)
-  const qh = props.quietHours as { enabled?: boolean; startHour?: number; endHour?: number } | undefined;
+  const qh = props.quietHours as
+    | { enabled?: boolean; startHour?: number; endHour?: number }
+    | undefined;
   if (qh?.enabled && typeof qh.startHour === 'number' && typeof qh.endHour === 'number') {
     const hour = new Date().getHours();
     if (qh.startHour > qh.endHour) {
@@ -120,9 +119,7 @@ export async function sendPushToActor(
       const status = (err as { statusCode?: number }).statusCode;
       // 404 or 410 = subscription expired, clean up
       if (status === 404 || status === 410) {
-        await db
-          .delete(pushSubscriptions)
-          .where(eq(pushSubscriptions.id, sub.id));
+        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
       } else {
         fastify.log.error({ err, endpoint: sub.endpoint }, 'Push delivery failed');
       }

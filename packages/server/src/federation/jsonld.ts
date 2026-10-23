@@ -19,7 +19,8 @@ export function serializeActor(actor: typeof actors.$inferSelect) {
 
   // Resolve relative icon path to absolute URL using the actor's own origin.
   // Person actors use `avatarUrl`; Group (server) actors use `logoUrl`.
-  const rawIcon = (props?.logoUrl as string | undefined) ?? (props?.avatarUrl as string | undefined);
+  const rawIcon =
+    (props?.logoUrl as string | undefined) ?? (props?.avatarUrl as string | undefined);
   let iconUrl: string | null = null;
   if (rawIcon) {
     if (rawIcon.startsWith('http://') || rawIcon.startsWith('https://')) {
@@ -97,11 +98,7 @@ export function serializeActivity(
   };
 }
 
-export function serializeOrderedCollection(
-  uri: string,
-  totalItems: number,
-  firstPageUri?: string,
-) {
+export function serializeOrderedCollection(uri: string, totalItems: number, firstPageUri?: string) {
   return {
     '@context': AP_CONTEXT,
     id: uri,
@@ -111,11 +108,7 @@ export function serializeOrderedCollection(
   };
 }
 
-export function serializeOrderedCollectionPage(
-  uri: string,
-  items: unknown[],
-  partOf: string,
-) {
+export function serializeOrderedCollectionPage(uri: string, items: unknown[], partOf: string) {
   return {
     '@context': AP_CONTEXT,
     id: uri,

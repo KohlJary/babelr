@@ -35,7 +35,7 @@ babelr/
     client/    React frontend, translation providers, E2E crypto
 ```
 
-The monorepo uses npm workspaces. The shared package must be built before the server or client can import from it: `npm run build -w packages/shared`.
+The monorepo uses npm workspaces. The `shared` and `plugin-sdk` packages must be built before the server or client can import from them: `npm run build:packages`. (`npm run typecheck` and `npm test` build them for you.)
 
 ## Code Style
 

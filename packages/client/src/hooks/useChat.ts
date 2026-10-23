@@ -37,7 +37,10 @@ export function useChat(
   e2eRef.current = e2eOptions;
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const typingUsers = useMemo(() => Array.from(typingMap.values()).map((v) => v.actor), [typingMap]);
+  const typingUsers = useMemo(
+    () => Array.from(typingMap.values()).map((v) => v.actor),
+    [typingMap],
+  );
 
   const handleWsMessage = useCallback(
     (msg: WsServerMessage) => {
@@ -59,7 +62,7 @@ export function useChat(
               updated.message = {
                 ...updated.message,
                 properties: {
-                  ...(updated.message.properties as Record<string, unknown> ?? {}),
+                  ...((updated.message.properties as Record<string, unknown>) ?? {}),
                   linkPreviews: extra.linkPreviews,
                 },
               };
@@ -68,9 +71,7 @@ export function useChat(
           }),
         );
       } else if (msg.type === 'message:deleted') {
-        setMessages((prev) =>
-          prev.filter((m) => m.message.id !== msg.payload.messageId),
-        );
+        setMessages((prev) => prev.filter((m) => m.message.id !== msg.payload.messageId));
       } else if (msg.type === 'message:new') {
         const e2e = e2eRef.current;
         if (isDM && e2e?.e2e.ready && msg.payload.message.properties?.encrypted) {
@@ -82,13 +83,15 @@ export function useChat(
         }
         // Desktop notification for messages from other users
         if (msg.payload.author?.id !== actor.id) {
-          const sender = msg.payload.author?.displayName ?? msg.payload.author?.preferredUsername ?? '';
+          const sender =
+            msg.payload.author?.displayName ?? msg.payload.author?.preferredUsername ?? '';
           const ctx = notifCtx;
-          const title = ctx?.serverName && ctx?.channelName
-            ? `${sender} · #${ctx.channelName} · ${ctx.serverName}`
-            : ctx?.channelName
-              ? `${sender} · #${ctx.channelName}`
-              : sender;
+          const title =
+            ctx?.serverName && ctx?.channelName
+              ? `${sender} · #${ctx.channelName} · ${ctx.serverName}`
+              : ctx?.channelName
+                ? `${sender} · #${ctx.channelName}`
+                : sender;
           const content = msg.payload.message?.content ?? '';
           showDesktopNotification(title, content.slice(0, 200), `msg-${channelId}`);
         }
@@ -189,7 +192,10 @@ export function useChat(
   }, [channelId, cursor, hasMore, isDM]);
 
   const sendMessage = useCallback(
-    async (content: string, attachments?: { url: string; filename: string; contentType: string }[]) => {
+    async (
+      content: string,
+      attachments?: { url: string; filename: string; contentType: string }[],
+    ) => {
       if (!channelId) return;
 
       const properties: Record<string, unknown> = {};

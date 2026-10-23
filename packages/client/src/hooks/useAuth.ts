@@ -33,19 +33,22 @@ export function useAuth() {
     }
   }, []);
 
-  const handleComplete2fa = useCallback(async (code: string) => {
-    if (!twoFactorChallenge) return;
-    setError(null);
-    try {
-      const profile = await api.complete2faChallenge(twoFactorChallenge, code);
-      setTwoFactorChallenge(null);
-      setActor(profile);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Invalid code';
-      setError(message);
-      throw err;
-    }
-  }, [twoFactorChallenge]);
+  const handleComplete2fa = useCallback(
+    async (code: string) => {
+      if (!twoFactorChallenge) return;
+      setError(null);
+      try {
+        const profile = await api.complete2faChallenge(twoFactorChallenge, code);
+        setTwoFactorChallenge(null);
+        setActor(profile);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Invalid code';
+        setError(message);
+        throw err;
+      }
+    },
+    [twoFactorChallenge],
+  );
 
   const handleRegister = useCallback(async (input: RegisterInput) => {
     setError(null);

@@ -92,7 +92,10 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
   return (
     <div
       className={`message-input-wrapper ${dragOver ? 'drag-over' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
@@ -105,7 +108,9 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
               ) : (
                 <span className="attachment-file">{att.filename}</span>
               )}
-              <button className="attachment-remove" onClick={() => removeAttachment(i)}>&times;</button>
+              <button className="attachment-remove" onClick={() => removeAttachment(i)}>
+                &times;
+              </button>
             </div>
           ))}
         </div>
@@ -138,7 +143,10 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
           disabled={disabled || sending}
           rows={1}
         />
-        <button onClick={handleSubmit} disabled={disabled || sending || (!value.trim() && attachments.length === 0)}>
+        <button
+          onClick={handleSubmit}
+          disabled={disabled || sending || (!value.trim() && attachments.length === 0)}
+        >
           Send
         </button>
       </div>

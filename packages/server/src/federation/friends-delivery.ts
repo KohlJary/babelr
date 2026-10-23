@@ -97,14 +97,7 @@ export async function sendFriendUndo(
     object: target.uri,
   };
 
-  const activity = serializeActivity(
-    activityUri,
-    'Undo',
-    sender.uri,
-    undoObject,
-    [target.uri],
-    [],
-  );
+  const activity = serializeActivity(activityUri, 'Undo', sender.uri, undoObject, [target.uri], []);
 
   await enqueueDelivery(fastify.db, activity, target.inboxUri, sender.id);
 }

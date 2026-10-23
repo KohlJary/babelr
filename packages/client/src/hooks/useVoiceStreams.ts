@@ -17,10 +17,7 @@ interface VoiceStreamGetters {
  * flags (videoEnabled/screenShareEnabled per self, hasVideo/hasScreen
  * per peer) tell us when to re-snapshot.
  */
-export function useVoiceStreams(
-  voice: UseVoiceState,
-  getters: VoiceStreamGetters,
-) {
+export function useVoiceStreams(voice: UseVoiceState, getters: VoiceStreamGetters) {
   const [localVideoStream, setLocalVideoStream] = useState<MediaStream | null>(null);
   const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
   const [peerVideoStreams, setPeerVideoStreams] = useState<Map<string, MediaStream | null>>(

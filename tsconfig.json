@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/shared" },
+    { "path": "packages/plugin-sdk" },
     { "path": "packages/server" }
   ]
 }

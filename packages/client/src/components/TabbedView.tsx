@@ -40,12 +40,7 @@ export function TabbedView({
       <header className="tabbed-view-header">
         {title && <h2 className="tabbed-view-title">{title}</h2>}
         {onClose && (
-          <button
-            type="button"
-            className="tabbed-view-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="tabbed-view-close" onClick={onClose} aria-label="Close">
             &times;
           </button>
         )}

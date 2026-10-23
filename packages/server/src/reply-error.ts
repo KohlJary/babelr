@@ -10,10 +10,6 @@ import type { FastifyReply } from 'fastify';
  *   return replyError(reply, 400, 'Bad input');
  *   return replyError(reply, 404, 'Not found');
  */
-export function replyError(
-  reply: FastifyReply,
-  status: number,
-  message: string,
-) {
+export function replyError(reply: FastifyReply, status: number, message: string) {
   return reply.status(status).send({ error: message });
 }

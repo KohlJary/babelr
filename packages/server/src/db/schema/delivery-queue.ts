@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, text, varchar, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  varchar,
+  integer,
+  timestamp,
+  jsonb,
+  index,
+} from 'drizzle-orm/pg-core';
 import { actors } from './actors.ts';
 
 export const deliveryQueue = pgTable(
@@ -18,7 +27,5 @@ export const deliveryQueue = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastError: text('last_error'),
   },
-  (table) => [
-    index('delivery_queue_pending_idx').on(table.status, table.nextAttemptAt),
-  ],
+  (table) => [index('delivery_queue_pending_idx').on(table.status, table.nextAttemptAt)],
 );

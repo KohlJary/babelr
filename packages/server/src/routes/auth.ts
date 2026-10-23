@@ -24,9 +24,7 @@ interface PendingChallenge {
 const pending2faChallenges = new Map<string, PendingChallenge>();
 
 function generateRecoveryCodes(): string[] {
-  return Array.from({ length: 10 }, () =>
-    randomBytes(4).toString('hex').toUpperCase(),
-  );
+  return Array.from({ length: 10 }, () => randomBytes(4).toString('hex').toUpperCase());
 }
 
 function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
@@ -94,9 +92,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     const skipVerification = SKIP_EMAIL_VERIFICATION || !isEmailEnabled();
     const token = skipVerification ? null : randomUUID();
-    const tokenExpires = token
-      ? new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS)
-      : null;
+    const tokenExpires = token ? new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS) : null;
 
     const [actor] = await db
       .insert(actors)
@@ -156,7 +152,10 @@ export default async function authRoutes(fastify: FastifyInstance) {
           .onConflictDoNothing();
       }
 
-      fastify.log.info({ username: actor.preferredUsername }, 'First user registered as instance admin');
+      fastify.log.info(
+        { username: actor.preferredUsername },
+        'First user registered as instance admin',
+      );
     }
 
     await fastify.createSession(actor.id, reply);
@@ -233,10 +232,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       }
 
       const newHash = await argon2.hash(newPassword);
-      await db
-        .update(actors)
-        .set({ passwordHash: newHash })
-        .where(eq(actors.id, request.actor.id));
+      await db.update(actors).set({ passwordHash: newHash }).where(eq(actors.id, request.actor.id));
 
       return { ok: true };
     },
@@ -263,7 +259,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const users = await db
       .select()
       .from(actors)
-      .where(and(eq(actors.type, 'Person'), eq(actors.local, true), ne(actors.id, request.actor.id)));
+      .where(
+        and(eq(actors.type, 'Person'), eq(actors.local, true), ne(actors.id, request.actor.id)),
+      );
 
     return users.map((u) => ({
       id: u.id,
@@ -313,7 +311,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
       })
       .where(eq(actors.id, request.actor.id));
 
-    return { quietHours: { enabled: !!enabled, startHour: startHour ?? 22, endHour: endHour ?? 8 } };
+    return {
+      quietHours: { enabled: !!enabled, startHour: startHour ?? 22, endHour: endHour ?? 8 },
+    };
   });
 
   // Get DND + quiet hours state
@@ -322,7 +322,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const props = (request.actor.properties as Record<string, unknown>) ?? {};
     return {
       dnd: props.dnd === true,
-      quietHours: (props.quietHours as Record<string, unknown>) ?? { enabled: false, startHour: 22, endHour: 8 },
+      quietHours: (props.quietHours as Record<string, unknown>) ?? {
+        enabled: false,
+        startHour: 22,
+        endHour: 8,
+      },
     };
   });
 
@@ -343,7 +347,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
         .select()
         .from(actors)
         .where(
-          and(eq(actors.preferredUsername, username), eq(actors.local, true), eq(actors.type, 'Person')),
+          and(
+            eq(actors.preferredUsername, username),
+            eq(actors.local, true),
+            eq(actors.type, 'Person'),
+          ),
         )
         .limit(1);
       if (!local) return reply.status(404).send({ error: 'User not found' });
@@ -374,52 +382,49 @@ export default async function authRoutes(fastify: FastifyInstance) {
       avatarUrl?: string;
       preferredLanguage?: string;
     };
-  }>(
-    '/auth/profile',
-    async (request, reply) => {
-      if (!request.actor) {
-        return reply.status(401).send({ error: 'Not authenticated' });
-      }
+  }>('/auth/profile', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
 
-      const { displayName, summary, avatarUrl, preferredLanguage } = request.body;
-      const updates: Record<string, unknown> = {};
+    const { displayName, summary, avatarUrl, preferredLanguage } = request.body;
+    const updates: Record<string, unknown> = {};
 
-      if (displayName !== undefined) updates.displayName = displayName || null;
-      if (summary !== undefined) updates.summary = summary || null;
-      if (preferredLanguage !== undefined) updates.preferredLanguage = preferredLanguage;
+    if (displayName !== undefined) updates.displayName = displayName || null;
+    if (summary !== undefined) updates.summary = summary || null;
+    if (preferredLanguage !== undefined) updates.preferredLanguage = preferredLanguage;
 
-      if (avatarUrl !== undefined) {
-        const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};
-        updates.properties = { ...currentProps, avatarUrl: avatarUrl || null };
-      }
+    if (avatarUrl !== undefined) {
+      const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};
+      updates.properties = { ...currentProps, avatarUrl: avatarUrl || null };
+    }
 
-      const federatableFieldsTouched =
-        displayName !== undefined || summary !== undefined || avatarUrl !== undefined;
+    const federatableFieldsTouched =
+      displayName !== undefined || summary !== undefined || avatarUrl !== undefined;
 
-      if (Object.keys(updates).length > 0) {
-        await db.update(actors).set(updates).where(eq(actors.id, request.actor.id));
-      }
+    if (Object.keys(updates).length > 0) {
+      await db.update(actors).set(updates).where(eq(actors.id, request.actor.id));
+    }
 
-      // Return updated profile
-      const [updated] = await db
-        .select()
-        .from(actors)
-        .where(eq(actors.id, request.actor.id))
-        .limit(1);
+    // Return updated profile
+    const [updated] = await db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, request.actor.id))
+      .limit(1);
 
-      // Fan out Update(Actor) to every remote friend's inbox so
-      // cross-instance friend lists reflect the new profile. Fire and
-      // forget — federation failure shouldn't block the HTTP
-      // response, and the delivery queue handles retries.
-      if (federatableFieldsTouched) {
-        broadcastActorUpdate(fastify, updated).catch((err) =>
-          fastify.log.error({ err }, 'Actor update federation enqueue failed'),
-        );
-      }
+    // Fan out Update(Actor) to every remote friend's inbox so
+    // cross-instance friend lists reflect the new profile. Fire and
+    // forget — federation failure shouldn't block the HTTP
+    // response, and the delivery queue handles retries.
+    if (federatableFieldsTouched) {
+      broadcastActorUpdate(fastify, updated).catch((err) =>
+        fastify.log.error({ err }, 'Actor update federation enqueue failed'),
+      );
+    }
 
-      return toProfile(updated);
-    },
-  );
+    return toProfile(updated);
+  });
 
   // Store own public key for E2E encryption
   fastify.put<{ Body: { publicKey: JsonWebKey } }>('/auth/publickey', async (request, reply) => {
@@ -465,111 +470,106 @@ export default async function authRoutes(fastify: FastifyInstance) {
   );
 
   // Get a user's public profile (for profile cards)
-  fastify.get<{ Params: { userId: string } }>(
-    '/users/:userId/profile',
-    async (request, reply) => {
-      if (!request.actor) {
-        return reply.status(401).send({ error: 'Not authenticated' });
-      }
+  fastify.get<{ Params: { userId: string } }>('/users/:userId/profile', async (request, reply) => {
+    if (!request.actor) {
+      return reply.status(401).send({ error: 'Not authenticated' });
+    }
 
-      const [user] = await db
-        .select()
+    const [user] = await db
+      .select()
+      .from(actors)
+      .where(eq(actors.id, request.params.userId))
+      .limit(1);
+
+    if (!user) {
+      return reply.status(404).send({ error: 'User not found' });
+    }
+
+    const props = user.properties as Record<string, unknown> | null;
+
+    // Find mutual servers (both the requesting actor and target are members)
+    const requesterMemberships = await db
+      .select({ collectionUri: collectionItems.collectionUri })
+      .from(collectionItems)
+      .where(eq(collectionItems.itemUri, request.actor.uri));
+
+    const targetMemberships = await db
+      .select({ collectionUri: collectionItems.collectionUri })
+      .from(collectionItems)
+      .where(eq(collectionItems.itemUri, user.uri));
+
+    const requesterUris = new Set(requesterMemberships.map((m) => m.collectionUri));
+    const mutualUris = targetMemberships
+      .filter((m) => requesterUris.has(m.collectionUri))
+      .map((m) => m.collectionUri);
+
+    const mutualServers: Array<{ id: string; name: string }> = [];
+    for (const uri of mutualUris) {
+      const [server] = await db
+        .select({
+          id: actors.id,
+          displayName: actors.displayName,
+          preferredUsername: actors.preferredUsername,
+        })
         .from(actors)
-        .where(eq(actors.id, request.params.userId))
+        .where(and(eq(actors.followersUri, uri), eq(actors.type, 'Group')))
         .limit(1);
-
-      if (!user) {
-        return reply.status(404).send({ error: 'User not found' });
+      if (server) {
+        mutualServers.push({
+          id: server.id,
+          name: server.displayName ?? server.preferredUsername,
+        });
       }
+    }
 
-      const props = user.properties as Record<string, unknown> | null;
-
-      // Find mutual servers (both the requesting actor and target are members)
-      const requesterMemberships = await db
-        .select({ collectionUri: collectionItems.collectionUri })
-        .from(collectionItems)
-        .where(eq(collectionItems.itemUri, request.actor.uri));
-
-      const targetMemberships = await db
-        .select({ collectionUri: collectionItems.collectionUri })
-        .from(collectionItems)
-        .where(eq(collectionItems.itemUri, user.uri));
-
-      const requesterUris = new Set(requesterMemberships.map((m) => m.collectionUri));
-      const mutualUris = targetMemberships
-        .filter((m) => requesterUris.has(m.collectionUri))
-        .map((m) => m.collectionUri);
-
-      const mutualServers: Array<{ id: string; name: string }> = [];
-      for (const uri of mutualUris) {
-        const [server] = await db
-          .select({ id: actors.id, displayName: actors.displayName, preferredUsername: actors.preferredUsername })
-          .from(actors)
-          .where(and(eq(actors.followersUri, uri), eq(actors.type, 'Group')))
-          .limit(1);
-        if (server) {
-          mutualServers.push({
-            id: server.id,
-            name: server.displayName ?? server.preferredUsername,
-          });
-        }
-      }
-
-      return {
-        id: user.id,
-        preferredUsername: user.preferredUsername,
-        displayName: user.displayName,
-        summary: user.summary,
-        avatarUrl: (props?.avatarUrl as string) ?? null,
-        createdAt: user.createdAt.toISOString(),
-        mutualServers,
-      };
-    },
-  );
+    return {
+      id: user.id,
+      preferredUsername: user.preferredUsername,
+      displayName: user.displayName,
+      summary: user.summary,
+      avatarUrl: (props?.avatarUrl as string) ?? null,
+      createdAt: user.createdAt.toISOString(),
+      mutualServers,
+    };
+  });
 
   // --- Email verification ---
 
-  fastify.get<{ Querystring: { token?: string } }>(
-    '/auth/verify',
-    async (request, reply) => {
-      const { token } = request.query;
-      if (!token) {
-        return reply.status(400).send({ error: 'Token is required' });
-      }
+  fastify.get<{ Querystring: { token?: string } }>('/auth/verify', async (request, reply) => {
+    const { token } = request.query;
+    if (!token) {
+      return reply.status(400).send({ error: 'Token is required' });
+    }
 
-      const [actor] = await db
-        .select()
-        .from(actors)
-        .where(eq(actors.verificationToken, token))
-        .limit(1);
+    const [actor] = await db
+      .select()
+      .from(actors)
+      .where(eq(actors.verificationToken, token))
+      .limit(1);
 
-      if (!actor) {
-        return reply.status(400).send({ error: 'Invalid or expired token' });
-      }
+    if (!actor) {
+      return reply.status(400).send({ error: 'Invalid or expired token' });
+    }
 
-      if (
-        actor.verificationTokenExpires &&
-        new Date() > actor.verificationTokenExpires
-      ) {
-        return reply.status(400).send({ error: 'Token has expired. Request a new one.' });
-      }
+    if (actor.verificationTokenExpires && new Date() > actor.verificationTokenExpires) {
+      return reply.status(400).send({ error: 'Token has expired. Request a new one.' });
+    }
 
-      await db
-        .update(actors)
-        .set({
-          emailVerified: true,
-          verificationToken: null,
-          verificationTokenExpires: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(actors.id, actor.id));
+    await db
+      .update(actors)
+      .set({
+        emailVerified: true,
+        verificationToken: null,
+        verificationTokenExpires: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(actors.id, actor.id));
 
-      // Redirect to the app — the client will see emailVerified: true
-      // on the next getMe() call.
-      const protocol = fastify.config.secureCookies ? 'https' : 'http';
-      return reply.redirect(`${protocol}://${domain}/?verified=1`);
-    },
-  );
+    // Redirect to the app — the client will see emailVerified: true
+    // on the next getMe() call.
+    const protocol = fastify.config.secureCookies ? 'https' : 'http';
+    return reply.redirect(`${protocol}://${domain}/?verified=1`);
+  });
 
   fastify.post('/auth/resend-verification', async (request, reply) => {
     if (!request.actor) {
@@ -597,8 +597,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
       .where(eq(actors.id, request.actor.id));
 
     if (request.actor.email) {
-      void sendVerificationEmail(request.actor.email, token, fastify.config).catch(
-        (err) => fastify.log.error({ err }, 'Failed to send verification email'),
+      void sendVerificationEmail(request.actor.email, token, fastify.config).catch((err) =>
+        fastify.log.error({ err }, 'Failed to send verification email'),
       );
     }
 
@@ -635,51 +635,46 @@ export default async function authRoutes(fastify: FastifyInstance) {
     return { otpauthUri, qrDataUrl, secret: secret.base32 };
   });
 
-  fastify.post<{ Body: { code: string } }>(
-    '/auth/2fa/verify',
-    async (request, reply) => {
-      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (request.actor.totpEnabled) {
-        return reply.status(400).send({ error: '2FA is already enabled' });
-      }
-      if (!request.actor.totpSecret) {
-        return reply.status(400).send({ error: 'Call /auth/2fa/setup first' });
-      }
+  fastify.post<{ Body: { code: string } }>('/auth/2fa/verify', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    if (request.actor.totpEnabled) {
+      return reply.status(400).send({ error: '2FA is already enabled' });
+    }
+    if (!request.actor.totpSecret) {
+      return reply.status(400).send({ error: 'Call /auth/2fa/setup first' });
+    }
 
-      const { code } = request.body ?? {};
-      if (!code) return reply.status(400).send({ error: 'Code is required' });
+    const { code } = request.body ?? {};
+    if (!code) return reply.status(400).send({ error: 'Code is required' });
 
-      const totp = new OTPAuth.TOTP({
-        issuer: 'Babelr',
-        label: request.actor.preferredUsername,
-        algorithm: 'SHA1',
-        digits: 6,
-        period: 30,
-        secret: OTPAuth.Secret.fromBase32(request.actor.totpSecret),
-      });
+    const totp = new OTPAuth.TOTP({
+      issuer: 'Babelr',
+      label: request.actor.preferredUsername,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(request.actor.totpSecret),
+    });
 
-      const delta = totp.validate({ token: code, window: 1 });
-      if (delta === null) {
-        return reply.status(400).send({ error: 'Invalid code' });
-      }
+    const delta = totp.validate({ token: code, window: 1 });
+    if (delta === null) {
+      return reply.status(400).send({ error: 'Invalid code' });
+    }
 
-      const recoveryCodes = generateRecoveryCodes();
-      const hashedCodes = await Promise.all(
-        recoveryCodes.map((c) => argon2.hash(c)),
-      );
+    const recoveryCodes = generateRecoveryCodes();
+    const hashedCodes = await Promise.all(recoveryCodes.map((c) => argon2.hash(c)));
 
-      await db
-        .update(actors)
-        .set({
-          totpEnabled: true,
-          totpRecoveryCodes: hashedCodes,
-          updatedAt: new Date(),
-        })
-        .where(eq(actors.id, request.actor.id));
+    await db
+      .update(actors)
+      .set({
+        totpEnabled: true,
+        totpRecoveryCodes: hashedCodes,
+        updatedAt: new Date(),
+      })
+      .where(eq(actors.id, request.actor.id));
 
-      return { enabled: true, recoveryCodes };
-    },
-  );
+    return { enabled: true, recoveryCodes };
+  });
 
   fastify.post<{ Body: { challengeToken: string; code: string } }>(
     '/auth/2fa/challenge',
@@ -747,41 +742,38 @@ export default async function authRoutes(fastify: FastifyInstance) {
     },
   );
 
-  fastify.post<{ Body: { code: string } }>(
-    '/auth/2fa/disable',
-    async (request, reply) => {
-      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (!request.actor.totpEnabled) {
-        return reply.status(400).send({ error: '2FA is not enabled' });
-      }
+  fastify.post<{ Body: { code: string } }>('/auth/2fa/disable', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    if (!request.actor.totpEnabled) {
+      return reply.status(400).send({ error: '2FA is not enabled' });
+    }
 
-      const { code } = request.body ?? {};
-      if (!code) return reply.status(400).send({ error: 'Code is required' });
+    const { code } = request.body ?? {};
+    if (!code) return reply.status(400).send({ error: 'Code is required' });
 
-      const totp = new OTPAuth.TOTP({
-        issuer: 'Babelr',
-        label: request.actor.preferredUsername,
-        algorithm: 'SHA1',
-        digits: 6,
-        period: 30,
-        secret: OTPAuth.Secret.fromBase32(request.actor.totpSecret!),
-      });
+    const totp = new OTPAuth.TOTP({
+      issuer: 'Babelr',
+      label: request.actor.preferredUsername,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(request.actor.totpSecret!),
+    });
 
-      if (totp.validate({ token: code, window: 1 }) === null) {
-        return reply.status(400).send({ error: 'Invalid code' });
-      }
+    if (totp.validate({ token: code, window: 1 }) === null) {
+      return reply.status(400).send({ error: 'Invalid code' });
+    }
 
-      await db
-        .update(actors)
-        .set({
-          totpEnabled: false,
-          totpSecret: null,
-          totpRecoveryCodes: [],
-          updatedAt: new Date(),
-        })
-        .where(eq(actors.id, request.actor.id));
+    await db
+      .update(actors)
+      .set({
+        totpEnabled: false,
+        totpSecret: null,
+        totpRecoveryCodes: [],
+        updatedAt: new Date(),
+      })
+      .where(eq(actors.id, request.actor.id));
 
-      return { disabled: true };
-    },
-  );
+    return { disabled: true };
+  });
 }

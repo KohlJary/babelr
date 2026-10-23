@@ -207,7 +207,12 @@ export function useWikiTranslation(
   // that aren't translated yet. Emits both the per-chunk stream (for
   // UI indicators) and the reassembled translatedContent string (for
   // callers that just want the blob).
-  const { chunks: translatedChunks, translatedContent, detectedLanguages, anyTranslated } = useMemo(() => {
+  const {
+    chunks: translatedChunks,
+    translatedContent,
+    detectedLanguages,
+    anyTranslated,
+  } = useMemo(() => {
     if (!enabled || !settings.preferredLanguage) {
       return {
         chunks: chunks.map<TranslatedChunk>((c) => ({

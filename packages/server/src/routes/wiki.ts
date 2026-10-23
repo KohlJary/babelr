@@ -83,14 +83,19 @@ async function ensureUniqueSlug(db: Db, serverId: string, base: string): Promise
   }
 }
 
-
-async function toWikiPageView(
-  db: Db,
-  page: typeof wikiPages.$inferSelect,
-): Promise<WikiPageView> {
+async function toWikiPageView(db: Db, page: typeof wikiPages.$inferSelect): Promise<WikiPageView> {
   const [creator] = await db.select().from(actors).where(eq(actors.id, page.createdById)).limit(1);
-  const [editor] = await db.select().from(actors).where(eq(actors.id, page.lastEditedById)).limit(1);
-  const fallback = { id: page.createdById, preferredUsername: 'unknown', displayName: null, avatarUrl: null };
+  const [editor] = await db
+    .select()
+    .from(actors)
+    .where(eq(actors.id, page.lastEditedById))
+    .limit(1);
+  const fallback = {
+    id: page.createdById,
+    preferredUsername: 'unknown',
+    displayName: null,
+    avatarUrl: null,
+  };
   return {
     id: page.id,
     serverId: page.serverId,
@@ -112,7 +117,12 @@ function toWikiPageSummary(
   page: typeof wikiPages.$inferSelect,
   editor: typeof actors.$inferSelect | undefined,
 ): WikiPageSummary {
-  const fallback = { id: page.lastEditedById, preferredUsername: 'unknown', displayName: null, avatarUrl: null };
+  const fallback = {
+    id: page.lastEditedById,
+    preferredUsername: 'unknown',
+    displayName: null,
+    avatarUrl: null,
+  };
   return {
     id: page.id,
     serverId: page.serverId,
@@ -137,7 +147,7 @@ async function resolveWikiSlugs(
   db: Db,
   serverId: string,
   slugs: string[],
-): Promise<typeof wikiPages.$inferSelect[]> {
+): Promise<(typeof wikiPages.$inferSelect)[]> {
   if (slugs.length === 0) return [];
   return db
     .select()
@@ -205,12 +215,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
         !(await isManualServer(request.params.serverId)) &&
-        !(await hasPermission(
-          db,
-          request.params.serverId,
-          request.actor.id,
-          PERMISSIONS.VIEW_WIKI,
-        ))
+        !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
       ) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
@@ -253,22 +258,33 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
               if (existing) {
                 await db
                   .update(wikiPages)
-                  .set({ title: p.title, content: p.content, tags: p.tags, parentId: p.parentId ?? null, position: p.position ?? 0, contentSearch: buildSearchVector(p.title, p.content), updatedAt: new Date() })
+                  .set({
+                    title: p.title,
+                    content: p.content,
+                    tags: p.tags,
+                    parentId: p.parentId ?? null,
+                    position: p.position ?? 0,
+                    contentSearch: buildSearchVector(p.title, p.content),
+                    updatedAt: new Date(),
+                  })
                   .where(eq(wikiPages.id, existing.id));
               } else {
-                await db.insert(wikiPages).values({
-                  uri: p.uri,
-                  serverId: serverActor.id,
-                  slug: p.slug,
-                  title: p.title,
-                  content: p.content,
-                  tags: p.tags,
-                  parentId: p.parentId ?? null,
-                  position: p.position ?? 0,
-                  contentSearch: buildSearchVector(p.title, p.content),
-                  createdById: serverActor.id,
-                  lastEditedById: serverActor.id,
-                }).onConflictDoNothing();
+                await db
+                  .insert(wikiPages)
+                  .values({
+                    uri: p.uri,
+                    serverId: serverActor.id,
+                    slug: p.slug,
+                    title: p.title,
+                    content: p.content,
+                    tags: p.tags,
+                    parentId: p.parentId ?? null,
+                    position: p.position ?? 0,
+                    contentSearch: buildSearchVector(p.title, p.content),
+                    createdById: serverActor.id,
+                    lastEditedById: serverActor.id,
+                  })
+                  .onConflictDoNothing();
               }
             }
           }
@@ -290,7 +306,9 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         : [];
       const editorMap = new Map(editors.map((e) => [e.id, e]));
 
-      const pages: WikiPageSummary[] = rows.map((p) => toWikiPageSummary(p, editorMap.get(p.lastEditedById)));
+      const pages: WikiPageSummary[] = rows.map((p) =>
+        toWikiPageSummary(p, editorMap.get(p.lastEditedById)),
+      );
       return { pages };
     },
   );
@@ -299,59 +317,51 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { serverId: string };
     Querystring: { q?: string; limit?: string };
-  }>(
-    '/servers/:serverId/wiki/search',
-    async (request, reply) => {
-      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (
-        !(await isManualServer(request.params.serverId)) &&
-        !(await hasPermission(
-          db,
-          request.params.serverId,
-          request.actor.id,
-          PERMISSIONS.VIEW_WIKI,
-        ))
-      ) {
-        return reply.status(403).send({ error: 'Insufficient permissions' });
-      }
+  }>('/servers/:serverId/wiki/search', async (request, reply) => {
+    if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+    if (
+      !(await isManualServer(request.params.serverId)) &&
+      !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
+    ) {
+      return reply.status(403).send({ error: 'Insufficient permissions' });
+    }
 
-      const q = request.query.q?.trim();
-      if (!q) return reply.status(400).send({ error: 'Search query is required' });
+    const q = request.query.q?.trim();
+    if (!q) return reply.status(400).send({ error: 'Search query is required' });
 
-      const limit = Math.min(parseInt(request.query.limit ?? '20', 10), 100);
-      const tsquery = q.split(/\s+/).join(' & ');
+    const limit = Math.min(parseInt(request.query.limit ?? '20', 10), 100);
+    const tsquery = q.split(/\s+/).join(' & ');
 
-      const rows = await db
-        .select({
-          page: wikiPages,
-          rank: sql<number>`ts_rank(${wikiPages.contentSearch}, to_tsquery('english', ${tsquery}))`,
-        })
-        .from(wikiPages)
-        .where(
-          and(
-            eq(wikiPages.serverId, request.params.serverId),
-            sql`${wikiPages.contentSearch} @@ to_tsquery('english', ${tsquery})`,
-          ),
-        )
-        .orderBy(sql`ts_rank DESC`)
-        .limit(limit);
+    const rows = await db
+      .select({
+        page: wikiPages,
+        rank: sql<number>`ts_rank(${wikiPages.contentSearch}, to_tsquery('english', ${tsquery}))`,
+      })
+      .from(wikiPages)
+      .where(
+        and(
+          eq(wikiPages.serverId, request.params.serverId),
+          sql`${wikiPages.contentSearch} @@ to_tsquery('english', ${tsquery})`,
+        ),
+      )
+      .orderBy(sql`ts_rank DESC`)
+      .limit(limit);
 
-      // Load editors for results
-      const editorIds = Array.from(new Set(rows.map((r) => r.page.lastEditedById)));
-      const editors = editorIds.length
-        ? await db.select().from(actors).where(inArray(actors.id, editorIds))
-        : [];
-      const editorMap = new Map(editors.map((e) => [e.id, e]));
+    // Load editors for results
+    const editorIds = Array.from(new Set(rows.map((r) => r.page.lastEditedById)));
+    const editors = editorIds.length
+      ? await db.select().from(actors).where(inArray(actors.id, editorIds))
+      : [];
+    const editorMap = new Map(editors.map((e) => [e.id, e]));
 
-      const results = rows.map((r) => ({
-        ...toWikiPageSummary(r.page, editorMap.get(r.page.lastEditedById)),
-        snippet: r.page.content.slice(0, 200),
-        rank: r.rank,
-      }));
+    const results = rows.map((r) => ({
+      ...toWikiPageSummary(r.page, editorMap.get(r.page.lastEditedById)),
+      snippet: r.page.content.slice(0, 200),
+      rank: r.rank,
+    }));
 
-      return { results };
-    },
-  );
+    return { results };
+  });
 
   // Get a single page by slug
   fastify.get<{ Params: { serverId: string; slug: string } }>(
@@ -360,12 +370,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
         !(await isManualServer(request.params.serverId)) &&
-        !(await hasPermission(
-          db,
-          request.params.serverId,
-          request.actor.id,
-          PERMISSIONS.VIEW_WIKI,
-        ))
+        !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
       ) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
@@ -406,7 +411,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       if (!body?.title?.trim()) return reply.status(400).send({ error: 'title is required' });
 
       const baseSlug = slugify(body.slug?.trim() || body.title);
-      if (!baseSlug) return reply.status(400).send({ error: 'title must produce a non-empty slug' });
+      if (!baseSlug)
+        return reply.status(400).send({ error: 'title must produce a non-empty slug' });
       const slug = await ensureUniqueSlug(db, request.params.serverId, baseSlug);
       const content = body.content ?? '';
 
@@ -458,7 +464,11 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       // Federation: deliver Create(Article).
       if (request.actor.local) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, request.params.serverId))
+          .limit(1);
         if (group) {
           const article = {
             type: 'Article',
@@ -475,13 +485,27 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
           if (!group.local && group.inboxUri) {
             // Remote server: deliver to the origin Group's inbox.
-            const activity = serializeActivity(activityUri, 'Create', request.actor.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const activity = serializeActivity(
+              activityUri,
+              'Create',
+              request.actor.uri,
+              article,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, request.actor)
               .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
               .catch((err) => fastify.log.error(err, 'Wiki page remote federation failed'));
           } else {
             // Local server: fan out to Group followers.
-            const activity = serializeActivity(activityUri, 'Create', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const activity = serializeActivity(
+              activityUri,
+              'Create',
+              group.uri,
+              article,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, group)
               .then((k) => enqueueToFollowers(fastify, k, activity))
               .catch((err) => fastify.log.error(err, 'Wiki page federation failed'));
@@ -583,13 +607,19 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       // Federation: deliver Update(Article).
       if (request.actor.local) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, request.params.serverId))
+          .limit(1);
         if (group) {
           const config = fastify.config;
           const protocol = config.secureCookies ? 'https' : 'http';
           const article = {
             type: 'Article',
-            id: updated.uri ?? `${protocol}://${config.domain}/servers/${request.params.serverId}/wiki/${updated.slug}`,
+            id:
+              updated.uri ??
+              `${protocol}://${config.domain}/servers/${request.params.serverId}/wiki/${updated.slug}`,
             name: updated.title,
             content: updated.content,
             slug: updated.slug,
@@ -601,12 +631,26 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
           };
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
           if (!group.local && group.inboxUri) {
-            const activity = serializeActivity(activityUri, 'Update', request.actor.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const activity = serializeActivity(
+              activityUri,
+              'Update',
+              request.actor.uri,
+              article,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, request.actor)
               .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
               .catch((err) => fastify.log.error(err, 'Wiki page update remote federation failed'));
           } else {
-            const activity = serializeActivity(activityUri, 'Update', group.uri, article, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const activity = serializeActivity(
+              activityUri,
+              'Update',
+              group.uri,
+              article,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, group)
               .then((k) => enqueueToFollowers(fastify, k, activity))
               .catch((err) => fastify.log.error(err, 'Wiki page update federation failed'));
@@ -639,12 +683,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
         !(await isManualServer(request.params.serverId)) &&
-        !(await hasPermission(
-          db,
-          request.params.serverId,
-          request.actor.id,
-          PERMISSIONS.VIEW_WIKI,
-        ))
+        !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
       ) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
@@ -734,7 +773,12 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
               channelName,
               author: author
                 ? toAuthorView(author)
-                : { id: msg.attributedTo ?? '', preferredUsername: 'unknown', displayName: null, avatarUrl: null },
+                : {
+                    id: msg.attributedTo ?? '',
+                    preferredUsername: 'unknown',
+                    displayName: null,
+                    avatarUrl: null,
+                  },
               content: msg.content ?? '',
               createdAt: msg.published.toISOString(),
             },
@@ -786,18 +830,36 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
 
       // Federation: deliver Delete(Article).
       if (request.actor.local && page.uri) {
-        const [group] = await db.select().from(actors).where(eq(actors.id, request.params.serverId)).limit(1);
+        const [group] = await db
+          .select()
+          .from(actors)
+          .where(eq(actors.id, request.params.serverId))
+          .limit(1);
         if (group) {
           const config = fastify.config;
           const protocol = config.secureCookies ? 'https' : 'http';
           const activityUri = `${protocol}://${config.domain}/activities/${crypto.randomUUID()}`;
           if (!group.local && group.inboxUri) {
-            const activity = serializeActivity(activityUri, 'Delete', request.actor.uri, page.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const activity = serializeActivity(
+              activityUri,
+              'Delete',
+              request.actor.uri,
+              page.uri,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, request.actor)
               .then((k) => enqueueDelivery(db, activity, group.inboxUri!, k.id))
               .catch((err) => fastify.log.error(err, 'Wiki page delete remote federation failed'));
           } else {
-            const activity = serializeActivity(activityUri, 'Delete', group.uri, page.uri, ['https://www.w3.org/ns/activitystreams#Public'], [group.followersUri ?? '']);
+            const activity = serializeActivity(
+              activityUri,
+              'Delete',
+              group.uri,
+              page.uri,
+              ['https://www.w3.org/ns/activitystreams#Public'],
+              [group.followersUri ?? ''],
+            );
             ensureActorKeys(db, group)
               .then((k) => enqueueToFollowers(fastify, k, activity))
               .catch((err) => fastify.log.error(err, 'Wiki page delete federation failed'));
@@ -831,12 +893,7 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       if (
         !(await isManualServer(request.params.serverId)) &&
-        !(await hasPermission(
-          db,
-          request.params.serverId,
-          request.actor.id,
-          PERMISSIONS.VIEW_WIKI,
-        ))
+        !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
       ) {
         return reply.status(403).send({ error: 'Not a member of this server' });
       }
@@ -847,7 +904,8 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .where(eq(actors.id, request.params.serverId))
         .limit(1);
       const props = (server?.properties as Record<string, unknown> | null) ?? null;
-      const rawHome = props && typeof props.wikiHomeSlug === 'string' ? (props.wikiHomeSlug as string) : null;
+      const rawHome =
+        props && typeof props.wikiHomeSlug === 'string' ? (props.wikiHomeSlug as string) : null;
 
       // Validate that the stored home slug still points at a live page.
       // If not, surface null — the client will fall back to recency order.
@@ -941,14 +999,22 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug/revisions',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (!(await isManualServer(request.params.serverId)) && !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
+      if (
+        !(await isManualServer(request.params.serverId)) &&
+        !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
+      ) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
       const [page] = await db
         .select()
         .from(wikiPages)
-        .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, request.params.slug)))
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
         .limit(1);
       if (!page) return reply.status(404).send({ error: 'Page not found' });
 
@@ -978,14 +1044,22 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
     '/servers/:serverId/wiki/pages/:slug/revisions/:revisionNumber',
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      if (!(await isManualServer(request.params.serverId)) && !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))) {
+      if (
+        !(await isManualServer(request.params.serverId)) &&
+        !(await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.VIEW_WIKI))
+      ) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
       const [page] = await db
         .select()
         .from(wikiPages)
-        .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, request.params.slug)))
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
         .limit(1);
       if (!page) return reply.status(404).send({ error: 'Page not found' });
 
@@ -994,7 +1068,9 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
         .select({ rev: wikiPageRevisions, editor: actors })
         .from(wikiPageRevisions)
         .innerJoin(actors, eq(wikiPageRevisions.editedById, actors.id))
-        .where(and(eq(wikiPageRevisions.pageId, page.id), eq(wikiPageRevisions.revisionNumber, revNum)))
+        .where(
+          and(eq(wikiPageRevisions.pageId, page.id), eq(wikiPageRevisions.revisionNumber, revNum)),
+        )
         .limit(1);
       if (!rev) return reply.status(404).send({ error: 'Revision not found' });
 
@@ -1023,19 +1099,33 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
       const [page] = await db
         .select()
         .from(wikiPages)
-        .where(and(eq(wikiPages.serverId, request.params.serverId), eq(wikiPages.slug, request.params.slug)))
+        .where(
+          and(
+            eq(wikiPages.serverId, request.params.serverId),
+            eq(wikiPages.slug, request.params.slug),
+          ),
+        )
         .limit(1);
       if (!page) return reply.status(404).send({ error: 'Page not found' });
 
       const isCreator = page.createdById === request.actor.id;
-      const canEdit = isCreator || (await hasPermission(db, request.params.serverId, request.actor.id, PERMISSIONS.MANAGE_WIKI));
+      const canEdit =
+        isCreator ||
+        (await hasPermission(
+          db,
+          request.params.serverId,
+          request.actor.id,
+          PERMISSIONS.MANAGE_WIKI,
+        ));
       if (!canEdit) return reply.status(403).send({ error: 'Insufficient permissions' });
 
       const revNum = parseInt(request.params.revisionNumber, 10);
       const [targetRev] = await db
         .select()
         .from(wikiPageRevisions)
-        .where(and(eq(wikiPageRevisions.pageId, page.id), eq(wikiPageRevisions.revisionNumber, revNum)))
+        .where(
+          and(eq(wikiPageRevisions.pageId, page.id), eq(wikiPageRevisions.revisionNumber, revNum)),
+        )
         .limit(1);
       if (!targetRev) return reply.status(404).send({ error: 'Revision not found' });
 
@@ -1101,70 +1191,56 @@ export default async function wikiRoutes(fastify: FastifyInstance) {
   });
 
   // Manual page lookup by slug for [[man:slug]] embeds.
-  fastify.get<{ Params: { slug: string } }>(
-    '/manual/by-slug/:slug',
-    async (request, reply) => {
-      const config = fastify.config;
-      const protocol = config.secureCookies ? 'https' : 'http';
-      const manualUri = `${protocol}://${config.domain}/system/manual`;
-      const [manual] = await db
-        .select({ id: actors.id })
-        .from(actors)
-        .where(eq(actors.uri, manualUri))
-        .limit(1);
-      if (!manual) return reply.status(404).send({ error: 'Manual not found' });
+  fastify.get<{ Params: { slug: string } }>('/manual/by-slug/:slug', async (request, reply) => {
+    const config = fastify.config;
+    const protocol = config.secureCookies ? 'https' : 'http';
+    const manualUri = `${protocol}://${config.domain}/system/manual`;
+    const [manual] = await db
+      .select({ id: actors.id })
+      .from(actors)
+      .where(eq(actors.uri, manualUri))
+      .limit(1);
+    if (!manual) return reply.status(404).send({ error: 'Manual not found' });
 
-      const [page] = await db
-        .select()
-        .from(wikiPages)
-        .where(and(eq(wikiPages.serverId, manual.id), eq(wikiPages.slug, request.params.slug)))
-        .limit(1);
-      if (!page) return reply.status(404).send({ error: 'Page not found' });
+    const [page] = await db
+      .select()
+      .from(wikiPages)
+      .where(and(eq(wikiPages.serverId, manual.id), eq(wikiPages.slug, request.params.slug)))
+      .limit(1);
+    if (!page) return reply.status(404).send({ error: 'Page not found' });
 
-      return {
-        id: page.id,
-        slug: page.slug,
-        title: page.title,
-        content: page.content.slice(0, 500),
-        serverId: manual.id,
-        serverName: 'Babelr Manual',
-      };
-    },
-  );
+    return {
+      id: page.id,
+      slug: page.slug,
+      title: page.title,
+      content: page.content.slice(0, 500),
+      serverId: manual.id,
+      serverName: 'Babelr Manual',
+    };
+  });
 
   // Wiki page embed lookup by slug. Used by cross-tower embeds
   // ([[server@tower:wiki:slug]]) and the local embed proxy.
   // Returns a compact view suitable for inline rendering.
-  fastify.get<{ Params: { slug: string } }>(
-    '/wiki/by-slug/:slug',
-    async (request, reply) => {
-      const { slug } = request.params;
-      if (!slug) return reply.status(400).send({ error: 'slug is required' });
+  fastify.get<{ Params: { slug: string } }>('/wiki/by-slug/:slug', async (request, reply) => {
+    const { slug } = request.params;
+    if (!slug) return reply.status(400).send({ error: 'slug is required' });
 
-      // Find the page across all servers (for cross-tower resolution,
-      // the server context comes from the request's tower, not from
-      // a specific server parameter).
-      const [page] = await db
-        .select()
-        .from(wikiPages)
-        .where(eq(wikiPages.slug, slug))
-        .limit(1);
-      if (!page) return reply.status(404).send({ error: 'Page not found' });
+    // Find the page across all servers (for cross-tower resolution,
+    // the server context comes from the request's tower, not from
+    // a specific server parameter).
+    const [page] = await db.select().from(wikiPages).where(eq(wikiPages.slug, slug)).limit(1);
+    if (!page) return reply.status(404).send({ error: 'Page not found' });
 
-      const [server] = await db
-        .select()
-        .from(actors)
-        .where(eq(actors.id, page.serverId))
-        .limit(1);
+    const [server] = await db.select().from(actors).where(eq(actors.id, page.serverId)).limit(1);
 
-      return {
-        id: page.id,
-        slug: page.slug,
-        title: page.title,
-        content: page.content.slice(0, 500),
-        serverId: page.serverId,
-        serverName: server?.displayName ?? server?.preferredUsername ?? null,
-      };
-    },
-  );
+    return {
+      id: page.id,
+      slug: page.slug,
+      title: page.title,
+      content: page.content.slice(0, 500),
+      serverId: page.serverId,
+      serverName: server?.displayName ?? server?.preferredUsername ?? null,
+    };
+  });
 }

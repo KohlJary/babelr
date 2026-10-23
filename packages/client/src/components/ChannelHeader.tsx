@@ -35,7 +35,11 @@ export function ChannelHeader({
       <div className="channel-info">
         <div className="channel-info-top">
           <span className="channel-name">
-            {encrypted && <span className="e2e-lock" title={t('channelHeader.encrypted')}>&#128274; </span>}
+            {encrypted && (
+              <span className="e2e-lock" title={t('channelHeader.encrypted')}>
+                &#128274;{' '}
+              </span>
+            )}
             {channelName}
           </span>
           <span className={`connection-status ${connected ? 'online' : 'offline'}`}>
@@ -45,7 +49,11 @@ export function ChannelHeader({
         {channelTopic && <span className="channel-topic">{channelTopic}</span>}
       </div>
       <div className="user-info">
-        <button className="username-btn" onClick={onOpenProfile} title={t('channelHeader.editProfile')}>
+        <button
+          className="username-btn"
+          onClick={onOpenProfile}
+          title={t('channelHeader.editProfile')}
+        >
           {actor.displayName ?? actor.preferredUsername}
         </button>
         {onOpenPins && (
@@ -53,10 +61,18 @@ export function ChannelHeader({
             📌{pinCount ? ` ${pinCount}` : ''}
           </button>
         )}
-        <button className="settings-btn" onClick={onOpenMentions} title={t('channelHeader.mentions')}>
+        <button
+          className="settings-btn"
+          onClick={onOpenMentions}
+          title={t('channelHeader.mentions')}
+        >
           @
         </button>
-        <button className="settings-btn" onClick={onOpenSettings} title={t('channelHeader.settings')}>
+        <button
+          className="settings-btn"
+          onClick={onOpenSettings}
+          title={t('channelHeader.settings')}
+        >
           &#9881;
         </button>
         <button className="logout-btn" onClick={onLogout}>

@@ -88,8 +88,10 @@ export function CallView({
     typingUsers: chatTyping,
     notifyTyping: chatNotifyTyping,
   } = useChat(actor, chatId, false);
-  const { translations: chatTranslations, isTranslating: chatIsTranslating } =
-    useTranslation(chatMessages, translationSettings);
+  const { translations: chatTranslations, isTranslating: chatIsTranslating } = useTranslation(
+    chatMessages,
+    translationSettings,
+  );
 
   const selfActor = useMemo(
     () => ({
@@ -225,9 +227,7 @@ export function CallView({
                     />
                   </>
                 ) : (
-                  <div className="call-chat-empty">
-                    {t('voice.chatUnavailable')}
-                  </div>
+                  <div className="call-chat-empty">{t('voice.chatUnavailable')}</div>
                 )}
               </div>
             ),

@@ -42,7 +42,9 @@ export const serverRoles = pgTable(
   'server_roles',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     name: varchar('name', { length: 64 }).notNull(),
     /** Hex color string like "#4b6cb7", null = no explicit color */
     color: varchar('color', { length: 16 }),
@@ -77,9 +79,15 @@ export const serverRoles = pgTable(
 export const serverRoleAssignments = pgTable(
   'server_role_assignments',
   {
-    serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
-    actorId: uuid('actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
-    roleId: uuid('role_id').notNull().references(() => serverRoles.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    roleId: uuid('role_id')
+      .notNull()
+      .references(() => serverRoles.id, { onDelete: 'cascade' }),
     assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

@@ -25,30 +25,38 @@ function cacheKey(origin: WikiRefOrigin, kind: string, slug: string): string {
 
 function kindIcon(kind: WikiRefKind): string {
   switch (kind) {
-    case 'message': return '\u{1F4AC}';
-    case 'event': return '\u{1F4C5}';
-    case 'file': return '\u{1F4CE}';
-    case 'page': return '\u{1F4C4}';
-    default: return '\u{1F517}';
+    case 'message':
+      return '\u{1F4AC}';
+    case 'event':
+      return '\u{1F4C5}';
+    case 'file':
+      return '\u{1F4CE}';
+    case 'page':
+      return '\u{1F4C4}';
+    default:
+      return '\u{1F517}';
   }
 }
 
 function kindLabel(kind: WikiRefKind): string {
   switch (kind) {
-    case 'message': return 'Message';
-    case 'event': return 'Event';
-    case 'file': return 'File';
-    case 'page': return 'Wiki page';
-    default: return 'Content';
+    case 'message':
+      return 'Message';
+    case 'event':
+      return 'Event';
+    case 'file':
+      return 'File';
+    case 'page':
+      return 'Wiki page';
+    default:
+      return 'Content';
   }
 }
 
 export function CrossTowerEmbed({ kind, slug, origin }: CrossTowerEmbedProps) {
   const t = useT();
   const key = cacheKey(origin, kind, slug);
-  const [state, setState] = useState<EmbedState>(
-    () => resolved.get(key) ?? { status: 'loading' },
-  );
+  const [state, setState] = useState<EmbedState>(() => resolved.get(key) ?? { status: 'loading' });
 
   useEffect(() => {
     if (state.status !== 'loading') return;
@@ -76,15 +84,13 @@ export function CrossTowerEmbed({ kind, slug, origin }: CrossTowerEmbedProps) {
     void promise.then((next) => {
       if (!cancelled) setState(next);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [key, state.status, kind, slug, origin]);
 
   if (state.status === 'loading') {
-    return (
-      <span className="cross-tower-embed loading">
-        {t('common.loading')}
-      </span>
-    );
+    return <span className="cross-tower-embed loading">{t('common.loading')}</span>;
   }
 
   if (state.status === 'locked') {
@@ -96,9 +102,10 @@ export function CrossTowerEmbed({ kind, slug, origin }: CrossTowerEmbedProps) {
   }
 
   const { data } = state;
-  const title = (data.title as string) ?? (data.name as string) ?? (data.filename as string) ?? slug;
-  const snippet = (data.content as string)?.slice(0, 150) ??
-    (data.description as string)?.slice(0, 150) ?? '';
+  const title =
+    (data.title as string) ?? (data.name as string) ?? (data.filename as string) ?? slug;
+  const snippet =
+    (data.content as string)?.slice(0, 150) ?? (data.description as string)?.slice(0, 150) ?? '';
 
   return (
     <div className="cross-tower-embed ok">
@@ -106,9 +113,7 @@ export function CrossTowerEmbed({ kind, slug, origin }: CrossTowerEmbedProps) {
         <span className="cross-tower-embed-icon">{kindIcon(kind)}</span>
         <div className="cross-tower-embed-content">
           <span className="cross-tower-embed-title">{title}</span>
-          {snippet && (
-            <span className="cross-tower-embed-snippet">{snippet}</span>
-          )}
+          {snippet && <span className="cross-tower-embed-snippet">{snippet}</span>}
           <span className="cross-tower-embed-origin">
             {origin.server}@{origin.tower}
           </span>

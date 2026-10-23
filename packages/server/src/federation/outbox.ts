@@ -5,7 +5,12 @@ import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { activities } from '../db/schema/activities.ts';
 import { objects } from '../db/schema/objects.ts';
-import { serializeOrderedCollection, serializeOrderedCollectionPage, serializeNote, serializeActivity } from './jsonld.ts';
+import {
+  serializeOrderedCollection,
+  serializeOrderedCollectionPage,
+  serializeNote,
+  serializeActivity,
+} from './jsonld.ts';
 
 export default async function outboxRoutes(fastify: FastifyInstance) {
   // Person outbox
@@ -36,11 +41,7 @@ export default async function outboxRoutes(fastify: FastifyInstance) {
       // If no page param, return collection metadata
       if (!request.query.page) {
         reply.header('Content-Type', 'application/activity+json; charset=utf-8');
-        return serializeOrderedCollection(
-          actor.outboxUri,
-          totalItems,
-          `${actor.outboxUri}?page=1`,
-        );
+        return serializeOrderedCollection(actor.outboxUri, totalItems, `${actor.outboxUri}?page=1`);
       }
 
       // Paginated items
@@ -67,16 +68,19 @@ export default async function outboxRoutes(fastify: FastifyInstance) {
         }
 
         items.push(
-          serializeActivity(act.uri, act.type, actor.uri, objectJson, (act.to as string[]) ?? [], (act.cc as string[]) ?? []),
+          serializeActivity(
+            act.uri,
+            act.type,
+            actor.uri,
+            objectJson,
+            (act.to as string[]) ?? [],
+            (act.cc as string[]) ?? [],
+          ),
         );
       }
 
       reply.header('Content-Type', 'application/activity+json; charset=utf-8');
-      return serializeOrderedCollectionPage(
-        `${actor.outboxUri}?page=1`,
-        items,
-        actor.outboxUri,
-      );
+      return serializeOrderedCollectionPage(`${actor.outboxUri}?page=1`, items, actor.outboxUri);
     },
   );
 }

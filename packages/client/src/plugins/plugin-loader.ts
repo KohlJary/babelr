@@ -59,9 +59,7 @@ export async function initPlugins(): Promise<void> {
         // ChatView passes. Each plugin registers its own slot with its
         // own namespaced API path.
         const pluginRouteBase = `/api/plugins/${manifest.id}`;
-        const OriginalComponent = def.Component as (props: {
-          host: unknown;
-        }) => unknown;
+        const OriginalComponent = def.Component as (props: { host: unknown }) => unknown;
         const wrapped = (({ host }: { host: unknown }) => {
           const pluginHost = {
             ...(host as Record<string, unknown>),

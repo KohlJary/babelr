@@ -135,7 +135,13 @@ export function MessageItem({
     hasTranslation && !showOriginal ? translation.translatedContent : message.content;
   const metadata = hasTranslation ? translation.metadata : undefined;
   const linkPreviews = (message.properties as Record<string, unknown> | undefined)?.linkPreviews as
-    | Array<{ url: string; title: string | null; description: string | null; image: string | null; siteName: string | null }>
+    | Array<{
+        url: string;
+        title: string | null;
+        description: string | null;
+        image: string | null;
+        siteName: string | null;
+      }>
     | undefined;
 
   const contentClass = ['message-content', isTranslating ? 'translating' : '']
@@ -143,23 +149,31 @@ export function MessageItem({
     .join(' ');
 
   const props = message.properties as Record<string, unknown> | undefined;
-  const messageAttachments = (props?.attachments as { url: string; filename: string; contentType: string }[]) ?? [];
+  const messageAttachments =
+    (props?.attachments as { url: string; filename: string; contentType: string }[]) ?? [];
 
-  const attachmentsBlock = messageAttachments.length > 0 ? (
-    <div className="message-attachments">
-      {messageAttachments.map((att, i) =>
-        att.contentType.startsWith('image/') ? (
-          <a key={i} href={att.url} target="_blank" rel="noopener noreferrer">
-            <img src={att.url} alt={att.filename} className="message-attachment-img" />
-          </a>
-        ) : (
-          <a key={i} href={att.url} target="_blank" rel="noopener noreferrer" className="message-attachment-file">
-            {att.filename}
-          </a>
-        ),
-      )}
-    </div>
-  ) : null;
+  const attachmentsBlock =
+    messageAttachments.length > 0 ? (
+      <div className="message-attachments">
+        {messageAttachments.map((att, i) =>
+          att.contentType.startsWith('image/') ? (
+            <a key={i} href={att.url} target="_blank" rel="noopener noreferrer">
+              <img src={att.url} alt={att.filename} className="message-attachment-img" />
+            </a>
+          ) : (
+            <a
+              key={i}
+              href={att.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="message-attachment-file"
+            >
+              {att.filename}
+            </a>
+          ),
+        )}
+      </div>
+    ) : null;
 
   const indicator = hasTranslation ? (
     <button
@@ -197,8 +211,24 @@ export function MessageItem({
         style={{ resize: 'vertical', fontFamily: 'inherit' }}
       />
       <div className="message-edit-actions">
-        <button className="message-action-btn" onClick={() => { onEdit?.(editContent); setEditing(false); }}>{t('common.save')}</button>
-        <button className="message-action-btn" onClick={() => { setEditing(false); setEditContent(message.content); }}>{t('common.cancel')}</button>
+        <button
+          className="message-action-btn"
+          onClick={() => {
+            onEdit?.(editContent);
+            setEditing(false);
+          }}
+        >
+          {t('common.save')}
+        </button>
+        <button
+          className="message-action-btn"
+          onClick={() => {
+            setEditing(false);
+            setEditContent(message.content);
+          }}
+        >
+          {t('common.cancel')}
+        </button>
       </div>
     </div>
   ) : (
@@ -213,16 +243,24 @@ export function MessageItem({
         </button>
       )}
       {onEdit && actor?.id === author.id && (
-        <button className="message-action-btn" onClick={() => setEditing(true)}>{t('messages.edit')}</button>
+        <button className="message-action-btn" onClick={() => setEditing(true)}>
+          {t('messages.edit')}
+        </button>
       )}
       {canDelete && (
-        <button className="message-action-btn message-action-danger" onClick={onDelete}>{t('messages.delete')}</button>
+        <button className="message-action-btn message-action-danger" onClick={onDelete}>
+          {t('messages.delete')}
+        </button>
       )}
       {onPin && !isPinned && (
-        <button className="message-action-btn" onClick={onPin}>📌 {t('pins.pin')}</button>
+        <button className="message-action-btn" onClick={onPin}>
+          📌 {t('pins.pin')}
+        </button>
       )}
       {onUnpin && isPinned && (
-        <button className="message-action-btn" onClick={onUnpin}>📌 {t('pins.unpin')}</button>
+        <button className="message-action-btn" onClick={onUnpin}>
+          📌 {t('pins.unpin')}
+        </button>
       )}
       {onConvertToWikiPage && (
         <button
@@ -280,17 +318,37 @@ export function MessageItem({
               <span className="reaction-count">{reactorIds.length}</span>
             </button>
           ))}
-          <button className="reaction-add-btn" onClick={openPicker} title={t('messages.addReaction')}>+</button>
+          <button
+            className="reaction-add-btn"
+            onClick={openPicker}
+            title={t('messages.addReaction')}
+          >
+            +
+          </button>
           {showEmojiPicker && (
-            <EmojiPicker onSelect={(emoji) => onToggleReaction?.(emoji)} onClose={() => setShowEmojiPicker(false)} anchorRect={pickerAnchor} />
+            <EmojiPicker
+              onSelect={(emoji) => onToggleReaction?.(emoji)}
+              onClose={() => setShowEmojiPicker(false)}
+              anchorRect={pickerAnchor}
+            />
           )}
         </div>
       )}
       {!messageReactions && onToggleReaction && (
         <div className="message-reactions">
-          <button className="reaction-add-btn" onClick={openPicker} title={t('messages.addReaction')}>+</button>
+          <button
+            className="reaction-add-btn"
+            onClick={openPicker}
+            title={t('messages.addReaction')}
+          >
+            +
+          </button>
           {showEmojiPicker && (
-            <EmojiPicker onSelect={(emoji) => onToggleReaction(emoji)} onClose={() => setShowEmojiPicker(false)} anchorRect={pickerAnchor} />
+            <EmojiPicker
+              onSelect={(emoji) => onToggleReaction(emoji)}
+              onClose={() => setShowEmojiPicker(false)}
+              anchorRect={pickerAnchor}
+            />
           )}
         </div>
       )}
@@ -328,7 +386,11 @@ export function MessageItem({
   ) : (
     <span
       className="message-avatar-default"
-      style={{ backgroundColor: ['#2563eb','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2'][author.preferredUsername.charCodeAt(0) % 6] }}
+      style={{
+        backgroundColor: ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'][
+          author.preferredUsername.charCodeAt(0) % 6
+        ],
+      }}
     >
       {author.preferredUsername.charAt(0).toUpperCase()}
     </span>

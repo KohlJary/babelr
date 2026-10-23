@@ -52,27 +52,62 @@ function GeneralTab({
     <div className="settings-tab-body">
       <div className="settings-field">
         <label htmlFor="channel-name">{t('channelSettings.name')}</label>
-        <input id="channel-name" className="modal-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
+        <input
+          id="channel-name"
+          className="modal-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={100}
+        />
       </div>
 
       <div className="settings-field">
         <label htmlFor="channel-category">{t('channelSettings.category')}</label>
-        <input id="channel-category" className="modal-input" value={category} onChange={(e) => setCategory(e.target.value)} placeholder={t('channelSettings.categoryHint')} maxLength={64} />
+        <input
+          id="channel-category"
+          className="modal-input"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          placeholder={t('channelSettings.categoryHint')}
+          maxLength={64}
+        />
       </div>
 
       <div className="settings-field">
         <label htmlFor="channel-topic">{t('channelSettings.topic')}</label>
-        <input id="channel-topic" className="modal-input" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder={t('channelSettings.topicHint')} maxLength={256} />
+        <input
+          id="channel-topic"
+          className="modal-input"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder={t('channelSettings.topicHint')}
+          maxLength={256}
+        />
       </div>
 
       <div className="settings-field">
         <label htmlFor="channel-description">{t('channelSettings.description')}</label>
-        <textarea id="channel-description" className="modal-input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('channelSettings.descriptionHint')} rows={5} />
+        <textarea
+          id="channel-description"
+          className="modal-input"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder={t('channelSettings.descriptionHint')}
+          rows={5}
+        />
       </div>
 
       <div className="settings-field">
         <label htmlFor="channel-slowmode">{t('channelSettings.slowMode')}</label>
-        <input id="channel-slowmode" type="number" min={0} max={21600} className="modal-input" value={slowMode} onChange={(e) => setSlowMode(e.target.value)} />
+        <input
+          id="channel-slowmode"
+          type="number"
+          min={0}
+          max={21600}
+          className="modal-input"
+          value={slowMode}
+          onChange={(e) => setSlowMode(e.target.value)}
+        />
         <p className="settings-hint">{t('channelSettings.slowModeHint')}</p>
       </div>
 
@@ -89,9 +124,7 @@ function GeneralTab({
 export function ChannelSettingsPanel({ channel, onClose, onUpdated }: ChannelSettingsPanelProps) {
   const t = useT();
 
-  const tabs = [
-    { id: 'general', label: t('channelSettings.tabGeneral') },
-  ];
+  const tabs = [{ id: 'general', label: t('channelSettings.tabGeneral') }];
 
   return (
     <TabbedView

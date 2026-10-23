@@ -38,14 +38,14 @@ All data is stored in PostgreSQL with a well-documented ActivityPub-shaped schem
 
 ## Encryption details
 
-| Property | Value |
-|----------|-------|
-| Key exchange | ECDH P-256 |
-| Symmetric cipher | AES-256-GCM |
-| IV | 12 bytes, random per message |
-| Key storage | IndexedDB (CryptoKey object, same-origin protected) |
-| Public key format | JWK, stored on server |
-| Implementation | Web Crypto API (no third-party crypto libraries) |
+| Property          | Value                                               |
+| ----------------- | --------------------------------------------------- |
+| Key exchange      | ECDH P-256                                          |
+| Symmetric cipher  | AES-256-GCM                                         |
+| IV                | 12 bytes, random per message                        |
+| Key storage       | IndexedDB (CryptoKey object, same-origin protected) |
+| Public key format | JWK, stored on server                               |
+| Implementation    | Web Crypto API (no third-party crypto libraries)    |
 
 ## Limitations
 

@@ -2,12 +2,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { createDb } from '../../db/index.ts';
-import {
-  createFederationTestApp,
-  createTestUser,
-  createRemoteActor,
-  cleanDb,
-} from './helpers.ts';
+import { createFederationTestApp, createTestUser, createRemoteActor, cleanDb } from './helpers.ts';
 
 let app: FastifyInstance;
 let db: ReturnType<typeof createDb>;

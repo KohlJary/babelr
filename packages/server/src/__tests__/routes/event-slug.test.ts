@@ -335,8 +335,7 @@ describe('wiki-links parser — event refs', () => {
 
   it('distinguishes event, message, and page refs', async () => {
     const { parseWikiRefs } = await import('@babelr/shared');
-    const src =
-      'See [[some-page]], read [[msg:abcdefghjk]], and join [[event:mnpqrstuvw]].';
+    const src = 'See [[some-page]], read [[msg:abcdefghjk]], and join [[event:mnpqrstuvw]].';
     const refs = parseWikiRefs(src);
     expect(refs.map((r) => r.kind)).toEqual(['page', 'message', 'event']);
   });
@@ -385,6 +384,8 @@ describe('wiki-links parser — event refs', () => {
     const refs = parseWikiRefs(src);
     expect(refs).toHaveLength(4);
     expect(refs.map((r) => r.kind)).toEqual(['message', 'event', 'file', 'page']);
-    expect(refs.every((r) => r.origin?.server === 'ops' && r.origin?.tower === 'acme.com')).toBe(true);
+    expect(refs.every((r) => r.origin?.server === 'ops' && r.origin?.tower === 'acme.com')).toBe(
+      true,
+    );
   });
 });

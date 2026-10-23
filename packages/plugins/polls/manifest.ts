@@ -41,13 +41,6 @@ interface PollOptionRow {
   label: string;
 }
 
-interface PollVoteRow {
-  poll_id: string;
-  actor_uri: string;
-  option_id: string;
-  voted_at: string;
-}
-
 interface PollPayload {
   slug: string;
   question: string;
@@ -71,8 +64,7 @@ export default definePlugin({
   id: 'polls',
   name: 'Polls & Quizzes',
   version: '0.1.0',
-  description:
-    'Inline polls you can vote on from anywhere a [[kind:slug]] embed renders.',
+  description: 'Inline polls you can vote on from anywhere a [[kind:slug]] embed renders.',
   dependencies: { babelr: '^0.1.0' },
 
   migrations: [
@@ -193,37 +185,34 @@ export default definePlugin({
       return payload;
     });
 
-    fastify.get<{ Querystring: { serverId?: string } }>(
-      '/polls',
-      async (request, reply) => {
-        if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-        const { serverId } = request.query;
-        // Server-scoped list for now. Global listing (cross-server
-        // recent activity dashboards, etc.) is a follow-up.
-        const rows = serverId
-          ? ((await fastify.db.execute(
-              sql`SELECT slug, question, created_by, server_id, created_at, closed_at, allow_revote
+    fastify.get<{ Querystring: { serverId?: string } }>('/polls', async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const { serverId } = request.query;
+      // Server-scoped list for now. Global listing (cross-server
+      // recent activity dashboards, etc.) is a follow-up.
+      const rows = serverId
+        ? ((await fastify.db.execute(
+            sql`SELECT slug, question, created_by, server_id, created_at, closed_at, allow_revote
                   FROM plugin_polls_polls
                   WHERE server_id = ${serverId}
                   ORDER BY created_at DESC
                   LIMIT 200`,
-            )) as unknown as PollRow[])
-          : ((await fastify.db.execute(
-              sql`SELECT slug, question, created_by, server_id, created_at, closed_at, allow_revote
+          )) as unknown as PollRow[])
+        : ((await fastify.db.execute(
+            sql`SELECT slug, question, created_by, server_id, created_at, closed_at, allow_revote
                   FROM plugin_polls_polls
                   WHERE created_by = ${request.actor.id}
                   ORDER BY created_at DESC
                   LIMIT 200`,
-            )) as unknown as PollRow[]);
-        return rows.map((r) => ({
-          slug: r.slug,
-          question: r.question,
-          createdBy: r.created_by,
-          createdAt: r.created_at,
-          closedAt: r.closed_at,
-        }));
-      },
-    );
+          )) as unknown as PollRow[]);
+      return rows.map((r) => ({
+        slug: r.slug,
+        question: r.question,
+        createdBy: r.created_by,
+        createdAt: r.created_at,
+        closedAt: r.closed_at,
+      }));
+    });
 
     fastify.get<{ Params: { slug: string } }>('/polls/:slug', async (request, reply) => {
       const payload = await loadPoll(request.params.slug);
@@ -279,25 +268,22 @@ export default definePlugin({
       return payload;
     });
 
-    fastify.post<{ Params: { slug: string } }>(
-      '/polls/:slug/close',
-      async (request, reply) => {
-        if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-        const polls = (await fastify.db.execute(
-          sql`SELECT id, created_by FROM plugin_polls_polls WHERE slug = ${request.params.slug} LIMIT 1`,
-        )) as unknown as { id: string; created_by: string }[];
-        const poll = polls[0];
-        if (!poll) return reply.status(404).send({ error: 'Poll not found' });
-        if (poll.created_by !== request.actor.id) {
-          return reply.status(403).send({ error: 'Only the creator can close a poll' });
-        }
-        await fastify.db.execute(
-          sql`UPDATE plugin_polls_polls SET closed_at = NOW() WHERE id = ${poll.id}`,
-        );
-        await broadcastPoll(request.params.slug);
-        return loadPoll(request.params.slug);
-      },
-    );
+    fastify.post<{ Params: { slug: string } }>('/polls/:slug/close', async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const polls = (await fastify.db.execute(
+        sql`SELECT id, created_by FROM plugin_polls_polls WHERE slug = ${request.params.slug} LIMIT 1`,
+      )) as unknown as { id: string; created_by: string }[];
+      const poll = polls[0];
+      if (!poll) return reply.status(404).send({ error: 'Poll not found' });
+      if (poll.created_by !== request.actor.id) {
+        return reply.status(403).send({ error: 'Only the creator can close a poll' });
+      }
+      await fastify.db.execute(
+        sql`UPDATE plugin_polls_polls SET closed_at = NOW() WHERE id = ${poll.id}`,
+      );
+      await broadcastPoll(request.params.slug);
+      return loadPoll(request.params.slug);
+    });
   },
 
   federationHandlers: {

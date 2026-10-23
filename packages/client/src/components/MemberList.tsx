@@ -26,7 +26,6 @@ export function MemberList({
   callerRole,
   presenceStatus,
   onKick,
-  onClose,
   onRolesChanged,
 }: MemberListProps) {
   const t = useT();
@@ -86,101 +85,94 @@ export function MemberList({
         {t('members.title')} ({members.length})
       </div>
       <div className="discover-list">
-          {members.map((member) => {
-            const isSelf = member.id === actor.id;
-            const status = presenceStatus?.get(member.id) ?? 'offline';
-            const statusColor =
-              status === 'online' ? '#10b981' : status === 'away' ? '#f59e0b' : '#6b7280';
-            const memberRoleIds = new Set(member.roleIds ?? []);
-            const memberRoles = (member.roleIds ?? [])
-              .map((id) => rolesById.get(id))
-              .filter((r): r is NonNullable<typeof r> => !!r);
-            const isEditing = editingMemberId === member.id;
-            const isBusy = busyMemberId === member.id;
-            return (
-              <div key={member.id} className="discover-item member-row">
-                <div className="discover-info">
-                  <div className="member-presence">
-                    <span
-                      className="presence-dot"
-                      style={{ backgroundColor: statusColor }}
-                      title={presenceLabel(status)}
-                    />
-                    <span className="discover-name">
-                      {member.displayName ?? member.preferredUsername}
-                    </span>
-                    <div className="member-role-chips">
-                      {memberRoles.map((r) => (
-                        <span
-                          key={r.id}
-                          className="member-role-chip"
-                          style={{
-                            borderColor: r.color ?? '#444',
-                            color: r.color ?? '#bbb',
-                          }}
-                        >
-                          {r.name}
-                        </span>
-                      ))}
-                    </div>
+        {members.map((member) => {
+          const isSelf = member.id === actor.id;
+          const status = presenceStatus?.get(member.id) ?? 'offline';
+          const statusColor =
+            status === 'online' ? '#10b981' : status === 'away' ? '#f59e0b' : '#6b7280';
+          const memberRoleIds = new Set(member.roleIds ?? []);
+          const memberRoles = (member.roleIds ?? [])
+            .map((id) => rolesById.get(id))
+            .filter((r): r is NonNullable<typeof r> => !!r);
+          const isEditing = editingMemberId === member.id;
+          const isBusy = busyMemberId === member.id;
+          return (
+            <div key={member.id} className="discover-item member-row">
+              <div className="discover-info">
+                <div className="member-presence">
+                  <span
+                    className="presence-dot"
+                    style={{ backgroundColor: statusColor }}
+                    title={presenceLabel(status)}
+                  />
+                  <span className="discover-name">
+                    {member.displayName ?? member.preferredUsername}
+                  </span>
+                  <div className="member-role-chips">
+                    {memberRoles.map((r) => (
+                      <span
+                        key={r.id}
+                        className="member-role-chip"
+                        style={{
+                          borderColor: r.color ?? '#444',
+                          color: r.color ?? '#bbb',
+                        }}
+                      >
+                        {r.name}
+                      </span>
+                    ))}
                   </div>
-                  <span className="discover-meta">@{member.preferredUsername}</span>
                 </div>
-                <div className="member-actions">
-                  {canManageRoles && !isSelf && member.role !== 'owner' && (
-                    <button
-                      className="voice-control-btn"
-                      onClick={() =>
-                        setEditingMemberId(isEditing ? null : member.id)
-                      }
-                      disabled={isBusy}
-                    >
-                      {isEditing ? 'Done' : 'Manage roles'}
-                    </button>
-                  )}
-                  {canKick && !isSelf && member.role !== 'owner' && (
-                    <button
-                      className="kick-btn"
-                      onClick={() => onKick(member.id)}
-                      title={t('members.kick')}
-                    >
-                      &times;
-                    </button>
-                  )}
-                </div>
-                {isEditing && (
-                  <div className="member-role-picker">
-                    {assignableRoles.length === 0 && (
-                      <div className="sidebar-empty">No roles to assign yet.</div>
-                    )}
-                    {assignableRoles.map((r) => {
-                      const assigned = memberRoleIds.has(r.id);
-                      return (
-                        <label key={r.id} className="member-role-picker-item">
-                          <input
-                            type="checkbox"
-                            checked={assigned}
-                            disabled={isBusy}
-                            onChange={() =>
-                              handleToggleAssignment(member.id, r.id, assigned)
-                            }
-                          />
-                          {r.color && (
-                            <span
-                              className="roles-list-dot"
-                              style={{ backgroundColor: r.color }}
-                            />
-                          )}
-                          <span>{r.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                <span className="discover-meta">@{member.preferredUsername}</span>
+              </div>
+              <div className="member-actions">
+                {canManageRoles && !isSelf && member.role !== 'owner' && (
+                  <button
+                    className="voice-control-btn"
+                    onClick={() => setEditingMemberId(isEditing ? null : member.id)}
+                    disabled={isBusy}
+                  >
+                    {isEditing ? 'Done' : 'Manage roles'}
+                  </button>
+                )}
+                {canKick && !isSelf && member.role !== 'owner' && (
+                  <button
+                    className="kick-btn"
+                    onClick={() => onKick(member.id)}
+                    title={t('members.kick')}
+                  >
+                    &times;
+                  </button>
                 )}
               </div>
-            );
-          })}
-        </div>
+              {isEditing && (
+                <div className="member-role-picker">
+                  {assignableRoles.length === 0 && (
+                    <div className="sidebar-empty">No roles to assign yet.</div>
+                  )}
+                  {assignableRoles.map((r) => {
+                    const assigned = memberRoleIds.has(r.id);
+                    return (
+                      <label key={r.id} className="member-role-picker-item">
+                        <input
+                          type="checkbox"
+                          checked={assigned}
+                          disabled={isBusy}
+                          onChange={() => handleToggleAssignment(member.id, r.id, assigned)}
+                        />
+                        {r.color && (
+                          <span className="roles-list-dot" style={{ backgroundColor: r.color }} />
+                        )}
+                        <span>{r.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

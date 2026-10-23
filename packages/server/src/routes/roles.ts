@@ -87,7 +87,10 @@ function normalizePermissions(input: unknown): string[] {
   return out;
 }
 
-async function loadServer(db: ReturnType<typeof import('../db/index.ts').createDb>, serverId: string) {
+async function loadServer(
+  db: ReturnType<typeof import('../db/index.ts').createDb>,
+  serverId: string,
+) {
   const [server] = await db
     .select()
     .from(actors)
@@ -137,9 +140,7 @@ export default async function roleRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const { serverId } = request.params;
-      if (
-        !(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))
-      ) {
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -215,9 +216,7 @@ export default async function roleRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const { serverId, roleId } = request.params;
-      if (
-        !(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))
-      ) {
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -239,7 +238,8 @@ export default async function roleRoutes(fastify: FastifyInstance) {
         }
         const name = body.name.trim();
         if (!name) return reply.status(400).send({ error: 'Role name cannot be empty' });
-        if (name.length > 64) return reply.status(400).send({ error: 'Role name too long (max 64)' });
+        if (name.length > 64)
+          return reply.status(400).send({ error: 'Role name too long (max 64)' });
         if (name !== role.name) {
           const [existing] = await db
             .select({ id: serverRoles.id })
@@ -307,9 +307,7 @@ export default async function roleRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const { serverId, roleId } = request.params;
-      if (
-        !(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))
-      ) {
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -357,9 +355,7 @@ export default async function roleRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const { serverId, actorId, roleId } = request.params;
-      if (
-        !(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))
-      ) {
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 
@@ -400,9 +396,7 @@ export default async function roleRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const { serverId, actorId, roleId } = request.params;
-      if (
-        !(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))
-      ) {
+      if (!(await hasPermission(db, serverId, request.actor.id, PERMISSIONS.MANAGE_ROLES))) {
         return reply.status(403).send({ error: 'Insufficient permissions' });
       }
 

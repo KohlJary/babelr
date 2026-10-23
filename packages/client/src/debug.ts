@@ -30,7 +30,10 @@ function loadChannels(): void {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
-    for (const ch of raw.split(',').map((s) => s.trim()).filter(Boolean)) {
+    for (const ch of raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)) {
       channels.add(ch);
     }
   } catch {
@@ -77,17 +80,13 @@ export function debugEnabled(channel: string): boolean {
 export function debugEnable(...names: string[]): void {
   for (const name of names) channels.add(name);
   persist();
-  console.info(
-    `[babelrDebug] enabled: ${Array.from(channels).join(', ') || '(none)'}`,
-  );
+  console.info(`[babelrDebug] enabled: ${Array.from(channels).join(', ') || '(none)'}`);
 }
 
 export function debugDisable(...names: string[]): void {
   for (const name of names) channels.delete(name);
   persist();
-  console.info(
-    `[babelrDebug] enabled: ${Array.from(channels).join(', ') || '(none)'}`,
-  );
+  console.info(`[babelrDebug] enabled: ${Array.from(channels).join(', ') || '(none)'}`);
 }
 
 export function debugList(): string[] {

@@ -181,7 +181,7 @@ export const TEST_SUITES: TestSuite[] = [
       },
       {
         id: 'fr-2',
-        content: "Il ne faut pas mettre la charrue avant les bœufs.",
+        content: 'Il ne faut pas mettre la charrue avant les bœufs.',
         sourceLanguage: 'fr',
         expectedRegister: 'neutral',
         expectedIntent: 'statement',
@@ -197,8 +197,7 @@ export const TEST_SUITES: TestSuite[] = [
       },
       {
         id: 'fr-4',
-        content:
-          "Veuillez agréer, Madame, l'expression de mes salutations distinguées.",
+        content: "Veuillez agréer, Madame, l'expression de mes salutations distinguées.",
         sourceLanguage: 'fr',
         expectedRegister: 'formal',
         expectedIntent: 'greeting',

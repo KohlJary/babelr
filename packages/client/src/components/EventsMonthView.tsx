@@ -117,9 +117,7 @@ export function EventsMonthView({
                     </button>
                   );
                 })}
-                {overflow > 0 && (
-                  <div className="events-month-overflow">+{overflow} more</div>
-                )}
+                {overflow > 0 && <div className="events-month-overflow">+{overflow} more</div>}
               </div>
             </div>
           );
@@ -128,4 +126,3 @@ export function EventsMonthView({
     </div>
   );
 }
-

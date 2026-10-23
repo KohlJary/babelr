@@ -33,7 +33,7 @@ Nous suivons une règle simple : le code doit être lisible avant d'être astuci
 
 ## Code-Reviews
 
-Reviews sollten zügig erfolgen — idealerweise innerhalb eines Werktages. Blockiere niemanden länger als nötig. Wenn du einen Kommentar hinterlässt, erkläre immer das *Warum*, nicht nur das *Was*. "Das ist falsch" hilft niemandem; "Das ist falsch, weil X unter Bedingung Y fehlschlägt" gibt dem Autor etwas, worauf er aufbauen kann.
+Reviews sollten zügig erfolgen — idealerweise innerhalb eines Werktages. Blockiere niemanden länger als nötig. Wenn du einen Kommentar hinterlässt, erkläre immer das _Warum_, nicht nur das _Was_. "Das ist falsch" hilft niemandem; "Das ist falsch, weil X unter Bedingung Y fehlschlägt" gibt dem Autor etwas, worauf er aufbauen kann.
 
 ## 休憩について
 

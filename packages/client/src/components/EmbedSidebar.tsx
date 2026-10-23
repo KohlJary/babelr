@@ -26,13 +26,7 @@ interface EmbedSidebarProps {
  * the registry's `navigate` (typically routing the user to the full-
  * size view for that kind).
  */
-export function EmbedSidebar({
-  target,
-  actor,
-  serverId,
-  navCtx,
-  onClose,
-}: EmbedSidebarProps) {
+export function EmbedSidebar({ target, actor, serverId, navCtx, onClose }: EmbedSidebarProps) {
   const t = useT();
   const def = getEmbed(target.kind);
   if (!def) {
@@ -65,11 +59,7 @@ export function EmbedSidebar({
           >
             {def.navigateLabel}
           </button>
-          <button
-            className="embed-sidebar-close"
-            onClick={onClose}
-            title={t('common.close')}
-          >
+          <button className="embed-sidebar-close" onClick={onClose} title={t('common.close')}>
             ×
           </button>
         </div>

@@ -99,7 +99,8 @@ export const UI_STRINGS = {
   'settings.localBrowser': 'Local (Browser)',
   'settings.anthropicApiKey': 'Anthropic API Key',
   'settings.openaiApiKey': 'OpenAI API Key',
-  'settings.apiKeyHint': 'Your key is stored locally in your browser. It is never saved on the server.',
+  'settings.apiKeyHint':
+    'Your key is stored locally in your browser. It is never saved on the server.',
   'settings.localModelHint':
     'Translations run entirely in your browser. First use downloads a ~50MB model per language pair. Tone, intent, and idiom annotations are not available with local translation.',
   'settings.tierTonePreserving': 'Tone-preserving (register, intent, idiom analysis)',
@@ -189,8 +190,7 @@ export const UI_STRINGS = {
   'serverSettings.taglineHint': 'Shown on discovery cards and invite landing pages.',
   'serverSettings.taglinePlaceholder': 'A short one-liner about your server',
   'serverSettings.about': 'About',
-  'serverSettings.aboutPlaceholder':
-    "Longer description — what's this server about? Who's it for?",
+  'serverSettings.aboutPlaceholder': "Longer description — what's this server about? Who's it for?",
   'serverSettings.tags': 'Tags',
   'serverSettings.tagsHint': 'Up to 10 tags. Used for discoverability.',
   'serverSettings.tagPlaceholder': 'Add tag (press Enter)',
@@ -564,7 +564,8 @@ export const UI_STRINGS = {
   'search.button': 'Search',
   'search.failed': 'Search failed',
   'search.noResults': 'No results found',
-  'search.hint': 'Filters: from:username in:channel before:YYYY-MM-DD after:YYYY-MM-DD has:file has:link has:image',
+  'search.hint':
+    'Filters: from:username in:channel before:YYYY-MM-DD after:YYYY-MM-DD has:file has:link has:image',
 
   // Messages (jump to present)
   'messages.jumpToPresent': '↓ Jump to Present',
@@ -594,7 +595,8 @@ export const UI_STRINGS = {
   'twoFactor.verifying': 'Verifying…',
   'twoFactor.recoveryHint': 'You can also use a recovery code.',
   'twoFactor.setup': 'Set up 2FA',
-  'twoFactor.setupSubtitle': 'Scan the QR code with your authenticator app, then enter the 6-digit code to confirm.',
+  'twoFactor.setupSubtitle':
+    'Scan the QR code with your authenticator app, then enter the 6-digit code to confirm.',
   'twoFactor.enterCode': 'Enter code from app',
   'twoFactor.confirm': 'Confirm',
   'twoFactor.confirming': 'Confirming…',
@@ -612,15 +614,19 @@ export const UI_STRINGS = {
   'verification.sent': 'Verification email sent!',
 
   'onboarding.embedsTitle': 'Link anything with embeds',
-  'onboarding.embedsSubtitle': 'Type [[kind:name]] in any message to embed a live reference. Click to preview, translate automatically.',
+  'onboarding.embedsSubtitle':
+    'Type [[kind:name]] in any message to embed a live reference. Click to preview, translate automatically.',
   'onboarding.embedPage': 'Embed a wiki page',
   'onboarding.embedEvent': 'Embed a calendar event',
   'onboarding.embedTask': 'Embed a work item',
   'onboarding.embedFile': 'Embed a shared file',
-  'onboarding.embedsHow': 'Embeds render inline as clickable cards. Click one to open a translated preview in the sidebar — no context switching.',
-  'onboarding.embedsCrossTower': 'Embeds work across federated Towers too. Reference content from any connected workspace.',
+  'onboarding.embedsHow':
+    'Embeds render inline as clickable cards. Click one to open a translated preview in the sidebar — no context switching.',
+  'onboarding.embedsCrossTower':
+    'Embeds work across federated Towers too. Reference content from any connected workspace.',
   'onboarding.allSet': "You're all set!",
-  'onboarding.doneSubtitle': 'Your workspace is ready. Start chatting, collaborating, and building.',
+  'onboarding.doneSubtitle':
+    'Your workspace is ready. Start chatting, collaborating, and building.',
   'onboarding.getStarted': 'Get started',
 } as const;
 

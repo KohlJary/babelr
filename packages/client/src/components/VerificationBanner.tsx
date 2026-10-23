@@ -22,13 +22,9 @@ export function VerificationBanner() {
 
   return (
     <div className="verification-banner">
-      <span className="verification-banner-text">
-        {t('verification.banner')}
-      </span>
+      <span className="verification-banner-text">{t('verification.banner')}</span>
       {sent ? (
-        <span className="verification-banner-sent">
-          {t('verification.sent')}
-        </span>
+        <span className="verification-banner-sent">{t('verification.sent')}</span>
       ) : (
         <button
           type="button"

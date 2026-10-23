@@ -155,10 +155,7 @@ function broadcastToAllChannels(fastify: FastifyInstance, message: WsServerMessa
  * the new joiner can initiate WebRTC offers to each of them.
  * Rejects with null if the room is full.
  */
-function voiceJoin(
-  channelId: string,
-  participant: VoiceParticipant,
-): VoiceParticipant[] | null {
+function voiceJoin(channelId: string, participant: VoiceParticipant): VoiceParticipant[] | null {
   let room = voiceRooms.get(channelId);
   if (!room) {
     room = new Map();
@@ -230,15 +227,18 @@ function registerActorConnection(ws: WebSocket, actorId: string, fastify: Fastif
   connections.add(ws);
 
   // Set up heartbeat timeout (5min inactivity = away)
-  const heartbeatTimeout = setTimeout(() => {
-    if (connections && connections.has(ws)) {
-      const awayMsg: WsServerMessage = {
-        type: 'presence:update',
-        payload: { actorId, status: 'away' },
-      };
-      broadcastToAllChannels(fastify, awayMsg);
-    }
-  }, 5 * 60 * 1000);
+  const heartbeatTimeout = setTimeout(
+    () => {
+      if (connections && connections.has(ws)) {
+        const awayMsg: WsServerMessage = {
+          type: 'presence:update',
+          payload: { actorId, status: 'away' },
+        };
+        broadcastToAllChannels(fastify, awayMsg);
+      }
+    },
+    5 * 60 * 1000,
+  );
 
   socketMeta.set(ws, { actorId, heartbeatTimeout });
 }

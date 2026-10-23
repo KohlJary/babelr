@@ -98,7 +98,11 @@ async function register(username: string): Promise<string> {
   const res = await app.inject({
     method: 'POST',
     url: '/auth/register',
-    payload: { username, email: `${username}@test.babelr.local`, password: 'test-password-12chars' },
+    payload: {
+      username,
+      email: `${username}@test.babelr.local`,
+      password: 'test-password-12chars',
+    },
   });
   const raw = res.headers['set-cookie'];
   const c = Array.isArray(raw) ? raw[0] : (raw as string);
@@ -137,11 +141,17 @@ beforeAll(async () => {
   await app.register(authRoutes);
   // Same wiring the plugin loader does: run migrations, mount routes
   // under /plugins/<id>.
-  await db.execute(sql.raw(`DROP TABLE IF EXISTS plugin_blinds_rounds, plugin_blinds_ratings, plugin_blinds_ranks`));
+  await db.execute(
+    sql.raw(
+      `DROP TABLE IF EXISTS plugin_blinds_rounds, plugin_blinds_ratings, plugin_blinds_ranks`,
+    ),
+  );
   for (const stmt of (blindsManifest.migrations![0].up as string).split(/;\s*(?:\n|$)/)) {
     if (stmt.trim()) await db.execute(sql.raw(stmt));
   }
-  await app.register(async (scoped: FastifyInstance) => blindsManifest.serverRoutes!(scoped), { prefix: '/plugins/blinds' });
+  await app.register(async (scoped: FastifyInstance) => blindsManifest.serverRoutes!(scoped), {
+    prefix: '/plugins/blinds',
+  });
   await app.ready();
 });
 
@@ -237,7 +247,9 @@ describe('grader gate', () => {
   it('a non-grader cannot write ratings that land in the export', async () => {
     await writeRound('r1');
     await req('PUT', '/rounds/r1/ratings/P1-A', other, { field: 'stunt', value: true });
-    const rows = (await db.execute(sql`SELECT * FROM plugin_blinds_ratings`)) as unknown as unknown[];
+    const rows = (await db.execute(
+      sql`SELECT * FROM plugin_blinds_ratings`,
+    )) as unknown as unknown[];
     expect(rows).toHaveLength(0);
   });
 });
@@ -252,7 +264,9 @@ describe('reading a round', () => {
     expect((await req('POST', '/rounds/r1/lock', grader)).statusCode).toBe(200);
     expect(fsPaths.length).toBeGreaterThan(0);
     const touched = fsPaths.filter((p) => p.startsWith(d + '/'));
-    expect(touched.every((p) => p.endsWith('/blind.json') || p.endsWith('/ratings.json'))).toBe(true);
+    expect(touched.every((p) => p.endsWith('/blind.json') || p.endsWith('/ratings.json'))).toBe(
+      true,
+    );
     expect(fsPaths.some((p) => /key\.json|raw\.json/.test(p))).toBe(false);
     // And the key is still unreadable, i.e. nothing chmodded it open.
     expect((await stat(join(d, 'key.json'))).mode & 0o777).toBe(0);
@@ -297,7 +311,8 @@ describe('reading a round', () => {
 describe('grading', () => {
   it('autosaves per field, validates values, counts progress', async () => {
     await writeRound('r1');
-    const put = (label: string, body: unknown) => req('PUT', `/rounds/r1/ratings/${label}`, grader, body);
+    const put = (label: string, body: unknown) =>
+      req('PUT', `/rounds/r1/ratings/${label}`, grader, body);
     expect((await put('P1-A', { field: 'stunt', value: true })).statusCode).toBe(200);
     let body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
     expect(body.graded).toBe(0); // would_do still unset
@@ -373,9 +388,16 @@ describe('lock', () => {
     expect(out.ranks).toEqual({ P1: ['P1-A', 'P1-B'] });
     expect(JSON.stringify(out)).not.toMatch(/bare|robokohl/);
 
-    expect((await req('PUT', '/rounds/r1/ratings/P1-A', grader, { field: 'stunt', value: false })).statusCode).toBe(409);
-    expect((await req('PUT', '/rounds/r1/ratings/P1-A', grader, { note: 'changed my mind' })).statusCode).toBe(409);
-    expect((await req('PUT', '/rounds/r1/ranks/P1', grader, { order: ['P1-B', 'P1-A'] })).statusCode).toBe(409);
+    expect(
+      (await req('PUT', '/rounds/r1/ratings/P1-A', grader, { field: 'stunt', value: false }))
+        .statusCode,
+    ).toBe(409);
+    expect(
+      (await req('PUT', '/rounds/r1/ratings/P1-A', grader, { note: 'changed my mind' })).statusCode,
+    ).toBe(409);
+    expect(
+      (await req('PUT', '/rounds/r1/ranks/P1', grader, { order: ['P1-B', 'P1-A'] })).statusCode,
+    ).toBe(409);
     expect((await req('POST', '/rounds/r1/lock', grader)).statusCode).toBe(409);
     const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
     expect(body.lockedAt).toBe(out.locked_at);
@@ -415,7 +437,9 @@ describe('lock: failure and races', () => {
     const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
     expect(body.lockedAt).toBeNull();
     expect((await req('POST', '/rounds/r1/lock', grader)).statusCode).toBe(200);
-    expect(JSON.parse(await readFile(join(d, 'ratings.json'), 'utf8')).ratings['P1-A'].fields).toEqual({
+    expect(
+      JSON.parse(await readFile(join(d, 'ratings.json'), 'utf8')).ratings['P1-A'].fields,
+    ).toEqual({
       stunt: true,
     });
   });

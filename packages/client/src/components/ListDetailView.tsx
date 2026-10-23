@@ -89,11 +89,7 @@ export function ListDetailView<T>({
       <aside className="list-detail-rail">
         {title && <div className="list-detail-title">{title}</div>}
         {onCreate && (
-          <button
-            type="button"
-            className="list-detail-create"
-            onClick={onCreate}
-          >
+          <button type="button" className="list-detail-create" onClick={onCreate}>
             + {createLabel}
           </button>
         )}
@@ -106,9 +102,7 @@ export function ListDetailView<T>({
         />
         <div className="list-detail-list">
           {filtered.length === 0 && (
-            <div className="list-detail-empty">
-              {query ? 'No matches.' : emptyListMessage}
-            </div>
+            <div className="list-detail-empty">{query ? 'No matches.' : emptyListMessage}</div>
           )}
           {filtered.map((item) => {
             const id = getId(item);
@@ -128,12 +122,7 @@ export function ListDetailView<T>({
       </aside>
       <main className="list-detail-main">
         {onClose && (
-          <button
-            type="button"
-            className="list-detail-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
+          <button type="button" className="list-detail-close" onClick={onClose} aria-label="Close">
             ×
           </button>
         )}

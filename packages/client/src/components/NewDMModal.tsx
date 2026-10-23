@@ -11,7 +11,9 @@ interface NewDMModalProps {
 
 export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
   const t = useT();
-  const [users, setUsers] = useState<{ id: string; preferredUsername: string; displayName: string | null }[]>([]);
+  const [users, setUsers] = useState<
+    { id: string; preferredUsername: string; displayName: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [handle, setHandle] = useState('');
@@ -83,9 +85,7 @@ export function NewDMModal({ onStartDM, onClose }: NewDMModalProps) {
           {users.map((user) => (
             <div key={user.id} className="discover-item">
               <div className="discover-info">
-                <span className="discover-name">
-                  {user.displayName ?? user.preferredUsername}
-                </span>
+                <span className="discover-name">{user.displayName ?? user.preferredUsername}</span>
                 <span className="discover-meta">@{user.preferredUsername}</span>
               </div>
               <button

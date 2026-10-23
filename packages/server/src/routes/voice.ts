@@ -9,10 +9,7 @@ import { hasPermission } from '../permissions.ts';
 import { verifySignedRequest } from '../federation/inbox.ts';
 import { extractDomain, isDomainAllowed } from '../federation/policy.ts';
 import { signedPost } from '../federation/delivery.ts';
-import {
-  issueVoiceFederationToken,
-  type VoiceFederationClaims,
-} from '../voice/federation-jwt.ts';
+import { issueVoiceFederationToken, type VoiceFederationClaims } from '../voice/federation-jwt.ts';
 
 interface FederationTokenRequest {
   /**
@@ -89,8 +86,7 @@ export default async function voiceRoutes(fastify: FastifyInstance) {
       if (!channel) {
         return reply.status(404).send({ error: 'Channel not found' });
       }
-      const channelType =
-        (channel.properties as Record<string, unknown> | null)?.channelType;
+      const channelType = (channel.properties as Record<string, unknown> | null)?.channelType;
       if (channelType !== 'voice') {
         return reply.status(400).send({ error: 'Channel is not a voice channel' });
       }
@@ -184,9 +180,7 @@ export default async function voiceRoutes(fastify: FastifyInstance) {
         { channelUri },
       );
       if (result.status === 0 || !result.data) {
-        return reply
-          .status(502)
-          .send({ error: 'Failed to reach remote Tower for token issuance' });
+        return reply.status(502).send({ error: 'Failed to reach remote Tower for token issuance' });
       }
       if (result.status !== 200) {
         return reply.status(result.status).send(result.data ?? { error: 'Token denied' });

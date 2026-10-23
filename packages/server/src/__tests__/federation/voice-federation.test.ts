@@ -92,7 +92,7 @@ async function postFederationToken(opts: {
 }
 
 describe('federated voice token issuance', () => {
-  it('issues a JWT to a remote member of the channel\'s Group', async () => {
+  it("issues a JWT to a remote member of the channel's Group", async () => {
     const { server, voiceChannel } = await setupGroupWithVoiceChannel({
       ownerUsername: 'alice',
       serverName: 'TestServer',

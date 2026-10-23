@@ -163,10 +163,7 @@ function loadExistingSeed(): Record<string, Record<string, string>> {
     return {};
   }
   try {
-    return JSON.parse(readFileSync(seedPath, 'utf-8')) as Record<
-      string,
-      Record<string, string>
-    >;
+    return JSON.parse(readFileSync(seedPath, 'utf-8')) as Record<string, Record<string, string>>;
   } catch (err) {
     console.warn(
       `Failed to parse existing seed JSON — treating as empty: ${
@@ -199,9 +196,7 @@ async function main() {
 
   const existingSeed = force ? {} : loadExistingSeed();
 
-  console.log(
-    `Seeding UI translations: ${totalKeys} strings × ${targets.length} languages`,
-  );
+  console.log(`Seeding UI translations: ${totalKeys} strings × ${targets.length} languages`);
   console.log(`Languages: ${targets.join(', ')}`);
   if (force) {
     console.log('--force: re-translating every key for every language');
@@ -233,9 +228,7 @@ async function main() {
   for (const lang of targets) {
     // Compute delta: source keys not yet translated for this language.
     const existingForLang = existingSeed[lang] ?? {};
-    const missingKeys = force
-      ? sourceKeys
-      : sourceKeys.filter((k) => !(k in existingForLang));
+    const missingKeys = force ? sourceKeys : sourceKeys.filter((k) => !(k in existingForLang));
 
     if (missingKeys.length === 0) {
       console.log(`[${lang}] up to date (${Object.keys(existingForLang).length} cached), skipping`);

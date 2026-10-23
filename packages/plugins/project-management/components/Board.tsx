@@ -39,24 +39,18 @@ export function BoardKanban({
       if (!board) return;
       const snapshot = board;
       // Find source column + item.
-      const srcCol = board.columns.find((c) =>
-        c.workItems.some((i) => i.slug === srcSlug),
-      );
+      const srcCol = board.columns.find((c) => c.workItems.some((i) => i.slug === srcSlug));
       if (!srcCol) return;
       const item = srcCol.workItems.find((i) => i.slug === srcSlug);
       if (!item) return;
 
       const sameColumn = srcCol.id === destColumnId;
-      const destCol = sameColumn
-        ? srcCol
-        : board.columns.find((c) => c.id === destColumnId);
+      const destCol = sameColumn ? srcCol : board.columns.find((c) => c.id === destColumnId);
       if (!destCol) return;
 
       // Build the new ordering for the affected columns.
       const srcItemsAfter = srcCol.workItems.filter((i) => i.slug !== srcSlug);
-      const destItemsAfter = sameColumn
-        ? srcItemsAfter.slice()
-        : destCol.workItems.slice();
+      const destItemsAfter = sameColumn ? srcItemsAfter.slice() : destCol.workItems.slice();
       const clampedIndex = Math.max(0, Math.min(destIndex, destItemsAfter.length));
       const movedItem: WorkItemView = { ...item, columnId: destColumnId };
       destItemsAfter.splice(clampedIndex, 0, movedItem);
@@ -88,15 +82,12 @@ export function BoardKanban({
       try {
         // Server's reorder endpoint accepts work-item slugs as
         // itemIds (the client never has the row uuid).
-        const res = await fetch(
-          `${routeBase}/boards/${encodeURIComponent(board.slug)}/reorder`,
-          {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ assignments }),
-          },
-        );
+        const res = await fetch(`${routeBase}/boards/${encodeURIComponent(board.slug)}/reorder`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignments }),
+        });
         if (!res.ok) throw new Error('reorder failed');
         // Refetch for canonical position numbers (and to pick up any
         // concurrent edits from other clients).
@@ -135,12 +126,9 @@ export function BoardKanban({
   // at worst a no-op (and keeps the code path singular).
   useEffect(() => {
     if (!board) return;
-    const unsub = onWsMessage<{ boardSlug: string }>(
-      'plugin:pm:updated',
-      (payload) => {
-        if (payload.boardSlug === board.slug) onMutated();
-      },
-    );
+    const unsub = onWsMessage<{ boardSlug: string }>('plugin:pm:updated', (payload) => {
+      if (payload.boardSlug === board.slug) onMutated();
+    });
     return unsub;
   }, [board, onMutated]);
 
@@ -226,15 +214,12 @@ function BoardColumn({
     if (!newTitle.trim() || submitting) return;
     setSubmitting(true);
     try {
-      const res = await fetch(
-        `${routeBase}/boards/${encodeURIComponent(boardSlug)}/work-items`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ columnId: column.id, title: newTitle.trim() }),
-        },
-      );
+      const res = await fetch(`${routeBase}/boards/${encodeURIComponent(boardSlug)}/work-items`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columnId: column.id, title: newTitle.trim() }),
+      });
       if (res.ok) {
         setNewTitle('');
         setAdding(false);
@@ -326,9 +311,7 @@ function BoardColumn({
         {column.workItems.length > 0 && (
           <div
             className={`pm-column-drop-tail${
-              dragActive && hoverIndex === column.workItems.length
-                ? ' pm-column-drop-hover'
-                : ''
+              dragActive && hoverIndex === column.workItems.length ? ' pm-column-drop-hover' : ''
             }`}
             onDragOver={(e) => {
               if (!dragActive) return;
@@ -373,11 +356,7 @@ function BoardColumn({
             </div>
           </form>
         ) : (
-          <button
-            type="button"
-            className="pm-column-add-btn"
-            onClick={() => setAdding(true)}
-          >
+          <button type="button" className="pm-column-add-btn" onClick={() => setAdding(true)}>
             + <T>Add card</T>
           </button>
         )}
@@ -427,9 +406,7 @@ function WorkItemCard({
         </div>
       )}
       <div className="pm-card-meta">
-        <span className={`pm-card-priority priority-${item.priority}`}>
-          {item.priority}
-        </span>
+        <span className={`pm-card-priority priority-${item.priority}`}>{item.priority}</span>
         <span className={`pm-card-type type-${item.itemType}`}>{item.itemType}</span>
       </div>
     </article>

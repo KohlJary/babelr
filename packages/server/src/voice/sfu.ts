@@ -349,11 +349,7 @@ export function leaveRoom(channelId: string, actorId: string): string[] {
   return closedProducerIds;
 }
 
-function findTransport(
-  channelId: string,
-  actorId: string,
-  transportId: string,
-): WebRtcTransport {
+function findTransport(channelId: string, actorId: string, transportId: string): WebRtcTransport {
   const room = getRoom(channelId);
   if (!room) throw new Error('Room not found');
   const p = room.participants.get(actorId);

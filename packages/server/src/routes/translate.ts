@@ -30,7 +30,11 @@ type AdapterResult = { ok: true; text: string } | { ok: false; status: number; e
  * Claude Messages API. 401 surfaces as 'Invalid API key'; anything
  * else maps to 502.
  */
-async function callAnthropic(prompt: string, apiKey: string, signal: AbortSignal): Promise<AdapterResult> {
+async function callAnthropic(
+  prompt: string,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<AdapterResult> {
   const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
     headers: {
@@ -68,7 +72,11 @@ async function callAnthropic(prompt: string, apiKey: string, signal: AbortSignal
  * the cheapest OpenAI model that handles the full classify-translate-
  * idiom pipeline reliably.
  */
-async function callOpenAI(prompt: string, apiKey: string, signal: AbortSignal): Promise<AdapterResult> {
+async function callOpenAI(
+  prompt: string,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<AdapterResult> {
   const res = await fetch(OPENAI_API_URL, {
     method: 'POST',
     headers: {

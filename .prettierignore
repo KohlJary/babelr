@@ -1,0 +1,16 @@
+# Generated files: rewritten by their tools, so formatting them only
+# produces churn.
+packages/server/src/db/migrations/meta/
+packages/desktop/src-tauri/gen/
+package-lock.json
+
+# Seeded wiki content (stored in the database as written).
+packages/server/src/db/seed-data/
+
+# Agent tooling and memory, not project source.
+.daedalus/
+.claude/
+
+# Local artifacts
+uploads/
+test-results/

@@ -4,13 +4,9 @@ import { ListDetailView } from '../../client/src/components/ListDetailView.js';
 import { T } from '../../client/src/components/T.js';
 import { onWsMessage } from '../../client/src/plugins/ws-helper.js';
 import { BoardKanban } from './components/Board.js';
-import { TaskPreview, TaskInline, EDIT_EVENT } from './components/TaskEmbed.js';
-import { BoardPreview, BoardInline, OPEN_BOARD_EVENT } from './components/BoardEmbed.js';
+import { OPEN_BOARD_EVENT } from './components/BoardEmbed.js';
 import type { ActorProfile } from '@babelr/shared';
-import type {
-  BoardSummary,
-  BoardDetail,
-} from './manifest.js';
+import type { BoardSummary, BoardDetail } from './manifest.js';
 
 /**
  * Client barrel for the project-management plugin.
@@ -99,9 +95,13 @@ function CreateBoardForm({ routeBase, serverId, onCreated }: CreateBoardFormProp
 
   return (
     <div className="pm-create-form">
-      <h3><T>New board</T></h3>
+      <h3>
+        <T>New board</T>
+      </h3>
       <label className="pm-form-field">
-        <span><T>Name</T></span>
+        <span>
+          <T>Name</T>
+        </span>
         <input
           type="text"
           value={name}
@@ -110,7 +110,9 @@ function CreateBoardForm({ routeBase, serverId, onCreated }: CreateBoardFormProp
         />
       </label>
       <label className="pm-form-field">
-        <span><T>Description (optional)</T></span>
+        <span>
+          <T>Description (optional)</T>
+        </span>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -145,10 +147,9 @@ export function PmView(props: PmViewProps) {
       setBoards([]);
       return;
     }
-    const res = await fetch(
-      `${routeBase}/boards?serverId=${encodeURIComponent(serverId)}`,
-      { credentials: 'include' },
-    );
+    const res = await fetch(`${routeBase}/boards?serverId=${encodeURIComponent(serverId)}`, {
+      credentials: 'include',
+    });
     if (!res.ok) return;
     const data = (await res.json()) as BoardSummary[];
     setBoards(data);
@@ -176,12 +177,9 @@ export function PmView(props: PmViewProps) {
   // create/delete work items, and newly-created boards should appear
   // without a manual reload.
   useEffect(() => {
-    const unsub = onWsMessage<{ boardSlug: string }>(
-      'plugin:pm:updated',
-      () => {
-        void reloadBoards();
-      },
-    );
+    const unsub = onWsMessage<{ boardSlug: string }>('plugin:pm:updated', () => {
+      void reloadBoards();
+    });
     return unsub;
   }, [reloadBoards]);
 
@@ -285,10 +283,9 @@ export function PmView(props: PmViewProps) {
               // counts stay consistent with the server. Cheap for now;
               // task-pm-7 adds WS-driven real-time sync instead.
               if (selectedSlug) {
-                void fetch(
-                  `${routeBase}/boards/${encodeURIComponent(selectedSlug)}`,
-                  { credentials: 'include' },
-                )
+                void fetch(`${routeBase}/boards/${encodeURIComponent(selectedSlug)}`, {
+                  credentials: 'include',
+                })
                   .then(async (res) => (res.ok ? ((await res.json()) as BoardDetail) : null))
                   .then((detail) => setSelectedBoard(detail));
               }

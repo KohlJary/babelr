@@ -19,22 +19,18 @@ self.addEventListener('push', (event) => {
     };
 
     event.waitUntil(
-      self.clients
-        .matchAll({ type: 'window', includeUncontrolled: true })
-        .then((clients) => {
-          const anyFocused = clients.some(
-            (c) => (c as WindowClient).focused,
-          );
-          if (anyFocused) return;
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        const anyFocused = clients.some((c) => (c as WindowClient).focused);
+        if (anyFocused) return;
 
-          return self.registration.showNotification(payload.title, {
-            body: payload.body,
-            tag: payload.tag,
-            icon: '/pwa-192.png',
-            badge: '/pwa-192.png',
-            data: payload.data,
-          });
-        }),
+        return self.registration.showNotification(payload.title, {
+          body: payload.body,
+          tag: payload.tag,
+          icon: '/pwa-192.png',
+          badge: '/pwa-192.png',
+          data: payload.data,
+        });
+      }),
     );
   } catch {
     // Malformed payload — ignore
@@ -48,18 +44,16 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data as { channelId?: string } | undefined;
 
   event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clients) => {
-        // Focus an existing window if one is open
-        for (const client of clients) {
-          if ('focus' in client) {
-            return client.focus();
-          }
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // Focus an existing window if one is open
+      for (const client of clients) {
+        if ('focus' in client) {
+          return client.focus();
         }
-        // Otherwise open a new window
-        const url = data?.channelId ? `/?channel=${data.channelId}` : '/';
-        return self.clients.openWindow(url);
-      }),
+      }
+      // Otherwise open a new window
+      const url = data?.channelId ? `/?channel=${data.channelId}` : '/';
+      return self.clients.openWindow(url);
+    }),
   );
 });

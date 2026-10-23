@@ -69,7 +69,11 @@ function computeScores(cases: TestCase[], results: RunResult): Scores {
       scores.idiomExpected += tc.expectedIdioms.length;
       const foundIdioms = result.metadata.idioms.map((i) => i.original.toLowerCase());
       for (const expected of tc.expectedIdioms) {
-        if (foundIdioms.some((f) => f.includes(expected.toLowerCase()) || expected.toLowerCase().includes(f))) {
+        if (
+          foundIdioms.some(
+            (f) => f.includes(expected.toLowerCase()) || expected.toLowerCase().includes(f),
+          )
+        ) {
           scores.idiomFound++;
         }
       }
@@ -112,17 +116,10 @@ export function printReport(cases: TestCase[], runs: RunResult[]) {
 
     const scores = computeScores(cases, run);
     const regPct =
-      scores.registerTotal > 0
-        ? `${scores.registerMatches}/${scores.registerTotal}`
-        : '-';
-    const intPct =
-      scores.intentTotal > 0
-        ? `${scores.intentMatches}/${scores.intentTotal}`
-        : '-';
+      scores.registerTotal > 0 ? `${scores.registerMatches}/${scores.registerTotal}` : '-';
+    const intPct = scores.intentTotal > 0 ? `${scores.intentMatches}/${scores.intentTotal}` : '-';
     const idiomPct =
-      scores.idiomExpected > 0
-        ? `${scores.idiomFound}/${scores.idiomExpected}`
-        : '-';
+      scores.idiomExpected > 0 ? `${scores.idiomFound}/${scores.idiomExpected}` : '-';
 
     const row = [
       bold(run.model.padEnd(10)),
@@ -153,12 +150,8 @@ export function printReport(cases: TestCase[], runs: RunResult[]) {
       }
 
       const meta = result.metadata;
-      const regCheck = tc.expectedRegister
-        ? checkMark(meta?.register === tc.expectedRegister)
-        : '';
-      const intCheck = tc.expectedIntent
-        ? checkMark(meta?.intent === tc.expectedIntent)
-        : '';
+      const regCheck = tc.expectedRegister ? checkMark(meta?.register === tc.expectedRegister) : '';
+      const intCheck = tc.expectedIntent ? checkMark(meta?.intent === tc.expectedIntent) : '';
 
       console.log(`  ${bold(run.model)}:`);
       console.log(`    ${truncate(result.translatedContent, 72)}`);
@@ -193,10 +186,7 @@ export function saveJson(cases: TestCase[], runs: RunResult[], outputDir: string
     testCases: cases.map((tc) => ({
       ...tc,
       results: Object.fromEntries(
-        runs.map((run) => [
-          run.model,
-          run.results.find((r) => r.id === tc.id) ?? null,
-        ]),
+        runs.map((run) => [run.model, run.results.find((r) => r.id === tc.id) ?? null]),
       ),
     })),
   };

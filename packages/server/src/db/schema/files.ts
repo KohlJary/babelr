@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, varchar, text, integer, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  integer,
+  timestamp,
+  index,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { actors } from './actors.ts';
 import { objects } from './objects.ts';
@@ -14,8 +23,12 @@ export const serverFiles = pgTable(
   'server_files',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
-    uploaderId: uuid('uploader_id').notNull().references(() => actors.id),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    uploaderId: uuid('uploader_id')
+      .notNull()
+      .references(() => actors.id),
 
     filename: varchar('filename', { length: 512 }).notNull(),
     contentType: varchar('content_type', { length: 128 }).notNull(),
@@ -34,7 +47,10 @@ export const serverFiles = pgTable(
     /** Translatable description — flows through the translation pipeline. */
     description: text('description'),
     /** Freeform tags for filtering. */
-    tags: text('tags').array().notNull().default(sql`ARRAY[]::text[]`),
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     /** Simple folder path for hierarchy, e.g. "docs/specs". Nullable = root. */
     folderPath: varchar('folder_path', { length: 512 }),
 
@@ -43,7 +59,9 @@ export const serverFiles = pgTable(
      * reusing the full message pipeline (reactions, threads,
      * translation, typing indicators) — same pattern as event chat.
      */
-    chatId: uuid('chat_id').notNull().references(() => objects.id, { onDelete: 'cascade' }),
+    chatId: uuid('chat_id')
+      .notNull()
+      .references(() => objects.id, { onDelete: 'cascade' }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -56,4 +74,3 @@ export const serverFiles = pgTable(
       .where(sql`${table.slug} IS NOT NULL`),
   ],
 );
-

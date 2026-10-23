@@ -100,35 +100,20 @@ export interface PluginMigration {
  * the underlying driver (postgres.js today, something else tomorrow)
  * isn't baked into the plugin API.
  */
-export type PluginSqlExecutor = (
-  query: string,
-  params?: unknown[],
-) => Promise<{ rows: unknown[] }>;
+export type PluginSqlExecutor = (query: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
 
 export interface FederationHandler {
   /** Given a slug (and optionally the requesting actor's URI), return
    *  the JSON shape the embed's renderPreview consumes. Return null if
    *  the item doesn't exist or the caller lacks permission — the
    *  caller gets a "locked" embed state. */
-  resolveBySlug: (
-    slug: string,
-    ctx: FederationHandlerContext,
-  ) => Promise<unknown | null>;
+  resolveBySlug: (slug: string, ctx: FederationHandlerContext) => Promise<unknown | null>;
 }
 
 export interface PluginInboxHandler {
-  handleCreate?: (
-    ctx: InboxHandlerContext,
-    objectData: Record<string, unknown>,
-  ) => Promise<void>;
-  handleUpdate?: (
-    ctx: InboxHandlerContext,
-    objectData: Record<string, unknown>,
-  ) => Promise<void>;
-  handleDelete?: (
-    ctx: InboxHandlerContext,
-    objectUri: string,
-  ) => Promise<void>;
+  handleCreate?: (ctx: InboxHandlerContext, objectData: Record<string, unknown>) => Promise<void>;
+  handleUpdate?: (ctx: InboxHandlerContext, objectData: Record<string, unknown>) => Promise<void>;
+  handleDelete?: (ctx: InboxHandlerContext, objectUri: string) => Promise<void>;
 }
 
 export interface InboxHandlerContext {
@@ -206,4 +191,3 @@ export interface PluginClientApi {
    *  right namespace regardless of where Babelr is mounted. */
   routeBase: string;
 }
-

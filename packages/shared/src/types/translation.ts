@@ -21,21 +21,9 @@ export interface TranslateProxyRequest {
   provider?: ProxyProviderKind;
 }
 
-export type Register =
-  | 'casual'
-  | 'formal'
-  | 'sarcastic'
-  | 'technical'
-  | 'affectionate'
-  | 'neutral';
+export type Register = 'casual' | 'formal' | 'sarcastic' | 'technical' | 'affectionate' | 'neutral';
 
-export type Intent =
-  | 'statement'
-  | 'question'
-  | 'joke'
-  | 'correction'
-  | 'greeting'
-  | 'reference';
+export type Intent = 'statement' | 'question' | 'joke' | 'correction' | 'greeting' | 'reference';
 
 export interface IdiomAnnotation {
   original: string;

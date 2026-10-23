@@ -12,8 +12,11 @@ interface MentionsPanelProps {
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
-    ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return (
+    d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
+    ' ' +
+    d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  );
 }
 
 export function MentionsPanel({ onClose }: MentionsPanelProps) {
@@ -22,7 +25,10 @@ export function MentionsPanel({ onClose }: MentionsPanelProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getMentions().then((res) => setMentions(res.messages)).finally(() => setLoading(false));
+    api
+      .getMentions()
+      .then((res) => setMentions(res.messages))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -33,10 +39,15 @@ export function MentionsPanel({ onClose }: MentionsPanelProps) {
       renderItem={(item) => (
         <div className="mention-item">
           <div className="mention-header">
-            <span className="mention-author">{item.author.displayName ?? item.author.preferredUsername}</span>
+            <span className="mention-author">
+              {item.author.displayName ?? item.author.preferredUsername}
+            </span>
             <span className="mention-time">{formatDate(item.message.published)}</span>
           </div>
-          <div className="mention-content" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.message.content) }} />
+          <div
+            className="mention-content"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(item.message.content) }}
+          />
         </div>
       )}
       onClose={onClose}

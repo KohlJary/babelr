@@ -50,9 +50,7 @@ export function MessagePreview({ slug, serverSlug }: MessagePreviewProps) {
         {embed.channelName && <span className="message-preview-channel">#{embed.channelName}</span>}
         {embed.serverName && <span className="message-preview-server">{embed.serverName}</span>}
       </div>
-      <div className="message-preview-time">
-        {new Date(embed.published).toLocaleString()}
-      </div>
+      <div className="message-preview-time">{new Date(embed.published).toLocaleString()}</div>
       <div className="message-preview-body">{embed.content}</div>
     </div>
   );

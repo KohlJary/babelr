@@ -36,7 +36,10 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
 
   useEffect(() => {
     if (step === 'server') {
-      api.discoverServers().then(setDiscoverable).catch(() => {});
+      api
+        .discoverServers()
+        .then(setDiscoverable)
+        .catch(() => {});
     }
   }, [step]);
 
@@ -114,10 +117,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
       <div className="onboarding-card">
         <div className="onboarding-progress">
           {steps.map((s, i) => (
-            <div
-              key={s}
-              className={`onboarding-progress-dot${i <= stepIndex ? ' active' : ''}`}
-            />
+            <div key={s} className={`onboarding-progress-dot${i <= stepIndex ? ' active' : ''}`} />
           ))}
         </div>
 
@@ -245,9 +245,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
             {serverMode === 'join' && (
               <div className="onboarding-server-list">
                 {discoverable.filter((s) => !s.joined).length === 0 ? (
-                  <div className="onboarding-empty">
-                    {t('onboarding.noServersToJoin')}
-                  </div>
+                  <div className="onboarding-empty">{t('onboarding.noServersToJoin')}</div>
                 ) : (
                   discoverable
                     .filter((s) => !s.joined)
@@ -256,9 +254,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
                         <div className="onboarding-server-info">
                           <span className="onboarding-server-name">{server.name}</span>
                           {server.tagline && (
-                            <span className="onboarding-server-tagline">
-                              {server.tagline}
-                            </span>
+                            <span className="onboarding-server-tagline">{server.tagline}</span>
                           )}
                         </div>
                         <button
@@ -267,9 +263,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
                           disabled={joiningId === server.id}
                           onClick={() => void handleJoinServer(server)}
                         >
-                          {joiningId === server.id
-                            ? t('onboarding.joining')
-                            : t('onboarding.join')}
+                          {joiningId === server.id ? t('onboarding.joining') : t('onboarding.join')}
                         </button>
                       </div>
                     ))
@@ -287,11 +281,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
               </div>
             )}
 
-            <button
-              type="button"
-              className="onboarding-skip"
-              onClick={() => setStep('embeds')}
-            >
+            <button type="button" className="onboarding-skip" onClick={() => setStep('embeds')}>
               {t('onboarding.skipForNow')}
             </button>
           </div>
@@ -350,11 +340,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
             <h2>{t('onboarding.allSet')}</h2>
             <p className="onboarding-subtitle">{t('onboarding.doneSubtitle')}</p>
             <div className="onboarding-actions">
-              <button
-                type="button"
-                className="onboarding-btn primary"
-                onClick={handleFinish}
-              >
+              <button type="button" className="onboarding-btn primary" onClick={handleFinish}>
                 {t('onboarding.getStarted')}
               </button>
             </div>

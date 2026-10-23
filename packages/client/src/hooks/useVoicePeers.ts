@@ -50,8 +50,7 @@ export function useVoicePeers(
     if (!audioCtxRef.current) {
       const Ctor =
         window.AudioContext ??
-        (window as unknown as { webkitAudioContext: typeof AudioContext })
-          .webkitAudioContext;
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       audioCtxRef.current = new Ctor();
     }
     // Browsers suspend AudioContexts created without a recent user gesture.
@@ -110,8 +109,7 @@ export function useVoicePeers(
     (actorId: string, hint?: AuthorView): PeerEntry => {
       let entry = peersRef.current.get(actorId);
       if (entry) return entry;
-      const actor: AuthorView =
-        hint ??
+      const actor: AuthorView = hint ??
         knownActorsRef.current.get(actorId) ?? {
           id: actorId,
           preferredUsername: actorId,
@@ -165,12 +163,7 @@ export function useVoicePeers(
   );
 
   const consumeProducer = useCallback(
-    async (
-      channelId: string,
-      peerActorId: string,
-      producerId: string,
-      slot: VoiceSlot,
-    ) => {
+    async (channelId: string, peerActorId: string, producerId: string, slot: VoiceSlot) => {
       const device = deviceRef.current;
       const recvTransport = recvTransportRef.current;
       if (!device || !recvTransport) return;
@@ -196,12 +189,10 @@ export function useVoicePeers(
         });
         // Server creates the consumer paused; resume after the client side
         // is wired up so we don't drop the first packets.
-        await rpc<Extract<WsServerMessage, { type: 'voice:consumer-resumed' }>>(
-          (requestId) => ({
-            type: 'voice:resume-consumer',
-            payload: { requestId, channelId, consumerId: consumer.id },
-          }),
-        );
+        await rpc<Extract<WsServerMessage, { type: 'voice:consumer-resumed' }>>((requestId) => ({
+          type: 'voice:resume-consumer',
+          payload: { requestId, channelId, consumerId: consumer.id },
+        }));
 
         const entry = ensurePeer(peerActorId);
         const stream = new MediaStream([consumer.track]);

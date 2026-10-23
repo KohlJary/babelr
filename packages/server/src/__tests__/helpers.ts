@@ -55,9 +55,7 @@ export async function createTestApp() {
     ),
   );
 
-  app.register(
-    fp(async () => {}, { name: 'config-plugin' }),
-  );
+  app.register(fp(async () => {}, { name: 'config-plugin' }));
 
   // Stub broadcastToChannel (no WS in tests)
   app.register(
@@ -129,5 +127,7 @@ export async function createTestUser(
 
 export async function cleanDb(db: ReturnType<typeof createDb>) {
   // Truncate all tables in dependency order
-  await db.execute(sql`TRUNCATE sessions, activities, delivery_queue, collection_items, read_positions, reactions, notification_preferences, invites, server_role_assignments, server_roles, objects, actors CASCADE`);
+  await db.execute(
+    sql`TRUNCATE sessions, activities, delivery_queue, collection_items, read_positions, reactions, notification_preferences, invites, server_role_assignments, server_roles, objects, actors CASCADE`,
+  );
 }

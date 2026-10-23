@@ -41,20 +41,17 @@ export function WorkItemDetailModal({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(
-        `${routeBase}/work-items/${encodeURIComponent(item.slug)}`,
-        {
-          method: 'PATCH',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: title.trim(),
-            description: description.trim() || null,
-            priority,
-            itemType,
-          }),
-        },
-      );
+      const res = await fetch(`${routeBase}/work-items/${encodeURIComponent(item.slug)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          priority,
+          itemType,
+        }),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: res.statusText }));
         setError(body.error ?? 'Save failed');
@@ -72,10 +69,10 @@ export function WorkItemDetailModal({
     if (!window.confirm('Delete this card?')) return;
     setSaving(true);
     try {
-      const res = await fetch(
-        `${routeBase}/work-items/${encodeURIComponent(item.slug)}`,
-        { method: 'DELETE', credentials: 'include' },
-      );
+      const res = await fetch(`${routeBase}/work-items/${encodeURIComponent(item.slug)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
       if (res.ok) onMutated();
       else setSaving(false);
     } catch {
@@ -87,22 +84,24 @@ export function WorkItemDetailModal({
     <div className="pm-modal-overlay" onClick={onClose}>
       <div className="pm-modal" onClick={(e) => e.stopPropagation()}>
         <header className="pm-modal-header">
-          <h3><T>Work item</T></h3>
+          <h3>
+            <T>Work item</T>
+          </h3>
           <button type="button" className="pm-modal-close" onClick={onClose}>
             ×
           </button>
         </header>
         <div className="pm-modal-body">
           <label className="pm-form-field">
-            <span><T>Title</T></span>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+            <span>
+              <T>Title</T>
+            </span>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
           <label className="pm-form-field">
-            <span><T>Description</T></span>
+            <span>
+              <T>Description</T>
+            </span>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -111,7 +110,9 @@ export function WorkItemDetailModal({
           </label>
           <div className="pm-modal-row">
             <label className="pm-form-field">
-              <span><T>Priority</T></span>
+              <span>
+                <T>Priority</T>
+              </span>
               <select value={priority} onChange={(e) => setPriority(e.target.value)}>
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>
@@ -121,7 +122,9 @@ export function WorkItemDetailModal({
               </select>
             </label>
             <label className="pm-form-field">
-              <span><T>Type</T></span>
+              <span>
+                <T>Type</T>
+              </span>
               <select value={itemType} onChange={(e) => setItemType(e.target.value)}>
                 {ITEM_TYPES.map((t) => (
                   <option key={t} value={t}>

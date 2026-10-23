@@ -147,7 +147,16 @@ export function useFileTranslation(
           return next;
         });
       });
-  }, [files, settings.enabled, settings.preferredLanguage, settings.anthropicApiKey, settings.openaiApiKey, settings.provider, settings.ollamaBaseUrl, settings.ollamaModel]);
+  }, [
+    files,
+    settings.enabled,
+    settings.preferredLanguage,
+    settings.anthropicApiKey,
+    settings.openaiApiKey,
+    settings.provider,
+    settings.ollamaBaseUrl,
+    settings.ollamaModel,
+  ]);
 
   const translations = useMemo(() => {
     if (!settings.enabled || !settings.preferredLanguage) {
@@ -158,10 +167,7 @@ export function useFileTranslation(
     for (const f of files) {
       if (!f.description) continue;
       const hash = hashContent(f.description);
-      const entry =
-        sessionFields.get(hash) ??
-        getCachedByHash('file', hash, targetLang) ??
-        null;
+      const entry = sessionFields.get(hash) ?? getCachedByHash('file', hash, targetLang) ?? null;
       if (!entry) continue;
       out.set(f.id, {
         description: entry.translatedContent,

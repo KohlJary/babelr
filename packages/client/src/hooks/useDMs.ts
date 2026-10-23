@@ -27,9 +27,7 @@ export function useDMs() {
       const { dmId, actorUri, lastReadAt } = msg.payload;
       setConversations((prev) =>
         prev.map((c) =>
-          c.id === dmId
-            ? { ...c, readBy: { ...(c.readBy ?? {}), [actorUri]: lastReadAt } }
-            : c,
+          c.id === dmId ? { ...c, readBy: { ...(c.readBy ?? {}), [actorUri]: lastReadAt } } : c,
         ),
       );
       setSelectedDM((prev) =>

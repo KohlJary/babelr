@@ -47,9 +47,7 @@ export function VoiceControls({
         className={`voice-control-btn ${voice.screenShareEnabled ? 'active-on' : ''}`}
         onClick={() => void onToggleScreenShare()}
         title={
-          voice.screenShareEnabled
-            ? t('voice.disableScreenShare')
-            : t('voice.enableScreenShare')
+          voice.screenShareEnabled ? t('voice.disableScreenShare') : t('voice.enableScreenShare')
         }
       >
         🖥️

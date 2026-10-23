@@ -15,8 +15,7 @@ const USER_AGENT = 'Babelr/0.1.0';
  * resolve `alice@babelr-a.local:3000` → `http://.../.well-known/webfinger`
  * without needing a local TLS terminator. Production stays strict-https.
  */
-const WEBFINGER_PROTOCOL =
-  process.env.NODE_ENV === 'production' ? 'https' : 'http';
+const WEBFINGER_PROTOCOL = process.env.NODE_ENV === 'production' ? 'https' : 'http';
 
 function extractIconUrl(icon: unknown): string | null {
   if (!icon) return null;
@@ -95,10 +94,7 @@ export async function resolveActor(
     return updated;
   }
 
-  const [created] = await db
-    .insert(actors)
-    .values(values)
-    .returning();
+  const [created] = await db.insert(actors).values(values).returning();
   return created;
 }
 
@@ -122,9 +118,13 @@ export async function lookupActorByHandle(
       signal: AbortSignal.timeout(FETCH_TIMEOUT),
     });
     if (!res.ok) return null;
-    const jrd = (await res.json()) as { links?: Array<{ rel?: string; type?: string; href?: string }> };
+    const jrd = (await res.json()) as {
+      links?: Array<{ rel?: string; type?: string; href?: string }>;
+    };
     const self = jrd.links?.find(
-      (l) => l.rel === 'self' && (l.type === 'application/activity+json' || l.type === 'application/ld+json'),
+      (l) =>
+        l.rel === 'self' &&
+        (l.type === 'application/activity+json' || l.type === 'application/ld+json'),
     );
     if (!self?.href) return null;
     return resolveActor(db, self.href);

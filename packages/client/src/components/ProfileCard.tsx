@@ -18,7 +18,11 @@ export function ProfileCard({ userId, anchorRect, onClose, onStartDM }: ProfileC
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.getUserProfile(userId).then(setProfile).catch(() => {}).finally(() => setLoading(false));
+    api
+      .getUserProfile(userId)
+      .then(setProfile)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [userId]);
 
   // Close on click outside
@@ -84,12 +88,12 @@ export function ProfileCard({ userId, anchorRect, onClose, onStartDM }: ProfileC
         </div>
       </div>
 
-      {profile.summary && (
-        <div className="profile-card-bio">{profile.summary}</div>
-      )}
+      {profile.summary && <div className="profile-card-bio">{profile.summary}</div>}
 
       <div className="profile-card-meta">
-        <span>{t('profileCard.memberSince')} {new Date(profile.createdAt).toLocaleDateString()}</span>
+        <span>
+          {t('profileCard.memberSince')} {new Date(profile.createdAt).toLocaleDateString()}
+        </span>
       </div>
 
       {profile.mutualServers.length > 0 && (
@@ -99,7 +103,9 @@ export function ProfileCard({ userId, anchorRect, onClose, onStartDM }: ProfileC
           </span>
           <div className="profile-card-mutual-list">
             {profile.mutualServers.map((s) => (
-              <span key={s.id} className="profile-card-server-chip">{s.name}</span>
+              <span key={s.id} className="profile-card-server-chip">
+                {s.name}
+              </span>
             ))}
           </div>
         </div>
@@ -109,7 +115,10 @@ export function ProfileCard({ userId, anchorRect, onClose, onStartDM }: ProfileC
         {onStartDM && (
           <button
             className="profile-card-btn primary"
-            onClick={() => { onStartDM(profile.id); onClose(); }}
+            onClick={() => {
+              onStartDM(profile.id);
+              onClose();
+            }}
           >
             {t('profileCard.sendMessage')}
           </button>

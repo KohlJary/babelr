@@ -9,7 +9,9 @@ export const activities = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     uri: text('uri').notNull().unique(),
     type: varchar('type', { length: 32 }).notNull(),
-    actorId: uuid('actor_id').notNull().references(() => actors.id),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id),
     objectUri: text('object_uri').notNull(),
     objectId: uuid('object_id').references(() => objects.id),
     targetUri: text('target_uri'),

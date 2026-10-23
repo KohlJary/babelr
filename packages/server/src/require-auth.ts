@@ -15,10 +15,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
  * auth/register, auth/login, federation endpoints) should NOT use
  * this hook.
  */
-export async function requireAuth(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<void> {
+export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!request.actor) {
     reply.status(401).send({ error: 'Not authenticated' });
   }

@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { pgTable, uuid, varchar, text, timestamp, index, uniqueIndex, integer, customType } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+  index,
+  uniqueIndex,
+  integer,
+  customType,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { objects } from './objects.ts';
 import { actors } from './actors.ts';
@@ -14,7 +24,12 @@ const tsvector = customType<{ data: string; notNull: true; default: true }>({
 // through jsonb or text in some codepaths, so we declare the raw
 // Postgres type directly to get a real array column with GIN-indexable
 // semantics for the tag filter.
-const textArray = customType<{ data: string[]; driverData: string[]; notNull: true; default: true }>({
+const textArray = customType<{
+  data: string[];
+  driverData: string[];
+  notNull: true;
+  default: true;
+}>({
   dataType() {
     return 'text[]';
   },
@@ -39,11 +54,15 @@ export const wikiPages = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     /** Federation identity URI — globally unique across instances. */
     uri: varchar('uri', { length: 512 }),
-    serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     slug: varchar('slug', { length: 128 }).notNull(),
     title: varchar('title', { length: 256 }).notNull(),
     content: text('content').notNull().default(''),
-    tags: textArray('tags').notNull().default(sql`ARRAY[]::text[]`),
+    tags: textArray('tags')
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     /** Parent page for nesting. NULL = root-level page. */
     parentId: uuid('parent_id'),
     /** Sort order within siblings. Lower values sort first. */
@@ -52,8 +71,12 @@ export const wikiPages = pgTable(
     chatId: uuid('chat_id').references(() => objects.id, { onDelete: 'cascade' }),
     /** Full-text search vector over title + content. Populated application-side on create/update. */
     contentSearch: tsvector('content_search'),
-    createdById: uuid('created_by_id').notNull().references(() => actors.id),
-    lastEditedById: uuid('last_edited_by_id').notNull().references(() => actors.id),
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => actors.id),
+    lastEditedById: uuid('last_edited_by_id')
+      .notNull()
+      .references(() => actors.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -78,11 +101,15 @@ export const wikiPageRevisions = pgTable(
   'wiki_page_revisions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    pageId: uuid('page_id').notNull().references(() => wikiPages.id, { onDelete: 'cascade' }),
+    pageId: uuid('page_id')
+      .notNull()
+      .references(() => wikiPages.id, { onDelete: 'cascade' }),
     revisionNumber: integer('revision_number').notNull(),
     title: varchar('title', { length: 256 }).notNull(),
     content: text('content').notNull(),
-    editedById: uuid('edited_by_id').notNull().references(() => actors.id),
+    editedById: uuid('edited_by_id')
+      .notNull()
+      .references(() => actors.id),
     editedAt: timestamp('edited_at', { withTimezone: true }).notNull().defaultNow(),
     summary: text('summary'),
   },
@@ -111,15 +138,21 @@ export const wikiPageLinks = pgTable(
   'wiki_page_links',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    serverId: uuid('server_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     sourceType: varchar('source_type', { length: 16 }).notNull(),
     // Nullable per-source FK columns so we get proper cascade behavior
     // without a polymorphic FK. Exactly one is populated based on sourceType.
     sourcePageId: uuid('source_page_id').references(() => wikiPages.id, { onDelete: 'cascade' }),
-    sourceMessageId: uuid('source_message_id').references(() => objects.id, { onDelete: 'cascade' }),
+    sourceMessageId: uuid('source_message_id').references(() => objects.id, {
+      onDelete: 'cascade',
+    }),
     targetType: varchar('target_type', { length: 16 }).notNull(),
     targetPageId: uuid('target_page_id').references(() => wikiPages.id, { onDelete: 'cascade' }),
-    targetMessageId: uuid('target_message_id').references(() => objects.id, { onDelete: 'cascade' }),
+    targetMessageId: uuid('target_message_id').references(() => objects.id, {
+      onDelete: 'cascade',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

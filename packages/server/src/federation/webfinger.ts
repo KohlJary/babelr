@@ -29,12 +29,7 @@ export default async function webfingerRoute(fastify: FastifyInstance) {
       const [actor] = await fastify.db
         .select()
         .from(actors)
-        .where(
-          and(
-            eq(actors.preferredUsername, username),
-            eq(actors.local, true),
-          ),
-        )
+        .where(and(eq(actors.preferredUsername, username), eq(actors.local, true)))
         .limit(1);
 
       if (!actor) {

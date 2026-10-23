@@ -16,12 +16,8 @@ export const serverBans = pgTable(
       .notNull()
       .references(() => actors.id),
     reason: text('reason'),
-    bannedAt: timestamp('banned_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    bannedAt: timestamp('banned_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
   },
-  (table) => [
-    uniqueIndex('server_bans_server_user_idx').on(table.serverId, table.userId),
-  ],
+  (table) => [uniqueIndex('server_bans_server_user_idx').on(table.serverId, table.userId)],
 );

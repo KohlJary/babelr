@@ -14,17 +14,17 @@ The server handles auth, messaging, and real-time delivery. Translation happens 
 
 The database uses ActivityPub primitives from day one, even though federation is not yet active.
 
-| Concept | AP Type | Table | Key Fields |
-|---------|---------|-------|------------|
-| User | Person Actor | `actors` | preferredUsername, email, passwordHash, preferredLanguage |
-| Server (guild) | Group Actor | `actors` | displayName, properties.ownerId |
-| Channel | OrderedCollection | `objects` | belongsTo (server), properties.name |
-| Message | Note | `objects` | content, context (channel), attributedTo (author) |
-| DM conversation | OrderedCollection | `objects` | belongsTo=null, properties.isDM=true |
-| Activity log | Activity | `activities` | type (Create/Follow/etc), actorId, objectUri |
-| Membership | Collection item | `collection_items` | collectionUri, itemUri |
-| Wiki page | (future: Article) | `wiki_pages` | serverId, slug, title, content, revisions history |
-| Wiki link | --- | `wiki_page_links` | bidirectional page↔page and message↔page link graph |
+| Concept         | AP Type           | Table              | Key Fields                                                |
+| --------------- | ----------------- | ------------------ | --------------------------------------------------------- |
+| User            | Person Actor      | `actors`           | preferredUsername, email, passwordHash, preferredLanguage |
+| Server (guild)  | Group Actor       | `actors`           | displayName, properties.ownerId                           |
+| Channel         | OrderedCollection | `objects`          | belongsTo (server), properties.name                       |
+| Message         | Note              | `objects`          | content, context (channel), attributedTo (author)         |
+| DM conversation | OrderedCollection | `objects`          | belongsTo=null, properties.isDM=true                      |
+| Activity log    | Activity          | `activities`       | type (Create/Follow/etc), actorId, objectUri              |
+| Membership      | Collection item   | `collection_items` | collectionUri, itemUri                                    |
+| Wiki page       | (future: Article) | `wiki_pages`       | serverId, slug, title, content, revisions history         |
+| Wiki link       | ---               | `wiki_page_links`  | bidirectional page↔page and message↔page link graph       |
 
 ActivityPub URIs are generated for all actors and objects, following the pattern `https://{domain}/users/{username}`, `https://{domain}/groups/{slug}`, etc.
 
@@ -98,11 +98,11 @@ Invalid per-entry metadata fields are coerced to safe defaults rather than throw
 
 Per-server long-form knowledge base. Three tables:
 
-| Table | Purpose |
-|-------|---------|
-| `wiki_pages` | One row per page. Keyed by `(serverId, slug)`. Stores markdown content, author, last-editor, timestamps. |
-| `wiki_page_revisions` | Append-only edit history. One row per write (create + every update). Monotonic `revisionNumber` per page. UI for browsing history is deferred. |
-| `wiki_page_links` | Bidirectional link graph. One row per "source references target" edge. Per-source-type FK columns (`sourcePageId` / `sourceMessageId`) so deletes cascade cleanly. |
+| Table                 | Purpose                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `wiki_pages`          | One row per page. Keyed by `(serverId, slug)`. Stores markdown content, author, last-editor, timestamps.                                                           |
+| `wiki_page_revisions` | Append-only edit history. One row per write (create + every update). Monotonic `revisionNumber` per page. UI for browsing history is deferred.                     |
+| `wiki_page_links`     | Bidirectional link graph. One row per "source references target" edge. Per-source-type FK columns (`sourcePageId` / `sourceMessageId`) so deletes cascade cleanly. |
 
 Routes live at `/servers/:serverId/wiki/pages/...`. Read access requires server membership; creators can delete their own pages; mods+ can delete any. The permission helper (`getServerRole`) mirrors the events.ts membership/role lookup pattern.
 

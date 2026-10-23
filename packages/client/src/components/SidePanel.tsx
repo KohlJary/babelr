@@ -26,12 +26,7 @@ export function SidePanel({ title, onClose, children, wide }: SidePanelProps) {
     <aside className={`side-panel${wide ? ' side-panel-wide' : ''}`}>
       <header className="side-panel-header">
         <h3 className="side-panel-title">{title}</h3>
-        <button
-          type="button"
-          className="side-panel-close"
-          onClick={onClose}
-          aria-label="Close"
-        >
+        <button type="button" className="side-panel-close" onClick={onClose} aria-label="Close">
           &times;
         </button>
       </header>

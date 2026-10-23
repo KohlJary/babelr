@@ -36,7 +36,7 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
     try {
       const res = await api.searchMessages(query.trim(), channelId);
       setResults(res);
-      setFilters((res as unknown as Record<string, unknown>).filters as SearchFilters ?? null);
+      setFilters(((res as unknown as Record<string, unknown>).filters as SearchFilters) ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('search.failed'));
     } finally {
@@ -115,9 +115,7 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
           </div>
         )}
 
-        <div className="search-hint">
-          {t('search.hint')}
-        </div>
+        <div className="search-hint">{t('search.hint')}</div>
 
         <div className="search-content">
           {loading && <div className="search-loading">{t('common.loading')}</div>}
@@ -128,11 +126,7 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
           {results && results.messages.length > 0 && (
             <div className="search-results">
               {results.messages.map((item) => (
-                <MessageItem
-                  key={item.message.id}
-                  data={item}
-                  compact={false}
-                />
+                <MessageItem key={item.message.id} data={item} compact={false} />
               ))}
             </div>
           )}

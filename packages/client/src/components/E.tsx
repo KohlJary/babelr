@@ -18,13 +18,7 @@ export interface EmbedHost {
 
 const EmbedHostContext = createContext<EmbedHost | null>(null);
 
-export function EmbedHostProvider({
-  host,
-  children,
-}: {
-  host: EmbedHost;
-  children: ReactNode;
-}) {
+export function EmbedHostProvider({ host, children }: { host: EmbedHost; children: ReactNode }) {
   return <EmbedHostContext.Provider value={host}>{children}</EmbedHostContext.Provider>;
 }
 

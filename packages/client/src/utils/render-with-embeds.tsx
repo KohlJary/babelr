@@ -22,9 +22,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
   // render as markdown links (with the wiki-click intercept opening
   // the sidebar preview). Plugin-supplied kinds pass the filter and
   // dispatch through the registry just like built-ins.
-  const refs = parseWikiRefs(source).filter(
-    (r) => r.kind !== 'page' || r.origin || r.server,
-  );
+  const refs = parseWikiRefs(source).filter((r) => r.kind !== 'page' || r.origin || r.server);
 
   if (refs.length === 0) {
     return <span dangerouslySetInnerHTML={{ __html: render(source) }} />;
@@ -35,9 +33,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
   refs.forEach((ref, i) => {
     if (ref.start > cursor) {
       const chunk = source.slice(cursor, ref.start);
-      segments.push(
-        <span key={`md-${i}`} dangerouslySetInnerHTML={{ __html: render(chunk) }} />,
-      );
+      segments.push(<span key={`md-${i}`} dangerouslySetInnerHTML={{ __html: render(chunk) }} />);
     }
     if (ref.origin) {
       segments.push(
@@ -56,8 +52,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
             {createElement(def.Inline, {
               slug: ref.slug,
               serverSlug: ref.server,
-              onClick: () =>
-                opts.onPreviewEmbed?.(ref.kind, ref.slug, ref.server),
+              onClick: () => opts.onPreviewEmbed?.(ref.kind, ref.slug, ref.server),
               actor: opts.actor,
             })}
           </span>,
@@ -68,9 +63,7 @@ export function renderWithEmbeds(source: string, opts: RenderOptions): ReactNode
   });
   if (cursor < source.length) {
     const tail = source.slice(cursor);
-    segments.push(
-      <span key="md-tail" dangerouslySetInnerHTML={{ __html: render(tail) }} />,
-    );
+    segments.push(<span key="md-tail" dangerouslySetInnerHTML={{ __html: render(tail) }} />);
   }
   return <>{segments}</>;
 }

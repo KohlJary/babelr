@@ -57,11 +57,7 @@ export default async function dmRoutes(fastify: FastifyInstance) {
     const actor = request.actor;
 
     // Find the other participant
-    const [other] = await db
-      .select()
-      .from(actors)
-      .where(eq(actors.id, participantId))
-      .limit(1);
+    const [other] = await db.select().from(actors).where(eq(actors.id, participantId)).limit(1);
 
     if (!other) {
       return reply.status(404).send({ error: 'User not found' });

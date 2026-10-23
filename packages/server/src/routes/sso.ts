@@ -17,7 +17,12 @@ import { actors } from '../db/schema/actors.ts';
 export default async function ssoRoutes(fastify: FastifyInstance) {
   const config = fastify.config;
 
-  if (!config.oidcIssuer || !config.oidcClientId || !config.oidcClientSecret || !config.oidcRedirectUri) {
+  if (
+    !config.oidcIssuer ||
+    !config.oidcClientId ||
+    !config.oidcClientSecret ||
+    !config.oidcRedirectUri
+  ) {
     fastify.log.info('OIDC SSO not configured — skipping SSO routes');
     return;
   }
@@ -107,11 +112,15 @@ export default async function ssoRoutes(fastify: FastifyInstance) {
     // Exchange code for tokens
     let tokenResult: Awaited<ReturnType<typeof oidc.authorizationCodeGrant>>;
     try {
-      tokenResult = await oidc.authorizationCodeGrant(oidcConfig, new URL(request.url, `http://${request.hostname}`), {
-        pkceCodeVerifier: pending.codeVerifier,
-        expectedNonce: pending.nonce,
-        expectedState: state,
-      });
+      tokenResult = await oidc.authorizationCodeGrant(
+        oidcConfig,
+        new URL(request.url, `http://${request.hostname}`),
+        {
+          pkceCodeVerifier: pending.codeVerifier,
+          expectedNonce: pending.nonce,
+          expectedState: state,
+        },
+      );
     } catch (err) {
       fastify.log.error({ err }, 'OIDC token exchange failed');
       return reply.redirect('/?sso_error=token_exchange_failed');
@@ -125,8 +134,9 @@ export default async function ssoRoutes(fastify: FastifyInstance) {
 
     const sub = claims.sub as string;
     const email = (claims as Record<string, unknown>).email as string | undefined;
-    const name = ((claims as Record<string, unknown>).name as string | undefined)
-      ?? ((claims as Record<string, unknown>).preferred_username as string | undefined);
+    const name =
+      ((claims as Record<string, unknown>).name as string | undefined) ??
+      ((claims as Record<string, unknown>).preferred_username as string | undefined);
 
     if (!sub) {
       return reply.redirect('/?sso_error=no_subject');
@@ -173,9 +183,7 @@ export default async function ssoRoutes(fastify: FastifyInstance) {
       // Ensure username uniqueness
       let finalUsername = username;
       let suffix = 1;
-      while (
-        allLocal.some((a) => a.preferredUsername === finalUsername)
-      ) {
+      while (allLocal.some((a) => a.preferredUsername === finalUsername)) {
         finalUsername = `${username}${suffix++}`;
       }
 
@@ -212,10 +220,12 @@ export default async function ssoRoutes(fastify: FastifyInstance) {
 }
 
 function sanitizeUsername(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-    .slice(0, 32) || 'user';
+  return (
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 32) || 'user'
+  );
 }

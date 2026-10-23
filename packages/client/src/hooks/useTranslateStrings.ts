@@ -38,9 +38,7 @@ export function useTranslateStrings(
       case 'local':
         return new TransformersJsProvider();
       case 'anthropic':
-        return settings.anthropicApiKey
-          ? new AnthropicProvider(settings.anthropicApiKey)
-          : null;
+        return settings.anthropicApiKey ? new AnthropicProvider(settings.anthropicApiKey) : null;
       case 'openai':
         return settings.openaiApiKey ? new OpenAIProvider(settings.openaiApiKey) : null;
       case 'ollama':
@@ -62,7 +60,10 @@ export function useTranslateStrings(
   // effect doesn't re-run on every render when the caller passes a
   // fresh object literal.
   const digest = useMemo(
-    () => Object.entries(strings).map(([id, s]) => `${id}:${hashContent(s)}`).join('|'),
+    () =>
+      Object.entries(strings)
+        .map(([id, s]) => `${id}:${hashContent(s)}`)
+        .join('|'),
     [strings],
   );
 
@@ -94,34 +95,37 @@ export function useTranslateStrings(
     if (uncached.length === 0) return;
 
     let cancelled = false;
-    provider.translate(uncached, targetLang).then((results) => {
-      if (cancelled) return;
-      const next = new Map<string, string>();
-      for (const r of results) {
-        const source = uncached.find((u) => u.id === r.id);
-        if (!source) continue;
-        const translated = r.skipped ? source.content : r.translatedContent;
-        next.set(r.id, translated);
-        setCachedByHash('message', hashContent(source.content), targetLang, {
-          translatedContent: r.translatedContent,
-          detectedLanguage: r.detectedLanguage,
-          skipped: r.skipped,
-          targetLanguage: targetLang,
-          metadata: r.metadata,
+    provider
+      .translate(uncached, targetLang)
+      .then((results) => {
+        if (cancelled) return;
+        const next = new Map<string, string>();
+        for (const r of results) {
+          const source = uncached.find((u) => u.id === r.id);
+          if (!source) continue;
+          const translated = r.skipped ? source.content : r.translatedContent;
+          next.set(r.id, translated);
+          setCachedByHash('message', hashContent(source.content), targetLang, {
+            translatedContent: r.translatedContent,
+            detectedLanguage: r.detectedLanguage,
+            skipped: r.skipped,
+            targetLanguage: targetLang,
+            metadata: r.metadata,
+          });
+        }
+        setTranslations((prev) => {
+          const merged = new Map(prev);
+          for (const [id, t] of next) merged.set(id, t);
+          return merged;
         });
-      }
-      setTranslations((prev) => {
-        const merged = new Map(prev);
-        for (const [id, t] of next) merged.set(id, t);
-        return merged;
+      })
+      .catch(() => {
+        // silent — caller falls back to the original text
       });
-    }).catch(() => {
-      // silent — caller falls back to the original text
-    });
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deps are deliberately limited to the inputs that change the result.
   }, [digest, provider, settings.preferredLanguage, settings.provider]);
 
   // Build the output map: translated where available, original otherwise.

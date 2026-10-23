@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as mediasoupClient from 'mediasoup-client';
-import type {
-  AuthorView,
-  WsServerMessage,
-  VoiceSlot,
-} from '@babelr/shared';
+import type { AuthorView, WsServerMessage, VoiceSlot } from '@babelr/shared';
 import { useVoiceRpc } from './useVoiceRpc';
 import { useVoiceMedia, PTT_KEY } from './useVoiceMedia';
 import { useVoicePeers } from './useVoicePeers';
@@ -84,13 +80,7 @@ export function useVoice(selfActorId: string) {
 
   const media = useVoiceMedia(rpc, sendTransportRef, channelIdRef, setState);
 
-  const peers = useVoicePeers(
-    rpc,
-    deviceRef,
-    recvTransportRef,
-    media.deafenedRef,
-    setState,
-  );
+  const peers = useVoicePeers(rpc, deviceRef, recvTransportRef, media.deafenedRef, setState);
 
   // --- Orchestrated toggleDeafen (needs both media + peers) ---
   const toggleDeafen = useCallback(() => {
@@ -249,7 +239,12 @@ export function useVoice(selfActorId: string) {
             if (producer.peerActorId === selfActorId) break;
             const ch = channelIdRef.current;
             if (!ch) break;
-            void peers.consumeProducer(ch, producer.peerActorId, producer.producerId, producer.slot);
+            void peers.consumeProducer(
+              ch,
+              producer.peerActorId,
+              producer.producerId,
+              producer.slot,
+            );
             break;
           }
           case 'voice:producer-closed':
@@ -275,60 +270,58 @@ export function useVoice(selfActorId: string) {
       await waitForOpen;
 
       // Wait for the SFU bootstrap (router caps + existing producers).
-      const joinedMsg = await new Promise<
-        Extract<WsServerMessage, { type: 'voice:joined' }>
-      >((resolve, reject) => {
-        const timer = setTimeout(() => {
-          ws.removeEventListener('message', onMsg);
-          reject(new Error('voice:joined timeout'));
-        }, REQUEST_TIMEOUT_MS);
-        const onMsg = (ev: MessageEvent) => {
-          try {
-            const m = JSON.parse(ev.data) as WsServerMessage;
-            if (m.type === 'voice:joined') {
-              clearTimeout(timer);
-              ws.removeEventListener('message', onMsg);
-              resolve(m);
+      const joinedMsg = await new Promise<Extract<WsServerMessage, { type: 'voice:joined' }>>(
+        (resolve, reject) => {
+          const timer = setTimeout(() => {
+            ws.removeEventListener('message', onMsg);
+            reject(new Error('voice:joined timeout'));
+          }, REQUEST_TIMEOUT_MS);
+          const onMsg = (ev: MessageEvent) => {
+            try {
+              const m = JSON.parse(ev.data) as WsServerMessage;
+              if (m.type === 'voice:joined') {
+                clearTimeout(timer);
+                ws.removeEventListener('message', onMsg);
+                resolve(m);
+              }
+            } catch {
+              // ignore
             }
-          } catch {
-            // ignore
-          }
-        };
-        ws.addEventListener('message', onMsg);
-        sendWs({ type: 'voice:join', payload: { channelId } });
-      });
+          };
+          ws.addEventListener('message', onMsg);
+          sendWs({ type: 'voice:join', payload: { channelId } });
+        },
+      );
 
       // 3) Device + transports
       const device = new mediasoupClient.Device();
       await device.load({
-        routerRtpCapabilities:
-          joinedMsg.payload.routerRtpCapabilities as mediasoupClient.types.RtpCapabilities,
+        routerRtpCapabilities: joinedMsg.payload
+          .routerRtpCapabilities as mediasoupClient.types.RtpCapabilities,
       });
       deviceRef.current = device;
 
-      const sendParams = await rpc<
-        Extract<WsServerMessage, { type: 'voice:transport-created' }>
-      >((requestId) => ({
-        type: 'voice:create-transport',
-        payload: { requestId, channelId, direction: 'send' },
-      }));
+      const sendParams = await rpc<Extract<WsServerMessage, { type: 'voice:transport-created' }>>(
+        (requestId) => ({
+          type: 'voice:create-transport',
+          payload: { requestId, channelId, direction: 'send' },
+        }),
+      );
       const sendTransport = device.createSendTransport({
         ...(sendParams.payload.params as unknown as mediasoupClient.types.TransportOptions),
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       });
       sendTransportRef.current = sendTransport;
       sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
-        rpc<Extract<WsServerMessage, { type: 'voice:transport-connected' }>>(
-          (requestId) => ({
-            type: 'voice:connect-transport',
-            payload: {
-              requestId,
-              channelId,
-              transportId: sendTransport.id,
-              dtlsParameters,
-            },
-          }),
-        )
+        rpc<Extract<WsServerMessage, { type: 'voice:transport-connected' }>>((requestId) => ({
+          type: 'voice:connect-transport',
+          payload: {
+            requestId,
+            channelId,
+            transportId: sendTransport.id,
+            dtlsParameters,
+          },
+        }))
           .then(() => callback())
           .catch((err: Error) => errback(err));
       });
@@ -349,29 +342,27 @@ export function useVoice(selfActorId: string) {
           .catch((err: Error) => errback(err));
       });
 
-      const recvParams = await rpc<
-        Extract<WsServerMessage, { type: 'voice:transport-created' }>
-      >((requestId) => ({
-        type: 'voice:create-transport',
-        payload: { requestId, channelId, direction: 'recv' },
-      }));
+      const recvParams = await rpc<Extract<WsServerMessage, { type: 'voice:transport-created' }>>(
+        (requestId) => ({
+          type: 'voice:create-transport',
+          payload: { requestId, channelId, direction: 'recv' },
+        }),
+      );
       const recvTransport = device.createRecvTransport({
         ...(recvParams.payload.params as unknown as mediasoupClient.types.TransportOptions),
         iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
       });
       recvTransportRef.current = recvTransport;
       recvTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
-        rpc<Extract<WsServerMessage, { type: 'voice:transport-connected' }>>(
-          (requestId) => ({
-            type: 'voice:connect-transport',
-            payload: {
-              requestId,
-              channelId,
-              transportId: recvTransport.id,
-              dtlsParameters,
-            },
-          }),
-        )
+        rpc<Extract<WsServerMessage, { type: 'voice:transport-connected' }>>((requestId) => ({
+          type: 'voice:connect-transport',
+          payload: {
+            requestId,
+            channelId,
+            transportId: recvTransport.id,
+            dtlsParameters,
+          },
+        }))
           .then(() => callback())
           .catch((err: Error) => errback(err));
       });
@@ -398,15 +389,7 @@ export function useVoice(selfActorId: string) {
       setState((s) => ({ ...s, status: 'connected' }));
       media.applyMicEnabled();
     },
-    [
-      media,
-      peers,
-      rpc,
-      selfActorId,
-      sendWs,
-      wsRef,
-      pendingRef,
-    ],
+    [media, peers, rpc, selfActorId, sendWs, wsRef, pendingRef],
   );
 
   // --- Teardown ---
@@ -516,7 +499,7 @@ export function useVoice(selfActorId: string) {
       wsRef.current = null;
       channelIdRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately empty deps: tear down only on unmount.
   }, []);
 
   return {

@@ -16,8 +16,12 @@ export const friendships = pgTable(
   'friendships',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    ownerActorId: uuid('owner_actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
-    otherActorId: uuid('other_actor_id').notNull().references(() => actors.id, { onDelete: 'cascade' }),
+    ownerActorId: uuid('owner_actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    otherActorId: uuid('other_actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
     state: varchar('state', { length: 16 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

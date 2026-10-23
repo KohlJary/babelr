@@ -111,10 +111,7 @@ export function isSameDay(a: Date, b: Date): boolean {
 
 /** True if the given date's month/year matches the reference. */
 export function isSameMonth(date: Date, reference: Date): boolean {
-  return (
-    date.getFullYear() === reference.getFullYear() &&
-    date.getMonth() === reference.getMonth()
-  );
+  return date.getFullYear() === reference.getFullYear() && date.getMonth() === reference.getMonth();
 }
 
 /**

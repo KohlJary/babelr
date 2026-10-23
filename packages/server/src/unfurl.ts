@@ -136,13 +136,8 @@ function parseOgMeta(url: string, html: string): LinkPreview {
       getMetaContent('twitter:description') ??
       getMetaContent('description') ??
       null,
-    image:
-      getMetaContent('og:image') ??
-      getMetaContent('twitter:image') ??
-      null,
-    siteName:
-      getMetaContent('og:site_name') ??
-      null,
+    image: getMetaContent('og:image') ?? getMetaContent('twitter:image') ?? null,
+    siteName: getMetaContent('og:site_name') ?? null,
   };
 }
 

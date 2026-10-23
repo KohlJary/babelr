@@ -22,7 +22,11 @@ function fileIcon(contentType?: string): string {
   if (contentType.startsWith('image/')) return '\u{1F5BC}\uFE0F';
   if (contentType.includes('zip') || contentType.includes('tar') || contentType.includes('gzip'))
     return '\u{1F4E6}';
-  if (contentType.includes('pdf') || contentType.includes('document') || contentType.includes('text'))
+  if (
+    contentType.includes('pdf') ||
+    contentType.includes('document') ||
+    contentType.includes('text')
+  )
     return '\u{1F4C4}';
   return '\u{1F4CE}';
 }
@@ -59,8 +63,7 @@ export default function FilesPanel({
   // Translation: file descriptions
   const { settings: translationSettings } = useTranslationSettings();
   const filesList = useMemo(() => (selected ? [selected] : []), [selected]);
-  const { translations: fileTranslations } =
-    useFileTranslation(filesList, [], translationSettings);
+  const { translations: fileTranslations } = useFileTranslation(filesList, [], translationSettings);
   const fileTrans = selected ? fileTranslations.get(selected.id) : undefined;
 
   // Comment thread via the message pipeline (same pattern as event chat)
@@ -74,8 +77,10 @@ export default function FilesPanel({
     typingUsers: chatTyping,
     notifyTyping: chatNotifyTyping,
   } = useChat(actor, selected?.chatId ?? null, false);
-  const { translations: chatTranslations, isTranslating: chatIsTranslating } =
-    useTranslation(chatMessages, translationSettings);
+  const { translations: chatTranslations, isTranslating: chatIsTranslating } = useTranslation(
+    chatMessages,
+    translationSettings,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-open a file when navigating from an embed click.
@@ -90,8 +95,12 @@ export default function FilesPanel({
           if (file.folderPath) setCurrentFolder(file.folderPath);
         }
       })
-      .catch(() => { /* file not found — stay on list */ });
-    return () => { cancelled = true; };
+      .catch(() => {
+        /* file not found — stay on list */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [initialFileId, serverId]);
 
   const loadFolder = useCallback(
@@ -159,8 +168,7 @@ export default function FilesPanel({
   };
 
   const canDelete = (file: FileView) =>
-    file.uploader.id === actor.id ||
-    ['moderator', 'admin', 'owner'].includes(callerRole ?? '');
+    file.uploader.id === actor.id || ['moderator', 'admin', 'owner'].includes(callerRole ?? '');
 
   const copyReference = async (slug: string) => {
     const text = `[[file:${slug}]]`;
@@ -171,7 +179,11 @@ export default function FilesPanel({
       ta.value = text;
       document.body.appendChild(ta);
       ta.select();
-      try { document.execCommand('copy'); } catch { /* nothing more we can do */ }
+      try {
+        document.execCommand('copy');
+      } catch {
+        /* nothing more we can do */
+      }
       document.body.removeChild(ta);
     }
   };
@@ -399,7 +411,9 @@ export default function FilesPanel({
                     }}
                     title={t('files.editDescription')}
                   >
-                    {fileTrans?.description ?? selected.description ?? t('files.descriptionPlaceholder')}
+                    {fileTrans?.description ??
+                      selected.description ??
+                      t('files.descriptionPlaceholder')}
                   </div>
                 )}
               </div>

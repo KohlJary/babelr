@@ -212,13 +212,7 @@ export async function postToInbox(
 ) {
   const body = JSON.stringify(activity);
   const url = `http://test.babelr.local${inboxPath}`;
-  const { headers } = signRequest(
-    signerPrivateKey,
-    `${signerUri}#main-key`,
-    'POST',
-    url,
-    body,
-  );
+  const { headers } = signRequest(signerPrivateKey, `${signerUri}#main-key`, 'POST', url, body);
 
   return app.inject({
     method: 'POST',

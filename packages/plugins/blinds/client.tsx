@@ -341,7 +341,8 @@ export function BlindGrader(props: Record<string, unknown>) {
       return;
     }
     if (step === 'grade') headingRef.current?.focus();
-    else document.getElementById(step === 'rank' ? 'blind-rank-title' : 'blind-lock-title')?.focus();
+    else
+      document.getElementById(step === 'rank' ? 'blind-rank-title' : 'blind-lock-title')?.focus();
   }, [index, step]);
 
   useEffect(() => {
@@ -417,12 +418,18 @@ export function BlindGrader(props: Record<string, unknown>) {
     setStatus('Saving…');
     setError(null);
     setState((s) =>
-      s.kind === 'ok' ? { kind: 'ok', data: { ...s.data, ranks: { ...s.data.ranks, [promptId]: order } } } : s,
+      s.kind === 'ok'
+        ? { kind: 'ok', data: { ...s.data, ranks: { ...s.data.ranks, [promptId]: order } } }
+        : s,
     );
     try {
-      await api(`${routeBase}/rounds/${encodeURIComponent(slug)}/ranks/${encodeURIComponent(promptId)}`, 'PUT', {
-        order,
-      });
+      await api(
+        `${routeBase}/rounds/${encodeURIComponent(slug)}/ranks/${encodeURIComponent(promptId)}`,
+        'PUT',
+        {
+          order,
+        },
+      );
       setStatus('Saved');
     } catch (err) {
       setStatus('');
@@ -474,7 +481,10 @@ export function BlindGrader(props: Record<string, unknown>) {
           aria-valuemax={total}
           aria-valuenow={graded}
         >
-          <span className="blind-progress-bar" style={{ width: `${total ? (graded / total) * 100 : 0}%` }} />
+          <span
+            className="blind-progress-bar"
+            style={{ width: `${total ? (graded / total) * 100 : 0}%` }}
+          />
         </div>
         <label className="blind-jump">
           <span>Jump to</span>
@@ -553,7 +563,14 @@ export function BlindGrader(props: Record<string, unknown>) {
         </section>
       )}
 
-      {step === 'rank' && <RankStep bundle={bundle} ranks={ranks} locked={locked} onSave={(p, o) => void saveRank(p, o)} />}
+      {step === 'rank' && (
+        <RankStep
+          bundle={bundle}
+          ranks={ranks}
+          locked={locked}
+          onSave={(p, o) => void saveRank(p, o)}
+        />
+      )}
 
       {step === 'lock' && (
         <section className="blind-lock" aria-labelledby="blind-lock-title">
@@ -569,18 +586,31 @@ export function BlindGrader(props: Record<string, unknown>) {
             <>
               <p>
                 {graded} of {total} answers fully graded
-                {bundle.rank ? `, ${rankedPrompts} of ${bundle.prompts.length} prompts ranked` : ''}.
+                {bundle.rank ? `, ${rankedPrompts} of ${bundle.prompts.length} prompts ranked` : ''}
+                .
               </p>
               {(graded < total || (bundle.rank && rankedPrompts < bundle.prompts.length)) && (
-                <p className="blind-warning">Some answers are not finished. They'll export as-is.</p>
+                <p className="blind-warning">
+                  Some answers are not finished. They'll export as-is.
+                </p>
               )}
               {!confirming ? (
-                <button type="button" className="blind-lock-button" onClick={() => setConfirming(true)}>
+                <button
+                  type="button"
+                  className="blind-lock-button"
+                  onClick={() => setConfirming(true)}
+                >
                   Lock round…
                 </button>
               ) : (
-                <div className="blind-confirm" role="alertdialog" aria-labelledby="blind-confirm-text">
-                  <p id="blind-confirm-text">Locking is final. You can't change ratings after this.</p>
+                <div
+                  className="blind-confirm"
+                  role="alertdialog"
+                  aria-labelledby="blind-confirm-text"
+                >
+                  <p id="blind-confirm-text">
+                    Locking is final. You can't change ratings after this.
+                  </p>
                   <div className="blind-confirm-actions">
                     <button
                       type="button"
@@ -590,11 +620,7 @@ export function BlindGrader(props: Record<string, unknown>) {
                     >
                       Cancel
                     </button>
-                    <button
-                      type="button"
-                      className="blind-lock-button"
-                      onClick={() => void lock()}
-                    >
+                    <button type="button" className="blind-lock-button" onClick={() => void lock()}>
                       Lock round
                     </button>
                   </div>
@@ -629,7 +655,11 @@ export function BlindGrader(props: Record<string, unknown>) {
             else go(index + 1);
           }}
         >
-          {step === 'grade' && index === total - 1 ? (bundle.rank ? 'Rank →' : 'Finish →') : 'Next →'}
+          {step === 'grade' && index === total - 1
+            ? bundle.rank
+              ? 'Rank →'
+              : 'Finish →'
+            : 'Next →'}
         </button>
       </nav>
 
@@ -648,7 +678,11 @@ export function BlindGrader(props: Record<string, unknown>) {
 export const BlindPreview = BlindGrader;
 
 export function BlindsView(props: Record<string, unknown>) {
-  const { round, routeBase, onClose } = props as { round?: string; routeBase: string; onClose: () => void };
+  const { round, routeBase, onClose } = props as {
+    round?: string;
+    routeBase: string;
+    onClose: () => void;
+  };
   return (
     <div className="blind-view">
       <div className="blind-view-bar">

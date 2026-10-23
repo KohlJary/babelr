@@ -55,10 +55,18 @@ export function BoardPreview(props: Record<string, unknown>) {
   const { slug, routeBase } = props as unknown as BoardPreviewProps;
   const state = useBoard(slug, routeBase);
   if (state.status === 'loading') {
-    return <div className="embed-preview-loading"><T>Loading board…</T></div>;
+    return (
+      <div className="embed-preview-loading">
+        <T>Loading board…</T>
+      </div>
+    );
   }
   if (state.status === 'locked') {
-    return <div className="embed-preview-locked"><T>Board not found.</T></div>;
+    return (
+      <div className="embed-preview-locked">
+        <T>Board not found.</T>
+      </div>
+    );
   }
   const { board } = state;
   return (
@@ -72,8 +80,8 @@ export function BoardPreview(props: Record<string, unknown>) {
         </div>
       )}
       <div className="pm-board-preview-stats">
-        {board.workItemCount} item{board.workItemCount === 1 ? '' : 's'} ·{' '}
-        {board.columns.length} column{board.columns.length === 1 ? '' : 's'}
+        {board.workItemCount} item{board.workItemCount === 1 ? '' : 's'} · {board.columns.length}{' '}
+        column{board.columns.length === 1 ? '' : 's'}
       </div>
       <div className="pm-board-preview-columns">
         {board.columns.map((col) => (
@@ -82,9 +90,7 @@ export function BoardPreview(props: Record<string, unknown>) {
               <span className="pm-board-preview-column-name">
                 <T>{col.name}</T>
               </span>
-              <span className="pm-board-preview-column-count">
-                {col.workItems.length}
-              </span>
+              <span className="pm-board-preview-column-count">{col.workItems.length}</span>
             </div>
             <ul className="pm-board-preview-column-items">
               {col.workItems.slice(0, 3).map((item) => (
@@ -93,9 +99,7 @@ export function BoardPreview(props: Record<string, unknown>) {
                 </li>
               ))}
               {col.workItems.length > 3 && (
-                <li className="pm-board-preview-column-more">
-                  +{col.workItems.length - 3} more
-                </li>
+                <li className="pm-board-preview-column-more">+{col.workItems.length - 3} more</li>
               )}
             </ul>
           </div>

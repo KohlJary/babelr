@@ -59,7 +59,13 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
       const [local] = await db
         .select()
         .from(actors)
-        .where(and(eq(actors.preferredUsername, username), eq(actors.local, true), eq(actors.type, 'Person')))
+        .where(
+          and(
+            eq(actors.preferredUsername, username),
+            eq(actors.local, true),
+            eq(actors.type, 'Person'),
+          ),
+        )
         .limit(1);
       other = local ?? null;
     } else {
@@ -116,7 +122,10 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
         .select()
         .from(friendships)
         .where(
-          and(eq(friendships.ownerActorId, other.id), eq(friendships.otherActorId, request.actor.id)),
+          and(
+            eq(friendships.ownerActorId, other.id),
+            eq(friendships.otherActorId, request.actor.id),
+          ),
         )
         .limit(1);
       if (mirror) {
@@ -248,9 +257,7 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
           )
           .limit(1);
         if (mirror) {
-          await db
-            .delete(friendships)
-            .where(eq(friendships.id, mirror.id));
+          await db.delete(friendships).where(eq(friendships.id, mirror.id));
           fastify.broadcastToActor(other.id, {
             type: 'friend:removed',
             payload: { friendshipId: mirror.id },
@@ -266,4 +273,3 @@ export default async function friendsRoutes(fastify: FastifyInstance) {
     },
   );
 }
-

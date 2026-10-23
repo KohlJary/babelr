@@ -18,11 +18,7 @@ export const pins = pgTable(
     pinnedBy: uuid('pinned_by')
       .notNull()
       .references(() => actors.id),
-    pinnedAt: timestamp('pinned_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    pinnedAt: timestamp('pinned_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex('pins_context_target_idx').on(table.contextId, table.targetId),
-  ],
+  (table) => [uniqueIndex('pins_context_target_idx').on(table.contextId, table.targetId)],
 );

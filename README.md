@@ -119,12 +119,12 @@ Every message displays a metadata badge showing what the system understood.
 
 ### Backend options
 
-| Backend | Tier | Where it runs | Setup |
-|---------|------|---------------|-------|
-| **Anthropic Claude** | Tone-preserving | Server proxy → `api.anthropic.com` | Paste your API key once |
-| **OpenAI GPT** | Tone-preserving | Server proxy → `api.openai.com` | Paste your API key once |
-| **Ollama** (self-hosted) | Tone-preserving | Browser → your Ollama instance directly | Point at `http://localhost:11434` or your internal host |
-| **Transformers.js** (local) | Translation-only | Browser-local (WASM) | Nothing — runs out of the box |
+| Backend                     | Tier             | Where it runs                           | Setup                                                   |
+| --------------------------- | ---------------- | --------------------------------------- | ------------------------------------------------------- |
+| **Anthropic Claude**        | Tone-preserving  | Server proxy → `api.anthropic.com`      | Paste your API key once                                 |
+| **OpenAI GPT**              | Tone-preserving  | Server proxy → `api.openai.com`         | Paste your API key once                                 |
+| **Ollama** (self-hosted)    | Tone-preserving  | Browser → your Ollama instance directly | Point at `http://localhost:11434` or your internal host |
+| **Transformers.js** (local) | Translation-only | Browser-local (WASM)                    | Nothing — runs out of the box                           |
 
 The three LLM backends share the same classify-translate-idiom prompt and produce the same structured response shape, so switching providers changes quality and cost but not feature surface. Register, intent, confidence, and idiom glosses all flow through identically.
 
@@ -138,15 +138,15 @@ Every piece of content in Babelr — messages, wiki pages, calendar events, file
 
 ### Built-in embed kinds
 
-| Syntax | Renders as | Click behavior |
-|--------|-----------|----------------|
-| `[[page-slug]]` or `[[wiki:page-slug]]` | Clickable wiki link | Opens page preview in right sidebar; "Open in Wiki" navigates to the full panel |
-| `[[msg:abc1234xyz]]` | Inline message preview with author, channel, and content snippet | Sidebar preview with full message + context; "Go to message" jumps to source |
-| `[[event:weekly-sync]]` | Inline invite card with date/time, location, and attendee counts | Sidebar preview with description + RSVP; "Open in Calendar" navigates |
-| `[[file:onboarding-deck]]` | File card with type icon, name, size | Sidebar preview with metadata + download |
-| `[[img:diagram]]` | Inline image | Large image preview in sidebar |
-| `[[man:wiki-syntax]]` | Manual link | Sidebar preview of the manual page |
-| `[[partner@partner.org:wiki:onboarding]]` | Cross-Tower embed (federation proxy) | Same shape as local; fetched via signed GET |
+| Syntax                                    | Renders as                                                       | Click behavior                                                                  |
+| ----------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `[[page-slug]]` or `[[wiki:page-slug]]`   | Clickable wiki link                                              | Opens page preview in right sidebar; "Open in Wiki" navigates to the full panel |
+| `[[msg:abc1234xyz]]`                      | Inline message preview with author, channel, and content snippet | Sidebar preview with full message + context; "Go to message" jumps to source    |
+| `[[event:weekly-sync]]`                   | Inline invite card with date/time, location, and attendee counts | Sidebar preview with description + RSVP; "Open in Calendar" navigates           |
+| `[[file:onboarding-deck]]`                | File card with type icon, name, size                             | Sidebar preview with metadata + download                                        |
+| `[[img:diagram]]`                         | Inline image                                                     | Large image preview in sidebar                                                  |
+| `[[man:wiki-syntax]]`                     | Manual link                                                      | Sidebar preview of the manual page                                              |
+| `[[partner@partner.org:wiki:onboarding]]` | Cross-Tower embed (federation proxy)                             | Same shape as local; fetched via signed GET                                     |
 
 ### How it works
 
@@ -200,16 +200,16 @@ No other chat platform does this. It is not even on their roadmaps.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | TypeScript, Fastify 5, Drizzle ORM |
-| Database | PostgreSQL |
-| Frontend | React 19, Vite |
-| Real-time | WebSocket (@fastify/websocket) |
-| Translation (tone-preserving) | Anthropic Claude, OpenAI GPT, or self-hosted Ollama (user's own key / instance) |
-| Translation (translation-only) | Transformers.js, Helsinki-NLP OPUS models (browser-local) |
-| Encryption | Web Crypto API (ECDH P-256 + AES-256-GCM) |
-| Monorepo | npm workspaces |
+| Layer                          | Technology                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| Backend                        | TypeScript, Fastify 5, Drizzle ORM                                              |
+| Database                       | PostgreSQL                                                                      |
+| Frontend                       | React 19, Vite                                                                  |
+| Real-time                      | WebSocket (@fastify/websocket)                                                  |
+| Translation (tone-preserving)  | Anthropic Claude, OpenAI GPT, or self-hosted Ollama (user's own key / instance) |
+| Translation (translation-only) | Transformers.js, Helsinki-NLP OPUS models (browser-local)                       |
+| Encryption                     | Web Crypto API (ECDH P-256 + AES-256-GCM)                                       |
+| Monorepo                       | npm workspaces                                                                  |
 
 ## Documentation
 
