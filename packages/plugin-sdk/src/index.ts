@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import './fastify-augment.js';
 export * from './types.js';
+export * from './access.js';
 
 import type { PluginManifest } from './types.js';
 

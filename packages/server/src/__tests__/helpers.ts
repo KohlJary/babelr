@@ -19,6 +19,8 @@ import roleRoutes from '../routes/roles.ts';
 import translateRoutes from '../routes/translate.ts';
 import fileRoutes from '../routes/files.ts';
 import auditRoutes from '../routes/audit.ts';
+import embedRoutes from '../routes/embeds.ts';
+import pluginLoader from '../plugins/plugin-loader.ts';
 import multipart from '@fastify/multipart';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
@@ -40,7 +42,12 @@ const testConfig: Config = {
   mediasoupRtcMaxPort: 40099,
 };
 
-export async function createTestApp() {
+/**
+ * `plugins: true` also mounts the real plugin loader (the in-tree
+ * plugins from registered.ts, with their migrations) and the embed
+ * proxy, for tests of plugin routes and their access checks.
+ */
+export async function createTestApp(opts: { plugins?: boolean } = {}) {
   const db = createDb(testConfig.databaseUrl);
 
   const app = Fastify({ logger: false });
@@ -96,6 +103,10 @@ export async function createTestApp() {
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(fileRoutes);
   await app.register(auditRoutes);
+  if (opts.plugins) {
+    await app.register(embedRoutes);
+    await app.register(pluginLoader);
+  }
 
   await app.ready();
   return { app, db };

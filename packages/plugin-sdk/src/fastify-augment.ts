@@ -40,6 +40,19 @@ declare module 'fastify' {
      *  isn't local. Plugins call this instead of importing server
      *  federation internals directly. */
     deliverToGroupFollowers: (groupId: string, activity: Record<string, unknown>) => Promise<void>;
+    /** Send a WS message to every connected local member of a server.
+     *  Use it instead of broadcastToAllSubscribers for anything scoped
+     *  to a server, so non-members never receive it. */
+    broadcastToServerMembers: (serverId: string, message: WsServerMessage) => Promise<void>;
+    /** Membership and role checks, implemented by the Tower. Plugins
+     *  normally call canAccess / requireMember / canManage instead. */
+    pluginAccess: {
+      /** Is the actor with this URI (local or remote) a member of the
+       *  server (Group actor id)? */
+      isMember: (actor: { uri: string }, serverId: string) => Promise<boolean>;
+      /** Does this local actor hold MANAGE_SERVER on the server? */
+      isServerAdmin: (actor: { id: string }, serverId: string) => Promise<boolean>;
+    };
   }
 
   interface FastifyRequest {

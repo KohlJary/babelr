@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { definePlugin } from '@babelr/plugin-sdk';
+import { definePlugin, canAccess, canManage } from '@babelr/plugin-sdk';
+import type { PluginCaller } from '@babelr/plugin-sdk';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -14,6 +15,12 @@ import { sql } from 'drizzle-orm';
  *   - Real-time vote-count sync via plugin-scoped WS broadcast
  *   - Translation: poll questions and option labels flow through the
  *     standard translation pipeline at render time (plaintext storage)
+ *
+ * Access: every route needs a login (the loader enforces it). A poll
+ * with a serverId is visible to, and votable by, members of that
+ * server only; non-members get 404. A poll with no serverId isn't
+ * scoped to anything, so any authenticated caller who has the slug can
+ * see it and vote. Closing is for the creator or a server admin.
  *
  * Not in v1:
  *   - Poll creation UI — create via POST /plugins/polls/polls for now;
@@ -58,6 +65,21 @@ interface PollPayload {
    *  sessions; omitted for federation resolver responses (the remote
    *  Tower computes this on their side from their own actor). */
   myVoteOptionId?: string | null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type FastifyLike = Parameters<typeof canAccess>[0];
+
+/** May `caller` see (and vote on) a poll scoped to `serverId`? */
+async function canSeePoll(
+  fastify: FastifyLike,
+  caller: Pick<PluginCaller, 'uri'> | null | undefined,
+  serverId: string | null,
+): Promise<boolean> {
+  if (!caller?.uri) return false;
+  if (!serverId) return true;
+  return canAccess(fastify, caller, serverId);
 }
 
 export default definePlugin({
@@ -105,6 +127,13 @@ export default definePlugin({
   ],
 
   serverRoutes: async (fastify) => {
+    async function pollRow(slug: string): Promise<PollRow | null> {
+      const rows = (await fastify.db.execute(
+        sql`SELECT * FROM plugin_polls_polls WHERE slug = ${slug} LIMIT 1`,
+      )) as unknown as PollRow[];
+      return rows[0] ?? null;
+    }
+
     async function loadPoll(slug: string): Promise<PollPayload | null> {
       const polls = (await fastify.db.execute(
         sql`SELECT * FROM plugin_polls_polls WHERE slug = ${slug} LIMIT 1`,
@@ -141,16 +170,16 @@ export default definePlugin({
     /** Push a live update to every subscriber so embedded polls across
      *  open clients re-render with the new counts. We piggyback on the
      *  broadcastToAllSubscribers decorator the WS plugin exposes. */
-    async function broadcastPoll(slug: string) {
+    async function broadcastPoll(slug: string, serverId: string | null) {
       const payload = await loadPoll(slug);
       if (!payload) return;
-      fastify.broadcastToAllSubscribers({
-        // Plugin-namespaced event — the WS type system treats unknown
-        // types as opaque pass-through, which is exactly what plugins
-        // need. Clients filter by this string.
-        type: 'plugin:polls:updated' as never,
-        payload: payload as never,
-      });
+      // Plugin-namespaced event — the WS type system treats unknown
+      // types as opaque pass-through, which is exactly what plugins
+      // need. Clients filter by this string. A server's poll goes to
+      // that server's members only.
+      const message = { type: 'plugin:polls:updated' as never, payload: payload as never };
+      if (serverId) await fastify.broadcastToServerMembers(serverId, message);
+      else fastify.broadcastToAllSubscribers(message);
     }
 
     fastify.post<{
@@ -163,6 +192,11 @@ export default definePlugin({
       }
       if (!Array.isArray(options) || options.length < 2 || options.length > 10) {
         return reply.status(400).send({ error: 'options must have 2–10 entries' });
+      }
+      if (serverId !== undefined && serverId !== null) {
+        if (typeof serverId !== 'string' || !(await canAccess(fastify, request.actor, serverId))) {
+          return reply.status(404).send({ error: 'Server not found' });
+        }
       }
       const slug = randomSlug();
       const actorId = request.actor.id;
@@ -188,6 +222,9 @@ export default definePlugin({
     fastify.get<{ Querystring: { serverId?: string } }>('/polls', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const { serverId } = request.query;
+      if (serverId && !(await canAccess(fastify, request.actor, serverId))) {
+        return reply.status(404).send({ error: 'Server not found' });
+      }
       // Server-scoped list for now. Global listing (cross-server
       // recent activity dashboards, etc.) is a follow-up.
       const rows = serverId
@@ -215,16 +252,18 @@ export default definePlugin({
     });
 
     fastify.get<{ Params: { slug: string } }>('/polls/:slug', async (request, reply) => {
+      if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const row = await pollRow(request.params.slug);
+      if (!row || !(await canSeePoll(fastify, request.actor, row.server_id))) {
+        return reply.status(404).send({ error: 'Poll not found' });
+      }
       const payload = await loadPoll(request.params.slug);
       if (!payload) return reply.status(404).send({ error: 'Poll not found' });
-      if (request.actor) {
-        const mine = (await fastify.db.execute(
-          sql`SELECT option_id FROM plugin_polls_votes
-              WHERE poll_id = (SELECT id FROM plugin_polls_polls WHERE slug = ${payload.slug})
-                AND actor_uri = ${request.actor.uri}`,
-        )) as unknown as { option_id: string }[];
-        payload.myVoteOptionId = mine[0]?.option_id ?? null;
-      }
+      const mine = (await fastify.db.execute(
+        sql`SELECT option_id FROM plugin_polls_votes
+            WHERE poll_id = ${row.id} AND actor_uri = ${request.actor.uri}`,
+      )) as unknown as { option_id: string }[];
+      payload.myVoteOptionId = mine[0]?.option_id ?? null;
       return payload;
     });
 
@@ -237,11 +276,13 @@ export default definePlugin({
       const { optionId } = request.body ?? {};
       if (!optionId) return reply.status(400).send({ error: 'optionId is required' });
       const actorUri = request.actor.uri;
-      const polls = (await fastify.db.execute(
-        sql`SELECT id, closed_at, allow_revote FROM plugin_polls_polls WHERE slug = ${slug} LIMIT 1`,
-      )) as unknown as { id: string; closed_at: string | null; allow_revote: boolean }[];
-      const poll = polls[0];
-      if (!poll) return reply.status(404).send({ error: 'Poll not found' });
+      const poll = await pollRow(slug);
+      if (!poll || !(await canSeePoll(fastify, request.actor, poll.server_id))) {
+        return reply.status(404).send({ error: 'Poll not found' });
+      }
+      if (typeof optionId !== 'string' || !UUID_RE.test(optionId)) {
+        return reply.status(400).send({ error: 'optionId does not belong to this poll' });
+      }
       if (poll.closed_at) return reply.status(409).send({ error: 'Poll is closed' });
       const options = (await fastify.db.execute(
         sql`SELECT id FROM plugin_polls_options WHERE poll_id = ${poll.id} AND id = ${optionId} LIMIT 1`,
@@ -262,7 +303,7 @@ export default definePlugin({
             ON CONFLICT (poll_id, actor_uri)
             DO UPDATE SET option_id = EXCLUDED.option_id, voted_at = NOW()`,
       );
-      await broadcastPoll(slug);
+      await broadcastPoll(slug, poll.server_id);
       const payload = await loadPoll(slug);
       if (payload) payload.myVoteOptionId = optionId;
       return payload;
@@ -270,18 +311,19 @@ export default definePlugin({
 
     fastify.post<{ Params: { slug: string } }>('/polls/:slug/close', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const polls = (await fastify.db.execute(
-        sql`SELECT id, created_by FROM plugin_polls_polls WHERE slug = ${request.params.slug} LIMIT 1`,
-      )) as unknown as { id: string; created_by: string }[];
-      const poll = polls[0];
-      if (!poll) return reply.status(404).send({ error: 'Poll not found' });
-      if (poll.created_by !== request.actor.id) {
-        return reply.status(403).send({ error: 'Only the creator can close a poll' });
+      const poll = await pollRow(request.params.slug);
+      if (!poll || !(await canSeePoll(fastify, request.actor, poll.server_id))) {
+        return reply.status(404).send({ error: 'Poll not found' });
+      }
+      if (!(await canManage(fastify, request.actor, poll.server_id, poll.created_by))) {
+        return reply
+          .status(403)
+          .send({ error: 'Only the creator or a server admin can close a poll' });
       }
       await fastify.db.execute(
         sql`UPDATE plugin_polls_polls SET closed_at = NOW() WHERE id = ${poll.id}`,
       );
-      await broadcastPoll(request.params.slug);
+      await broadcastPoll(request.params.slug, poll.server_id);
       return loadPoll(request.params.slug);
     });
   },
@@ -294,6 +336,8 @@ export default definePlugin({
         )) as unknown as PollRow[];
         const poll = polls[0];
         if (!poll) return null;
+        // Locked and missing look the same to the caller.
+        if (!(await canSeePoll(ctx.fastify, ctx.caller, poll.server_id))) return null;
         const options = (await ctx.fastify.db.execute(
           sql`SELECT o.id, o.position, o.label,
                      (SELECT COUNT(*) FROM plugin_polls_votes v WHERE v.option_id = o.id) AS vote_count

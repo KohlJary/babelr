@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import { definePlugin } from '@babelr/plugin-sdk';
+import { definePlugin, canAccess, canManage, requireMember } from '@babelr/plugin-sdk';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -21,6 +21,16 @@ import { sql } from 'drizzle-orm';
  *     used in [[task:slug]] embeds.
  *   - Sprints (plugin-phase-4 deferred) and per-board permissions
  *     (deferred) are not in this shape yet.
+ *
+ * Access: every route needs a login (the loader enforces it), and
+ * every board, its columns and its work items are visible only to
+ * members of the board's server. Non-members get 404 for reads and
+ * writes alike. Within a server, any member can create boards and
+ * work items and move cards (reorder, or a PATCH that only changes
+ * columnId/position). Changing a work item's content (title,
+ * description, priority, type, assignee, points, due date) or
+ * deleting it is for its reporter or a server admin (MANAGE_SERVER);
+ * other members get 403. Boards have no edit or delete route yet.
  *
  * Comments will attach via a chat_id pointing at an OrderedCollection
  * in the core objects table — same pattern wiki / events / files use.
@@ -110,6 +120,19 @@ interface WorkItemView {
 function randomSlug(): string {
   return Math.random().toString(36).slice(2, 12);
 }
+
+/** PATCH fields that change what a work item says, as opposed to
+ *  where it sits on the board. Only the reporter or an admin may
+ *  change these. */
+const CONTENT_FIELDS = [
+  'title',
+  'description',
+  'priority',
+  'itemType',
+  'assigneeId',
+  'storyPoints',
+  'dueDate',
+] as const;
 
 export default definePlugin({
   id: 'project-management',
@@ -241,14 +264,37 @@ export default definePlugin({
      *  polls plugin's pattern — opaque type pass-through, clients
      *  filter by the event string. */
     function broadcastPm(
+      serverId: string,
       boardSlug: string,
       kind: 'work-item' | 'reorder' | 'board',
       slug?: string,
     ) {
-      fastify.broadcastToAllSubscribers({
+      // Members of the board's server only: even the slugs are theirs.
+      void fastify.broadcastToServerMembers(serverId, {
         type: 'plugin:pm:updated' as never,
         payload: { boardSlug, kind, slug } as never,
       });
+    }
+
+    async function boardBySlug(slug: string): Promise<BoardRow | null> {
+      const rows = (await fastify.db.execute(
+        sql`SELECT * FROM plugin_pm_boards WHERE slug = ${slug} LIMIT 1`,
+      )) as unknown as BoardRow[];
+      return rows[0] ?? null;
+    }
+
+    /** A work item plus its board's server and slug, for access checks. */
+    async function itemBySlug(
+      slug: string,
+    ): Promise<(WorkItemRow & { server_id: string; board_slug: string }) | null> {
+      const rows = (await fastify.db.execute(
+        sql`SELECT w.*, b.server_id, b.slug AS board_slug
+              FROM plugin_pm_work_items w
+              JOIN plugin_pm_boards b ON b.id = w.board_id
+             WHERE w.slug = ${slug}
+             LIMIT 1`,
+      )) as unknown as (WorkItemRow & { server_id: string; board_slug: string })[];
+      return rows[0] ?? null;
     }
 
     async function loadBoardDetail(slug: string): Promise<BoardDetail | null> {
@@ -319,6 +365,7 @@ export default definePlugin({
       if (!serverId || !name?.trim()) {
         return reply.status(400).send({ error: 'serverId and name are required' });
       }
+      if (!(await requireMember(request, reply, serverId))) return reply;
       const boardSlug = randomSlug();
       const actorId = request.actor.id;
       const inserted = (await fastify.db.execute(
@@ -343,7 +390,7 @@ export default definePlugin({
       }
 
       const detail = await loadBoardDetail(boardSlug);
-      broadcastPm(boardSlug, 'board');
+      broadcastPm(serverId, boardSlug, 'board');
       return detail;
     });
 
@@ -353,6 +400,7 @@ export default definePlugin({
       if (!serverId) {
         return reply.status(400).send({ error: 'serverId query param is required' });
       }
+      if (!(await requireMember(request, reply, serverId))) return reply;
       const rows = (await fastify.db.execute(
         sql`SELECT b.*,
                      (SELECT COUNT(*) FROM plugin_pm_work_items w WHERE w.board_id = b.id)
@@ -374,6 +422,10 @@ export default definePlugin({
 
     fastify.get<{ Params: { slug: string } }>('/boards/:slug', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
+      const board = await boardBySlug(request.params.slug);
+      if (!board || !(await canAccess(fastify, request.actor, board.server_id))) {
+        return reply.status(404).send({ error: 'Board not found' });
+      }
       const detail = await loadBoardDetail(request.params.slug);
       if (!detail) return reply.status(404).send({ error: 'Board not found' });
       return detail;
@@ -401,11 +453,10 @@ export default definePlugin({
       if (!columnId || !title?.trim()) {
         return reply.status(400).send({ error: 'columnId and title are required' });
       }
-      const boards = (await fastify.db.execute(
-        sql`SELECT id FROM plugin_pm_boards WHERE slug = ${request.params.slug} LIMIT 1`,
-      )) as unknown as { id: string }[];
-      const board = boards[0];
-      if (!board) return reply.status(404).send({ error: 'Board not found' });
+      const board = await boardBySlug(request.params.slug);
+      if (!board || !(await canAccess(fastify, request.actor, board.server_id))) {
+        return reply.status(404).send({ error: 'Board not found' });
+      }
 
       // Confirm the column belongs to this board.
       const cols = (await fastify.db.execute(
@@ -457,7 +508,7 @@ export default definePlugin({
             RETURNING *`,
       )) as unknown as WorkItemRow[];
       const item = inserted[0];
-      broadcastPm(request.params.slug, 'work-item', item.slug);
+      broadcastPm(board.server_id, request.params.slug, 'work-item', item.slug);
       void deliverWorkItem('Create', item);
       return {
         slug: item.slug,
@@ -479,11 +530,10 @@ export default definePlugin({
 
     fastify.get<{ Params: { slug: string } }>('/work-items/:slug', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const items = (await fastify.db.execute(
-        sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
-      )) as unknown as WorkItemRow[];
-      const i = items[0];
-      if (!i) return reply.status(404).send({ error: 'Work item not found' });
+      const i = await itemBySlug(request.params.slug);
+      if (!i || !(await canAccess(fastify, request.actor, i.server_id))) {
+        return reply.status(404).send({ error: 'Work item not found' });
+      }
       return {
         slug: i.slug,
         title: i.title,
@@ -518,21 +568,20 @@ export default definePlugin({
       if (!Array.isArray(assignments) || assignments.length === 0) {
         return reply.status(400).send({ error: 'assignments required' });
       }
-      const boards = (await fastify.db.execute(
-        sql`SELECT * FROM plugin_pm_boards WHERE slug = ${request.params.slug} LIMIT 1`,
-      )) as unknown as BoardRow[];
-      const board = boards[0];
-      if (!board) return reply.status(404).send({ error: 'Board not found' });
+      const board = await boardBySlug(request.params.slug);
+      if (!board || !(await canAccess(fastify, request.actor, board.server_id))) {
+        return reply.status(404).send({ error: 'Board not found' });
+      }
 
       // itemIds are work-item slugs (what the client holds). Server
-      // resolves slug → row id below; a single SELECT ANY() makes the
+      // resolves slug → row id below; a single SELECT ... IN makes the
       // validation one round-trip instead of per-item.
       const columnIds = assignments.map((a) => a.columnId);
       const itemSlugs = assignments.flatMap((a) => a.itemIds);
 
       const cols = (await fastify.db.execute(
         sql`SELECT id FROM plugin_pm_columns
-            WHERE board_id = ${board.id} AND id = ANY(${columnIds})`,
+            WHERE board_id = ${board.id} AND id IN ${columnIds}`,
       )) as unknown as { id: string }[];
       if (cols.length !== columnIds.length) {
         return reply.status(400).send({ error: 'columnId not on this board' });
@@ -540,7 +589,7 @@ export default definePlugin({
       if (itemSlugs.length > 0) {
         const items = (await fastify.db.execute(
           sql`SELECT slug FROM plugin_pm_work_items
-              WHERE board_id = ${board.id} AND slug = ANY(${itemSlugs})`,
+              WHERE board_id = ${board.id} AND slug IN ${itemSlugs}`,
         )) as unknown as { slug: string }[];
         if (items.length !== itemSlugs.length) {
           return reply.status(400).send({ error: 'workItem not on this board' });
@@ -556,7 +605,7 @@ export default definePlugin({
           );
         }
       }
-      broadcastPm(request.params.slug, 'reorder');
+      broadcastPm(board.server_id, request.params.slug, 'reorder');
       return reply.status(204).send();
     });
 
@@ -576,11 +625,21 @@ export default definePlugin({
     }>('/work-items/:slug', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const body = request.body ?? {};
-      const existing = (await fastify.db.execute(
-        sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
-      )) as unknown as WorkItemRow[];
-      const current = existing[0];
-      if (!current) return reply.status(404).send({ error: 'Work item not found' });
+      const current = await itemBySlug(request.params.slug);
+      if (!current || !(await canAccess(fastify, request.actor, current.server_id))) {
+        return reply.status(404).send({ error: 'Work item not found' });
+      }
+      // Any member can move a card; changing what it says is for its
+      // reporter or a server admin.
+      const editsContent = CONTENT_FIELDS.some((f) => body[f] !== undefined);
+      if (
+        editsContent &&
+        !(await canManage(fastify, request.actor, current.server_id, current.reporter_id))
+      ) {
+        return reply
+          .status(403)
+          .send({ error: 'Only the reporter or a server admin can edit this work item' });
+      }
 
       // Merge provided fields with current values; let the DB settle
       // updated_at. The SQL builder approach keeps this readable for
@@ -624,12 +683,7 @@ export default definePlugin({
             RETURNING *`,
       )) as unknown as WorkItemRow[];
       const item = updated[0];
-      const parentBoard = (await fastify.db.execute(
-        sql`SELECT slug FROM plugin_pm_boards WHERE id = ${item.board_id} LIMIT 1`,
-      )) as unknown as { slug: string }[];
-      if (parentBoard[0]) {
-        broadcastPm(parentBoard[0].slug, 'work-item', item.slug);
-      }
+      broadcastPm(current.server_id, current.board_slug, 'work-item', item.slug);
       void deliverWorkItem('Update', item);
       return {
         slug: item.slug,
@@ -653,11 +707,15 @@ export default definePlugin({
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       // Fetch full row before deleting so we can construct the AS2
       // Delete activity with proper context.
-      const existing = (await fastify.db.execute(
-        sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${request.params.slug} LIMIT 1`,
-      )) as unknown as WorkItemRow[];
-      const toDelete = existing[0];
-      if (!toDelete) return reply.status(404).send({ error: 'Work item not found' });
+      const toDelete = await itemBySlug(request.params.slug);
+      if (!toDelete || !(await canAccess(fastify, request.actor, toDelete.server_id))) {
+        return reply.status(404).send({ error: 'Work item not found' });
+      }
+      if (!(await canManage(fastify, request.actor, toDelete.server_id, toDelete.reporter_id))) {
+        return reply
+          .status(403)
+          .send({ error: 'Only the reporter or a server admin can delete this work item' });
+      }
       const res = (await fastify.db.execute(
         sql`DELETE FROM plugin_pm_work_items WHERE id = ${toDelete.id}
               RETURNING id, chat_id, board_id`,
@@ -673,12 +731,7 @@ export default definePlugin({
       if (chatId) {
         await fastify.db.execute(sql`DELETE FROM objects WHERE id = ${chatId}`);
       }
-      const parentBoard = (await fastify.db.execute(
-        sql`SELECT slug FROM plugin_pm_boards WHERE id = ${res[0].board_id} LIMIT 1`,
-      )) as unknown as { slug: string }[];
-      if (parentBoard[0]) {
-        broadcastPm(parentBoard[0].slug, 'work-item', request.params.slug);
-      }
+      broadcastPm(toDelete.server_id, toDelete.board_slug, 'work-item', request.params.slug);
       void deliverWorkItem('Delete', toDelete);
       return reply.status(204).send();
     });
@@ -811,10 +864,16 @@ export default definePlugin({
     task: {
       resolveBySlug: async (slug, ctx) => {
         const rows = (await ctx.fastify.db.execute(
-          sql`SELECT * FROM plugin_pm_work_items WHERE slug = ${slug} LIMIT 1`,
-        )) as unknown as WorkItemRow[];
+          sql`SELECT w.*, b.server_id
+                FROM plugin_pm_work_items w
+                JOIN plugin_pm_boards b ON b.id = w.board_id
+               WHERE w.slug = ${slug}
+               LIMIT 1`,
+        )) as unknown as (WorkItemRow & { server_id: string })[];
         const item = rows[0];
         if (!item) return null;
+        // Locked and missing look the same to the caller.
+        if (!(await canAccess(ctx.fastify, ctx.caller, item.server_id))) return null;
         return {
           slug: item.slug,
           title: item.title,
@@ -842,6 +901,7 @@ export default definePlugin({
         )) as unknown as BoardRow[];
         const board = boards[0];
         if (!board) return null;
+        if (!(await canAccess(ctx.fastify, ctx.caller, board.server_id))) return null;
         const columns = (await ctx.fastify.db.execute(
           sql`SELECT * FROM plugin_pm_columns WHERE board_id = ${board.id} ORDER BY position`,
         )) as unknown as ColumnRow[];
