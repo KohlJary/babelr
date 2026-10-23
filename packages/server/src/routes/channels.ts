@@ -21,6 +21,7 @@ import { hasPermission } from '../permissions.ts';
 import { writeAuditLog } from '../audit.ts';
 import { broadcastPushToChannel } from '../push.ts';
 import { unfurlLinks } from '../unfurl.ts';
+import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 
 // Parse @mentions from content and return array of mentioned usernames
 export function parseMentions(content: string): string[] {
@@ -54,6 +55,23 @@ export async function createMessageInChannel(
   const db = fastify.db;
   const config = fastify.config;
   const protocol = config.secureCookies ? 'https' : 'http';
+
+  // Kill switch: a suspended agent can't post by any path.
+  if (actor.suspendedAt) {
+    throw Object.assign(new Error('Actor is suspended'), { statusCode: 403 });
+  }
+
+  // Clients may send only encrypted/iv and attachments; provenance is
+  // stamped here from the authenticated actor, never taken from them.
+  const clientProps = sanitizeClientProperties(messageProperties);
+  const provenance = await provenanceFor(actor, async (id) => {
+    const [s] = await db
+      .select({ id: actors.id, preferredUsername: actors.preferredUsername })
+      .from(actors)
+      .where(eq(actors.id, id))
+      .limit(1);
+    return s ?? null;
+  });
 
   // Parse mentions from content
   const mentionedUsernames = parseMentions(content);
@@ -89,8 +107,9 @@ export async function createMessageInChannel(
           to: [],
           cc: [],
           properties: {
-            ...messageProperties,
+            ...clientProps,
             ...(mentionedIds.length > 0 && { mentions: mentionedIds }),
+            ...provenance,
           },
           slug: generateMessageSlug(),
         })

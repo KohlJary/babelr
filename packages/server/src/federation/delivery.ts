@@ -5,6 +5,7 @@ import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { deliveryQueue } from '../db/schema/delivery-queue.ts';
+import { activityFromSuspendedActor } from '../agent-tokens.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { signRequest } from './signatures.ts';
 import { serializeNote, serializeActivity, serializeActor } from './jsonld.ts';
@@ -171,6 +172,19 @@ export async function processQueue(fastify: FastifyInstance) {
       await db
         .update(deliveryQueue)
         .set({ status: 'failed', lastError: 'Federation policy: domain not allowed' })
+        .where(eq(deliveryQueue.id, item.id));
+      continue;
+    }
+
+    // Kill switch: nothing goes out for a suspended local actor, as
+    // sender or as the author of the note a Group is relaying.
+    if (
+      sender?.suspendedAt ||
+      (await activityFromSuspendedActor(db, item.activityJson as Record<string, unknown>))
+    ) {
+      await db
+        .update(deliveryQueue)
+        .set({ status: 'cancelled', lastError: 'Sender suspended' })
         .where(eq(deliveryQueue.id, item.id));
       continue;
     }

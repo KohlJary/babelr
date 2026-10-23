@@ -7,12 +7,16 @@ type AnyDb = {
 };
 
 export interface AuditEntry {
-  serverId: string;
+  /** Null for account-level events (agent management). */
+  serverId: string | null;
   actorId: string;
   category: string;
   action: string;
   summary: string;
   details?: Record<string, unknown>;
+  sponsorId?: string | null;
+  scope?: string | null;
+  route?: string | null;
 }
 
 /**
@@ -28,6 +32,9 @@ export async function writeAuditLog(db: AnyDb, entry: AuditEntry): Promise<void>
       action: entry.action,
       summary: entry.summary,
       details: entry.details,
+      sponsorId: entry.sponsorId ?? null,
+      scope: entry.scope ?? null,
+      route: entry.route ?? null,
     });
   } catch (err) {
     console.error('Failed to write audit log:', err);

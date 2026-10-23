@@ -27,6 +27,7 @@ import { serializeActivity } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
+import { actorLikeType, isActorLike } from '../actor-kind.ts';
 
 interface APActivity {
   id?: string;
@@ -172,7 +173,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, request.params.username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
+            actorLikeType(actors.type),
           ),
         )
         .limit(1);
@@ -301,7 +302,7 @@ async function handleFollow(
 
   // Person→Person Follow is a friend request — do NOT auto-accept.
   // Create a pending_in friendship row and notify the local user.
-  if (localActor.type === 'Person') {
+  if (isActorLike(localActor.type)) {
     const [existing] = await db
       .select()
       .from(friendships)
@@ -466,7 +467,7 @@ async function handleUndo(
   if (innerType === 'Follow') {
     // Person → Person Undo: remove any friendship row owned by the local user
     // with the remote as other.
-    if (localActor.type === 'Person') {
+    if (isActorLike(localActor.type)) {
       const [row] = await fastify.db
         .select()
         .from(friendships)
@@ -650,7 +651,7 @@ async function handleCreateNote(ctx: CreateCtx) {
       const [target] = await fastify.db
         .select()
         .from(actors)
-        .where(and(eq(actors.uri, uri), eq(actors.local, true), eq(actors.type, 'Person')))
+        .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
         .limit(1);
       if (target) {
         const result = await findOrCreateDM(fastify, target, remoteActor);
@@ -1310,7 +1311,7 @@ async function handleUpdate(
   // not letting a remote actor update anyone's profile but their
   // own.
   const innerType = (obj as { type?: string }).type;
-  if (innerType === 'Person' || innerType === 'Group') {
+  if (isActorLike(innerType) || innerType === 'Group') {
     if (obj.id !== remoteActor.uri) {
       fastify.log.warn(
         { sender: remoteActor.uri, claimed: obj.id },

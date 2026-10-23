@@ -27,6 +27,7 @@ import { signedGet } from '../federation/delivery.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import { pins } from '../db/schema/pins.ts';
 import { createMessageInChannel, parseMentions } from './channels.ts';
+import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 import {
   toMessageView,
   toAuthorView,
@@ -125,12 +126,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     }
 
     const { channelId } = request.params;
-    const { content, properties } = request.body;
+    const { content } = request.body;
+    const properties = sanitizeClientProperties(request.body?.properties);
 
-    const hasAttachments =
-      properties?.attachments &&
-      Array.isArray(properties.attachments) &&
-      properties.attachments.length > 0;
+    const hasAttachments = Array.isArray(properties.attachments);
     if ((!content || content.trim().length === 0) && !hasAttachments) {
       return reply.status(400).send({ error: 'Message content or attachment is required' });
     }
@@ -806,6 +805,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     const config = fastify.config;
     const protocol = config.secureCookies ? 'https' : 'http';
 
+    if (request.actor.suspendedAt) {
+      return reply.status(403).send({ error: 'Actor is suspended' });
+    }
+    const provenance = await provenanceFor(request.actor, async (id) => {
+      const [s] = await db
+        .select({ id: actors.id, preferredUsername: actors.preferredUsername })
+        .from(actors)
+        .where(eq(actors.id, id))
+        .limit(1);
+      return s ?? null;
+    });
+
     const [reply_msg] = await db
       .insert(objects)
       .values({
@@ -817,7 +828,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         inReplyTo: messageId,
         to: [],
         cc: [],
-        properties: mentionedIds.length > 0 ? { mentions: mentionedIds } : {},
+        properties: {
+          ...(mentionedIds.length > 0 ? { mentions: mentionedIds } : {}),
+          ...provenance,
+        },
       })
       .returning();
 

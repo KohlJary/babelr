@@ -35,6 +35,20 @@ declare module 'fastify' {
 
   interface FastifyRequest {
     actor?: typeof actors.$inferSelect;
+    /** Scopes of the agent token that authenticated this request.
+     *  Undefined for cookie sessions. */
+    agentScopes?: string[];
+    /** Set for every bearer-token request (allowed or denied) so the
+     *  onResponse hook can write the agent audit row. */
+    agentAuth?: {
+      tokenId: string;
+      actorId: string;
+      sponsorId: string | null;
+      scope: string | null;
+      route: string;
+      action: string;
+      denial?: string;
+    };
     /** Exact request body, set only on routes that call
      *  captureRawBody (signature-verified federation routes). */
     rawBody?: string;

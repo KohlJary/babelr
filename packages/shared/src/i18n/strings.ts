@@ -586,6 +586,22 @@ export const UI_STRINGS = {
   'settings.tabProfile': 'Profile',
   'settings.tabTranslation': 'Translation',
   'settings.tabAccount': 'Account',
+  'settings.tabAgents': 'Agents',
+
+  // Agents and services this person sponsors (the kill switch)
+  'agents.title': 'Your agents',
+  'agents.hint':
+    'Agents and services you sponsor. Suspend revokes every token at once, stops pending deliveries and blocks posting.',
+  'agents.none': "You don't sponsor any agents.",
+  'agents.badgeAgent': 'agent',
+  'agents.badgeService': 'service',
+  'agents.sponsoredBy': 'sponsored by @{name}',
+  'agents.activeTokens': '{count} active tokens',
+  'agents.suspended': 'Suspended',
+  'agents.suspend': 'Suspend',
+  'agents.unsuspend': 'Unsuspend',
+  'agents.confirmSuspend': 'Suspend @{name}? Its tokens stop working immediately.',
+  'agents.loadFailed': "Couldn't load your agents.",
 
   // Two-factor authentication
   'twoFactor.title': 'Two-factor authentication',

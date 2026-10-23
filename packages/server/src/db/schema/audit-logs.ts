@@ -14,10 +14,9 @@ export const auditLogs = pgTable(
   'audit_logs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** Server this action occurred in. */
-    serverId: uuid('server_id')
-      .notNull()
-      .references(() => actors.id, { onDelete: 'cascade' }),
+    /** Server this action occurred in. Null for account-level
+     *  events, e.g. agent-token requests and agent management. */
+    serverId: uuid('server_id').references(() => actors.id, { onDelete: 'cascade' }),
     /** Actor who performed the action. */
     actorId: uuid('actor_id')
       .notNull()
@@ -30,6 +29,13 @@ export const auditLogs = pgTable(
     summary: text('summary').notNull(),
     /** Action-specific metadata: target IDs, old/new values, etc. */
     details: jsonb('details').$type<Record<string, unknown>>(),
+    /** For agent and service actions: the agent's sponsor, so the
+     *  sponsor can read everything their agents did. */
+    sponsorId: uuid('sponsor_id').references(() => actors.id, { onDelete: 'set null' }),
+    /** The token scope that allowed (or would have allowed) the request. */
+    scope: varchar('scope', { length: 128 }),
+    /** Method and route pattern, e.g. 'POST /channels/:channelId/messages'. */
+    route: text('route'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -37,5 +43,6 @@ export const auditLogs = pgTable(
     index('audit_logs_server_created_idx').on(table.serverId, table.createdAt),
     index('audit_logs_actor_idx').on(table.actorId),
     index('audit_logs_action_idx').on(table.action),
+    index('audit_logs_sponsor_created_idx').on(table.sponsorId, table.createdAt),
   ],
 );

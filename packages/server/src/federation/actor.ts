@@ -5,9 +5,10 @@ import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { serializeActor } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
+import { actorLikeType } from '../actor-kind.ts';
 
 export default async function actorRoutes(fastify: FastifyInstance) {
-  // Person actor profile
+  // Person, agent or Service actor profile
   fastify.get<{ Params: { username: string } }>('/users/:username', async (request, reply) => {
     const [actor] = await fastify.db
       .select()
@@ -16,7 +17,7 @@ export default async function actorRoutes(fastify: FastifyInstance) {
         and(
           eq(actors.preferredUsername, request.params.username),
           eq(actors.local, true),
-          eq(actors.type, 'Person'),
+          actorLikeType(actors.type),
         ),
       )
       .limit(1);
@@ -27,7 +28,21 @@ export default async function actorRoutes(fastify: FastifyInstance) {
 
     const actorWithKeys = await ensureActorKeys(fastify.db, actor);
     reply.header('Content-Type', 'application/activity+json; charset=utf-8');
-    return serializeActor(actorWithKeys);
+    const json: Record<string, unknown> = serializeActor(actorWithKeys);
+    // Agents and services say so, and name their sponsor, as Babelr
+    // extension properties. A service's AS2 type is already Service.
+    if (actor.kind === 'agent' || actor.kind === 'service') {
+      json.babelrKind = actor.kind;
+      if (actor.sponsorId) {
+        const [sponsor] = await fastify.db
+          .select({ uri: actors.uri })
+          .from(actors)
+          .where(eq(actors.id, actor.sponsorId))
+          .limit(1);
+        if (sponsor) json.babelrSponsor = sponsor.uri;
+      }
+    }
+    return json;
   });
 
   // Group actor profile

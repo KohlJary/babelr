@@ -69,6 +69,10 @@ export async function resolveActor(
   const values = {
     uri: data.id as string,
     type: (data.type as string) ?? 'Person',
+    // Label only: remote bots arrive as AS2 Service, and a remote
+    // Babelr marks its agents with babelrKind. Neither gives the
+    // remote actor any local authority.
+    kind: data.type === 'Service' ? 'service' : data.babelrKind === 'agent' ? 'agent' : 'person',
     preferredUsername: (data.preferredUsername as string) ?? 'unknown',
     displayName: (data.name as string) ?? null,
     summary: (data.summary as string) ?? null,
