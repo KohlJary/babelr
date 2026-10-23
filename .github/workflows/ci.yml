@@ -4,8 +4,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # Every PR, not just those into main, so a PR stacked on another
+  # branch still gets checks before it is retargeted.
   pull_request:
-    branches: [main]
 
 jobs:
   lint-and-format:
