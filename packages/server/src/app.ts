@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripApiPrefix } from './api-prefix.ts';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -55,6 +56,7 @@ export async function buildApp() {
       level: isProduction ? 'info' : 'debug',
     },
     trustProxy: isProduction,
+    rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });
 
   // Production error handler — no stack traces leaked
