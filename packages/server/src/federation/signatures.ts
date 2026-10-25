@@ -99,3 +99,10 @@ export function getKeyIdFromSignature(signatureHeader: string): string {
   const parsed = parseSignatureHeader(signatureHeader);
   return parsed.keyId;
 }
+
+/** The header names a Signature header says it covers, lowercased. */
+export function getSignedHeaderNames(signatureHeader: string): string[] {
+  return parseSignatureHeader(signatureHeader)
+    .headers.map((h) => h.toLowerCase())
+    .filter((h) => h.length > 0);
+}

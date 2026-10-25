@@ -12,6 +12,7 @@ import { randomUUID, randomBytes } from 'crypto';
 import { sendVerificationEmail, isEmailEnabled } from '../email.ts';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
+import { actorLikeType } from '../actor-kind.ts';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === 'true';
@@ -124,7 +125,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const [userCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(actors)
-      .where(and(eq(actors.type, 'Person'), eq(actors.local, true)));
+      .where(and(eq(actors.type, 'Person'), eq(actors.kind, 'person'), eq(actors.local, true)));
 
     if (userCount.count === 1) {
       const currentProps = (actor.properties as Record<string, unknown>) ?? {};
@@ -260,7 +261,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       .select()
       .from(actors)
       .where(
-        and(eq(actors.type, 'Person'), eq(actors.local, true), ne(actors.id, request.actor.id)),
+        and(actorLikeType(actors.type), eq(actors.local, true), ne(actors.id, request.actor.id)),
       );
 
     return users.map((u) => ({
@@ -350,7 +351,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
+            actorLikeType(actors.type),
           ),
         )
         .limit(1);

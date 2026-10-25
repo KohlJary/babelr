@@ -38,6 +38,10 @@ const mockActor = {
   totpSecret: null,
   totpEnabled: false,
   totpRecoveryCodes: [],
+  kind: 'person',
+  sponsorId: null,
+  suspendedAt: null,
+  suspendedBy: null,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
 };

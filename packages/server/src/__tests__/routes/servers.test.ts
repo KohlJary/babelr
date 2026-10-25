@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { serverBans } from '../../db/schema/bans.ts';
 import { createTestApp, createTestUser, cleanDb } from '../helpers.ts';
 import type Fastify from 'fastify';
 import type { createDb } from '../../db/index.ts';
@@ -71,6 +72,13 @@ describe('Server Routes', () => {
       payload: { name: 'Open Server' },
     });
     const serverId = JSON.parse(createRes.body).id;
+    // Servers are invite-only unless marked public.
+    await app.inject({
+      method: 'PUT',
+      url: `/servers/${serverId}`,
+      headers: { cookie: aliceCookie },
+      payload: { isPublic: true },
+    });
 
     const joinRes = await app.inject({
       method: 'POST',
@@ -102,6 +110,13 @@ describe('Server Routes', () => {
       payload: { name: 'Temp Server' },
     });
     const serverId = JSON.parse(createRes.body).id;
+    // Servers are invite-only unless marked public.
+    await app.inject({
+      method: 'PUT',
+      url: `/servers/${serverId}`,
+      headers: { cookie: aliceCookie },
+      payload: { isPublic: true },
+    });
 
     await app.inject({
       method: 'POST',
@@ -142,11 +157,23 @@ describe('Server Routes', () => {
     const { cookie: aliceCookie } = await createTestUser(app, 'alice');
     const { cookie: bobCookie } = await createTestUser(app, 'bob');
 
-    await app.inject({
+    const created = await app.inject({
       method: 'POST',
       url: '/servers',
       headers: { cookie: aliceCookie },
       payload: { name: 'Discoverable' },
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/servers/${JSON.parse(created.body).id}`,
+      headers: { cookie: aliceCookie },
+      payload: { isPublic: true },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: aliceCookie },
+      payload: { name: 'Hidden' },
     });
 
     const res = await app.inject({
@@ -161,5 +188,89 @@ describe('Server Routes', () => {
     const server = body.find((s: { name: string }) => s.name === 'Discoverable');
     expect(server).toBeTruthy();
     expect(server.joined).toBe(false);
+    expect(server.isPublic).toBe(true);
+    // Invite-only servers stay out of discovery for non-members.
+    expect(body.find((s: { name: string }) => s.name === 'Hidden')).toBeUndefined();
+  });
+
+  it('refuses a person joining an invite-only server without an invite', async () => {
+    const { cookie: aliceCookie } = await createTestUser(app, 'alice');
+    const { cookie: bobCookie } = await createTestUser(app, 'bob');
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: aliceCookie },
+      payload: { name: 'Closed' },
+    });
+    const serverId = JSON.parse(createRes.body).id;
+    const joinRes = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/join`,
+      headers: { cookie: bobCookie },
+    });
+    expect(joinRes.statusCode).toBe(403);
+    const list = await app.inject({
+      method: 'GET',
+      url: '/servers',
+      headers: { cookie: bobCookie },
+    });
+    expect(JSON.parse(list.body).some((s: { id: string }) => s.id === serverId)).toBe(false);
+  });
+
+  it('lets a person in with an invite code', async () => {
+    const { cookie: aliceCookie } = await createTestUser(app, 'alice');
+    const { cookie: bobCookie } = await createTestUser(app, 'bob');
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: aliceCookie },
+      payload: { name: 'Closed' },
+    });
+    const serverId = JSON.parse(createRes.body).id;
+    const inv = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/invites`,
+      headers: { cookie: aliceCookie },
+      payload: { maxUses: 1 },
+    });
+    expect(inv.statusCode).toBeLessThan(300);
+    const code = JSON.parse(inv.body).code;
+    const joinRes = await app.inject({
+      method: 'POST',
+      url: `/invites/${code}/join`,
+      headers: { cookie: bobCookie },
+    });
+    expect(joinRes.statusCode).toBe(200);
+    const list = await app.inject({
+      method: 'GET',
+      url: '/servers',
+      headers: { cookie: bobCookie },
+    });
+    expect(JSON.parse(list.body).some((s: { id: string }) => s.id === serverId)).toBe(true);
+  });
+
+  it('a ban outranks an invite code', async () => {
+    const { cookie: aliceCookie } = await createTestUser(app, 'alice');
+    const { cookie: bobCookie, body: bob } = await createTestUser(app, 'bob');
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: aliceCookie },
+      payload: { name: 'Closed' },
+    });
+    const serverId = JSON.parse(createRes.body).id;
+    await db.insert(serverBans).values({ serverId, userId: bob.id, bannedBy: bob.id });
+    const inv = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/invites`,
+      headers: { cookie: aliceCookie },
+      payload: {},
+    });
+    const joinRes = await app.inject({
+      method: 'POST',
+      url: `/invites/${JSON.parse(inv.body).code}/join`,
+      headers: { cookie: bobCookie },
+    });
+    expect(joinRes.statusCode).toBe(403);
   });
 });

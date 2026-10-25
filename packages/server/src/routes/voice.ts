@@ -7,6 +7,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { hasPermission } from '../permissions.ts';
 import { verifySignedRequest } from '../federation/inbox.ts';
+import { captureRawBody } from '../federation/raw-body.ts';
 import { extractDomain, isDomainAllowed } from '../federation/policy.ts';
 import { signedPost } from '../federation/delivery.ts';
 import { issueVoiceFederationToken, type VoiceFederationClaims } from '../voice/federation-jwt.ts';
@@ -39,6 +40,9 @@ interface ProxyTokenRequest {
 }
 
 export default async function voiceRoutes(fastify: FastifyInstance) {
+  // The federation-token signature covers a Digest of the exact body.
+  captureRawBody(fastify);
+
   /**
    * Origin-Tower endpoint. A remote home Tower POSTs an HTTP-signed
    * request asking us to issue a JWT authorizing one of their actors to
@@ -56,6 +60,7 @@ export default async function voiceRoutes(fastify: FastifyInstance) {
         headers: request.headers as Record<string, string | string[] | undefined>,
         method: 'POST',
         url: request.url,
+        rawBody: request.rawBody,
       });
       if (!remoteActor) {
         return reply.status(401).send({ error: 'Invalid or missing signature' });

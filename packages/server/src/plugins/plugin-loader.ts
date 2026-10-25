@@ -1,11 +1,22 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { sql } from 'drizzle-orm';
-import type { PluginManifest, FederationHandler, PluginInboxHandler } from '@babelr/plugin-sdk';
-import { eq } from 'drizzle-orm';
+import type {
+  PluginManifest,
+  FederationHandler,
+  PluginInboxHandler,
+  PluginCaller,
+} from '@babelr/plugin-sdk';
+import { and, eq } from 'drizzle-orm';
+import type { WsServerMessage } from '@babelr/shared';
+import { PERMISSIONS } from '@babelr/shared';
 import { actors } from '../db/schema/actors.ts';
+import { collectionItems } from '../db/schema/collections.ts';
 import { enqueueToFollowers } from '../federation/delivery.ts';
+import { verifySignedRequest } from '../federation/inbox.ts';
+import { isActorAllowed } from '../federation/policy.ts';
+import { hasPermission } from '../permissions.ts';
 import { registeredPlugins } from './registered.ts';
 import '../types.ts';
 
@@ -34,6 +45,21 @@ const federationHandlers = new Map<string, FederationHandler>();
 
 export function getPluginFederationHandler(kind: string): FederationHandler | undefined {
   return federationHandlers.get(kind);
+}
+
+// kind -> id of the plugin that owns it. The by-slug route for a kind
+// lives at /plugins/<id>/<kind>/by-slug/:slug, so anything dialing it
+// (routes/embeds.ts, for a remote Tower) needs the owning plugin's id,
+// which is usually not the kind (polls owns `poll`, project-management
+// owns `task` and `board`).
+const kindToPluginId = new Map<string, string>();
+
+/** Path of a plugin kind's by-slug route, on this Tower or any other
+ *  running the same plugin. Undefined for a kind no plugin owns. */
+export function pluginBySlugPath(kind: string, slug: string): string | undefined {
+  const id = kindToPluginId.get(kind);
+  if (!id) return undefined;
+  return `/plugins/${id}/${kind}/by-slug/${encodeURIComponent(slug)}`;
 }
 
 // objectType -> handler, populated from each plugin's inboxHandlers.
@@ -128,6 +154,122 @@ async function runPluginMigrations(
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Followers collection URI of a server (Group actor), or null when
+ *  the id is malformed or isn't a server. Membership in a server is a
+ *  row in that collection, for local and remote members alike. */
+async function serverFollowersUri(fastify: FastifyInstance, serverId: string) {
+  if (typeof serverId !== 'string' || !UUID_RE.test(serverId)) return null;
+  const [server] = await fastify.db
+    .select({ followersUri: actors.followersUri })
+    .from(actors)
+    .where(and(eq(actors.id, serverId), eq(actors.type, 'Group')))
+    .limit(1);
+  return server?.followersUri ?? null;
+}
+
+async function isServerMember(
+  fastify: FastifyInstance,
+  actor: { uri: string },
+  serverId: string,
+): Promise<boolean> {
+  if (!actor?.uri) return false;
+  const followersUri = await serverFollowersUri(fastify, serverId);
+  if (!followersUri) return false;
+  const [row] = await fastify.db
+    .select({ id: collectionItems.id })
+    .from(collectionItems)
+    .where(
+      and(eq(collectionItems.collectionUri, followersUri), eq(collectionItems.itemUri, actor.uri)),
+    )
+    .limit(1);
+  return !!row;
+}
+
+async function broadcastToServerMembers(
+  fastify: FastifyInstance,
+  serverId: string,
+  message: WsServerMessage,
+): Promise<void> {
+  const followersUri = await serverFollowersUri(fastify, serverId);
+  if (!followersUri) return;
+  const members = await fastify.db
+    .select({ id: actors.id })
+    .from(collectionItems)
+    .innerJoin(actors, eq(actors.uri, collectionItems.itemUri))
+    .where(and(eq(collectionItems.collectionUri, followersUri), eq(actors.local, true)));
+  for (const m of members) fastify.broadcastToActor(m.id, message);
+}
+
+/** Install the access helpers plugins reach through the SDK. */
+function decorateAccess(fastify: FastifyInstance): void {
+  if (!fastify.hasDecorator('pluginAccess')) {
+    fastify.decorate('pluginAccess', {
+      isMember: (actor: { uri: string }, serverId: string) =>
+        isServerMember(fastify, actor, serverId),
+      isServerAdmin: async (actor: { id: string }, serverId: string) => {
+        if (!actor?.id || typeof serverId !== 'string' || !UUID_RE.test(serverId)) return false;
+        return hasPermission(fastify.db, serverId, actor.id, PERMISSIONS.MANAGE_SERVER);
+      },
+    });
+  }
+  if (!fastify.hasDecorator('broadcastToServerMembers')) {
+    fastify.decorate('broadcastToServerMembers', (serverId: string, message: WsServerMessage) =>
+      broadcastToServerMembers(fastify, serverId, message),
+    );
+  }
+}
+
+/**
+ * Who is calling a by-slug route: the local session actor, or a
+ * federated actor whose HTTP Signature verifies (and whose domain the
+ * federation policy allows). Null for anyone else.
+ */
+async function resolveBySlugCaller(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+): Promise<PluginCaller | null> {
+  const a = request.actor;
+  if (a && a.local === true) return { id: a.id, uri: a.uri, local: true };
+  if (!request.headers.signature) return null;
+  // verifySignedRequest requires the signature to cover
+  // (request-target), host, date and digest, the Date to be within 5
+  // minutes, and the Digest to match the (empty) body, so a captured
+  // by-slug request can be replayed for 5 minutes at most.
+  let remote;
+  try {
+    remote = await verifySignedRequest(fastify, {
+      headers: request.headers,
+      method: request.method,
+      url: request.url,
+    });
+  } catch {
+    return null;
+  }
+  if (!remote) return null;
+  if (!remote.local && !isActorAllowed(fastify.config, remote.uri)) return null;
+  return { id: remote.id, uri: remote.uri, local: remote.local };
+}
+
+/** Normalize a manifest publicRoutes entry to 'METHOD /path'. */
+function routeKey(method: string, path: string): string {
+  const p = path.length > 1 ? path.replace(/\/+$/, '') : path;
+  return `${method.toUpperCase()} ${p || '/'}`;
+}
+
+function parsePublicRoutes(manifest: PluginManifest): Set<string> {
+  const out = new Set<string>();
+  for (const entry of manifest.publicRoutes ?? []) {
+    const m = /^\s*([A-Za-z]+)\s+(\/\S*)\s*$/.exec(entry);
+    if (!m)
+      throw new Error(`plugin ${manifest.id}: bad publicRoutes entry ${JSON.stringify(entry)}`);
+    out.add(routeKey(m[1], m[2]));
+    if (m[1].toUpperCase() === 'GET') out.add(routeKey('HEAD', m[2]));
+  }
+  return out;
+}
+
 function isCompatible(range: string, version: string): boolean {
   // Minimal semver check: accept '^X.Y.Z' matching major version, or
   // the literal version. A full semver implementation is Phase 5 work;
@@ -148,6 +290,7 @@ async function pluginLoader(fastify: FastifyInstance): Promise<void> {
     return;
   }
   await ensureMigrationsTable(fastify);
+  decorateAccess(fastify);
 
   for (const manifest of registeredPlugins) {
     if (!isCompatible(manifest.dependencies.babelr, BABELR_VERSION)) {
@@ -194,23 +337,57 @@ async function pluginLoader(fastify: FastifyInstance): Promise<void> {
       );
     }
 
+    let publicRoutes: Set<string>;
+    try {
+      publicRoutes = parsePublicRoutes(manifest);
+    } catch (err) {
+      fastify.log.error({ err: String(err), plugin: manifest.id }, 'plugin skipped');
+      continue;
+    }
+    const prefix = `/plugins/${manifest.id}`;
+    const kinds = Object.keys(manifest.federationHandlers ?? {});
+    const bySlugRoutes = new Set(kinds.map((k) => routeKey('GET', `/${k}/by-slug/:slug`)));
+
     await fastify.register(
       async (scoped) => {
+        // Deny by default. Every route this plugin mounts needs a local
+        // session unless the manifest lists it in publicRoutes. The
+        // auto-mounted by-slug routes do their own check below, since
+        // they also admit verified federated callers. Registered before
+        // serverRoutes so it runs ahead of any hook the plugin adds.
+        scoped.addHook('onRequest', async (request, reply) => {
+          const url = request.routeOptions.url;
+          // No matched route: let the 404 through rather than reveal
+          // which paths exist by answering 401 to some of them.
+          if (!url) return;
+          const rel = url.startsWith(prefix) ? url.slice(prefix.length) || '/' : url;
+          const key = routeKey(request.method, rel);
+          const getKey = routeKey(request.method === 'HEAD' ? 'GET' : request.method, rel);
+          if (publicRoutes.has(key)) return;
+          if (bySlugRoutes.has(getKey)) return;
+          if (!request.actor || request.actor.local !== true) {
+            return reply.status(401).send({ error: 'Not authenticated' });
+          }
+        });
+
         // Auto-mount a /by-slug/:slug route per federation-handled kind
         // so the cross-Tower /embeds/resolve proxy has something to dial.
-        // Plugin authors only provide resolveBySlug; the transport is
-        // handled here.
+        // Plugin authors only provide resolveBySlug; the transport and
+        // caller authentication are handled here. The handler gets the
+        // caller and decides what that caller may see.
         if (manifest.federationHandlers) {
           const handlers = manifest.federationHandlers;
-          for (const kind of Object.keys(handlers)) {
+          for (const kind of kinds) {
             const handler = handlers[kind];
             scoped.get<{ Params: { slug: string } }>(
               `/${kind}/by-slug/:slug`,
               async (request, reply) => {
+                const caller = await resolveBySlugCaller(fastify, request);
+                if (!caller) return reply.status(401).send({ error: 'Not authenticated' });
                 const { slug } = request.params;
-                const callerUri = request.actor?.uri;
                 const result = await handler.resolveBySlug(slug, {
-                  callerUri,
+                  callerUri: caller.uri,
+                  caller,
                   fastify,
                 });
                 if (!result) return reply.status(404).send({ error: 'Not found' });
@@ -223,12 +400,13 @@ async function pluginLoader(fastify: FastifyInstance): Promise<void> {
           await manifest.serverRoutes(scoped);
         }
       },
-      { prefix: `/plugins/${manifest.id}` },
+      { prefix },
     );
 
     if (manifest.federationHandlers) {
-      for (const kind of Object.keys(manifest.federationHandlers)) {
+      for (const kind of kinds) {
         federationHandlers.set(kind, manifest.federationHandlers[kind]);
+        kindToPluginId.set(kind, manifest.id);
       }
     }
 

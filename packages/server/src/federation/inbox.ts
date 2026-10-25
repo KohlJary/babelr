@@ -6,6 +6,7 @@ import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 import { activities } from '../db/schema/activities.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { serverBans } from '../db/schema/bans.ts';
 import { friendships } from '../db/schema/friendships.ts';
 import { reactions } from '../db/schema/reactions.ts';
 import { wikiPages } from '../db/schema/wiki.ts';
@@ -13,13 +14,21 @@ import { events } from '../db/schema/events.ts';
 import { serverFiles } from '../db/schema/files.ts';
 import { generateShortSlug } from '@babelr/shared';
 import { toAuthorView } from '../serializers.ts';
-import { verifySignatureFromParts, getKeyIdFromSignature } from './signatures.ts';
+import { timingSafeEqual } from 'node:crypto';
+import {
+  verifySignatureFromParts,
+  getKeyIdFromSignature,
+  getSignedHeaderNames,
+  createDigest,
+} from './signatures.ts';
+import { captureRawBody } from './raw-body.ts';
 import { resolveActor, resolveActorByKeyId, resolveObject } from './resolve.ts';
 import { enqueueDelivery } from './delivery.ts';
 import { serializeActivity } from './jsonld.ts';
 import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
+import { actorLikeType, isActorLike } from '../actor-kind.ts';
 
 interface APActivity {
   id?: string;
@@ -32,18 +41,67 @@ interface APActivity {
   cc?: string[];
 }
 
+/** Headers every accepted signature must cover. Without `date` the
+ *  signature could be replayed forever; without `digest` the body
+ *  could be swapped under it; without `host` it could be replayed
+ *  against another Tower. Our own signRequest signs exactly these. */
+const REQUIRED_SIGNED_HEADERS = ['(request-target)', 'host', 'date', 'digest'];
+
+/** How far a signed request's Date may be from our clock. */
+export const SIGNATURE_MAX_SKEW_MS = 5 * 60 * 1000;
+
+/**
+ * Checks on a signed request that don't need the key: the signature
+ * covers the required headers, the Date is recent, and the Digest is
+ * the SHA-256 of the body actually received (the empty string when
+ * there is none, as signRequest does for GET).
+ */
+function signedHeadersAcceptable(
+  signatureHeader: string,
+  headers: Record<string, string | string[] | undefined>,
+  rawBody: string | undefined,
+): boolean {
+  const signed = getSignedHeaderNames(signatureHeader);
+  if (!REQUIRED_SIGNED_HEADERS.every((h) => signed.includes(h))) return false;
+
+  const date = Date.parse(String(headers.date ?? ''));
+  if (!Number.isFinite(date) || Math.abs(Date.now() - date) > SIGNATURE_MAX_SKEW_MS) return false;
+
+  const digest = String(headers.digest ?? '');
+  const eq = digest.indexOf('=');
+  if (eq < 0 || digest.slice(0, eq).toUpperCase() !== 'SHA-256') return false;
+  const expected = createDigest(rawBody ?? '').slice('SHA-256='.length);
+  const a = Buffer.from(digest.slice(eq + 1));
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /**
  * Verify an HTTP Signature on any request (GET or POST). Returns the
  * resolved actor on success, null on failure. Retries with a fresh
  * key fetch on verification failure (handles key rotation). Does NOT
  * check activity.actor — that's inbox-specific.
+ *
+ * Pass `rawBody` (from captureRawBody) for any request with a body:
+ * the Digest is checked against it.
  */
 export async function verifySignedRequest(
   fastify: FastifyInstance,
-  request: { headers: Record<string, string | string[] | undefined>; method: string; url: string },
+  request: {
+    headers: Record<string, string | string[] | undefined>;
+    method: string;
+    url: string;
+    rawBody?: string;
+  },
 ): Promise<typeof actors.$inferSelect | null> {
   const signatureHeader = request.headers.signature as string | undefined;
   if (!signatureHeader) return null;
+  if (!signedHeadersAcceptable(signatureHeader, request.headers, request.rawBody)) return null;
+  // The signed Host must be us. Otherwise a request signed for (or
+  // captured on its way to) another Tower could be replayed here.
+  // config.domain is the host[:port] this Tower is reached at.
+  const host = String(request.headers.host ?? '').toLowerCase();
+  if (!host || host !== String(fastify.config.domain ?? '').toLowerCase()) return null;
 
   const keyId = getKeyIdFromSignature(signatureHeader);
   const headerParts = {
@@ -69,6 +127,9 @@ export async function verifySignedRequest(
     );
   };
 
+  // If verification fails, the cached key may be stale (the remote
+  // rotated keys, or the actor was cached before keys were generated).
+  // Refetch the actor profile to get the current key and retry once.
   let valid = tryVerify(remoteActor);
   if (!valid) {
     const actorUri = keyId.split('#')[0];
@@ -81,6 +142,7 @@ export async function verifySignedRequest(
   return valid ? remoteActor : null;
 }
 
+/** verifySignedRequest, plus: the activity's actor is the signer. */
 async function verifyInboxRequest(
   fastify: FastifyInstance,
   request: {
@@ -88,56 +150,18 @@ async function verifyInboxRequest(
     method: string;
     url: string;
     body: APActivity;
+    rawBody?: string;
   },
 ) {
-  const signatureHeader = request.headers.signature as string | undefined;
-  if (!signatureHeader) return null;
-
-  const keyId = getKeyIdFromSignature(signatureHeader);
-  const headerParts = {
-    host: (request.headers.host as string) ?? '',
-    date: (request.headers.date as string) ?? '',
-    digest: (request.headers.digest as string) ?? '',
-  };
-
-  // Try with cached key first.
-  const remoteActor = await resolveActorByKeyId(fastify.db, keyId);
-  if (!remoteActor) return null;
-
-  const tryVerify = (actor: typeof remoteActor) => {
-    const apPublicKey = (actor.properties as Record<string, unknown>)?.apPublicKey as
-      | { publicKeyPem?: string }
-      | undefined;
-    if (!apPublicKey?.publicKeyPem) return false;
-    return verifySignatureFromParts(
-      apPublicKey.publicKeyPem,
-      signatureHeader,
-      request.method,
-      request.url,
-      headerParts,
-    );
-  };
-
-  let valid = tryVerify(remoteActor);
-  let actor = remoteActor;
-
-  // If verification fails, the cached key may be stale (the remote
-  // rotated keys, or the actor was cached before keys were generated).
-  // Refetch the actor profile to get the current key and retry once.
-  if (!valid) {
-    const actorUri = keyId.split('#')[0];
-    const refreshed = await resolveActor(fastify.db, actorUri, true);
-    if (refreshed && refreshed.id === remoteActor.id) {
-      valid = tryVerify(refreshed);
-      actor = refreshed;
-    }
-  }
-
-  if (!valid || request.body.actor !== actor.uri) return null;
+  const actor = await verifySignedRequest(fastify, request);
+  if (!actor || request.body?.actor !== actor.uri) return null;
   return actor;
 }
 
 export default async function inboxRoutes(fastify: FastifyInstance) {
+  // Inbox signatures cover a Digest of the exact body bytes.
+  captureRawBody(fastify);
+
   // Person inbox (rate-limited: 30 req/min per IP)
   fastify.post<{ Params: { username: string }; Body: APActivity }>(
     '/users/:username/inbox',
@@ -150,7 +174,7 @@ export default async function inboxRoutes(fastify: FastifyInstance) {
           and(
             eq(actors.preferredUsername, request.params.username),
             eq(actors.local, true),
-            eq(actors.type, 'Person'),
+            actorLikeType(actors.type),
           ),
         )
         .limit(1);
@@ -279,7 +303,7 @@ async function handleFollow(
 
   // Person→Person Follow is a friend request — do NOT auto-accept.
   // Create a pending_in friendship row and notify the local user.
-  if (localActor.type === 'Person') {
+  if (isActorLike(localActor.type)) {
     const [existing] = await db
       .select()
       .from(friendships)
@@ -332,8 +356,39 @@ async function handleFollow(
     return;
   }
 
-  // Group follow (server join) — preserve existing auto-accept behavior.
+  // Group follow (server join). Same rules as a local join: a banned
+  // actor is always refused, and only a public server auto-accepts.
+  // An invite-only server refuses remote Follows with a Reject (remote
+  // invites don't exist yet), so federation can't route around invites
+  // or bans.
   if (!localActor.followersUri) return;
+
+  const [ban] = await db
+    .select()
+    .from(serverBans)
+    .where(and(eq(serverBans.serverId, localActor.id), eq(serverBans.userId, remoteActor.id)))
+    .limit(1);
+  const banned = !!ban && !(ban.expiresAt && new Date() > ban.expiresAt);
+  const isPublic = (localActor.properties as Record<string, unknown> | null)?.public === true;
+  if (banned || !isPublic) {
+    const keyed = await ensureActorKeys(db, localActor);
+    if (keyed.privateKeyPem) {
+      const reject = serializeActivity(
+        `${protocol}://${domain}/activities/${crypto.randomUUID()}`,
+        'Reject',
+        localActor.uri,
+        activity,
+        [remoteActor.uri],
+        [],
+      );
+      await enqueueDelivery(db, reject, remoteActor.inboxUri, localActor.id);
+    }
+    fastify.log.info(
+      { follower: remoteActor.uri, followed: localActor.uri, banned },
+      'Follow rejected',
+    );
+    return;
+  }
 
   await db
     .insert(collectionItems)
@@ -444,7 +499,7 @@ async function handleUndo(
   if (innerType === 'Follow') {
     // Person → Person Undo: remove any friendship row owned by the local user
     // with the remote as other.
-    if (localActor.type === 'Person') {
+    if (isActorLike(localActor.type)) {
       const [row] = await fastify.db
         .select()
         .from(friendships)
@@ -628,7 +683,7 @@ async function handleCreateNote(ctx: CreateCtx) {
       const [target] = await fastify.db
         .select()
         .from(actors)
-        .where(and(eq(actors.uri, uri), eq(actors.local, true), eq(actors.type, 'Person')))
+        .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
         .limit(1);
       if (target) {
         const result = await findOrCreateDM(fastify, target, remoteActor);
@@ -1288,7 +1343,7 @@ async function handleUpdate(
   // not letting a remote actor update anyone's profile but their
   // own.
   const innerType = (obj as { type?: string }).type;
-  if (innerType === 'Person' || innerType === 'Group') {
+  if (isActorLike(innerType) || innerType === 'Group') {
     if (obj.id !== remoteActor.uri) {
       fastify.log.warn(
         { sender: remoteActor.uri, claimed: obj.id },

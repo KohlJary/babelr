@@ -6,6 +6,7 @@ import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
 import { RolesPanel } from './RolesPanel';
 import { TabbedView } from './TabbedView';
+import { LittleGuysTab } from './LittleGuysTab';
 
 interface ServerSettingsPanelProps {
   server: ServerView;
@@ -19,6 +20,7 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
   const tabs = [
     { id: 'info', label: t('serverSettings.tabInfo') },
     { id: 'invites', label: t('serverSettings.tabInvites') },
+    { id: 'littleGuys', label: t('serverSettings.tabLittleGuys') },
     { id: 'roles', label: t('serverSettings.tabRoles') },
     { id: 'audit', label: t('serverSettings.tabAudit') },
   ];
@@ -34,6 +36,8 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
             return <InfoTab server={server} onUpdated={onUpdated} />;
           case 'invites':
             return <InvitesTab serverId={server.id} />;
+          case 'littleGuys':
+            return <LittleGuysTab serverId={server.id} />;
           case 'roles':
             return <RolesPanel serverId={server.id} />;
           case 'audit':
@@ -59,6 +63,7 @@ function InfoTab({
   const [longDescription, setLongDescription] = useState(server.longDescription ?? '');
   const [logoUrl, setLogoUrl] = useState(server.logoUrl ?? '');
   const [tags, setTags] = useState<string[]>(server.tags ?? []);
+  const [isPublic, setIsPublic] = useState(server.isPublic === true);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -128,6 +133,7 @@ function InfoTab({
         longDescription: longDescription.trim() || null,
         logoUrl: logoUrl || null,
         tags,
+        isPublic,
       });
       setStatus(t('common.saved'));
       onUpdated?.(updated);
@@ -235,6 +241,18 @@ function InfoTab({
           </button>
         </div>
         <p className="settings-hint">{t('serverSettings.tagsHint')}</p>
+      </div>
+
+      <div className="settings-field">
+        <label className="settings-checkbox">
+          <input
+            type="checkbox"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+          />{' '}
+          {t('serverSettings.public')}
+        </label>
+        <p className="settings-hint">{t('serverSettings.publicHint')}</p>
       </div>
 
       <div className="settings-divider" />
