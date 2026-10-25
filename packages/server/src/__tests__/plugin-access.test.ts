@@ -49,7 +49,7 @@ let aliceTaskSlug: string;
 let carolTaskSlug: string;
 
 async function call(
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   url: string,
   cookie?: string,
   payload?: unknown,
@@ -84,6 +84,8 @@ beforeAll(async () => {
   const server = await call('POST', '/servers', c.alice, { name: 'Alice House' });
   expect(server.status).toBe(201);
   serverId = server.json().id;
+  // Servers are invite-only unless public; make this one open to join.
+  await call('PUT', `/servers/${serverId}`, c.alice, { isPublic: true });
   const other = await call('POST', '/servers', c.bob, { name: 'Bob Shed' });
   otherServerId = other.json().id;
   for (const m of [c.carol, c.dan]) {

@@ -9,6 +9,10 @@ export interface AuditLogEntry {
   summary: string;
   details?: Record<string, unknown>;
   createdAt: string;
+  /** Agent rows: the agent's sponsor, the scope used, and the route. */
+  sponsorId?: string | null;
+  scope?: string | null;
+  route?: string | null;
 }
 
 export interface AuditLogResponse {

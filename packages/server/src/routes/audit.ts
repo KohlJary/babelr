@@ -57,7 +57,7 @@ export default async function auditRoutes(fastify: FastifyInstance) {
 
     const entries: AuditLogEntry[] = rows.slice(0, limit).map((r) => ({
       id: r.log.id,
-      actorId: r.log.actorId,
+      actorId: r.log.actorId ?? r.actor.id,
       actorName: r.actor.displayName ?? r.actor.preferredUsername,
       category: r.log.category,
       action: r.log.action,

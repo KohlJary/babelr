@@ -152,7 +152,7 @@ export default async function ssoRoutes(fastify: FastifyInstance) {
     const allLocal = await db
       .select()
       .from(actors)
-      .where(and(eq(actors.local, true), eq(actors.type, 'Person')));
+      .where(and(eq(actors.local, true), eq(actors.type, 'Person'), eq(actors.kind, 'person')));
 
     actor = allLocal.find((a) => {
       const props = a.properties as Record<string, unknown> | null;

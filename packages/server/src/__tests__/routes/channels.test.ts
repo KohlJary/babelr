@@ -29,6 +29,13 @@ async function createServerWithChannel(cookie: string) {
     payload: { name: 'Test Server' },
   });
   const serverId = JSON.parse(serverRes.body).id;
+  // Open to anyone, so tests can have a second user join.
+  await app.inject({
+    method: 'PUT',
+    url: `/servers/${serverId}`,
+    headers: { cookie },
+    payload: { isPublic: true },
+  });
 
   // Get the auto-created #general channel
   const channelsRes = await app.inject({

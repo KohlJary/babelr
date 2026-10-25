@@ -12,6 +12,7 @@ import { wikiPages } from '../../db/schema/wiki.ts';
 import { events } from '../../db/schema/events.ts';
 import { serverFiles } from '../../db/schema/files.ts';
 import { deliveryQueue } from '../../db/schema/delivery-queue.ts';
+import { serverBans } from '../../db/schema/bans.ts';
 import {
   createFederationTestApp,
   createTestUser,
@@ -38,6 +39,15 @@ afterAll(async () => {
 beforeEach(async () => {
   await cleanDb(db);
 });
+
+/** Servers are invite-only unless marked public. */
+async function makePublic(serverId: string) {
+  const [g] = await db.select().from(actors).where(eq(actors.id, serverId));
+  await db
+    .update(actors)
+    .set({ properties: { ...((g.properties as Record<string, unknown>) ?? {}), public: true } })
+    .where(eq(actors.id, serverId));
+}
 
 describe('Follow lifecycle', () => {
   it('Person→Person Follow creates a pending_in friendship', async () => {
@@ -74,9 +84,10 @@ describe('Follow lifecycle', () => {
     expect(friendship.otherActorId).toBe(bob.id);
   });
 
-  it('Group Follow adds member and enqueues Accept', async () => {
+  it('Group Follow of a public server adds member and enqueues Accept', async () => {
     const { cookie } = await createTestUser(app, 'admin');
     const { server } = await createTestServer(app, cookie, 'Test Server');
+    await makePublic(server.id);
     const { actor: bob, privateKeyPem } = await createRemoteActor(db, {
       username: 'bob',
       domain: 'remote.tower',
@@ -126,6 +137,86 @@ describe('Follow lifecycle', () => {
     expect(delivery).toBeDefined();
     const activity = delivery.activityJson as Record<string, unknown>;
     expect(activity.type).toBe('Accept');
+  });
+
+  async function followGroup(groupId: string, username: string, n: number) {
+    const { actor, privateKeyPem } = await createRemoteActor(db, {
+      username,
+      domain: 'remote.tower',
+    });
+    const [group] = await db.select().from(actors).where(eq(actors.id, groupId));
+    return { actor, group, privateKeyPem, n };
+  }
+
+  async function sendFollow(f: Awaited<ReturnType<typeof followGroup>>) {
+    const res = await postToInbox(
+      app,
+      `/groups/${f.group.preferredUsername}/inbox`,
+      {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${f.actor.uri}/activities/follow-${f.n}`,
+        type: 'Follow',
+        actor: f.actor.uri,
+        object: f.group.uri,
+      },
+      f.actor.uri,
+      f.privateKeyPem,
+    );
+    expect(res.statusCode).toBe(202);
+    const members = await db
+      .select()
+      .from(collectionItems)
+      .where(
+        and(
+          eq(collectionItems.collectionUri, f.group.followersUri!),
+          eq(collectionItems.itemUri, f.actor.uri),
+        ),
+      );
+    const sent = await db
+      .select()
+      .from(deliveryQueue)
+      .where(eq(deliveryQueue.recipientInboxUri, f.actor.inboxUri));
+    return {
+      member: members.length > 0,
+      replies: sent.map((d) => (d.activityJson as { type: string }).type),
+    };
+  }
+
+  it('a remote Follow of an invite-only server creates no membership and gets a Reject', async () => {
+    const { cookie } = await createTestUser(app, 'admin');
+    const { server } = await createTestServer(app, cookie, 'Closed Server');
+    const out = await sendFollow(await followGroup(server.id, 'bob', 1));
+    expect(out.member).toBe(false);
+    expect(out.replies).toEqual(['Reject']);
+  });
+
+  it('a banned remote actor is refused even by a public server', async () => {
+    const { cookie, body: admin } = await createTestUser(app, 'admin');
+    const { server } = await createTestServer(app, cookie, 'Open Server');
+    await makePublic(server.id);
+    const f = await followGroup(server.id, 'mallory', 2);
+    await db
+      .insert(serverBans)
+      .values({ serverId: server.id, userId: f.actor.id, bannedBy: admin.id });
+    const out = await sendFollow(f);
+    expect(out.member).toBe(false);
+    expect(out.replies).toEqual(['Reject']);
+  });
+
+  it('an expired ban no longer blocks a public server', async () => {
+    const { cookie, body: admin } = await createTestUser(app, 'admin');
+    const { server } = await createTestServer(app, cookie, 'Open Server');
+    await makePublic(server.id);
+    const f = await followGroup(server.id, 'carol', 3);
+    await db.insert(serverBans).values({
+      serverId: server.id,
+      userId: f.actor.id,
+      bannedBy: admin.id,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    const out = await sendFollow(f);
+    expect(out.member).toBe(true);
+    expect(out.replies).toEqual(['Accept']);
   });
 
   it('rejects activities from blocked domains in allowlist mode', async () => {

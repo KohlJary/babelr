@@ -8,6 +8,7 @@ import { SUPPORTED_LANGUAGES } from '@babelr/shared';
 import { useOllamaModels } from '../hooks/useOllamaModels';
 import { TwoFactorSettings } from './TwoFactorSettings';
 import { TabbedView } from './TabbedView';
+import { AgentsTab } from './AgentsTab';
 
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 
@@ -438,6 +439,7 @@ export function SettingsPanel({ actor, onClose, onActorUpdate }: SettingsPanelPr
     { id: 'profile', label: t('settings.tabProfile') },
     { id: 'translation', label: t('settings.tabTranslation') },
     { id: 'account', label: t('settings.tabAccount') },
+    { id: 'agents', label: t('settings.tabAgents') },
   ];
 
   return (
@@ -459,6 +461,8 @@ export function SettingsPanel({ actor, onClose, onActorUpdate }: SettingsPanelPr
             );
           case 'account':
             return <AccountTab actor={actor} onActorUpdate={onActorUpdate} />;
+          case 'agents':
+            return <AgentsTab />;
           default:
             return null;
         }

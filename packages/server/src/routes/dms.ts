@@ -8,6 +8,7 @@ import { collectionItems } from '../db/schema/collections.ts';
 import { toAuthorView, toMessageView, getMessagesForChannel } from '../serializers.ts';
 import { createMessageInChannel } from './channels.ts';
 import type { DMConversation, CreateMessageInput } from '@babelr/shared';
+import { isActorLike } from '../actor-kind.ts';
 
 const DEFAULT_LIMIT = 50;
 
@@ -59,7 +60,8 @@ export default async function dmRoutes(fastify: FastifyInstance) {
     // Find the other participant
     const [other] = await db.select().from(actors).where(eq(actors.id, participantId)).limit(1);
 
-    if (!other) {
+    // People, agents and services; not servers (Group actors).
+    if (!other || !isActorLike(other.type)) {
       return reply.status(404).send({ error: 'User not found' });
     }
 
