@@ -19,8 +19,9 @@ import { enqueueDelivery } from '../federation/delivery.ts';
 import { serializeActivity, serializeActor } from '../federation/jsonld.ts';
 import { enqueueToFollowers } from '../federation/delivery.ts';
 import { writeAuditLog } from '../audit.ts';
-import { serverAgentGrants } from '../db/schema/server-agent-grants.ts';
+import { serverAgentGrants, agentServerDepartures } from '../db/schema/server-agent-grants.ts';
 import { isSponsoredKind } from '../actor-kind.ts';
+import { dropAgentServerGrant } from '../agent-tokens.ts';
 
 function slugify(name: string): string {
   return name
@@ -499,14 +500,50 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         return reply.status(400).send({ error: 'Server owner cannot leave' });
       }
 
-      await db
-        .delete(collectionItems)
-        .where(
-          and(
-            eq(collectionItems.collectionUri, server.followersUri),
-            eq(collectionItems.itemUri, request.actor.uri),
-          ),
-        );
+      const me = request.actor;
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(collectionItems)
+          .where(
+            and(
+              eq(collectionItems.collectionUri, server.followersUri!),
+              eq(collectionItems.itemUri, me.uri),
+            ),
+          );
+        // An agent that leaves gives up the grant that let it in, so
+        // coming back takes a member adding it again.
+        if (isSponsoredKind(me.kind)) {
+          await dropAgentServerGrant(tx, server.id, me.id);
+          // It left by choice: from now on only it can bring itself back.
+          await tx
+            .insert(agentServerDepartures)
+            .values({ serverId: server.id, agentId: me.id })
+            .onConflictDoUpdate({
+              target: [agentServerDepartures.serverId, agentServerDepartures.agentId],
+              set: { leftAt: new Date() },
+            });
+        }
+      });
+
+      // Stop live delivery of the server's channels to this actor.
+      const serverChannels = await db
+        .select({ id: objects.id })
+        .from(objects)
+        .where(eq(objects.belongsTo, server.id));
+      for (const ch of serverChannels) fastify.wsUnsubscribeActor(me.id, ch.id);
+
+      if (isSponsoredKind(me.kind)) {
+        await writeAuditLog(db, {
+          serverId: server.id,
+          actorId: me.id,
+          sponsorId: me.sponsorId,
+          category: 'agent',
+          action: 'agent.server.grant_dropped',
+          summary: `@${me.preferredUsername} left ${server.displayName ?? server.preferredUsername} and gave up its grant`,
+          details: { agentId: me.id, serverId: server.id },
+          scope: `servers:join:${server.id}`,
+        });
+      }
 
       // For remote servers, send Undo(Follow) so the origin removes
       // us from their followers list and stops delivering messages.
@@ -912,12 +949,9 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
       try {
         await db.transaction(async (tx) => {
-          // A kicked agent loses its grant, so it can't walk back in.
-          await tx
-            .delete(serverAgentGrants)
-            .where(
-              and(eq(serverAgentGrants.serverId, serverId), eq(serverAgentGrants.agentId, userId)),
-            );
+          // A kicked agent loses its grant and its join scope, so it
+          // can't walk back in.
+          await dropAgentServerGrant(tx, serverId, userId);
           // Remove membership from the server's followers collection.
           await tx
             .delete(collectionItems)

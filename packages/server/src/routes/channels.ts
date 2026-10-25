@@ -23,6 +23,7 @@ import { broadcastPushToChannel } from '../push.ts';
 import { unfurlLinks } from '../unfurl.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 import { assertNotSuspended } from '../agent-tokens.ts';
+import { assertCanPostInDM, mentionableIds, requestFor } from '../dm-consent.ts';
 
 // Parse @mentions from content and return array of mentioned usernames
 export function parseMentions(content: string): string[] {
@@ -62,6 +63,9 @@ export async function createMessageInChannel(
     throw Object.assign(new Error('Actor is suspended'), { statusCode: 403 });
   }
 
+  // DM consent: message requests, blocks, everyone else gone.
+  await assertCanPostInDM(db, channelId, actor);
+
   // Clients may send only encrypted/iv and attachments; provenance is
   // stamped here from the authenticated actor, never taken from them.
   const clientProps = sanitizeClientProperties(messageProperties);
@@ -86,7 +90,12 @@ export async function createMessageInChannel(
           .where(inArray(actors.preferredUsername, mentionedUsernames))
       : [];
 
-  const mentionedIds = mentionedActors.map((a) => a.id);
+  // Someone who blocked the author isn't mentioned by them.
+  const mentionedIds = await mentionableIds(
+    db,
+    actor.id,
+    mentionedActors.map((a) => a.id),
+  );
 
   // Generate a short message slug. Collision probability at 31^10
   // is vanishingly small, but we still retry a bounded number of
@@ -201,12 +210,17 @@ export async function createMessageInChannel(
         : chName
           ? `${sender} · #${chName}`
           : sender;
-    void broadcastPushToChannel(fastify, channelId, actor.id, {
-      title: pushTitle,
-      body: content.trim().slice(0, 200),
-      tag: `msg-${channelId}`,
-      data: { channelId, messageId: note.id },
-    }).catch((err) => fastify.log.error(err, 'Push broadcast failed'));
+    // A message request doesn't buzz anyone's phone: it waits in the
+    // recipient's requests list.
+    const pendingRequest =
+      !channel?.belongsTo && (await requestFor(db, channelId))?.state === 'pending';
+    if (!pendingRequest)
+      void broadcastPushToChannel(fastify, channelId, actor.id, {
+        title: pushTitle,
+        body: content.trim().slice(0, 200),
+        tag: `msg-${channelId}`,
+        data: { channelId, messageId: note.id },
+      }).catch((err) => fastify.log.error(err, 'Push broadcast failed'));
     const isDM = channel && !channel.belongsTo && channelProps?.isDM === true;
 
     if (isDM) {

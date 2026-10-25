@@ -13,7 +13,7 @@ import { wikiPages } from '../db/schema/wiki.ts';
 import { events } from '../db/schema/events.ts';
 import { serverFiles } from '../db/schema/files.ts';
 import { generateShortSlug } from '@babelr/shared';
-import { toAuthorView } from '../serializers.ts';
+import { checkChannelAccess, toAuthorView } from '../serializers.ts';
 import { timingSafeEqual } from 'node:crypto';
 import {
   verifySignatureFromParts,
@@ -29,6 +29,7 @@ import { ensureActorKeys } from './keys.ts';
 import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
 import { actorLikeType, isActorLike } from '../actor-kind.ts';
+import { checkDMPost, handleRemoteLeave, inboundDMTarget, isDMRow } from '../dm-consent.ts';
 
 interface APActivity {
   id?: string;
@@ -285,6 +286,9 @@ async function routeActivity(
       break;
     case 'Read':
       await handleRead(fastify, remoteActor, body);
+      break;
+    case 'Leave':
+      await handleLeave(fastify, remoteActor, body);
       break;
     default:
       fastify.log.info({ type: body.type }, 'Unhandled activity type');
@@ -589,81 +593,6 @@ async function handleUndo(
   }
 }
 
-/**
- * Look up (or create) a local DM collection between a local Person and a remote actor.
- * Returns the local DM object id.
- */
-async function findOrCreateDM(
-  fastify: FastifyInstance,
-  localActor: typeof actors.$inferSelect,
-  remoteActor: typeof actors.$inferSelect,
-): Promise<{ dmId: string; isNew: boolean }> {
-  const db = fastify.db;
-
-  // Search for an existing DM containing both actors
-  const localMemberships = await db
-    .select({ collectionUri: collectionItems.collectionUri })
-    .from(collectionItems)
-    .where(eq(collectionItems.itemUri, localActor.uri));
-
-  for (const m of localMemberships) {
-    const [otherEntry] = await db
-      .select({ id: collectionItems.id })
-      .from(collectionItems)
-      .where(
-        and(
-          eq(collectionItems.collectionUri, m.collectionUri),
-          eq(collectionItems.itemUri, remoteActor.uri),
-        ),
-      )
-      .limit(1);
-    if (!otherEntry) continue;
-
-    const [channel] = await db
-      .select()
-      .from(objects)
-      .where(eq(objects.uri, m.collectionUri))
-      .limit(1);
-    if (!channel) continue;
-    const props = channel.properties as Record<string, unknown> | null;
-    if (channel.belongsTo === null && props?.isDM) {
-      return { dmId: channel.id, isNew: false };
-    }
-  }
-
-  // Create a new local DM collection
-  const config = fastify.config;
-  const protocol = config.secureCookies ? 'https' : 'http';
-  const dmUri = `${protocol}://${config.domain}/dms/${crypto.randomUUID()}`;
-
-  const [channel] = await db
-    .insert(objects)
-    .values({
-      uri: dmUri,
-      type: 'OrderedCollection',
-      belongsTo: null,
-      properties: { name: null, isDM: true },
-    })
-    .returning();
-
-  await db.insert(collectionItems).values([
-    {
-      collectionUri: channel.uri,
-      collectionId: channel.id,
-      itemUri: localActor.uri,
-      itemId: localActor.id,
-    },
-    {
-      collectionUri: channel.uri,
-      collectionId: channel.id,
-      itemUri: remoteActor.uri,
-      itemId: remoteActor.id,
-    },
-  ]);
-
-  return { dmId: channel.id, isNew: true };
-}
-
 type CreateCtx = {
   fastify: FastifyInstance;
   remoteActor: typeof actors.$inferSelect;
@@ -677,6 +606,7 @@ async function handleCreateNote(ctx: CreateCtx) {
 
   let localDMId: string | null = null;
   let dmIsNew = false;
+  let dmIsRequest = false;
   let dmLocalRecipient: typeof actors.$inferSelect | null = null;
   if (!isPublic) {
     for (const uri of toList) {
@@ -686,9 +616,20 @@ async function handleCreateNote(ctx: CreateCtx) {
         .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
         .limit(1);
       if (target) {
-        const result = await findOrCreateDM(fastify, target, remoteActor);
+        // DM consent: the recipient's policy, blocks, pending requests
+        // and departures apply to remote senders exactly as to local
+        // ones. A refused DM is dropped whole: not stored anywhere.
+        const result = await inboundDMTarget(fastify, target, remoteActor);
+        if (!result) {
+          fastify.log.info(
+            { from: remoteActor.uri, to: target.uri },
+            'Inbound DM refused by DM consent',
+          );
+          return;
+        }
         localDMId = result.dmId;
         dmIsNew = result.isNew;
+        dmIsRequest = result.isRequest;
         dmLocalRecipient = target;
         break;
       }
@@ -706,10 +647,17 @@ async function handleCreateNote(ctx: CreateCtx) {
   if (!channelContextId && obj.context) {
     const contextUri = obj.context as string;
     const [shadow] = await fastify.db
-      .select({ id: objects.id })
+      .select()
       .from(objects)
       .where(eq(objects.uri, contextUri))
       .limit(1);
+    // A DM is reached only through `to` (and the consent gate above),
+    // never by naming its collection as the context.
+    const shadowProps = (shadow?.properties as Record<string, unknown> | null) ?? null;
+    if (shadow && shadow.belongsTo === null && shadowProps?.isDM === true) {
+      fastify.log.info({ from: remoteActor.uri }, 'Inbound Note into a DM by context refused');
+      return;
+    }
     if (shadow) channelContextId = shadow.id;
   }
 
@@ -781,7 +729,7 @@ async function handleCreateNote(ctx: CreateCtx) {
           null,
       };
       fastify.broadcastToActor(dmLocalRecipient.id, {
-        type: 'conversation:new',
+        type: dmIsRequest ? 'dm:request' : 'conversation:new',
         payload: {
           conversation: {
             id: localDMId,
@@ -1051,7 +999,36 @@ async function handleLike(
     .from(objects)
     .where(eq(objects.uri, noteUri))
     .limit(1);
-  if (!note) return;
+  if (!note?.context) return;
+
+  // The reactor must be able to read the channel, and in a DM the
+  // consent rules apply (blocks, requests) as they do to posts.
+  const [reactorRow] = await fastify.db
+    .select()
+    .from(actors)
+    .where(eq(actors.id, reactorId))
+    .limit(1);
+  if (!reactorRow) return;
+  // Membership is ours to check for DMs and for our own servers; a
+  // remote server's channel follows its origin's member list.
+  const { allowed, channel } = await checkChannelAccess(fastify.db, note.context, reactorRow.uri);
+  let ownsMembership = !channel?.belongsTo;
+  if (channel?.belongsTo) {
+    const [group] = await fastify.db
+      .select({ local: actors.local })
+      .from(actors)
+      .where(eq(actors.id, channel.belongsTo))
+      .limit(1);
+    ownsMembership = !!group?.local;
+  }
+  if (!allowed && ownsMembership) {
+    fastify.log.info({ reactor: reactorRow.uri }, 'Remote Like refused: no access');
+    return;
+  }
+  if (isDMRow(channel) && !(await checkDMPost(fastify.db, channel, reactorRow, 'react')).ok) {
+    fastify.log.info({ reactor: reactorRow.uri }, 'Remote Like refused by DM consent');
+    return;
+  }
 
   // Upsert the reaction.
   await fastify.db
@@ -1597,4 +1574,30 @@ async function handleUpdate(
 
     fastify.log.info({ objectUri: obj.id }, 'Remote Update processed');
   }
+}
+
+/**
+ * A remote participant left a DM (Babelr extension: `Leave` whose
+ * object is their tower's DM collection, marked `babelrDM`). Each tower
+ * has its own copy of a DM, so match ours by the pair: the remote actor
+ * and the local actors it addressed.
+ */
+async function handleLeave(
+  fastify: FastifyInstance,
+  remoteActor: typeof actors.$inferSelect,
+  activity: APActivity,
+) {
+  const obj = activity.object as Record<string, unknown> | string | undefined;
+  if (!obj || typeof obj === 'string' || obj.babelrDM !== true) return;
+  const toList = Array.isArray(activity.to) ? (activity.to as string[]) : [];
+  const targets: Array<typeof actors.$inferSelect> = [];
+  for (const uri of toList) {
+    const [t] = await fastify.db
+      .select()
+      .from(actors)
+      .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
+      .limit(1);
+    if (t) targets.push(t);
+  }
+  await handleRemoteLeave(fastify, remoteActor, targets);
 }

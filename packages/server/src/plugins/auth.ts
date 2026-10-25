@@ -9,7 +9,7 @@ import { sessions } from '../db/schema/sessions.ts';
 import { agentTokens } from '../db/schema/agent-tokens.ts';
 import { objects } from '../db/schema/objects.ts';
 import { auditLogs } from '../db/schema/audit-logs.ts';
-import { checkScopes, type AgentScope } from '../agent-scopes.ts';
+import { checkScopes, isConsentRoute, type AgentScope } from '../agent-scopes.ts';
 import { hashSecret, hashesMatch, parseToken } from '../agent-tokens.ts';
 import { isSponsoredKind } from '../actor-kind.ts';
 
@@ -71,6 +71,7 @@ async function authPlugin(fastify: FastifyInstance) {
     // matches no agent is logged by a short hash prefix, never itself.
     request.agentAuth = {
       tokenId: null,
+      mintedBy: null,
       actorId: null,
       sponsorId: null,
       scope: null,
@@ -97,6 +98,7 @@ async function authPlugin(fastify: FastifyInstance) {
 
     const [agent] = await db.select().from(actors).where(eq(actors.id, token.actorId)).limit(1);
     request.agentAuth.tokenId = token.id;
+    request.agentAuth.mintedBy = token.createdBy;
     request.agentAuth.actorId = agent?.id ?? null;
     request.agentAuth.sponsorId = agent?.sponsorId ?? null;
     if (!hashesMatch(hashSecret(parsed.secret), token.tokenHash)) {
@@ -126,6 +128,25 @@ async function authPlugin(fastify: FastifyInstance) {
         .where(eq(actors.id, agent.sponsorId))
         .limit(1);
       if (!sponsor || sponsor.kind !== 'person' || sponsor.suspendedAt) refusal = 'no_sponsor';
+    }
+    // Suspension stops what an agent can do, not its right to say no or
+    // walk out ("nobody is anyone's bitch"): the consent routes (leave,
+    // decline, block, its own DM settings; scope null in the map) stay
+    // open to a suspended agent, through tokens the kill switch revoked
+    // (revoked_at = suspended_at) and while its sponsor is suspended.
+    // Tokens revoked or expired for any other reason stay dead.
+    const killSwitched =
+      refusal === 'token_revoked' &&
+      !!agent.suspendedAt &&
+      token.revokedAt!.getTime() === agent.suspendedAt.getTime();
+    if (
+      refusal &&
+      (refusal === 'agent_suspended' || refusal === 'no_sponsor' || killSwitched) &&
+      isConsentRoute(request.method, request.routeOptions.url) &&
+      isSponsoredKind(agent.kind) &&
+      agent.local
+    ) {
+      refusal = null;
     }
     if (refusal) {
       request.agentAuth.denial = refusal;
@@ -196,6 +217,7 @@ async function authPlugin(fastify: FastifyInstance) {
         route: a.route,
         details: {
           tokenId: a.tokenId,
+          mintedBy: a.mintedBy,
           ...(a.actorId ? {} : { tokenFingerprint: a.fingerprint }),
           status: reply.statusCode,
           ...(a.denial ? { denial: a.denial } : {}),
