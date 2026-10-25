@@ -17,6 +17,7 @@ import dmRoutes from '../routes/dms.ts';
 import dmConsentRoutes from '../routes/dm-consent.ts';
 import { testConfig } from './federation/helpers.ts';
 import { cleanDb } from './helpers.ts';
+import { enc } from './e2e-fixtures.ts';
 
 let app: FastifyInstance;
 let db: ReturnType<typeof createDb>;
@@ -110,7 +111,7 @@ describe('WS delivery and DM consent', () => {
         method: 'POST',
         url: `/dms/${dmId}/messages`,
         headers: { cookie: alice.cookie },
-        payload: { content },
+        payload: { content, properties: enc() },
       });
       await settle();
       return r.statusCode;

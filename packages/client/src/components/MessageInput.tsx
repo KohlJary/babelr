@@ -18,6 +18,7 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
   const t = useT();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -70,11 +71,16 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
     if ((!content && attachments.length === 0) || sending) return;
 
     setSending(true);
+    setSendError(null);
     try {
       await onSend(content || '', attachments.length > 0 ? attachments : undefined);
       setValue('');
       setAttachments([]);
       inputRef.current?.focus();
+    } catch (err) {
+      // Nothing was sent (e.g. a DM that couldn't be encrypted): keep
+      // the draft and say why.
+      setSendError(err instanceof Error ? err.message : String(err));
     } finally {
       setSending(false);
     }
@@ -113,6 +119,11 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
               </button>
             </div>
           ))}
+        </div>
+      )}
+      {sendError && (
+        <div className="message-input-error" role="alert">
+          {sendError}
         </div>
       )}
       <div className="message-input">

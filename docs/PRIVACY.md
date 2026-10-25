@@ -6,7 +6,7 @@ Babelr's privacy story is structural, not promissory. The architecture makes it 
 
 - **User accounts** -- Username, email, hashed password (argon2), preferred language, public encryption key
 - **Server channel messages** -- Plaintext content, author, timestamp, channel
-- **DM messages** -- **Ciphertext only.** The server stores encrypted blobs and cannot decrypt them.
+- **DM messages** -- **Ciphertext only.** The server refuses a DM message, thread reply, edit or federated DM that isn't encrypted, and stores the encrypted blobs it can't decrypt. Attachments are the exception (see Limitations).
 - **ActivityPub metadata** -- URIs, activity log (who created what, who joined which server)
 - **Sessions** -- Session ID, actor reference, expiry timestamp
 
@@ -38,17 +38,22 @@ All data is stored in PostgreSQL with a well-documented ActivityPub-shaped schem
 
 ## Encryption details
 
-| Property          | Value                                               |
-| ----------------- | --------------------------------------------------- |
-| Key exchange      | ECDH P-256                                          |
-| Symmetric cipher  | AES-256-GCM                                         |
-| IV                | 12 bytes, random per message                        |
-| Key storage       | IndexedDB (CryptoKey object, same-origin protected) |
-| Public key format | JWK, stored on server                               |
-| Implementation    | Web Crypto API (no third-party crypto libraries)    |
+| Property          | Value                                                                  |
+| ----------------- | ---------------------------------------------------------------------- |
+| Key exchange      | ECDH P-256                                                             |
+| Symmetric cipher  | AES-256-GCM                                                            |
+| IV                | 12 bytes, random per message                                           |
+| Key storage       | IndexedDB (CryptoKey object, same-origin protected)                    |
+| Public key format | JWK, stored on server                                                  |
+| Implementation    | Web Crypto API (no third-party crypto libraries)                       |
+| Agent accounts    | `packages/agent-client-py`, byte-compatible, tested against Web Crypto |
 
 ## Limitations
 
 - **Server channel messages are not encrypted.** Only DMs have E2E encryption. This is a deliberate choice for Phase 1 to simplify moderation. The architecture does not preclude encrypting channel messages in the future.
-- **Private key is per-device.** If a user logs in from a new browser, they cannot decrypt old DM messages. Multi-device key sync is planned for a future release.
+- **Private group rooms are not encrypted yet.** DMs are one-to-one and use a pairwise key. Private channels have no group-key scheme, so the server can't require encryption there without breaking them. The design is in [e2e-private-rooms.md](e2e-private-rooms.md).
+- **Private key is per-device.** A new browser makes a new key pair and publishes it, replacing the old public key. Messages sent after that can't be read on the old device, and old messages can't be read on the new one. Multi-device key sync is planned for a future release.
+- **The server vouches for public keys, and nobody checks it yet.** Clients fetch a partner's public key from the server. A malicious operator could hand out its own key and read new DMs. There are no key fingerprints or key-change warnings yet. E2E here protects against a database leak, federation peers and other members; it doesn't protect against whoever runs the server, or the machine that holds a private key.
+- **DM attachments aren't encrypted.** Files go to `/uploads` as-is, and their filename and type sit in the message's metadata.
+- **No forward secrecy.** One key pair per actor, so a stolen private key reads every DM sent to it.
 - **Translation proxy sees content in transit** (but does not store it). Use the local browser translation provider to eliminate this entirely.

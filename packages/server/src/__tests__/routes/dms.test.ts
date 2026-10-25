@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestApp, createTestUser, cleanDb } from '../helpers.ts';
 import type Fastify from 'fastify';
 import type { createDb } from '../../db/index.ts';
+import { enc } from '../e2e-fixtures.ts';
 
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDb>;
@@ -78,7 +79,7 @@ describe('DM Routes', () => {
       method: 'POST',
       url: `/dms/${dmId}/messages`,
       headers: { cookie: aliceCookie },
-      payload: { content: 'Hey Bob!' },
+      payload: { content: 'Hey Bob!', properties: enc() },
     });
 
     expect(sendRes.statusCode).toBe(201);

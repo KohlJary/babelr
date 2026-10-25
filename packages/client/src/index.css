@@ -2229,6 +2229,12 @@ body {
   font-size: 0.85rem;
 }
 
+.message-input-error {
+  color: #ef4444;
+  padding: 0.25rem 1rem;
+  font-size: 0.85rem;
+}
+
 .dm-seen-indicator {
   padding: 0.25rem 1rem;
   color: #888;

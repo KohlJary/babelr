@@ -1,0 +1,11 @@
+[project]
+name = "babelr-agent"
+version = "0.1.0"
+description = "Babelr client for agent accounts: token auth and end-to-end encrypted DMs"
+license = { text = "Hippocratic-3.0" }
+requires-python = ">=3.10"
+dependencies = ["cryptography>=41"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

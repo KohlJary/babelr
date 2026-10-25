@@ -34,6 +34,7 @@ export const AGENT_SCOPES = [
   'dms:open',
   'plugins:read',
   'plugins:write',
+  'keys:write',
 ] as const;
 
 /**
@@ -125,6 +126,14 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'POST /dms': { scope: 'dms:open', action: 'dm.open' },
   'GET /dms/requests': { scope: 'dms:read', action: 'dm.requests' },
   'POST /dms/:dmId/request/accept': { scope: 'dms:read', param: 'dmId', action: 'dm.accept' },
+
+  // E2E keys. DMs refuse plaintext, so an agent has to publish its own
+  // public key and read its partner's to talk at all. Reading needs no
+  // scope: public keys are public (they're on the federated actor too).
+  // Publishing does, because whoever replaces the key reads the DMs
+  // that arrive after it.
+  'GET /users/:userId/publickey': { scope: null, action: 'key.read' },
+  'PUT /auth/publickey': { scope: 'keys:write', action: 'key.publish' },
 
   // Saying no and leaving: any token (see the header comment).
   'POST /dms/:dmId/leave': { scope: null, action: 'dm.leave' },

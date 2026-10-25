@@ -295,10 +295,11 @@ export async function editMessage(
   channelId: string,
   messageId: string,
   content: string,
+  properties?: { encrypted: true; iv: string },
 ): Promise<MessageView> {
   return apiFetch(`/channels/${channelId}/messages/${messageId}`, {
     method: 'PUT',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(properties && { properties }) }),
   });
 }
 
@@ -334,10 +335,11 @@ export async function sendThreadReply(
   channelId: string,
   messageId: string,
   content: string,
+  properties?: { encrypted: true; iv: string },
 ): Promise<MessageWithAuthor> {
   return apiFetch(`/channels/${channelId}/messages/${messageId}/replies`, {
     method: 'POST',
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, ...(properties && { properties }) }),
   });
 }
 
