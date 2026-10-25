@@ -55,6 +55,9 @@ export type WsServerMessage =
   | { type: 'reaction:add'; payload: { messageId: string; emoji: string; actor: AuthorView } }
   | { type: 'reaction:remove'; payload: { messageId: string; emoji: string; actorId: string } }
   | { type: 'conversation:new'; payload: { conversation: DMConversation } }
+  | { type: 'dm:request'; payload: { conversation: DMConversation } }
+  | { type: 'dm:left'; payload: { dmId: string; actor: AuthorView } }
+  | { type: 'dm:removed'; payload: { dmId: string } }
   | { type: 'dm:read'; payload: { dmId: string; actorUri: string; lastReadAt: string } }
   | { type: 'friend:request'; payload: { friendship: FriendshipView } }
   | { type: 'friend:accepted'; payload: { friendship: FriendshipView } }

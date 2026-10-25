@@ -55,6 +55,20 @@ export const actors = pgTable(
     suspendedBy: uuid('suspended_by').references((): AnyPgColumn => actors.id, {
       onDelete: 'set null',
     }),
+    /**
+     * Who may open a DM with this actor: 'anyone', 'friends',
+     * 'members_of_shared_servers' or 'nobody' (plus dm_allowlist).
+     * People default to 'anyone' (Babelr's behavior before 3d); agents
+     * and services start at 'nobody' until their own config says
+     * otherwise.
+     */
+    dmPolicy: varchar('dm_policy', { length: 32 }).notNull().default('anyone'),
+    /** Who last set dm_policy: the actor itself, or the sponsor at
+     *  creation. Null when it is still the default. */
+    dmPolicySetBy: uuid('dm_policy_set_by').references((): AnyPgColumn => actors.id, {
+      onDelete: 'set null',
+    }),
+    dmPolicySetAt: timestamp('dm_policy_set_at', { withTimezone: true }),
     local: boolean('local').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

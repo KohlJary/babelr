@@ -7359,3 +7359,110 @@ textarea.modal-input {
   font-size: 0.9rem;
   color: #aaa;
 }
+
+/* DM consent: request answer, "left", Leave and Block (step 3d).
+   Tap targets are 44px so they work from a phone. */
+.dm-consent-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.dm-consent-request {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: #1e293b;
+}
+
+.dm-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dm-consent-menu {
+  justify-content: flex-end;
+}
+
+.dm-consent-actions button {
+  min-height: 44px;
+  min-width: 88px;
+  padding: 0 1rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #2563eb;
+  color: white;
+}
+
+.dm-consent-actions button.dm-consent-secondary {
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.dm-consent-actions button.dm-consent-danger {
+  background: #b91c1c;
+  color: white;
+}
+
+.dm-consent-actions button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.dm-consent-note {
+  margin: 0;
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.dm-consent-error {
+  margin: 0;
+  color: #f87171;
+}
+
+.dm-request-badge {
+  margin-left: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  background: #1e3a8a;
+  color: #bfdbfe;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.dm-policy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: none;
+}
+
+.dm-policy-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dm-policy-option:hover {
+  background: #1a1a1a;
+}
+
+.dm-policy-option input {
+  width: 20px;
+  height: 20px;
+}

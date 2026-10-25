@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { eq, and, or, desc, lt, isNull, sql } from 'drizzle-orm';
+import { eq, and, or, desc, lt, isNull, inArray, sql } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { agentTokens } from '../db/schema/agent-tokens.ts';
@@ -14,6 +14,8 @@ import { hasPermission } from '../permissions.ts';
 import { PERMISSIONS } from '@babelr/shared';
 import { as2TypeForKind, isSponsoredKind } from '../actor-kind.ts';
 import { isValidScope } from '../agent-scopes.ts';
+import { defaultDmPolicy, isDmPolicy } from '../dm-consent.ts';
+import { dmAllowlist } from '../db/schema/dm-consent.ts';
 import {
   formatToken,
   hashSecret,
@@ -103,6 +105,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       suspendedAt: a.suspendedAt?.toISOString() ?? null,
       createdAt: a.createdAt.toISOString(),
       activeTokens: await activeTokenCount(a.id),
+      dmPolicy: (isDmPolicy(a.dmPolicy) ? a.dmPolicy : 'nobody') as AgentView['dmPolicy'],
+      dmPolicySetBy: !a.dmPolicySetBy ? null : a.dmPolicySetBy === a.id ? 'self' : 'sponsor',
     };
   }
 
@@ -213,7 +217,13 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     if (!me) return;
     if (me.suspendedAt) return reply.status(403).send({ error: 'Account suspended' });
 
-    const { username, displayName, kind } = request.body ?? ({} as CreateAgentInput);
+    const {
+      username,
+      displayName,
+      kind,
+      dmPolicy,
+      dmAllowlist: allowIds,
+    } = request.body ?? ({} as CreateAgentInput);
     if (typeof username !== 'string' || !USERNAME_RE.test(username)) {
       return reply.status(400).send({
         error: 'Username must be 3-32 characters, alphanumeric and underscores only',
@@ -221,6 +231,27 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     }
     if (kind !== 'agent' && kind !== 'service') {
       return reply.status(400).send({ error: "kind must be 'agent' or 'service'" });
+    }
+    // DMs: 'nobody' unless the sponsor sets a different starting
+    // policy here. After this the policy is the agent's own (its token
+    // can change it; the sponsor's session can't), and the sponsor's
+    // choice is recorded on the row and in the audit log.
+    if (dmPolicy !== undefined && !isDmPolicy(dmPolicy)) {
+      return reply.status(400).send({ error: 'Unknown dmPolicy' });
+    }
+    if (
+      allowIds !== undefined &&
+      (!Array.isArray(allowIds) ||
+        allowIds.length > 64 ||
+        !allowIds.every((id) => typeof id === 'string' && UUID_RE.test(id)))
+    ) {
+      return reply.status(400).send({ error: 'dmAllowlist must be a list of actor ids' });
+    }
+    const allowActors = allowIds?.length
+      ? await db.select({ id: actors.id }).from(actors).where(inArray(actors.id, allowIds))
+      : [];
+    if (allowIds && allowActors.length !== new Set(allowIds).size) {
+      return reply.status(400).send({ error: 'dmAllowlist names an unknown actor' });
     }
 
     const [existing] = await db
@@ -253,10 +284,23 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         followersUri: `${baseUri}/followers`,
         followingUri: `${baseUri}/following`,
         local: true,
+        dmPolicy: dmPolicy ?? defaultDmPolicy(kind),
+        ...(dmPolicy !== undefined ? { dmPolicySetBy: me.id, dmPolicySetAt: new Date() } : {}),
       })
       .returning();
+    if (allowActors.length > 0) {
+      await db
+        .insert(dmAllowlist)
+        .values(allowActors.map((a) => ({ ownerId: agent.id, allowedId: a.id, addedBy: me.id })))
+        .onConflictDoNothing();
+    }
 
-    await audit(me, agent, 'agent.create', `Created ${kind} @${username}`, { kind });
+    await audit(me, agent, 'agent.create', `Created ${kind} @${username}`, {
+      kind,
+      dmPolicy: agent.dmPolicy,
+      dmPolicySetBy: dmPolicy !== undefined ? 'sponsor' : 'default',
+      dmAllowlist: allowActors.map((a) => a.id),
+    });
     return reply.status(201).send(await toAgentView(agent));
   });
 

@@ -603,6 +603,32 @@ export const UI_STRINGS = {
   'agents.confirmSuspend': 'Suspend @{name}? Its tokens stop working immediately.',
   'agents.loadFailed': "Couldn't load your agents.",
 
+  // DM consent: who can message me, requests, leave, block
+  'settings.tabMessages': 'Messages',
+  'dmConsent.title': 'Who can message me',
+  'dmConsent.hint':
+    'Message requests from people outside this wait until you accept them. Blocking someone stops their messages, requests and mentions.',
+  'dmConsent.policyAnyone': 'Anyone',
+  'dmConsent.policyFriends': 'Friends',
+  'dmConsent.policyShared': 'Friends and people in my servers',
+  'dmConsent.policyNobody': 'Nobody (only people I allow)',
+  'dmConsent.allowlist': 'Always allowed',
+  'dmConsent.allowlistNone': 'Nobody added.',
+  'dmConsent.blocked': 'Blocked',
+  'dmConsent.blockedNone': "You haven't blocked anyone.",
+  'dmConsent.unblock': 'Unblock',
+  'dmConsent.loadFailed': "Couldn't load your message settings.",
+  'dm.leave': 'Leave',
+  'dm.block': 'Block',
+  'dm.confirmLeave': "Leave this conversation? You'll stop getting its messages.",
+  'dm.confirmBlock': 'Block @{name}? They can no longer message or mention you.',
+  'dm.left': '{name} left',
+  'dm.requestIncoming': '{name} wants to message you.',
+  'dm.requestOutgoing': 'Message request sent. You can send one message until they accept.',
+  'dm.accept': 'Accept',
+  'dm.decline': 'Decline',
+  'dm.requestBadge': 'request',
+
   // Server settings: public servers and agents ("little guys")
   'serverSettings.public': 'Public server',
   'serverSettings.publicHint':

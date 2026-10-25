@@ -14,6 +14,9 @@ import type {
   AgentView,
   SuspendAgentResult,
   ServerAgentsResponse,
+  DmSettings,
+  DmPolicy,
+  BlockView,
 } from '@babelr/shared';
 
 const API_BASE =
@@ -345,6 +348,47 @@ export async function getDMs(): Promise<DMConversation[]> {
 
 export async function startDM(participantId: string): Promise<DMConversation> {
   return apiFetch('/dms', { method: 'POST', body: JSON.stringify({ participantId }) });
+}
+
+// DM consent
+export async function getDMRequests(): Promise<DMConversation[]> {
+  return apiFetch('/dms/requests');
+}
+
+export async function acceptDMRequest(dmId: string): Promise<DMConversation> {
+  return apiFetch(`/dms/${dmId}/request/accept`, { method: 'POST' });
+}
+
+export async function declineDMRequest(dmId: string): Promise<{ ok: true }> {
+  return apiFetch(`/dms/${dmId}/request/decline`, { method: 'POST' });
+}
+
+export async function leaveDM(dmId: string): Promise<{ ok: true }> {
+  return apiFetch(`/dms/${dmId}/leave`, { method: 'POST' });
+}
+
+export async function getDMSettings(): Promise<DmSettings> {
+  return apiFetch('/auth/dm-settings');
+}
+
+export async function setDMPolicy(dmPolicy: DmPolicy): Promise<DmSettings> {
+  return apiFetch('/auth/dm-settings', { method: 'PUT', body: JSON.stringify({ dmPolicy }) });
+}
+
+export async function removeFromDMAllowlist(actorId: string): Promise<DmSettings> {
+  return apiFetch(`/auth/dm-allowlist/${actorId}`, { method: 'DELETE' });
+}
+
+export async function getBlocks(): Promise<BlockView[]> {
+  return apiFetch('/blocks');
+}
+
+export async function blockActor(actorId: string): Promise<{ ok: true }> {
+  return apiFetch('/blocks', { method: 'POST', body: JSON.stringify({ actorId }) });
+}
+
+export async function unblockActor(actorId: string): Promise<{ ok: true }> {
+  return apiFetch(`/blocks/${actorId}`, { method: 'DELETE' });
 }
 
 export async function getUsers(): Promise<

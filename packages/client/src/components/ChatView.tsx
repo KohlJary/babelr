@@ -20,6 +20,7 @@ import { MessageInput } from './MessageInput';
 import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
+import { DMConsentBar } from './DMConsentBar';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
@@ -113,7 +114,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
     dmMode ? null : (selectedServer?.id ?? null),
   );
-  const { conversations, selectedDM, selectDM, startDM } = useDMs();
+  const { conversations, selectedDM, selectDM, startDM, accept, decline, leave, block } = useDMs();
   const e2e = useE2E();
   const {
     members,
@@ -515,6 +516,16 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 />
               ) : (
                 <>
+                  {dmMode && selectedDM && (
+                    <DMConsentBar
+                      dm={selectedDM}
+                      actor={actor}
+                      onAccept={accept}
+                      onDecline={decline}
+                      onLeave={leave}
+                      onBlock={block}
+                    />
+                  )}
                   <MessageList
                     messages={messages}
                     loading={loading}

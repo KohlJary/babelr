@@ -9,6 +9,7 @@ import { useOllamaModels } from '../hooks/useOllamaModels';
 import { TwoFactorSettings } from './TwoFactorSettings';
 import { TabbedView } from './TabbedView';
 import { AgentsTab } from './AgentsTab';
+import { DMSettingsTab } from './DMSettingsTab';
 
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 
@@ -439,6 +440,7 @@ export function SettingsPanel({ actor, onClose, onActorUpdate }: SettingsPanelPr
     { id: 'profile', label: t('settings.tabProfile') },
     { id: 'translation', label: t('settings.tabTranslation') },
     { id: 'account', label: t('settings.tabAccount') },
+    { id: 'messages', label: t('settings.tabMessages') },
     { id: 'agents', label: t('settings.tabAgents') },
   ];
 
@@ -461,6 +463,8 @@ export function SettingsPanel({ actor, onClose, onActorUpdate }: SettingsPanelPr
             );
           case 'account':
             return <AccountTab actor={actor} onActorUpdate={onActorUpdate} />;
+          case 'messages':
+            return <DMSettingsTab />;
           case 'agents':
             return <AgentsTab />;
           default:
