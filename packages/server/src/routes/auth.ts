@@ -444,7 +444,8 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
   function stripPrivate(k: unknown): unknown {
     if (!k || typeof k !== 'object' || Array.isArray(k)) return k;
-    const { d: _d, ...rest } = k as Record<string, unknown>;
+    const rest = { ...(k as Record<string, unknown>) };
+    delete rest.d;
     return rest;
   }
 
