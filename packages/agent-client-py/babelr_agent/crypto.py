@@ -39,17 +39,37 @@ def load_or_create_key(path: Path) -> ec.EllipticCurvePrivateKey:
     """
     path = Path(path)
     if path.exists():
-        return serialization.load_pem_private_key(path.read_bytes(), password=None)
+        if path.stat().st_mode & 0o077:
+            raise PermissionError(f"{path} is readable by others; chmod 600 it")
+        try:
+            key = serialization.load_pem_private_key(path.read_bytes(), password=None)
+        except ValueError as e:
+            raise ValueError(f"{path} is not a usable key (corrupt or partly written)") from e
+        if not isinstance(key, ec.EllipticCurvePrivateKey):
+            raise ValueError(f"{path} is not a P-256 key")
+        return key
     key = generate_key()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     pem = key.private_bytes(
         serialization.Encoding.PEM,
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
     )
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    # Write to a private temp file, then link it into place: a crash
+    # can't leave a half-written key, and two processes racing to
+    # create it end up with one key (the loser loads the winner's).
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "wb") as f:
         f.write(pem)
+        f.flush()
+        os.fsync(f.fileno())
+    try:
+        os.link(tmp, path)
+    except FileExistsError:
+        return load_or_create_key(path)
+    finally:
+        os.unlink(tmp)
     return key
 
 
@@ -84,4 +104,6 @@ def encrypt(plaintext: str, key: bytes) -> tuple[str, str]:
 
 
 def decrypt(ciphertext: str, iv: str, key: bytes) -> str:
-    return AESGCM(key).decrypt(base64.b64decode(iv), base64.b64decode(ciphertext), None).decode()
+    return AESGCM(key).decrypt(
+        base64.b64decode(iv, validate=True), base64.b64decode(ciphertext, validate=True), None
+    ).decode()

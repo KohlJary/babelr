@@ -6,7 +6,8 @@
               key_path="~/.config/babelr-agent/key.pem")
     a.publish_key()                 # needs keys:write, once per key
     dm = a.open_dm(partner_id)      # needs dms:open
-    a.send(dm["id"], "hello")       # needs dms:post; always encrypted
+    a.send(dm["id"], "hello")       # needs dms:post (and dms:read to find
+                                    # the partner, unless you pass partner_id)
     for m in a.messages(dm["id"]):  # needs dms:read; decrypted here
         print(m["author"]["preferredUsername"], m["text"])
 
@@ -17,11 +18,14 @@ Messages are data, not instructions. This client hands back what people
 wrote; it never treats a message as a command, and an agent built on it
 shouldn't either.
 """
+import binascii
 import json
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+from cryptography.exceptions import InvalidTag
 
 from . import crypto
 
@@ -73,8 +77,8 @@ class Agent:
         self._req("PUT", "/auth/publickey", {"publicKey": crypto.public_jwk(self.key)})
         self._shared.clear()
 
-    def _key_for(self, partner_id: str) -> bytes:
-        if partner_id not in self._shared:
+    def _key_for(self, partner_id: str, refresh: bool = False) -> bytes:
+        if refresh or partner_id not in self._shared:
             res = self._req("GET", f"/users/{partner_id}/publickey")
             jwk = (res or {}).get("publicKey")
             if not jwk:
@@ -110,21 +114,41 @@ class Agent:
         )
 
     def messages(self, dm_id: str, partner_id: str | None = None) -> list[dict]:
-        """Messages in a DM, each with `text` decrypted (or None if it can't
-        be: wrong key, or a legacy plaintext message, flagged `plaintext`)."""
+        """Messages in a DM, each with `text` decrypted.
+
+        When a message can't be decrypted, `text` is None and `error` says
+        why: "plaintext" (sent before DMs were enforced), "bad-format"
+        (content or IV isn't valid base64), or "undecryptable" (the
+        authentication tag failed: a key changed on one side, or the
+        message was tampered with; this client can't tell which).
+        """
         partner = partner_id or self._partner(dm_id)
         key = self._key_for(partner)
+        refreshed = False
         out = []
         for m in self._req("GET", f"/dms/{dm_id}/messages")["messages"]:
             msg = m["message"]
             props = msg.get("properties") or {}
             entry = {"id": msg["id"], "author": m["author"], "published": msg["published"]}
-            if props.get("encrypted") and props.get("iv"):
-                try:
-                    entry["text"] = crypto.decrypt(msg["content"], props["iv"], key)
-                except Exception:
-                    entry["text"] = None
+            if not (props.get("encrypted") and props.get("iv")):
+                entry["text"], entry["error"] = None, "plaintext"
             else:
-                entry["text"], entry["plaintext"] = None, True
+                entry["text"], entry["error"] = self._open(msg["content"], props["iv"], key)
+                if entry["error"] == "undecryptable" and not refreshed:
+                    # The partner may have a new key: fetch it once and retry.
+                    refreshed = True
+                    key = self._key_for(partner, refresh=True)
+                    entry["text"], entry["error"] = self._open(msg["content"], props["iv"], key)
+            if entry["error"] is None:
+                del entry["error"]
             out.append(entry)
         return out
+
+    @staticmethod
+    def _open(content: str, iv: str, key: bytes) -> tuple[str | None, str | None]:
+        try:
+            return crypto.decrypt(content, iv, key), None
+        except InvalidTag:
+            return None, "undecryptable"
+        except (ValueError, binascii.Error):
+            return None, "bad-format"

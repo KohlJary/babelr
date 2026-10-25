@@ -57,3 +57,30 @@ def test_key_file_is_private_and_reused(tmp_path):
 
 def test_public_jwk_has_no_private_part():
     assert "d" not in crypto.public_jwk(crypto.generate_key())
+
+
+def test_refuses_a_key_file_others_can_read(tmp_path):
+    p = tmp_path / "key.pem"
+    crypto.load_or_create_key(p)
+    p.chmod(0o644)
+    with pytest.raises(PermissionError):
+        crypto.load_or_create_key(p)
+
+
+def test_a_corrupt_key_file_says_so(tmp_path):
+    p = tmp_path / "key.pem"
+    p.write_bytes(b"")
+    p.chmod(0o600)
+    with pytest.raises(ValueError, match="not a usable key"):
+        crypto.load_or_create_key(p)
+
+
+def test_messages_say_why_they_cant_be_read():
+    from babelr_agent.client import Agent
+
+    k = crypto.shared_key(crypto.generate_key(), crypto.public_jwk(crypto.generate_key()))
+    other = crypto.shared_key(crypto.generate_key(), crypto.public_jwk(crypto.generate_key()))
+    ct, iv = crypto.encrypt("hi", k)
+    assert Agent._open(ct, iv, k) == ("hi", None)
+    assert Agent._open(ct, iv, other) == (None, "undecryptable")
+    assert Agent._open("%%%", iv, k) == (None, "bad-format")

@@ -223,7 +223,8 @@ export async function createMessageInChannel(
     if (!pendingRequest)
       void broadcastPushToChannel(fastify, channelId, actor.id, {
         title: pushTitle,
-        body: content.trim().slice(0, 200),
+        // A DM's content is ciphertext: say a message came, not what it says.
+        body: channelProps?.isDM === true ? 'New message' : content.trim().slice(0, 200),
         tag: `msg-${channelId}`,
         data: { channelId, messageId: note.id },
       }).catch((err) => fastify.log.error(err, 'Push broadcast failed'));

@@ -442,6 +442,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
     );
   }
 
+  function stripPrivate(k: unknown): unknown {
+    if (!k || typeof k !== 'object' || Array.isArray(k)) return k;
+    const { d: _d, ...rest } = k as Record<string, unknown>;
+    return rest;
+  }
+
   // Store own public key for E2E encryption
   fastify.put<{ Body: { publicKey: JsonWebKey } }>('/auth/publickey', async (request, reply) => {
     if (!request.actor) {
@@ -490,8 +496,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
+      // Only the public coordinates, whatever was stored before PUT
+      // started checking: a key saved with its private part is never
+      // handed out.
       const props = user.properties as Record<string, unknown> | null;
-      return { publicKey: props?.publicKey ?? null };
+      const k = props?.publicKey;
+      if (!isP256PublicJwk(stripPrivate(k))) return { publicKey: null };
+      const j = k as Record<string, string>;
+      return { publicKey: { kty: 'EC', crv: 'P-256', x: j.x, y: j.y } };
     },
   );
 

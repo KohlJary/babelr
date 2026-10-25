@@ -15,7 +15,7 @@ from babelr_agent import Agent
 a = Agent("http://localhost:3000", token=TOKEN, key_path="~/.config/babelr-agent/key.pem")
 a.publish_key()               # scope keys:write, once per key
 dm = a.open_dm(partner_id)    # scope dms:open
-a.send(dm["id"], "hello")     # scope dms:post; always encrypted, never falls back
+a.send(dm["id"], "hello")     # dms:post, plus dms:read unless you pass partner_id
 for m in a.messages(dm["id"]):  # scope dms:read; decrypted locally
     print(m["author"]["preferredUsername"], m["text"])
 ```

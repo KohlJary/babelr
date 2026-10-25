@@ -3,6 +3,8 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createTestApp, createTestUser, cleanDb } from '../helpers.ts';
 import type Fastify from 'fastify';
 import type { createDb } from '../../db/index.ts';
+import { eq } from 'drizzle-orm';
+import { actors } from '../../db/schema/actors.ts';
 
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDb>;
@@ -140,5 +142,88 @@ describe('agents and E2E keys', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).publicKey.x).toBe(X);
+  });
+});
+
+describe('GET /users/:id/publickey', () => {
+  it('never hands out a private part saved before PUT checked keys', async () => {
+    const { cookie, body } = await createTestUser(app, 'pat');
+    await db
+      .update(actors)
+      .set({ properties: { publicKey: { ...PUBLIC_JWK, d: X } } })
+      .where(eq(actors.id, body.id));
+    const res = await app.inject({
+      method: 'GET',
+      url: `/users/${body.id}/publickey`,
+      headers: { cookie },
+    });
+    expect(JSON.parse(res.body).publicKey).toEqual({ kty: 'EC', crv: 'P-256', x: X, y: Y });
+  });
+});
+
+describe('channel glossary', () => {
+  it('only a DM participant can read or change its glossary', async () => {
+    const pat = await createTestUser(app, 'pat');
+    const sam = await createTestUser(app, 'sam');
+    const eve = await createTestUser(app, 'eve');
+    const dm = await app.inject({
+      method: 'POST',
+      url: '/dms',
+      headers: { cookie: pat.cookie },
+      payload: { participantId: sam.body.id },
+    });
+    const dmId = JSON.parse(dm.body).id as string;
+    const url = `/channels/${dmId}/glossary`;
+
+    const outsiderPut = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { cookie: eve.cookie },
+      payload: { glossary: { a: 'b' } },
+    });
+    expect(outsiderPut.statusCode).toBe(403);
+    const outsiderGet = await app.inject({ method: 'GET', url, headers: { cookie: eve.cookie } });
+    expect(outsiderGet.statusCode).toBe(403);
+
+    const put = await app.inject({
+      method: 'PUT',
+      url,
+      headers: { cookie: pat.cookie },
+      payload: { glossary: { a: 'b' } },
+    });
+    expect(put.statusCode).toBe(200);
+  });
+
+  it('a non-member cannot change a server channel glossary', async () => {
+    const owner = await createTestUser(app, 'owner');
+    const eve = await createTestUser(app, 'eve');
+    const s = await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: owner.cookie },
+      payload: { name: 'House' },
+    });
+    const serverId = JSON.parse(s.body).id as string;
+    const ch = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/channels`,
+      headers: { cookie: owner.cookie },
+      payload: { name: 'general-2' },
+    });
+    const channelId = JSON.parse(ch.body).id as string;
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/channels/${channelId}/glossary`,
+      headers: { cookie: eve.cookie },
+      payload: { glossary: { a: 'b' } },
+    });
+    expect(res.statusCode).toBe(403);
+    const ok = await app.inject({
+      method: 'PUT',
+      url: `/channels/${channelId}/glossary`,
+      headers: { cookie: owner.cookie },
+      payload: { glossary: { a: 'b' } },
+    });
+    expect(ok.statusCode).toBe(200);
   });
 });
