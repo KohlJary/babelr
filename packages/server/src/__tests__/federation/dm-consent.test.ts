@@ -20,6 +20,7 @@ import {
   cleanDb,
 } from './helpers.ts';
 import { wsSent } from '../helpers.ts';
+import { enc, encNote } from '../e2e-fixtures.ts';
 
 let app: FastifyInstance;
 let db: ReturnType<typeof createDb>;
@@ -65,6 +66,7 @@ async function remoteDM(
         attributedTo: remote.actor.uri,
         content,
         to: [to],
+        ...encNote(),
       },
     },
     remote.actor.uri,
@@ -164,6 +166,7 @@ describe('A DM is reachable only through the consent gate', () => {
           content: 'hi',
           to: [],
           context: row.uri,
+          ...encNote(),
         },
       },
       eve.actor.uri,
@@ -196,6 +199,7 @@ describe('A DM is reachable only through the consent gate', () => {
           content: 'two',
           to: [ALICE_URI],
           published: '2001-01-01T00:00:00Z',
+          ...encNote(),
         },
       },
       bob.actor.uri,
@@ -275,7 +279,7 @@ describe('Leaving stops federation delivery', () => {
       method: 'POST',
       url: `/dms/${dm.id}/messages`,
       headers: { cookie: alice.cookie },
-      payload: { content: 'come back' },
+      payload: { content: 'come back', properties: enc() },
     });
     expect(post.statusCode).toBe(403);
     const reopen = await app.inject({
@@ -344,7 +348,7 @@ describe('Momus trial 2: federation', () => {
       method: 'POST',
       url: `/dms/${dmId}/messages`,
       headers: { cookie: alice.cookie },
-      payload: { content: 'private' },
+      payload: { content: 'private', properties: enc() },
     });
     const privateNote = JSON.parse(sent.body).message.id as string;
     const [pn] = await db.select().from(objects).where(eq(objects.id, privateNote));

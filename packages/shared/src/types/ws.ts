@@ -47,7 +47,15 @@ export type WsServerMessage =
   | { type: 'message:new'; payload: { message: MessageView; author: AuthorView } }
   | {
       type: 'message:updated';
-      payload: { messageId: string; channelId: string; content: string; updatedAt: string };
+      payload: {
+        messageId: string;
+        channelId: string;
+        content: string;
+        updatedAt: string;
+        /** Set when the edited content is E2E-encrypted (DMs): the new IV. */
+        encrypted?: boolean;
+        iv?: string;
+      };
     }
   | { type: 'message:deleted'; payload: { messageId: string; channelId: string } }
   | { type: 'typing:start'; payload: { channelId: string; actor: AuthorView } }

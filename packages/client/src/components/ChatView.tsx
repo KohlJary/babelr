@@ -217,6 +217,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     hasMore,
     connected,
     sendMessage,
+    encryptForDM,
+    decryptForDM,
     loadMore,
     typingUsers,
     notifyTyping,
@@ -297,34 +299,43 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       setThreadLoading(true);
       try {
         const res = await api.getThreadReplies(activeChannelId, messageId);
-        setThreadReplies(res.messages);
+        setThreadReplies(await decryptForDM(res.messages));
       } catch {
         setThreadReplies([]);
       } finally {
         setThreadLoading(false);
       }
     },
-    [activeChannelId],
+    [activeChannelId, decryptForDM],
   );
 
   const sendThreadReply = useCallback(
     async (content: string) => {
       if (!activeChannelId || !threadMessageId) return;
-      await api.sendThreadReply(activeChannelId, threadMessageId, content);
+      // In a DM the reply is encrypted like any message (fresh IV).
+      const out = await encryptForDM(content);
+      await api.sendThreadReply(activeChannelId, threadMessageId, out.content, out.properties);
       // Reload thread
       const res = await api.getThreadReplies(activeChannelId, threadMessageId);
-      setThreadReplies(res.messages);
+      setThreadReplies(await decryptForDM(res.messages));
     },
-    [activeChannelId, threadMessageId],
+    [activeChannelId, threadMessageId, encryptForDM, decryptForDM],
   );
 
   const handleEditMessage = useCallback(
     async (messageId: string, content: string) => {
       if (!activeChannelId) return;
-      await api.editMessage(activeChannelId, messageId, content);
-      updateMessageContent(messageId, content);
+      // A DM edit is re-encrypted under a fresh IV; the server refuses
+      // a reused one.
+      try {
+        const out = await encryptForDM(content);
+        await api.editMessage(activeChannelId, messageId, out.content, out.properties);
+        updateMessageContent(messageId, content);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : String(err));
+      }
     },
-    [activeChannelId, updateMessageContent],
+    [activeChannelId, updateMessageContent, encryptForDM],
   );
 
   const handleDeleteMessage = useCallback(

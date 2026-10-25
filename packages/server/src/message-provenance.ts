@@ -21,7 +21,7 @@ export const SERVER_PROVENANCE_KEYS = ['authorKind', 'sponsor'] as const;
 const MAX_ATTACHMENTS = 10;
 const UPLOAD_URL_RE =
   /^\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[^/\\?#]{0,32}$/;
-const IV_RE = /^[A-Za-z0-9+/]{16}$/; // 12-byte AES-GCM IV, base64
+export const IV_RE = /^[A-Za-z0-9+/]{16}$/; // 12-byte AES-GCM IV, base64
 
 export interface Attachment {
   url: string;

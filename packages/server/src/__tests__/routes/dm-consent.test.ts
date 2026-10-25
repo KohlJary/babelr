@@ -15,6 +15,7 @@ import { friendships } from '../../db/schema/friendships.ts';
 import { dmRequests } from '../../db/schema/dm-consent.ts';
 import { serverAgentGrants } from '../../db/schema/server-agent-grants.ts';
 import { REFUSED_OPEN } from '../../dm-consent.ts';
+import { enc } from '../e2e-fixtures.ts';
 
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDb>;
@@ -60,7 +61,7 @@ async function call(who: User | string, method: string, url: string, payload?: u
 const openDM = (who: User | string, participantId: string) =>
   call(who, 'POST', '/dms', { participantId });
 const say = (who: User | string, dmId: string, content: string) =>
-  call(who, 'POST', `/dms/${dmId}/messages`, { content });
+  call(who, 'POST', `/dms/${dmId}/messages`, { content, properties: enc() });
 
 async function createAgent(sponsor: User, username: string, extra: Record<string, unknown> = {}) {
   const res = await call(sponsor, 'POST', '/agents', { username, kind: 'agent', ...extra });
@@ -352,7 +353,10 @@ describe('Message requests', () => {
     const dmId = req.body.id as string;
     const sent = await say(bob, dmId, 'hi');
     const msgId = (sent.body as unknown as { message: { id: string } }).message.id;
-    const edit = await call(bob, 'PUT', `/channels/${dmId}/messages/${msgId}`, { content: 'BUY' });
+    const edit = await call(bob, 'PUT', `/channels/${dmId}/messages/${msgId}`, {
+      content: 'BUY',
+      properties: enc(),
+    });
     expect(edit.status).toBe(403);
     expect((await call(bob, 'DELETE', `/channels/${dmId}/messages/${msgId}`)).status).toBe(200);
     expect((await say(bob, dmId, 'hi again')).status).toBe(403);
@@ -441,7 +445,12 @@ describe('Leaving', () => {
     expect((await say(kohl, dmId, 'get back here')).status).toBe(403);
     // Nor can kohl post through the channel route.
     expect(
-      (await call(kohl, 'POST', `/channels/${dmId}/messages`, { content: 'please' })).status,
+      (
+        await call(kohl, 'POST', `/channels/${dmId}/messages`, {
+          content: 'please',
+          properties: enc(),
+        })
+      ).status,
     ).toBe(403);
     // Nor mint a token scoped to a DM the agent isn't in any more.
     const scoped = await call(kohl, 'POST', `/agents/${agent.id}/tokens`, {
@@ -518,7 +527,7 @@ describe('Blocking', () => {
       bob,
       'POST',
       `/channels/${dmId}/messages/${msgs.messages[0].message.id}/replies`,
-      { content: 'reply' },
+      { content: 'reply', properties: enc() },
     );
     expect(reply.status).toBe(403);
 

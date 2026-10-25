@@ -10,6 +10,9 @@ import { notificationPreferences } from '../db/schema/notification-preferences.t
 import { ensureActorKeys } from '../federation/keys.ts';
 import { enqueueDelivery, deliverDMRead } from '../federation/delivery.ts';
 import { serializeActivity } from '../federation/jsonld.ts';
+import { PERMISSIONS } from '@babelr/shared';
+import { hasPermission } from '../permissions.ts';
+import { checkChannelAccess } from '../serializers.ts';
 
 export default async function channelSettingsRoutes(fastify: FastifyInstance) {
   const db = fastify.db;
@@ -150,13 +153,15 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
 
-      const [channel] = await db
-        .select()
-        .from(objects)
-        .where(and(eq(objects.id, request.params.channelId), eq(objects.type, 'OrderedCollection')))
-        .limit(1);
-
-      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
+      const { allowed, channel } = await checkChannelAccess(
+        db,
+        request.params.channelId,
+        request.actor.uri,
+      );
+      if (!channel || channel.type !== 'OrderedCollection') {
+        return reply.status(404).send({ error: 'Channel not found' });
+      }
+      if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
 
       const props = channel.properties as Record<string, unknown> | null;
       return { glossary: (props?.glossary as Record<string, string>) ?? {} };
@@ -172,13 +177,20 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
       const { channelId } = request.params;
       const { glossary } = request.body;
 
-      const [channel] = await db
-        .select()
-        .from(objects)
-        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
-        .limit(1);
-
-      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
+      // Members only, and in a server channel only those who manage
+      // channels. (This route used to let anyone signed in rewrite any
+      // channel's glossary, DMs included.)
+      const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
+      if (!channel || channel.type !== 'OrderedCollection') {
+        return reply.status(404).send({ error: 'Channel not found' });
+      }
+      if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
+      if (
+        channel.belongsTo &&
+        !(await hasPermission(db, channel.belongsTo, request.actor.id, PERMISSIONS.MANAGE_CHANNELS))
+      ) {
+        return reply.status(403).send({ error: 'Missing MANAGE_CHANNELS permission' });
+      }
 
       const props = (channel.properties as Record<string, unknown>) ?? {};
       await db

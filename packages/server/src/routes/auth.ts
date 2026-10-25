@@ -427,21 +427,53 @@ export default async function authRoutes(fastify: FastifyInstance) {
     return toProfile(updated);
   });
 
+  const B64URL_32 = /^[A-Za-z0-9_-]{43}$/; // 32-byte coordinate, base64url
+  function isP256PublicJwk(k: unknown): boolean {
+    if (!k || typeof k !== 'object' || Array.isArray(k)) return false;
+    const j = k as Record<string, unknown>;
+    return (
+      j.kty === 'EC' &&
+      j.crv === 'P-256' &&
+      typeof j.x === 'string' &&
+      B64URL_32.test(j.x) &&
+      typeof j.y === 'string' &&
+      B64URL_32.test(j.y) &&
+      !('d' in j)
+    );
+  }
+
+  function stripPrivate(k: unknown): unknown {
+    if (!k || typeof k !== 'object' || Array.isArray(k)) return k;
+    const rest = { ...(k as Record<string, unknown>) };
+    delete rest.d;
+    return rest;
+  }
+
   // Store own public key for E2E encryption
   fastify.put<{ Body: { publicKey: JsonWebKey } }>('/auth/publickey', async (request, reply) => {
     if (!request.actor) {
       return reply.status(401).send({ error: 'Not authenticated' });
     }
 
-    const { publicKey } = request.body;
+    const { publicKey } = request.body ?? {};
     if (!publicKey) {
       return reply.status(400).send({ error: 'publicKey is required' });
+    }
+    // An ECDH P-256 public key and nothing else. A JWK with `d` is a
+    // private key: refuse it rather than publish it to everyone.
+    if (!isP256PublicJwk(publicKey)) {
+      return reply.status(400).send({ error: 'publicKey must be a P-256 public JWK' });
     }
 
     const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};
     await db
       .update(actors)
-      .set({ properties: { ...currentProps, publicKey } })
+      .set({
+        properties: {
+          ...currentProps,
+          publicKey: { kty: 'EC', crv: 'P-256', x: publicKey.x, y: publicKey.y },
+        },
+      })
       .where(eq(actors.id, request.actor.id));
 
     return { ok: true };
@@ -465,8 +497,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ error: 'User not found' });
       }
 
+      // Only the public coordinates, whatever was stored before PUT
+      // started checking: a key saved with its private part is never
+      // handed out.
       const props = user.properties as Record<string, unknown> | null;
-      return { publicKey: props?.publicKey ?? null };
+      const k = props?.publicKey;
+      if (!isP256PublicJwk(stripPrivate(k))) return { publicKey: null };
+      const j = k as Record<string, string>;
+      return { publicKey: { kty: 'EC', crv: 'P-256', x: j.x, y: j.y } };
     },
   );
 

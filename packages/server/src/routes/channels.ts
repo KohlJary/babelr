@@ -24,6 +24,7 @@ import { unfurlLinks } from '../unfurl.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
 import { assertNotSuspended } from '../agent-tokens.ts';
 import { assertCanPostInDM, mentionableIds, requestFor } from '../dm-consent.ts';
+import { requireEncryptedInDM } from '../e2e-policy.ts';
 
 // Parse @mentions from content and return array of mentioned usernames
 export function parseMentions(content: string): string[] {
@@ -69,6 +70,11 @@ export async function createMessageInChannel(
   // Clients may send only encrypted/iv and attachments; provenance is
   // stamped here from the authenticated actor, never taken from them.
   const clientProps = sanitizeClientProperties(messageProperties);
+
+  // DMs are end-to-end encrypted: plaintext is refused, by any path.
+  const [target] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
+  requireEncryptedInDM(target, clientProps);
+
   const provenance = await provenanceFor(actor, async (id) => {
     const [s] = await db
       .select({ id: actors.id, preferredUsername: actors.preferredUsername })
@@ -217,7 +223,8 @@ export async function createMessageInChannel(
     if (!pendingRequest)
       void broadcastPushToChannel(fastify, channelId, actor.id, {
         title: pushTitle,
-        body: content.trim().slice(0, 200),
+        // A DM's content is ciphertext: say a message came, not what it says.
+        body: channelProps?.isDM === true ? 'New message' : content.trim().slice(0, 200),
         tag: `msg-${channelId}`,
         data: { channelId, messageId: note.id },
       }).catch((err) => fastify.log.error(err, 'Push broadcast failed'));

@@ -16,8 +16,13 @@ import * as api from '../api';
 export interface E2EContext {
   ready: boolean;
   encrypt: (plaintext: string, recipientId: string) => Promise<{ ciphertext: string; iv: string }>;
-  decryptMsg: (msg: MessageWithAuthor) => Promise<MessageWithAuthor>;
-  decryptMsgs: (msgs: MessageWithAuthor[]) => Promise<MessageWithAuthor[]>;
+  /** Decrypt one ciphertext shared with `partnerId`; throws on failure. */
+  decrypt: (ciphertext: string, iv: string, partnerId: string) => Promise<string>;
+  /** `partnerId` is the other side of a 1:1 DM. The key is shared
+   *  with them whoever wrote the message, so it's what decrypts our
+   *  own messages too. Without it, the author's key is used. */
+  decryptMsg: (msg: MessageWithAuthor, partnerId?: string) => Promise<MessageWithAuthor>;
+  decryptMsgs: (msgs: MessageWithAuthor[], partnerId?: string) => Promise<MessageWithAuthor[]>;
 }
 
 export function useE2E(): E2EContext {
@@ -75,13 +80,21 @@ export function useE2E(): E2EContext {
     [getSharedKey],
   );
 
+  const decrypt = useCallback(
+    async (ciphertext: string, iv: string, partnerId: string) => {
+      const sharedKey = await getSharedKey(partnerId);
+      if (!sharedKey) throw new Error('Cannot decrypt: key unavailable');
+      return decryptMessage(ciphertext, iv, sharedKey);
+    },
+    [getSharedKey],
+  );
+
   const decryptMsg = useCallback(
-    async (msg: MessageWithAuthor): Promise<MessageWithAuthor> => {
+    async (msg: MessageWithAuthor, partnerId?: string): Promise<MessageWithAuthor> => {
       if (!msg.message.properties?.encrypted) return msg;
 
       try {
-        const senderId = msg.message.authorId;
-        const sharedKey = await getSharedKey(senderId);
+        const sharedKey = await getSharedKey(partnerId || msg.message.authorId);
         if (!sharedKey) {
           return {
             ...msg,
@@ -110,11 +123,11 @@ export function useE2E(): E2EContext {
   );
 
   const decryptMsgs = useCallback(
-    async (msgs: MessageWithAuthor[]): Promise<MessageWithAuthor[]> => {
-      return Promise.all(msgs.map(decryptMsg));
+    async (msgs: MessageWithAuthor[], partnerId?: string): Promise<MessageWithAuthor[]> => {
+      return Promise.all(msgs.map((m) => decryptMsg(m, partnerId)));
     },
     [decryptMsg],
   );
 
-  return { ready, encrypt, decryptMsg, decryptMsgs };
+  return { ready, encrypt, decrypt, decryptMsg, decryptMsgs };
 }

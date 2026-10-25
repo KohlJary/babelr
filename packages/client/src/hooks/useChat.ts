@@ -45,37 +45,57 @@ export function useChat(
   const handleWsMessage = useCallback(
     (msg: WsServerMessage) => {
       if (msg.type === 'message:updated') {
-        setMessages((prev) =>
-          prev.map((m) => {
-            if (m.message.id !== msg.payload.messageId) return m;
-            const updated = {
-              ...m,
-              message: {
-                ...m.message,
-                content: msg.payload.content,
-                updated: msg.payload.updatedAt,
-              },
-            };
-            // Merge any extra fields (e.g. linkPreviews from unfurl)
-            const extra = msg.payload as Record<string, unknown>;
-            if (extra.linkPreviews) {
-              updated.message = {
-                ...updated.message,
-                properties: {
-                  ...((updated.message.properties as Record<string, unknown>) ?? {}),
-                  linkPreviews: extra.linkPreviews,
+        const applyUpdate = (content: string) =>
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.message.id !== msg.payload.messageId) return m;
+              const updated = {
+                ...m,
+                message: {
+                  ...m.message,
+                  content,
+                  updated: msg.payload.updatedAt,
                 },
               };
-            }
-            return updated;
-          }),
-        );
+              // A re-encrypted DM edit brings its new IV.
+              if (msg.payload.encrypted && msg.payload.iv) {
+                updated.message = {
+                  ...updated.message,
+                  properties: {
+                    ...((updated.message.properties as Record<string, unknown>) ?? {}),
+                    encrypted: true,
+                    iv: msg.payload.iv,
+                  },
+                };
+              }
+              // Merge any extra fields (e.g. linkPreviews from unfurl)
+              const extra = msg.payload as Record<string, unknown>;
+              if (extra.linkPreviews) {
+                updated.message = {
+                  ...updated.message,
+                  properties: {
+                    ...((updated.message.properties as Record<string, unknown>) ?? {}),
+                    linkPreviews: extra.linkPreviews,
+                  },
+                };
+              }
+              return updated;
+            }),
+          );
+        const e2e = e2eRef.current;
+        if (isDM && msg.payload.encrypted && msg.payload.iv && e2e?.e2e.ready) {
+          e2e.e2e
+            .decrypt(msg.payload.content, msg.payload.iv, e2e.recipientId)
+            .then(applyUpdate, () => applyUpdate('[Decryption failed]'));
+        } else {
+          applyUpdate(msg.payload.content);
+        }
       } else if (msg.type === 'message:deleted') {
         setMessages((prev) => prev.filter((m) => m.message.id !== msg.payload.messageId));
       } else if (msg.type === 'message:new') {
         const e2e = e2eRef.current;
         if (isDM && e2e?.e2e.ready && msg.payload.message.properties?.encrypted) {
-          e2e.e2e.decryptMsg(msg.payload).then((decrypted) => {
+          e2e.e2e.decryptMsg(msg.payload, e2e.recipientId).then((decrypted) => {
             setMessages((prev) => [...prev, decrypted]);
           });
         } else {
@@ -147,7 +167,7 @@ export function useChat(
       // Decrypt DM history if E2E is available
       const e2e = e2eRef.current;
       if (isDM && e2e?.e2e.ready) {
-        msgs = await e2e.e2e.decryptMsgs(msgs);
+        msgs = await e2e.e2e.decryptMsgs(msgs, e2e.recipientId);
       }
 
       setMessages(msgs);
@@ -183,13 +203,42 @@ export function useChat(
 
     const e2e = e2eRef.current;
     if (isDM && e2e?.e2e.ready) {
-      msgs = await e2e.e2e.decryptMsgs(msgs);
+      msgs = await e2e.e2e.decryptMsgs(msgs, e2e.recipientId);
     }
 
     setMessages((prev) => [...msgs, ...prev]);
     setHasMore(res.hasMore);
     if (res.cursor) setCursor(res.cursor);
   }, [channelId, cursor, hasMore, isDM]);
+
+  /** DMs are end-to-end encrypted and the server refuses plaintext, so
+   *  there is no fallback: if encryption isn't ready, or the recipient
+   *  has no public key, this throws and nothing is sent. Each call
+   *  encrypts under a fresh IV. Outside DMs, content passes through. */
+  const encryptForDM = useCallback(
+    async (
+      content: string,
+    ): Promise<{ content: string; properties?: { encrypted: true; iv: string } }> => {
+      if (!isDM) return { content };
+      const e2e = e2eRef.current;
+      if (!e2e?.e2e.ready || !e2e.recipientId) {
+        throw new Error('Encryption is not ready, so this DM was not sent.');
+      }
+      const encrypted = await e2e.e2e.encrypt(content, e2e.recipientId);
+      return { content: encrypted.ciphertext, properties: { encrypted: true, iv: encrypted.iv } };
+    },
+    [isDM],
+  );
+
+  /** Decrypt DM messages fetched outside this hook (e.g. thread replies). */
+  const decryptForDM = useCallback(
+    async (msgs: MessageWithAuthor[]): Promise<MessageWithAuthor[]> => {
+      const e2e = e2eRef.current;
+      if (!isDM || !e2e?.e2e.ready) return msgs;
+      return e2e.e2e.decryptMsgs(msgs, e2e.recipientId);
+    },
+    [isDM],
+  );
 
   const sendMessage = useCallback(
     async (
@@ -203,20 +252,12 @@ export function useChat(
         properties.attachments = attachments;
       }
 
-      const e2e = e2eRef.current;
-      if (isDM && e2e?.e2e.ready) {
-        const encrypted = await e2e.e2e.encrypt(content, e2e.recipientId);
-        await api.sendMessage(channelId, encrypted.ciphertext, true, {
-          encrypted: true,
-          iv: encrypted.iv,
-          ...properties,
-        });
-      } else {
-        const hasProps = Object.keys(properties).length > 0;
-        await api.sendMessage(channelId, content, isDM, hasProps ? properties : undefined);
-      }
+      const out = await encryptForDM(content);
+      Object.assign(properties, out.properties);
+      const hasProps = Object.keys(properties).length > 0;
+      await api.sendMessage(channelId, out.content, isDM, hasProps ? properties : undefined);
     },
-    [channelId, isDM],
+    [channelId, isDM, encryptForDM],
   );
 
   const notifyTyping = useCallback(() => {
@@ -248,6 +289,8 @@ export function useChat(
     hasMore,
     connected,
     sendMessage,
+    encryptForDM,
+    decryptForDM,
     loadMore,
     typingUsers,
     notifyTyping,

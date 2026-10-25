@@ -35,6 +35,7 @@ import {
   mentionableIds,
 } from '../dm-consent.ts';
 import { sanitizeClientProperties, provenanceFor } from '../message-provenance.ts';
+import { requireEncryptedInDM, requireFreshIvForDMEdit } from '../e2e-policy.ts';
 import { assertNotSuspended } from '../agent-tokens.ts';
 import {
   toMessageView,
@@ -226,7 +227,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   // Edit a message
   fastify.put<{
     Params: { channelId: string; messageId: string };
-    Body: { content: string };
+    Body: { content: string; properties?: { encrypted?: boolean; iv?: string } };
   }>('/channels/:channelId/messages/:messageId', async (request, reply) => {
     if (!request.actor) {
       return reply.status(401).send({ error: 'Not authenticated' });
@@ -254,9 +255,26 @@ export default async function messageRoutes(fastify: FastifyInstance) {
     // In a DM: only while still in it, unblocked, and not as an
     // unanswered request.
     const [editChannel] = await db.select().from(objects).where(eq(objects.id, channelId)).limit(1);
-    if (isDMRow(editChannel)) {
+    // A DM edit is re-encrypted by the client: it must bring a fresh
+    // IV (never the stored one; AES-GCM can't reuse an IV under the
+    // same key). Only `encrypted` and `iv` are taken from the client,
+    // merged over the stored properties, so provenance stays the
+    // server's. Outside DMs, client properties are ignored as before.
+    const isDMEdit = isDMRow(editChannel);
+    let editProps: Record<string, unknown> | undefined;
+    if (isDMEdit) {
       const decision = await checkDMEdit(db, editChannel, request.actor);
       if (!decision.ok) return reply.status(decision.status).send({ error: decision.error });
+      const { encrypted, iv } = sanitizeClientProperties(request.body?.properties);
+      const storedProps = (message.properties as Record<string, unknown> | null) ?? {};
+      try {
+        requireFreshIvForDMEdit(editChannel, { encrypted, iv }, storedProps);
+      } catch (err) {
+        const e = err as { statusCode?: number; message: string };
+        if (e.statusCode) return reply.status(e.statusCode).send({ error: e.message });
+        throw err;
+      }
+      editProps = { ...storedProps, encrypted: true, iv };
     }
 
     const editor = request.actor;
@@ -264,11 +282,16 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       await assertNotSuspended(tx, editor.id);
       const [row] = await tx
         .update(objects)
-        .set({ content: content.trim(), updated: new Date() })
+        .set({
+          content: content.trim(),
+          updated: new Date(),
+          ...(editProps && { properties: editProps }),
+        })
         .where(eq(objects.id, messageId))
         .returning();
       return row;
     });
+    const updatedProps = (updated.properties as Record<string, unknown> | null) ?? {};
 
     // Re-sync [[slug]] wiki refs after edit
     await syncMessageOutboundLinks(db, updated.id, channelId, updated.content ?? '');
@@ -295,6 +318,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         channelId,
         content: updated.content ?? '',
         updatedAt: (updated.updated ?? new Date()).toISOString(),
+        // The new IV, so clients can decrypt the re-encrypted content.
+        ...(updatedProps.encrypted === true && {
+          encrypted: true,
+          iv: updatedProps.iv as string,
+        }),
       },
     });
 
@@ -849,6 +877,24 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       throw err;
     }
 
+    // Replies take only the encryption marker from the client (no
+    // attachments: this route has no ATTACH_FILES check), and in a DM
+    // the reply must be encrypted.
+    const { encrypted, iv } = sanitizeClientProperties(request.body?.properties);
+    const clientProps: Record<string, unknown> = encrypted ? { encrypted, iv } : {};
+    const [replyChannel] = await db
+      .select()
+      .from(objects)
+      .where(eq(objects.id, channelId))
+      .limit(1);
+    try {
+      requireEncryptedInDM(replyChannel, clientProps);
+    } catch (err) {
+      const e = err as { statusCode?: number; message: string };
+      if (e.statusCode) return reply.status(e.statusCode).send({ error: e.message });
+      throw err;
+    }
+
     // Parse mentions (not of anyone who blocked the author)
     const mentionedUsernames = parseMentions(content);
     const mentionedActors =
@@ -895,6 +941,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           to: [],
           cc: [],
           properties: {
+            ...clientProps,
             ...(mentionedIds.length > 0 ? { mentions: mentionedIds } : {}),
             ...provenance,
           },

@@ -13,6 +13,7 @@ import { sessions } from '../../db/schema/sessions.ts';
 import { processQueue } from '../../federation/delivery.ts';
 import { serverAgentGrants } from '../../db/schema/server-agent-grants.ts';
 import { createMessageInChannel } from '../../routes/channels.ts';
+import { enc } from '../e2e-fixtures.ts';
 
 let app: ReturnType<typeof Fastify>;
 let db: ReturnType<typeof createDb>;
@@ -388,7 +389,7 @@ describe('2. Scopes, deny by default', () => {
       method: 'POST',
       url: `/dms/${dmId}/messages`,
       headers: bearer(dmTok.token),
-      payload: { content: 'hello kohl' },
+      payload: { content: 'hello kohl', properties: enc() },
     });
     expect(post.statusCode).toBe(201);
     const read = await app.inject({
@@ -425,7 +426,7 @@ describe('2. Scopes, deny by default', () => {
       method: 'POST',
       url: `/dms/${dmId}/messages`,
       headers: { cookie: kohl.cookie },
-      payload: { content: 'private' },
+      payload: { content: 'private', properties: enc() },
     });
     // carol is a person, not a participant.
     const read = await app.inject({
@@ -1032,14 +1033,14 @@ describe('Momus fixes', () => {
       method: 'POST',
       url: `/dms/${dmId}/messages`,
       headers: { cookie: kohl.cookie },
-      payload: { content: 'parent' },
+      payload: { content: 'parent', properties: enc() },
     });
     const mid = JSON.parse(msg.body).message.id;
     await app.inject({
       method: 'POST',
       url: `/channels/${dmId}/messages/${mid}/replies`,
       headers: { cookie: bob.cookie },
-      payload: { content: 'secret reply' },
+      payload: { content: 'secret reply', properties: enc() },
     });
     const url = `/channels/${dmId}/messages/${mid}/replies`;
     const asCarol = await app.inject({ method: 'GET', url, headers: { cookie: carol.cookie } });

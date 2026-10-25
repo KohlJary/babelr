@@ -30,6 +30,7 @@ import { isActorAllowed } from './policy.ts';
 import { findPluginInboxHandler, allPluginInboxHandlers } from '../plugins/plugin-loader.ts';
 import { actorLikeType, isActorLike } from '../actor-kind.ts';
 import { checkDMPost, handleRemoteLeave, inboundDMTarget, isDMRow } from '../dm-consent.ts';
+import { isValidIv } from '../e2e-policy.ts';
 
 interface APActivity {
   id?: string;
@@ -599,6 +600,11 @@ type CreateCtx = {
   obj: Record<string, unknown>;
 };
 
+/** A Note carrying Babelr's E2E marker and a well-formed IV. */
+function isEncryptedNote(obj: Record<string, unknown>): boolean {
+  return obj.babelrEncrypted === true && isValidIv(obj.babelrIv);
+}
+
 async function handleCreateNote(ctx: CreateCtx) {
   const { fastify, remoteActor, obj } = ctx;
   const toList = (obj.to as string[]) ?? [];
@@ -616,6 +622,15 @@ async function handleCreateNote(ctx: CreateCtx) {
         .where(and(eq(actors.uri, uri), eq(actors.local, true), actorLikeType(actors.type)))
         .limit(1);
       if (target) {
+        // DMs are end-to-end encrypted: a plaintext DM is refused before
+        // it can open a conversation or a request.
+        if (!isEncryptedNote(obj)) {
+          fastify.log.info(
+            { from: remoteActor.uri, to: target.uri },
+            'Inbound plaintext DM refused',
+          );
+          return;
+        }
         // DM consent: the recipient's policy, blocks, pending requests
         // and departures apply to remote senders exactly as to local
         // ones. A refused DM is dropped whole: not stored anywhere.
@@ -1551,11 +1566,34 @@ async function handleUpdate(
     })());
 
   if (isAuthor || isOwnerGroup) {
+    // An edit to a DM message must stay encrypted, under a fresh IV.
+    const existingProps = (existing.properties as Record<string, unknown> | null) ?? {};
+    let dmEditProps: Record<string, unknown> | undefined;
+    if (existing.context) {
+      const [ctxRow] = await fastify.db
+        .select()
+        .from(objects)
+        .where(eq(objects.id, existing.context))
+        .limit(1);
+      if (isDMRow(ctxRow)) {
+        const objData = obj as Record<string, unknown>;
+        if (!isEncryptedNote(objData) || objData.babelrIv === existingProps.iv) {
+          fastify.log.info(
+            { from: remoteActor.uri, objectUri: obj.id },
+            'Inbound DM Update refused: not encrypted under a fresh IV',
+          );
+          return;
+        }
+        dmEditProps = { ...existingProps, encrypted: true, iv: objData.babelrIv };
+      }
+    }
+
     await fastify.db
       .update(objects)
       .set({
         content: obj.content ?? existing.content,
         updated: new Date(),
+        ...(dmEditProps && { properties: dmEditProps }),
       })
       .where(eq(objects.id, existing.id));
 
@@ -1568,6 +1606,7 @@ async function handleUpdate(
           channelId: existing.context,
           content: (obj.content as string) ?? existing.content ?? '',
           updatedAt: new Date().toISOString(),
+          ...(dmEditProps && { encrypted: true, iv: dmEditProps.iv as string }),
         },
       });
     }
