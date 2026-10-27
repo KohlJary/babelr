@@ -14,6 +14,7 @@ import './types.ts';
 import { createDb } from './db/index.ts';
 import { loadConfig } from './config.ts';
 import authPlugin from './plugins/auth.ts';
+import { rateLimitOptions } from './rate-limit.ts';
 import wsPlugin from './plugins/ws.ts';
 import seedPlugin from './plugins/seed.ts';
 import i18nSeedPlugin from './plugins/i18n-seed.ts';
@@ -115,11 +116,8 @@ export async function buildApp() {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   });
 
-  // Rate limiting
-  await app.register(rateLimit, {
-    max: 100,
-    timeWindow: '1 minute',
-  });
+  // Rate limiting: per actor, after auth (see rate-limit.ts)
+  await app.register(rateLimit, rateLimitOptions);
 
   // File handling
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
