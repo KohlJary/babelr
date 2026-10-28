@@ -34,6 +34,18 @@ class ApiError extends Error {
   }
 }
 
+// A 429 means the server refused before doing anything, so the request
+// is safe to repeat. Without this, one refused load left a view on its
+// loading state for good.
+const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_RETRY_WAIT_MS = 10_000;
+
+function retryDelayMs(res: Response, attempt: number): number {
+  const seconds = Number(res.headers.get('retry-after'));
+  const ms = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000 * 2 ** attempt;
+  return Math.min(ms, MAX_RETRY_WAIT_MS);
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...((options?.headers as Record<string, string>) ?? {}),
@@ -41,11 +53,19 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (options?.body) {
     headers['Content-Type'] = 'application/json';
   }
-  const res = await fetch(`${API_BASE}${path}`, {
+  let res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     ...options,
     headers,
   });
+  for (let attempt = 0; res.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs(res, attempt)));
+    res = await fetch(`${API_BASE}${path}`, {
+      credentials: 'include',
+      ...options,
+      headers,
+    });
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
