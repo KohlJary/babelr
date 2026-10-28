@@ -23,6 +23,12 @@ export async function fetchInbox(routeBase: string): Promise<ReviewItem[]> {
   return (await res.json()) as ReviewItem[];
 }
 
+async function fetchHistory(routeBase: string): Promise<ReviewItem[]> {
+  const res = await fetch(`${routeBase}/history`, { credentials: 'include', cache: 'no-store' });
+  if (!res.ok) return [];
+  return (await res.json()) as ReviewItem[];
+}
+
 async function send<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
@@ -59,9 +65,19 @@ function rank(it: ReviewItem): number {
 const agentName = (it: ReviewItem) => it.agent.displayName ?? it.agent.preferredUsername;
 
 type Mode = 'view' | 'veto' | 'edit';
+type Tab = 'open' | 'decided';
+
+/** How a closed item ended, for the Decided tab. */
+function outcome(it: ReviewItem): string {
+  if (it.decision === 'approve') return 'Approved';
+  if (it.decision === 'veto') return it.reason ? `Vetoed: ${it.reason}` : 'Vetoed';
+  return 'Decided elsewhere (the DM, or the command line)';
+}
 
 export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose: () => void }) {
   const [items, setItems] = useState<ReviewItem[] | null>(null);
+  const [history, setHistory] = useState<ReviewItem[]>([]);
+  const [tab, setTab] = useState<Tab>('open');
   const [error, setError] = useState<string | null>(null);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>('view');
@@ -72,7 +88,9 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
 
   const load = useCallback(async () => {
     try {
-      setItems(await fetchInbox(routeBase));
+      const [open, closed] = await Promise.all([fetchInbox(routeBase), fetchHistory(routeBase)]);
+      setItems(open);
+      setHistory(closed);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -87,20 +105,28 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
   }, [load]);
 
   const ordered = useMemo(() => (items ?? []).slice().sort((a, b) => rank(a) - rank(b)), [items]);
+  const shown = tab === 'open' ? ordered : history;
   const index = Math.max(
     0,
-    ordered.findIndex((it) => it.id === currentId),
+    shown.findIndex((it) => it.id === currentId),
   );
-  const current = ordered[index] ?? null;
+  const current = shown[index] ?? null;
+  const readOnly = tab === 'decided';
   const undecided = ordered.filter((it) => it.decision === null).length;
   const decided = ordered.length - undecided;
 
   // Land on the first undecided item, and stay put across refetches.
   useEffect(() => {
-    if (!currentId || !ordered.some((it) => it.id === currentId)) {
-      setCurrentId(ordered[0]?.id ?? null);
+    if (!currentId || !shown.some((it) => it.id === currentId)) {
+      setCurrentId(shown[0]?.id ?? null);
     }
-  }, [ordered, currentId]);
+  }, [shown, currentId]);
+
+  const switchTab = useCallback((t: Tab) => {
+    setTab(t);
+    setCurrentId(null);
+    setMode('view');
+  }, []);
 
   const jump = useCallback((id: string) => {
     setCurrentId(id);
@@ -109,10 +135,10 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
 
   const go = useCallback(
     (delta: number) => {
-      if (ordered.length === 0) return;
-      jump(ordered[(index + delta + ordered.length) % ordered.length].id);
+      if (shown.length === 0) return;
+      jump(shown[(index + delta + shown.length) % shown.length].id);
     },
-    [ordered, index, jump],
+    [shown, index, jump],
   );
 
   const submit = useCallback(
@@ -173,6 +199,7 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
+      if (readOnly && !['j', 'k', 'arrowleft', 'arrowright'].includes(k)) return;
       if (k === 'a') void submit('approve');
       else if (k === 'h') void submit('hold');
       else if (k === 'v') startVeto();
@@ -185,7 +212,7 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [mode, save, submit, startVeto, startEdit, go]);
+  }, [mode, save, submit, startVeto, startEdit, go, readOnly]);
 
   return (
     <div className="review-view">
@@ -214,129 +241,199 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
       )}
       {error && <div className="review-error">{error}</div>}
 
-      {items !== null && ordered.length === 0 && (
-        <p className="review-empty">Nothing waiting on you. Agents' drafts show up here.</p>
-      )}
-
-      {current && (
-        <div className="review-layout">
-          <ItemList items={ordered} currentId={current.id} onJump={jump} />
-
-          <div className="review-main">
-            <article className="review-item" aria-labelledby="review-title">
-              <div className="review-item-top">
-                <span className="review-position">
-                  {index + 1} / {ordered.length}
-                </span>
-                <span className="review-from">
-                  from {agentName(current)}
-                  {current.revision > 1 ? ` · revision ${current.revision}` : ''}
-                </span>
-              </div>
-              <h2 id="review-title" className="review-title">
-                <span className="review-ref">{current.ref}</span> {current.title}
-              </h2>
-              {current.meta && <div className="review-meta">{current.meta}</div>}
-              {current.decision && (
-                <div className={`review-decided review-decided-${current.decision}`}>
-                  {LABEL[current.decision]}
-                  {current.decision === 'veto' && current.reason ? `: ${current.reason}` : ''}
-                  {current.decision !== 'hold' &&
-                    ` · ${agentName(current)} picks it up shortly; you can still change it`}
-                </div>
-              )}
-              {current.why && (
-                <section className="review-why">
-                  <h3>Why</h3>
-                  <p>{current.why}</p>
-                </section>
-              )}
-              <section className="review-draft">
-                <h3>{current.decision === 'edit' ? 'Draft (your edit)' : 'Draft'}</h3>
-                <div className="review-body">{current.editedBody ?? current.body}</div>
-              </section>
-
-              {mode !== 'view' && (
-                <section className="review-compose">
-                  <label htmlFor="review-text">
-                    {mode === 'veto'
-                      ? 'Why veto it? The agent learns from this.'
-                      : 'Your version of the draft'}
-                  </label>
-                  <textarea
-                    id="review-text"
-                    ref={textRef}
-                    value={draft}
-                    rows={mode === 'edit' ? 16 : 4}
-                    onChange={(e) => setDraft(e.target.value)}
-                  />
-                  <div className="review-compose-actions">
-                    <button
-                      type="button"
-                      className="review-secondary"
-                      onClick={() => setMode('view')}
-                    >
-                      Cancel <kbd>Esc</kbd>
-                    </button>
-                    <button
-                      type="button"
-                      className={mode === 'veto' ? 'review-veto' : 'review-primary'}
-                      disabled={busy || !draft.trim()}
-                      onClick={save}
-                    >
-                      {mode === 'veto' ? 'Veto' : 'Save edit'} <kbd>Ctrl+Enter</kbd>
-                    </button>
-                  </div>
-                </section>
-              )}
-            </article>
-
-            {mode === 'view' && (
-              <nav className="review-actions" aria-label="Decide">
-                <button
-                  type="button"
-                  className="review-nav"
-                  onClick={() => go(-1)}
-                  aria-label="Previous"
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  className="review-primary"
-                  disabled={busy}
-                  onClick={() => void submit('approve')}
-                >
-                  Approve <kbd>A</kbd>
-                </button>
-                <button type="button" disabled={busy} onClick={() => void submit('hold')}>
-                  Hold <kbd>H</kbd>
-                </button>
-                <button type="button" className="review-veto" disabled={busy} onClick={startVeto}>
-                  Veto <kbd>V</kbd>
-                </button>
-                <button type="button" disabled={busy} onClick={startEdit}>
-                  Edit <kbd>E</kbd>
-                </button>
-                <button
-                  type="button"
-                  className="review-nav"
-                  onClick={() => go(1)}
-                  aria-label="Next"
-                >
-                  →
-                </button>
-              </nav>
-            )}
+      {items !== null && (
+        <div className={`review-layout${readOnly ? ' review-layout-history' : ''}`}>
+          <div className="review-side">
+            <div className="review-tabs" role="tablist" aria-label="Which items">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'open'}
+                className={tab === 'open' ? 'review-tab-current' : ''}
+                onClick={() => switchTab('open')}
+              >
+                To decide ({ordered.length})
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'decided'}
+                className={tab === 'decided' ? 'review-tab-current' : ''}
+                onClick={() => switchTab('decided')}
+              >
+                Decided ({history.length})
+              </button>
+            </div>
+            <ItemList
+              items={shown}
+              currentId={current?.id ?? null}
+              onJump={jump}
+              history={readOnly}
+            />
           </div>
 
-          <ItemChat
-            key={current.id}
-            routeBase={routeBase}
-            item={current}
-            inputRef={chatRef}
-            onAgentReplied={load}
-          />
+          {!current && (
+            <p className="review-empty">
+              {readOnly
+                ? 'Nothing decided yet. Approved and vetoed items land here.'
+                : "Nothing waiting on you. Agents' drafts show up here."}
+            </p>
+          )}
+
+          {current && readOnly && (
+            <div className="review-main">
+              <article className="review-item" aria-labelledby="review-title">
+                <div className="review-item-top">
+                  <span className="review-position">
+                    {index + 1} / {shown.length}
+                  </span>
+                  <span className="review-from">
+                    from {agentName(current)}
+                    {current.closedAt
+                      ? ` · closed ${new Date(current.closedAt).toLocaleString()}`
+                      : ''}
+                  </span>
+                </div>
+                <h2 id="review-title" className="review-title">
+                  <span className="review-ref">{current.ref}</span> {current.title}
+                </h2>
+                {current.meta && <div className="review-meta">{current.meta}</div>}
+                <div className={`review-decided review-decided-${current.decision ?? 'hold'}`}>
+                  {outcome(current)}
+                </div>
+                {current.why && (
+                  <section className="review-why">
+                    <h3>Why</h3>
+                    <p>{current.why}</p>
+                  </section>
+                )}
+                <section className="review-draft">
+                  <h3>Draft as decided</h3>
+                  <div className="review-body">{current.editedBody ?? current.body}</div>
+                </section>
+              </article>
+            </div>
+          )}
+
+          {current && !readOnly && (
+            <div className="review-main">
+              <article className="review-item" aria-labelledby="review-title">
+                <div className="review-item-top">
+                  <span className="review-position">
+                    {index + 1} / {ordered.length}
+                  </span>
+                  <span className="review-from">
+                    from {agentName(current)}
+                    {current.revision > 1 ? ` · revision ${current.revision}` : ''}
+                  </span>
+                </div>
+                <h2 id="review-title" className="review-title">
+                  <span className="review-ref">{current.ref}</span> {current.title}
+                </h2>
+                {current.meta && <div className="review-meta">{current.meta}</div>}
+                {current.decision && (
+                  <div className={`review-decided review-decided-${current.decision}`}>
+                    {LABEL[current.decision]}
+                    {current.decision === 'veto' && current.reason ? `: ${current.reason}` : ''}
+                    {current.decision !== 'hold' &&
+                      ` · ${agentName(current)} picks it up shortly; you can still change it`}
+                  </div>
+                )}
+                {current.why && (
+                  <section className="review-why">
+                    <h3>Why</h3>
+                    <p>{current.why}</p>
+                  </section>
+                )}
+                <section className="review-draft">
+                  <h3>{current.decision === 'edit' ? 'Draft (your edit)' : 'Draft'}</h3>
+                  <div className="review-body">{current.editedBody ?? current.body}</div>
+                </section>
+
+                {mode !== 'view' && (
+                  <section className="review-compose">
+                    <label htmlFor="review-text">
+                      {mode === 'veto'
+                        ? 'Why veto it? The agent learns from this.'
+                        : 'Your version of the draft'}
+                    </label>
+                    <textarea
+                      id="review-text"
+                      ref={textRef}
+                      value={draft}
+                      rows={mode === 'edit' ? 16 : 4}
+                      onChange={(e) => setDraft(e.target.value)}
+                    />
+                    <div className="review-compose-actions">
+                      <button
+                        type="button"
+                        className="review-secondary"
+                        onClick={() => setMode('view')}
+                      >
+                        Cancel <kbd>Esc</kbd>
+                      </button>
+                      <button
+                        type="button"
+                        className={mode === 'veto' ? 'review-veto' : 'review-primary'}
+                        disabled={busy || !draft.trim()}
+                        onClick={save}
+                      >
+                        {mode === 'veto' ? 'Veto' : 'Save edit'} <kbd>Ctrl+Enter</kbd>
+                      </button>
+                    </div>
+                  </section>
+                )}
+              </article>
+
+              {mode === 'view' && (
+                <nav className="review-actions" aria-label="Decide">
+                  <button
+                    type="button"
+                    className="review-nav"
+                    onClick={() => go(-1)}
+                    aria-label="Previous"
+                  >
+                    ←
+                  </button>
+                  <button
+                    type="button"
+                    className="review-primary"
+                    disabled={busy}
+                    onClick={() => void submit('approve')}
+                  >
+                    Approve <kbd>A</kbd>
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => void submit('hold')}>
+                    Hold <kbd>H</kbd>
+                  </button>
+                  <button type="button" className="review-veto" disabled={busy} onClick={startVeto}>
+                    Veto <kbd>V</kbd>
+                  </button>
+                  <button type="button" disabled={busy} onClick={startEdit}>
+                    Edit <kbd>E</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    className="review-nav"
+                    onClick={() => go(1)}
+                    aria-label="Next"
+                  >
+                    →
+                  </button>
+                </nav>
+              )}
+            </div>
+          )}
+
+          {current && !readOnly && (
+            <ItemChat
+              key={current.id}
+              routeBase={routeBase}
+              item={current}
+              inputRef={chatRef}
+              onAgentReplied={load}
+            />
+          )}
         </div>
       )}
     </div>
@@ -349,10 +446,12 @@ function ItemList({
   items,
   currentId,
   onJump,
+  history,
 }: {
   items: ReviewItem[];
-  currentId: string;
+  currentId: string | null;
   onJump: (id: string) => void;
+  history: boolean;
 }) {
   return (
     <nav className="review-list" aria-label="Items">
@@ -371,12 +470,14 @@ function ItemList({
                   <span className={`review-badge review-badge-${it.decision}`}>
                     {LABEL[it.decision]}
                   </span>
+                ) : history ? (
+                  <span className="review-badge">Elsewhere</span>
                 ) : (
                   <span className="review-badge review-badge-new">To decide</span>
                 )}
               </span>
               <span className="review-list-title">{it.title}</span>
-              {it.messageCount > 0 && (
+              {!history && it.messageCount > 0 && (
                 <span className="review-list-chat">
                   💬 {it.messageCount}
                   {it.awaitingReply ? ` · ${agentName(it)} is replying…` : ''}

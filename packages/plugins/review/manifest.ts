@@ -30,6 +30,7 @@ import { sql } from 'drizzle-orm';
  *   DELETE /items/:ref   close: acted on, or decided elsewhere
  * Reviewer routes (sessions):
  *   GET    /inbox
+ *   GET    /history     closed items, newest first: what was decided
  *   POST   /items/:id/decision {decision, reason?, body?}
  * Both, about one item (agents address it by ref, the reviewer by id):
  *   GET    /items/:key/messages
@@ -63,6 +64,9 @@ export interface ReviewItem {
   messageCount: number;
   /** The last chat message is the reviewer's: the agent owes a reply. */
   awaitingReply: boolean;
+  /** When the agent acted on it and closed it; null while it's open. A
+   *  closed item with no decision was decided somewhere else. */
+  closedAt: string | null;
 }
 
 export interface ReviewMessage {
@@ -139,6 +143,7 @@ interface ItemRow {
   updated_at: string | Date;
   message_count: number | string;
   last_author: string | null;
+  closed_at: string | Date | null;
 }
 
 const iso = (v: string | Date) => new Date(v).toISOString();
@@ -161,12 +166,13 @@ function toItem(r: ItemRow): ReviewItem {
     updatedAt: iso(r.updated_at),
     messageCount: Number(r.message_count),
     awaitingReply: r.last_author !== null && r.last_author !== r.agent_id,
+    closedAt: r.closed_at ? iso(r.closed_at) : null,
   };
 }
 
 const SELECT = sql`SELECT i.id, i.ref, i.agent_id, a.preferred_username AS username,
   a.display_name, i.title, i.meta, i.why, i.body, i.revision, i.decision, i.reason,
-  i.edited_body, i.decided_at, i.created_at, i.updated_at,
+  i.edited_body, i.decided_at, i.created_at, i.updated_at, i.closed_at,
   (SELECT count(*) FROM plugin_review_messages m WHERE m.item_id = i.id) AS message_count,
   (SELECT m.author_id FROM plugin_review_messages m WHERE m.item_id = i.id
     ORDER BY m.seq DESC LIMIT 1) AS last_author
@@ -419,6 +425,19 @@ export default definePlugin({
         const rows = (await fastify.db.execute(
           sql`${SELECT} WHERE i.reviewer_id = ${me.id} AND i.closed_at IS NULL
             ORDER BY i.created_at, i.ref`,
+        )) as unknown as ItemRow[];
+        return rows.map(toItem);
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
+
+    fastify.get('/history', async (request, reply) => {
+      try {
+        const me = reviewerOf(request.actor as Actor);
+        const rows = (await fastify.db.execute(
+          sql`${SELECT} WHERE i.reviewer_id = ${me.id} AND i.closed_at IS NOT NULL
+            ORDER BY i.closed_at DESC LIMIT 200`,
         )) as unknown as ItemRow[];
         return rows.map(toItem);
       } catch (err) {

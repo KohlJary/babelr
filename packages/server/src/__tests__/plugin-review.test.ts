@@ -209,3 +209,28 @@ describe('review chat', () => {
     expect(wsSent).toEqual([]);
   });
 });
+
+describe('review history', () => {
+  it('lists closed items newest first, with the decision; only to the reviewer', async () => {
+    const { kohl, mallory, robo } = await cast();
+    await call('PUT', '/items/0001', robo, ITEM);
+    await call('PUT', '/items/0002', robo, ITEM);
+    await call('PUT', '/items/0003', robo, ITEM);
+    const inbox = (await call('GET', '/inbox', kohl)).json();
+    const id = (ref: string) => inbox.find((i: { ref: string }) => i.ref === ref).id;
+    await call('POST', `/items/${id('0001')}/decision`, kohl, { decision: 'veto', reason: 'no' });
+    await call('DELETE', '/items/0001', robo);
+    await call('DELETE', '/items/0002', robo); // decided elsewhere: no decision here
+
+    const history = (await call('GET', '/history', kohl)).json();
+    expect(history.map((i: { ref: string }) => i.ref)).toEqual(['0002', '0001']);
+    expect(history[1]).toMatchObject({ decision: 'veto', reason: 'no' });
+    expect(history[1].closedAt).not.toBeNull();
+    expect(history[0].decision).toBeNull();
+    expect((await call('GET', '/inbox', kohl)).json().map((i: { ref: string }) => i.ref)).toEqual([
+      '0003',
+    ]);
+    expect((await call('GET', '/history', mallory)).json()).toEqual([]);
+    expect((await call('GET', '/history', robo)).status).toBe(403);
+  });
+});
