@@ -483,6 +483,12 @@ export function PollPreview(props: Record<string, unknown>) {
       </ul>
       <div className="poll-preview-footer">
         {poll.totalVotes} vote{poll.totalVotes === 1 ? '' : 's'}
+        {poll.publicVotes && (
+          <span className="poll-preview-public-hint">
+            {' '}
+            · votes are public: everyone here sees yours
+          </span>
+        )}
         {myVote && !closed && poll.allowRevote && (
           <span className="poll-preview-revote-hint">
             {' '}

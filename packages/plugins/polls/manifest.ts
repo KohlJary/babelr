@@ -15,6 +15,10 @@ import { sql } from 'drizzle-orm';
  *   - Real-time vote-count sync via plugin-scoped WS broadcast
  *   - Translation: poll questions and option labels flow through the
  *     standard translation pipeline at render time (plaintext storage)
+ *   - Public votes, chosen at creation: everyone who can see the poll
+ *     sees who voted for what (GET by slug only; never in the live
+ *     broadcast, which can reach the whole Tower). The UI says so before
+ *     anyone votes. Off by default; a poll can't be switched later.
  *
  * Access: every route needs a login (the loader enforces it). A poll
  * with a serverId is visible to, and votable by, members of that
@@ -39,6 +43,7 @@ interface PollRow {
   created_at: string;
   closed_at: string | null;
   allow_revote: boolean;
+  public_votes: boolean;
 }
 
 interface PollOptionRow {
@@ -61,6 +66,9 @@ interface PollPayload {
     voteCount: number;
   }>;
   totalVotes: number;
+  publicVotes: boolean;
+  /** Who voted for what, on a public-votes poll. GET by slug only. */
+  votes?: Array<{ actorUri: string; optionId: string; votedAt: string }>;
   /** The requesting actor's current vote, if any. Populated for local
    *  sessions; omitted for federation resolver responses (the remote
    *  Tower computes this on their side from their own actor). */
@@ -124,6 +132,13 @@ export default definePlugin({
         CREATE INDEX IF NOT EXISTS plugin_polls_votes_option_idx ON plugin_polls_votes (option_id);
       `,
     },
+    {
+      id: 2,
+      name: 'public-votes',
+      up: `
+        ALTER TABLE plugin_polls_polls ADD COLUMN IF NOT EXISTS public_votes BOOLEAN NOT NULL DEFAULT FALSE;
+      `,
+    },
   ],
 
   serverRoutes: async (fastify) => {
@@ -153,6 +168,7 @@ export default definePlugin({
         createdBy: poll.created_by,
         closedAt: poll.closed_at,
         allowRevote: poll.allow_revote,
+        publicVotes: poll.public_votes,
         options: options.map((o) => ({
           id: o.id,
           position: o.position,
@@ -183,10 +199,13 @@ export default definePlugin({
     }
 
     fastify.post<{
-      Body: { question: string; options: string[]; serverId?: string };
+      Body: { question: string; options: string[]; serverId?: string; publicVotes?: boolean };
     }>('/polls', async (request, reply) => {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
-      const { question, options, serverId } = request.body ?? {};
+      const { question, options, serverId, publicVotes } = request.body ?? {};
+      if (publicVotes !== undefined && typeof publicVotes !== 'boolean') {
+        return reply.status(400).send({ error: 'publicVotes must be a boolean' });
+      }
       if (!question || typeof question !== 'string' || question.trim().length === 0) {
         return reply.status(400).send({ error: 'question is required' });
       }
@@ -202,8 +221,8 @@ export default definePlugin({
       const actorId = request.actor.id;
       const trimmedQuestion = question.trim();
       const res = (await fastify.db.execute(
-        sql`INSERT INTO plugin_polls_polls (slug, question, created_by, server_id)
-            VALUES (${slug}, ${trimmedQuestion}, ${actorId}, ${serverId ?? null})
+        sql`INSERT INTO plugin_polls_polls (slug, question, created_by, server_id, public_votes)
+            VALUES (${slug}, ${trimmedQuestion}, ${actorId}, ${serverId ?? null}, ${publicVotes === true})
             RETURNING id`,
       )) as unknown as { id: string }[];
       const pollId = res[0].id;
@@ -264,6 +283,17 @@ export default definePlugin({
             WHERE poll_id = ${row.id} AND actor_uri = ${request.actor.uri}`,
       )) as unknown as { option_id: string }[];
       payload.myVoteOptionId = mine[0]?.option_id ?? null;
+      if (row.public_votes) {
+        const votes = (await fastify.db.execute(
+          sql`SELECT actor_uri, option_id, voted_at FROM plugin_polls_votes
+              WHERE poll_id = ${row.id} ORDER BY voted_at`,
+        )) as unknown as { actor_uri: string; option_id: string; voted_at: string }[];
+        payload.votes = votes.map((v) => ({
+          actorUri: v.actor_uri,
+          optionId: v.option_id,
+          votedAt: String(v.voted_at),
+        }));
+      }
       return payload;
     });
 
@@ -351,6 +381,7 @@ export default definePlugin({
           createdBy: poll.created_by,
           closedAt: poll.closed_at,
           allowRevote: poll.allow_revote,
+          publicVotes: poll.public_votes,
           options: options.map((o) => ({
             id: o.id,
             position: o.position,

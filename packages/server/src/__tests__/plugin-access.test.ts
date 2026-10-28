@@ -525,3 +525,49 @@ describe('cross-Tower plugin embeds', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('public-votes polls', () => {
+  it('show who voted for what on GET, to anyone who can see the poll', async () => {
+    const created = await call('POST', '/plugins/polls/polls', c.alice, {
+      question: 'Queue 0011',
+      options: ['Approve', 'Hold', 'Veto'],
+      serverId,
+      publicVotes: true,
+    });
+    expect(created.status).toBe(200);
+    expect(created.json().publicVotes).toBe(true);
+    const slug = created.json().slug;
+    const approve = created.json().options[0].id;
+
+    wsSent.length = 0;
+    expect(
+      (await call('POST', `/plugins/polls/polls/${slug}/vote`, c.carol, { optionId: approve }))
+        .status,
+    ).toBe(200);
+    // The live broadcast carries counts, never voters.
+    expect(JSON.stringify(wsSent)).not.toContain('actorUri');
+
+    const seen = await call('GET', `/plugins/polls/polls/${slug}`, c.dan);
+    expect(seen.status).toBe(200);
+    const votes = seen.json().votes;
+    expect(votes).toHaveLength(1);
+    expect(votes[0].optionId).toBe(approve);
+    expect(votes[0].actorUri).toContain('carol');
+  });
+
+  it('stay private by default', async () => {
+    await call('POST', `/plugins/polls/polls/${pollSlug}/vote`, c.carol, { optionId });
+    const seen = await call('GET', `/plugins/polls/polls/${pollSlug}`, c.alice);
+    expect(seen.json().publicVotes).toBe(false);
+    expect(seen.json().votes).toBeUndefined();
+  });
+
+  it('reject a publicVotes that is not a boolean', async () => {
+    const res = await call('POST', '/plugins/polls/polls', c.alice, {
+      question: 'Q',
+      options: ['A', 'B'],
+      publicVotes: 'yes',
+    });
+    expect(res.status).toBe(400);
+  });
+});
