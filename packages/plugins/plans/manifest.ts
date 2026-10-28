@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { definePlugin, canAccess } from '@babelr/plugin-sdk';
 import { sql } from 'drizzle-orm';
+import {
+  decide,
+  draftOf,
+  edit as editDraft,
+  lineDiff,
+  setField as setFieldOf,
+  split,
+  SEND_STATUSES,
+} from './outreach.ts';
+import type { SendStatus } from './outreach.ts';
 
 /**
  * Plans: the house's strategic planning, where everybody contributes and
@@ -74,6 +84,22 @@ export interface PlanItem {
   createdBy: Who;
   createdAt: string;
   updatedAt: string;
+  /** Outreach items only: the queue file and where its send stands. */
+  outreach?: Outreach;
+}
+
+export interface Outreach {
+  /** The queue id (e.g. "0017"), when it came from or goes to a queue file. */
+  ref: string | null;
+  to: string;
+  room: string;
+  sendStatus: SendStatus;
+  /** Revision of the draft; 1 is the original. */
+  rev: number;
+  /** The revision Kohl approved to send, while that approval holds. */
+  approvedRev: number | null;
+  /** The queue file, byte for byte as queue.py would write it. */
+  raw: string;
 }
 
 export interface PlanPhase {
@@ -261,6 +287,10 @@ interface ItemRow {
   created_by_name: string;
   created_at: string | Date;
   updated_at: string | Date;
+  o_ref: string | null;
+  o_raw: string | null;
+  o_rev: number | null;
+  o_approved_rev: number | null;
 }
 interface ApprovalRow {
   phase_id: string;
@@ -311,6 +341,22 @@ function toItem(r: ItemRow): PlanItem {
     createdBy: { id: r.created_by, name: r.created_by_name },
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
+    ...(r.o_raw !== null && r.o_raw !== undefined ? { outreach: toOutreach(r) } : {}),
+  };
+}
+
+function toOutreach(r: ItemRow): Outreach {
+  const { meta } = split(r.o_raw as string);
+  return {
+    ref: r.o_ref,
+    to: meta.to ?? '',
+    room: meta.room ?? '',
+    sendStatus: (SEND_STATUSES as readonly string[]).includes(meta.status)
+      ? (meta.status as SendStatus)
+      : 'pending',
+    rev: Number(r.o_rev),
+    approvedRev: r.o_approved_rev === null ? null : Number(r.o_approved_rev),
+    raw: r.o_raw as string,
   };
 }
 
@@ -324,8 +370,10 @@ const PLAN_SELECT = sql`SELECT p.*, COALESCE(a.preferred_username, '') AS create
   FROM plugin_plans_plans p LEFT JOIN actors a ON a.id::text = p.created_by`;
 const PHASE_SELECT = sql`SELECT f.*, COALESCE(a.preferred_username, '') AS created_by_name
   FROM plugin_plans_phases f LEFT JOIN actors a ON a.id::text = f.created_by`;
-const ITEM_SELECT = sql`SELECT i.*, COALESCE(a.preferred_username, '') AS created_by_name
-  FROM plugin_plans_items i LEFT JOIN actors a ON a.id::text = i.created_by`;
+const ITEM_SELECT = sql`SELECT i.*, COALESCE(a.preferred_username, '') AS created_by_name,
+    o.ref AS o_ref, o.raw AS o_raw, o.rev AS o_rev, o.approved_rev AS o_approved_rev
+  FROM plugin_plans_items i LEFT JOIN actors a ON a.id::text = i.created_by
+  LEFT JOIN plugin_plans_outreach o ON o.item_id = i.id`;
 
 export default definePlugin({
   id: 'plans',
@@ -406,6 +454,37 @@ export default definePlugin({
         );
 
         CREATE INDEX IF NOT EXISTS plugin_plans_events_plan_idx ON plugin_plans_events (plan_id, seq);
+      `,
+    },
+    {
+      id: 2,
+      name: 'outreach',
+      up: `
+        CREATE TABLE IF NOT EXISTS plugin_plans_outreach (
+          item_id UUID PRIMARY KEY REFERENCES plugin_plans_items(id) ON DELETE CASCADE,
+          ref TEXT,
+          raw TEXT NOT NULL,
+          rev INTEGER NOT NULL DEFAULT 1,
+          approved_rev INTEGER
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS plugin_plans_outreach_ref_idx
+          ON plugin_plans_outreach (ref) WHERE ref IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS plugin_plans_revisions (
+          item_id UUID NOT NULL REFERENCES plugin_plans_items(id) ON DELETE CASCADE,
+          rev INTEGER NOT NULL,
+          draft TEXT NOT NULL,
+          actor_id TEXT NOT NULL,
+          actor_name TEXT NOT NULL,
+          surface TEXT NOT NULL,
+          seen_rev INTEGER,
+          cause_msg TEXT,
+          verified BOOLEAN NOT NULL DEFAULT TRUE,
+          claimed TEXT,
+          at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (item_id, rev)
+        );
       `,
     },
   ],
@@ -970,7 +1049,8 @@ export default definePlugin({
           const phaseId = await phaseIn(plan, b.phaseId);
           const kind = kindOf(b.kind);
           const title = text(b.title, 'title', true);
-          const body = text(b.body, 'body');
+          const outreach = kind === 'outreach' ? outreachIn(b.outreach) : null;
+          const body = outreach ? draftOf(outreach.raw) : text(b.body, 'body');
           const owner = ownerOf(b.owner);
           const pos = (await db.execute(
             sql`SELECT COALESCE(MAX(position), -1) + 1 AS n FROM plugin_plans_items WHERE plan_id = ${plan.id}`,
@@ -985,10 +1065,19 @@ export default definePlugin({
             actor,
             surface,
             'item-added',
-            { kind, title, body, owner },
+            { kind, title, body, owner, ...(outreach ? { ref: outreach.ref } : {}) },
             { phaseId, itemId: rows[0].id },
           );
-          await voidApproval(plan, phaseId, actor, surface);
+          if (outreach) {
+            // Outreach never waits on (or voids) a phase approval: its send
+            // approval is its own, per item, Kohl's.
+            await db.execute(
+              sql`INSERT INTO plugin_plans_outreach (item_id, ref, raw) VALUES (${rows[0].id}, ${outreach.ref}, ${outreach.raw})`,
+            );
+            await addRevision(rows[0].id, 1, body, actor, surface, null, causeOf(b));
+          } else {
+            await voidApproval(plan, phaseId, actor, surface);
+          }
           return reply.status(201).send(await detail(plan, actor));
         } catch (err) {
           return fail(reply, err);
@@ -1004,6 +1093,10 @@ export default definePlugin({
           const { plan, item } = await itemFor(actor, request.params.id);
           const b = request.body ?? {};
           const surface = surfaceOf(request.headers, actor);
+          if (item.kind === 'outreach' && item.o_raw !== null) {
+            await reviseOutreach(plan, item, actor, surface, b);
+            return await detail(plan, actor);
+          }
           const next = {
             kind: b.kind !== undefined ? kindOf(b.kind) : item.kind,
             title: b.title !== undefined ? text(b.title, 'title', true) : item.title,
@@ -1058,6 +1151,289 @@ export default definePlugin({
         }
       },
     );
+
+    // ── outreach (RoboKohl's queue, Plans phase 3) ──────────────────────
+
+    /** Local date, as queue.py's today() writes it. */
+    const today = () => new Date().toLocaleDateString('en-CA');
+
+    /** The server's owner, as a person: never an agent or service token,
+     * whatever surface it claims (the header is a label; the actor is auth). */
+    async function isKohl(plan: Plan, actor: Actor): Promise<boolean> {
+      if (isAgent(actor)) return false;
+      const owner = await ownerName(plan.serverId);
+      return !!owner && owner.toLowerCase() === actor.preferredUsername.toLowerCase();
+    }
+
+    /** The name queue files record: "kohl" for the owner, else the username. */
+    const queueName = async (plan: Plan, actor: Actor) =>
+      (await isKohl(plan, actor)) ? 'kohl' : actor.preferredUsername.toLowerCase();
+
+    function outreachIn(v: unknown): { raw: string; ref: string | null } {
+      const o = (v ?? {}) as Record<string, unknown>;
+      const raw = text(o.raw, 'body', true);
+      const ref = o.ref === undefined || o.ref === null ? null : String(o.ref);
+      if (ref !== null && !/^\d{4}$/.test(ref))
+        throw new PlanError('outreach.ref must be four digits', 400);
+      const { head, meta } = split(raw);
+      if (!head)
+        throw new PlanError(
+          'outreach.raw must be a queue file (a --- header, then the draft)',
+          400,
+        );
+      if (!meta.to || !meta.room) {
+        throw new PlanError("an outreach item needs who it's to and its room: know the room", 400);
+      }
+      if (meta.status !== 'pending') throw new PlanError('a new outreach item starts pending', 400);
+      if (!draftOf(raw).trim()) throw new PlanError('an outreach item needs a draft', 400);
+      return { raw, ref };
+    }
+
+    const causeOf = (b: Record<string, unknown>) =>
+      typeof b.causeMsg === 'string' && /^[\w:-]{1,100}$/.test(b.causeMsg) ? b.causeMsg : null;
+
+    async function addRevision(
+      itemId: string,
+      rev: number,
+      draft: string,
+      actor: Actor,
+      surface: string,
+      seenRev: number | null,
+      causeMsg: string | null,
+      claimed: string | null = null,
+    ) {
+      await db.execute(
+        sql`INSERT INTO plugin_plans_revisions (item_id, rev, draft, actor_id, actor_name, surface, seen_rev, cause_msg, verified, claimed)
+            VALUES (${itemId}, ${rev}, ${draft}, ${actor.id}, ${actor.preferredUsername}, ${surface}, ${seenRev}, ${causeMsg}, ${claimed === null}, ${claimed})`,
+      );
+    }
+
+    async function revisionDraft(itemId: string, rev: number): Promise<string | null> {
+      const rows = (await db.execute(
+        sql`SELECT draft FROM plugin_plans_revisions WHERE item_id = ${itemId} AND rev = ${rev}`,
+      )) as unknown as { draft: string }[];
+      return rows[0]?.draft ?? null;
+    }
+
+    /** Store a new queue file for an outreach item; a text change voids the send approval. */
+    async function saveOutreach(
+      plan: Plan,
+      item: ItemRow,
+      actor: Actor,
+      surface: string,
+      raw: string,
+      newRev: boolean,
+    ) {
+      await db.execute(
+        sql`UPDATE plugin_plans_outreach SET raw = ${raw}, rev = rev + ${newRev ? 1 : 0},
+            approved_rev = CASE WHEN ${newRev} THEN NULL ELSE approved_rev END
+            WHERE item_id = ${item.id}`,
+      );
+      await db.execute(
+        sql`UPDATE plugin_plans_items SET body = ${draftOf(raw)}, updated_at = NOW() WHERE id = ${item.id}`,
+      );
+      if (newRev && item.o_approved_rev !== null) {
+        await log(
+          plan,
+          actor,
+          surface,
+          'send-approval-void',
+          {
+            why: 'the draft changed after Kohl approved it',
+            approvedRev: Number(item.o_approved_rev),
+          },
+          { phaseId: item.phase_id, itemId: item.id },
+        );
+      }
+    }
+
+    async function reviseOutreach(
+      plan: Plan,
+      item: ItemRow,
+      actor: Actor,
+      surface: string,
+      b: Record<string, unknown>,
+    ) {
+      if (b.kind !== undefined && b.kind !== 'outreach') {
+        throw new PlanError('an outreach item stays outreach (decline it instead)', 400);
+      }
+      if (
+        b.title !== undefined ||
+        b.owner !== undefined ||
+        b.phaseId !== undefined ||
+        b.position !== undefined
+      ) {
+        // Title, owner, phase and order are the plan's business, not the draft's.
+        const t = b.title !== undefined ? text(b.title, 'title', true) : item.title;
+        const phaseId = b.phaseId !== undefined ? await phaseIn(plan, b.phaseId) : item.phase_id;
+        const owner = b.owner !== undefined ? ownerOf(b.owner) : item.owner;
+        const position =
+          b.position !== undefined && Number.isInteger(b.position)
+            ? (b.position as number)
+            : Number(item.position);
+        await db.execute(
+          sql`UPDATE plugin_plans_items SET title = ${t}, phase_id = ${phaseId}, owner = ${owner},
+              position = ${position}, updated_at = NOW() WHERE id = ${item.id}`,
+        );
+        await log(
+          plan,
+          actor,
+          surface,
+          'item-edited',
+          {
+            changes: { title: { before: item.title, after: t } },
+          },
+          { phaseId, itemId: item.id },
+        );
+      }
+      if (b.body === undefined) return;
+      const draft = text(b.body, 'body', true);
+      const rev = Number(item.o_rev);
+      const seenRev = b.seenRev === undefined ? rev : Number(b.seenRev);
+      if (!Number.isInteger(seenRev) || seenRev < 1 || seenRev > rev) {
+        throw new PlanError('seenRev must be a revision of this draft', 400);
+      }
+      // Kohl's TUI runs locally on RoboKohl's token: its edits are claimed
+      // as Kohl's but unverified until the TUI has Kohl's credentials. Kohl
+      // (2026-10-28): lessons count them. No flag ever picks the actor.
+      const claimed = isAgent(actor) && b.claimed === 'kohl' ? 'kohl' : null;
+      const by = claimed ?? (await queueName(plan, actor));
+      let raw: string;
+      try {
+        raw = editDraft(item.o_raw as string, draft, by, today());
+      } catch (e) {
+        throw new PlanError((e as Error).message, 400);
+      }
+      if (claimed) raw = setFieldOf(raw, 'edited_unverified', 'true');
+      if (raw === item.o_raw) return;
+      const next = rev + 1;
+      await addRevision(item.id, next, draftOf(raw), actor, surface, seenRev, causeOf(b), claimed);
+      const kohl = await isKohl(plan, actor);
+      const seen = kohl ? await revisionDraft(item.id, seenRev) : null;
+      await saveOutreach(plan, item, actor, surface, raw, true);
+      await log(
+        plan,
+        actor,
+        surface,
+        'outreach-revised',
+        {
+          rev: next,
+          seenRev,
+          before: item.body,
+          after: draftOf(raw),
+          // Kohl's red pen, against the text Kohl saw: the lesson.
+          ...(seen !== null ? { kohlDiff: lineDiff(seen.trim(), draftOf(raw).trim()) } : {}),
+          ...(causeOf(b) ? { causeMsg: causeOf(b) } : {}),
+          ...(claimed ? { claimed, verified: false } : {}),
+        },
+        { phaseId: item.phase_id, itemId: item.id },
+      );
+    }
+
+    // Kohl's decisions on a draft: approve it to send (that revision only),
+    // veto it with a reason, or say it went out. Only the owner, as a person.
+    fastify.post<{ Params: { id: string }; Body: Record<string, unknown> }>(
+      '/items/:id/send',
+      async (request, reply) => {
+        try {
+          const actor = me(request);
+          const { plan, item } = await itemFor(actor, request.params.id);
+          const b = request.body ?? {};
+          const surface = surfaceOf(request.headers, actor);
+          if (item.kind !== 'outreach' || item.o_raw === null) {
+            throw new PlanError('only outreach items are sent', 400);
+          }
+          if (!(await isKohl(plan, actor))) {
+            throw new PlanError("only Kohl decides a send, from Kohl's own account", 403);
+          }
+          const action = b.action;
+          const rev = Number(item.o_rev);
+          const { meta } = split(item.o_raw);
+          let raw: string;
+          let detailOut: Record<string, unknown> = { rev, from: meta.status };
+          let status: ItemStatus = item.status;
+          if (action === 'approve') {
+            if (Number(b.rev) !== rev) {
+              throw new PlanError(
+                'the draft changed since you read it: read it again, then approve',
+                409,
+              );
+            }
+            if (meta.status === 'sent') throw new PlanError('it already went out', 409);
+            raw = decide(item.o_raw, 'approve', 'kohl', today());
+            await db.execute(
+              sql`UPDATE plugin_plans_outreach SET approved_rev = ${rev} WHERE item_id = ${item.id}`,
+            );
+            status = 'open';
+          } else if (action === 'veto') {
+            const reason = text(b.reason, 'text', true);
+            raw = decide(item.o_raw, 'veto', 'kohl', today(), reason);
+            await db.execute(
+              sql`UPDATE plugin_plans_outreach SET approved_rev = NULL WHERE item_id = ${item.id}`,
+            );
+            detailOut = { ...detailOut, reason };
+            status = 'declined';
+          } else if (action === 'sent') {
+            const outside = !(
+              meta.status === 'approved' &&
+              item.o_approved_rev !== null &&
+              Number(item.o_approved_rev) === rev
+            );
+            raw = decide(item.o_raw, 'sent', 'kohl', today());
+            if (outside) raw = setFieldOf(raw, 'sent_outside_queue', 'true');
+            detailOut = { ...detailOut, outsideQueue: outside };
+            status = 'done';
+          } else {
+            throw new PlanError('action must be approve, veto or sent', 400);
+          }
+          await saveOutreach(plan, item, actor, surface, raw, false);
+          await db.execute(
+            sql`UPDATE plugin_plans_items SET status = ${status} WHERE id = ${item.id}`,
+          );
+          await log(plan, actor, surface, `send-${action}`, detailOut, {
+            phaseId: item.phase_id,
+            itemId: item.id,
+          });
+          return await detail(plan, actor);
+        } catch (err) {
+          return fail(reply, err);
+        }
+      },
+    );
+
+    fastify.get<{ Params: { id: string } }>('/items/:id/revisions', async (request, reply) => {
+      try {
+        const actor = me(request);
+        const { item } = await itemFor(actor, request.params.id);
+        const rows = (await db.execute(
+          sql`SELECT rev, draft, actor_name, surface, seen_rev, cause_msg, verified, claimed, at
+              FROM plugin_plans_revisions WHERE item_id = ${item.id} ORDER BY rev`,
+        )) as unknown as {
+          rev: number;
+          draft: string;
+          actor_name: string;
+          surface: string;
+          seen_rev: number | null;
+          cause_msg: string | null;
+          verified: boolean;
+          claimed: string | null;
+          at: string | Date;
+        }[];
+        return rows.map((r) => ({
+          rev: Number(r.rev),
+          draft: r.draft,
+          by: r.actor_name,
+          surface: r.surface,
+          seenRev: r.seen_rev === null ? null : Number(r.seen_rev),
+          causeMsg: r.cause_msg,
+          verified: r.verified,
+          claimed: r.claimed,
+          at: iso(r.at),
+        }));
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
 
     fastify.post<{ Params: { id: string }; Body: { status?: unknown; resolution?: unknown } }>(
       '/items/:id/status',

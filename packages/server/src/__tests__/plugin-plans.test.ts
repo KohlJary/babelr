@@ -361,4 +361,198 @@ describe('plans', () => {
     const events = (await call('GET', `/plans/${slug}/events`, h.kohl)).json();
     expect(JSON.stringify(events)).not.toMatch(/holdout_convs|robokohl-eval|moves_raw/);
   });
+
+  describe("outreach (RoboKohl's queue)", () => {
+    const RAW = [
+      '---',
+      'status: pending',
+      'kind: email',
+      'to: A Researcher  # check the address',
+      'room: researchers',
+      'why: say hi',
+      'created: 2026-10-28',
+      'origin: drafted by robokohl',
+      '---',
+      '',
+      'Hello there.',
+      '',
+    ].join('\n');
+
+    async function outreachItem(h: Awaited<ReturnType<typeof house>>) {
+      const { slug } = await planWithPhase(h);
+      const r = await call('POST', `/plans/${slug}/items`, h.cass, {
+        kind: 'outreach',
+        title: '0042 A Researcher',
+        outreach: { raw: RAW, ref: '0042' },
+      });
+      expect(r.status).toBe(201);
+      const item = r.json().items.find((i: { kind: string }) => i.kind === 'outreach');
+      return { slug, item };
+    }
+
+    it("a draft goes through Kohl's edit, approval, and a change that voids it, byte for byte", async () => {
+      const h = await house();
+      const { slug, item } = await outreachItem(h);
+      expect(item.outreach).toMatchObject({
+        ref: '0042',
+        room: 'researchers',
+        sendStatus: 'pending',
+        rev: 1,
+      });
+      expect(item.outreach.raw).toBe(RAW);
+      expect(item.body).toBe('\nHello there.\n');
+
+      // Kohl's red pen, against revision 1.
+      let d = (
+        await call('PATCH', `/items/${item.id}`, h.kohl, { body: 'Hi. Short version.', seenRev: 1 })
+      ).json();
+      let it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach.rev).toBe(2);
+      expect(it.outreach.sendStatus).toBe('edited');
+      expect(it.outreach.raw).toContain('to: A Researcher  # check the address'); // comments kept
+      expect(it.outreach.raw).toContain('edited_by: kohl');
+      expect(it.outreach.raw).toContain('<!-- original -->\n\nHello there.\n'); // the original, kept
+
+      // A stale approval is refused; the current one holds.
+      expect(
+        (await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'approve', rev: 1 }))
+          .status,
+      ).toBe(409);
+      d = (
+        await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'approve', rev: 2 })
+      ).json();
+      it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach).toMatchObject({ sendStatus: 'approved', approvedRev: 2 });
+
+      // An agent revises it (Kohl asked in a DM): the approval is void.
+      d = (
+        await call('PATCH', `/items/${item.id}`, h.cass, {
+          body: 'Hi. Shorter.',
+          causeMsg: 'msg-123',
+        })
+      ).json();
+      it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach).toMatchObject({ rev: 3, approvedRev: null, sendStatus: 'edited' });
+
+      const events = (await call('GET', `/plans/${slug}/events`, h.kohl)).json();
+      const kohlEdit = events.find(
+        (e: { action: string; actor: { name: string } }) =>
+          e.action === 'outreach-revised' && e.actor.name !== 'cass',
+      );
+      expect(kohlEdit.detail.kohlDiff).toContain('+Hi. Short version.');
+      expect(kohlEdit.detail.kohlDiff).toContain('-Hello there.');
+      const agentEdit = events
+        .filter((e: { action: string }) => e.action === 'outreach-revised')
+        .pop();
+      expect(agentEdit.actor.name).toBe('cass');
+      expect(agentEdit.detail.kohlDiff).toBeUndefined();
+      expect(agentEdit.detail.causeMsg).toBe('msg-123');
+      expect(events.some((e: { action: string }) => e.action === 'send-approval-void')).toBe(true);
+
+      const revs = (await call('GET', `/items/${item.id}/revisions`, h.kohl)).json();
+      expect(revs.map((r: { rev: number }) => r.rev)).toEqual([1, 2, 3]);
+      expect(revs[0].draft).toBe('\nHello there.\n'); // revision 1 is the original
+    });
+
+    it('only Kohl, as a person, decides a send: an agent token is refused whatever surface it claims', async () => {
+      const h = await house();
+      const { item } = await outreachItem(h);
+      for (const who of [h.cass, h.carol]) {
+        for (const action of ['approve', 'veto', 'sent']) {
+          const r = await call(
+            'POST',
+            `/items/${item.id}/send`,
+            who,
+            { action, rev: 1, reason: 'x' },
+            'plans-view',
+          );
+          expect(r.status, `${action}`).toBe(403);
+        }
+      }
+    });
+
+    it('a veto needs a reason, kept verbatim; sent outside the queue is said so', async () => {
+      const h = await house();
+      const { item, slug } = await outreachItem(h);
+      expect(
+        (await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'veto' })).status,
+      ).toBe(400);
+      let d = (
+        await call('POST', `/items/${item.id}/send`, h.kohl, {
+          action: 'veto',
+          reason: 'missed\nthe point',
+        })
+      ).json();
+      let it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach.raw).toContain('veto_reason: missed the point');
+      expect(it.status).toBe('declined');
+      d = (await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'sent' })).json();
+      it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach.raw).toContain('sent_outside_queue: true');
+      const events = (await call('GET', `/plans/${slug}/events`, h.kohl)).json();
+      expect(events.find((e: { action: string }) => e.action === 'send-veto').detail.reason).toBe(
+        'missed\nthe point',
+      );
+      expect(
+        events.find((e: { action: string }) => e.action === 'send-sent').detail.outsideQueue,
+      ).toBe(true);
+    });
+
+    it("Kohl's TUI edits are claimed as Kohl's, marked unverified", async () => {
+      const h = await house();
+      const { item } = await outreachItem(h);
+      const d = (
+        await call(
+          'PATCH',
+          `/items/${item.id}`,
+          h.cass,
+          { body: 'TUI words.', claimed: 'kohl' },
+          'terminal',
+        )
+      ).json();
+      const it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach.raw).toContain('edited_by: kohl');
+      expect(it.outreach.raw).toContain('edited_unverified: true');
+      const revs = (await call('GET', `/items/${item.id}/revisions`, h.kohl)).json();
+      expect(revs[1]).toMatchObject({
+        by: 'cass',
+        claimed: 'kohl',
+        verified: false,
+        surface: 'terminal',
+      });
+      // A person can't claim to be someone else.
+      const c = (
+        await call('PATCH', `/items/${item.id}`, h.carol, { body: 'Carol words.', claimed: 'kohl' })
+      ).json();
+      expect(c.items.find((i: { id: string }) => i.id === item.id).outreach.raw).toContain(
+        'edited_by: carol',
+      );
+    });
+
+    it('an outreach item needs its room, and never voids its phase approval', async () => {
+      const h = await house();
+      const { slug, phaseId } = await planWithPhase(h);
+      const noRoom = RAW.replace('room: researchers\n', '');
+      expect(
+        (
+          await call('POST', `/plans/${slug}/items`, h.cass, {
+            kind: 'outreach',
+            title: 'x',
+            outreach: { raw: noRoom },
+          })
+        ).status,
+      ).toBe(400);
+      await call('POST', `/phases/${phaseId}/propose`, h.carol);
+      await call('POST', `/phases/${phaseId}/approve`, h.kohl);
+      const d = (
+        await call('POST', `/plans/${slug}/items`, h.cass, {
+          kind: 'outreach',
+          title: 'x',
+          phaseId,
+          outreach: { raw: RAW },
+        })
+      ).json();
+      expect(d.phases.find((f: { id: string }) => f.id === phaseId).status).toBe('approved');
+    });
+  });
 });
