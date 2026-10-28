@@ -9,6 +9,7 @@ import healthRoutes from '../routes/health.ts';
 import authRoutes from '../routes/auth.ts';
 import channelRoutes from '../routes/channels.ts';
 import messageRoutes from '../routes/messages.ts';
+import agentStatusRoutes from '../routes/agent-status.ts';
 import channelSettingsRoutes from '../routes/channel-settings.ts';
 import serverRoutes from '../routes/servers.ts';
 import dmRoutes from '../routes/dms.ts';
@@ -119,6 +120,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(authRoutes);
   await app.register(channelRoutes);
   await app.register(messageRoutes);
+  await app.register(agentStatusRoutes);
   await app.register(channelSettingsRoutes);
   await app.register(serverRoutes);
   await app.register(dmRoutes);

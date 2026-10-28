@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useState, useEffect, useRef } from 'react';
-import type { MessageWithAuthor, IdiomAnnotation, ActorProfile } from '@babelr/shared';
+import type {
+  AgentReplyStatusView,
+  MessageWithAuthor,
+  IdiomAnnotation,
+  ActorProfile,
+} from '@babelr/shared';
 import type { CachedTranslation } from '../translation';
 import { EmojiPicker } from './EmojiPicker';
 import { renderWithEmbeds } from '../utils/render-with-embeds';
 import { useT } from '../i18n/I18nProvider';
 import { LinkPreviewCards } from './LinkPreview';
 import { ProfileCard } from './ProfileCard';
+import { AgentStatusLine } from './AgentStatusLine';
 import type { UIStringKey } from '@babelr/shared';
 
 interface MessageItemProps {
@@ -17,6 +23,8 @@ interface MessageItemProps {
   actor?: ActorProfile;
   messageReactions?: Record<string, string[]>;
   onToggleReaction?: (emoji: string) => void;
+  agentStatuses?: AgentReplyStatusView[];
+  onRetryAgentReply?: (agentId: string) => Promise<void>;
   onReply?: () => void;
   replyCount?: number;
   onEdit?: (content: string) => void;
@@ -125,6 +133,8 @@ export function MessageItem({
   actor,
   messageReactions,
   onToggleReaction,
+  agentStatuses,
+  onRetryAgentReply,
   onReply,
   replyCount,
   onEdit,
@@ -328,6 +338,10 @@ export function MessageItem({
     </div>
   );
 
+  const agentStatusBlock = agentStatuses?.length ? (
+    <AgentStatusLine statuses={agentStatuses} onRetry={onRetryAgentReply} />
+  ) : null;
+
   const reactionsBlock = (
     <>
       {messageReactions && Object.keys(messageReactions).length > 0 && (
@@ -404,6 +418,7 @@ export function MessageItem({
           </div>
         )}
         {idiomLine}
+        {agentStatusBlock}
         {reactionsBlock}
         {actionsBlock}
       </div>
@@ -460,6 +475,7 @@ export function MessageItem({
         </div>
       )}
       {idiomLine}
+      {agentStatusBlock}
       {reactionsBlock}
       {actionsBlock}
       {showProfile && (

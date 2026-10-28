@@ -41,6 +41,7 @@ import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
+import { useAgentStatus } from '../hooks/useAgentStatus';
 
 interface ChatViewProps {
   actor: ActorProfile;
@@ -241,7 +242,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     handleWsMessage: handleReactionWs,
     toggleReaction,
   } = useReactions(activeChannelId, actor.id, messages);
-  extraWsRef.current = handleReactionWs;
+  const {
+    agentStatuses,
+    handleWsMessage: handleAgentStatusWs,
+    retryAgentReply,
+  } = useAgentStatus(activeChannelId, messages);
+  extraWsRef.current = (msg) => {
+    handleReactionWs(msg);
+    handleAgentStatusWs(msg);
+  };
 
   const { settings, updateSettings } = useTranslationSettings();
   const { translations, isTranslating } = useTranslation(messages, settings);
@@ -547,6 +556,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                     actor={actor}
                     messageReactions={messageReactions}
                     onToggleReaction={toggleReaction}
+                    agentStatuses={agentStatuses}
+                    onRetryAgentReply={retryAgentReply}
                     onOpenThread={openThread}
                     onEditMessage={handleEditMessage}
                     onDeleteMessage={handleDeleteMessage}

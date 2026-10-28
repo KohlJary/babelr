@@ -4,7 +4,9 @@ import { objects } from './db/schema/objects.ts';
 import { actors } from './db/schema/actors.ts';
 import { reactions } from './db/schema/reactions.ts';
 import { collectionItems } from './db/schema/collections.ts';
+import { agentStatusFor } from './routes/agent-status.ts';
 import type {
+  AgentReplyStatusView,
   ChannelView,
   MessageView,
   AuthorView,
@@ -36,6 +38,7 @@ export function toChannelView(obj: typeof objects.$inferSelect): ChannelView {
 export function toMessageView(
   obj: typeof objects.$inferSelect,
   reactionsData?: Record<string, string[]>,
+  agentStatus?: AgentReplyStatusView[],
 ): MessageView {
   const props = obj.properties as Record<string, unknown> | null;
   const messageProps: Record<string, unknown> = {};
@@ -62,6 +65,7 @@ export function toMessageView(
       }),
     ...(Object.keys(messageProps).length > 0 && { properties: messageProps }),
     ...(reactionsData && { reactions: reactionsData }),
+    ...(agentStatus?.length && { agentStatus }),
   };
 }
 
@@ -115,8 +119,14 @@ export async function getMessagesForChannel(
     reactionsByMessage.set(r.objectId, msgReactions);
   }
 
+  const statusByMessage = await agentStatusFor(db, messageIds);
+
   const messages: MessageWithAuthor[] = items.map((row) => ({
-    message: toMessageView(row.object, reactionsByMessage.get(row.object.id)),
+    message: toMessageView(
+      row.object,
+      reactionsByMessage.get(row.object.id),
+      statusByMessage.get(row.object.id),
+    ),
     author: toAuthorView(row.actor),
   }));
 

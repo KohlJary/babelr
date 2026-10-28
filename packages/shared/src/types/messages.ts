@@ -12,6 +12,8 @@ export interface MessageView {
   inReplyTo?: string;
   replyCount?: number;
   reactions?: Record<string, string[]>;
+  /** Agents answering this message, and how that's going. Absent when none. */
+  agentStatus?: AgentReplyStatusView[];
   /**
    * Short copy-paste-friendly slug. Used to reference this message
    * from other messages or wiki pages via `[[msg:slug]]` which
@@ -19,6 +21,23 @@ export interface MessageView {
    * messages. Null/undefined for older messages pre-slug migration.
    */
   slug?: string | null;
+}
+
+/**
+ * An agent's progress answering one message, set by the agent itself
+ * (PUT .../agent-status). `retry` is set by the message's author
+ * (POST .../agent-status/:agentId/retry) and is the agent's cue to try
+ * again. `done` is kept so the agent can see a retry it already
+ * answered; clients show nothing for it.
+ */
+export type AgentReplyState = 'working' | 'failed' | 'retry' | 'done';
+
+export interface AgentReplyStatusView {
+  agent: AuthorView;
+  state: AgentReplyState;
+  /** The agent's own short note, e.g. why it failed. */
+  detail: string;
+  updatedAt: string;
 }
 
 /**

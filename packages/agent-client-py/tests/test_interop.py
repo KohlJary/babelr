@@ -84,3 +84,18 @@ def test_messages_say_why_they_cant_be_read():
     assert Agent._open(ct, iv, k) == ("hi", None)
     assert Agent._open(ct, iv, other) == (None, "undecryptable")
     assert Agent._open("%%%", iv, k) == (None, "bad-format")
+
+
+def test_retries_are_the_messages_whose_author_asked_this_agent():
+    from babelr_agent.client import Agent
+
+    a = Agent.__new__(Agent)
+    a._me = {"id": "rk"}
+    status = lambda agent, state: {"agent": {"id": agent}, "state": state}  # noqa: E731
+    msgs = [
+        {"id": "m1", "agent_status": [status("rk", "retry")]},
+        {"id": "m2", "agent_status": [status("cass", "retry")]},
+        {"id": "m3", "agent_status": [status("rk", "failed")]},
+        {"id": "m4", "agent_status": []},
+    ]
+    assert [m["id"] for m in a.retries(msgs)] == ["m1"]

@@ -7,6 +7,7 @@ export { sessions } from './sessions.ts';
 export { deliveryQueue } from './delivery-queue.ts';
 export { readPositions } from './read-positions.ts';
 export { reactions } from './reactions.ts';
+export { agentReplyStatus } from './agent-reply-status.ts';
 export { notificationPreferences } from './notification-preferences.ts';
 export { invites } from './invites.ts';
 export { friendships } from './friendships.ts';

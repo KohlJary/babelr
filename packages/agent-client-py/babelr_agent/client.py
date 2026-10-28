@@ -10,6 +10,14 @@
                                     # the partner, unless you pass partner_id)
     for m in a.messages(dm["id"]):  # needs dms:read; decrypted here
         print(m["author"]["preferredUsername"], m["text"])
+    a.reply_status(dm["id"], m["id"], "working")   # dms:post (channels:post
+                                                    # in a server channel)
+
+reply_status shows the person, under their message, that you've picked
+it up ("working"), that you couldn't answer ("failed", with a short
+detail), or that you're done. They can ask for a retry from there; you
+see it as your own status turning to "retry" in `messages()`
+(`agent_status`), or `retries()` for just those.
 
 The server refuses plaintext in DMs, so `send` never falls back to it:
 if the partner has no public key, it raises.
@@ -129,7 +137,8 @@ class Agent:
         for m in self._req("GET", f"/dms/{dm_id}/messages")["messages"]:
             msg = m["message"]
             props = msg.get("properties") or {}
-            entry = {"id": msg["id"], "author": m["author"], "published": msg["published"]}
+            entry = {"id": msg["id"], "author": m["author"], "published": msg["published"],
+                     "agent_status": msg.get("agentStatus") or []}
             if not (props.get("encrypted") and props.get("iv")):
                 entry["text"], entry["error"] = None, "plaintext"
             else:
@@ -143,6 +152,25 @@ class Agent:
                 del entry["error"]
             out.append(entry)
         return out
+
+    # -- reply status -----------------------------------------------------
+
+    def reply_status(self, channel_id: str, message_id: str, state: str, detail: str = "") -> dict:
+        """Say how answering a message is going: "working", "failed" or "done".
+
+        Works in DMs (channel_id is the DM id; needs dms:post) and server
+        channels (channels:post). The detail is stored and shown in
+        plaintext, even in an encrypted DM: keep it to an error class
+        ("usage limit", "timeout"), never message content.
+        """
+        return self._req("PUT", f"/channels/{channel_id}/messages/{message_id}/agent-status",
+                         {"state": state, "detail": detail[:300]})
+
+    def retries(self, messages: list[dict]) -> list[dict]:
+        """The messages (from `messages()`) whose author asked this agent to retry."""
+        me = self.me()["id"]
+        return [m for m in messages
+                if any(s["agent"]["id"] == me and s["state"] == "retry" for s in m.get("agent_status", []))]
 
     @staticmethod
     def _open(content: str, iv: str, key: bytes) -> tuple[str | None, str | None]:

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Hippocratic-3.0
-import type { MessageView, AuthorView, DMConversation } from './messages.js';
+import type { MessageView, AuthorView, AgentReplyStatusView, DMConversation } from './messages.js';
 import type { FriendshipView } from './friends.js';
 
 export type PresenceStatus = 'online' | 'away' | 'dnd' | 'offline';
@@ -62,6 +62,7 @@ export type WsServerMessage =
   | { type: 'presence:update'; payload: { actorId: string; status: PresenceStatus } }
   | { type: 'reaction:add'; payload: { messageId: string; emoji: string; actor: AuthorView } }
   | { type: 'reaction:remove'; payload: { messageId: string; emoji: string; actorId: string } }
+  | { type: 'agent-status:update'; payload: { messageId: string; status: AgentReplyStatusView } }
   | { type: 'conversation:new'; payload: { conversation: DMConversation } }
   | { type: 'dm:request'; payload: { conversation: DMConversation } }
   | { type: 'dm:left'; payload: { dmId: string; actor: AuthorView } }

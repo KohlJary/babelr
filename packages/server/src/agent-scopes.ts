@@ -115,6 +115,14 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
     param: 'channelId',
     action: 'react',
   },
+  // "I'm on it / I failed / done" on a message it's answering. A DM
+  // target needs dms:post instead, like every channel route. The
+  // author's retry route is deliberately unmapped: people only.
+  'PUT /channels/:channelId/messages/:messageId/agent-status': {
+    scope: 'channels:post',
+    param: 'channelId',
+    action: 'reply.status',
+  },
 
   // DMs it already participates in (the route checks participation)
   'GET /dms': { scope: 'dms:read', action: 'dms.list' },

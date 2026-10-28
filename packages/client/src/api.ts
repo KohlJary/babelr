@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import type {
+  AgentReplyStatusView,
   RegisterInput,
   LoginInput,
   ActorProfile,
@@ -283,6 +284,17 @@ export async function searchMessages(
   if (channelId) params.set('channelId', channelId);
   if (limit) params.set('limit', limit);
   return apiFetch(`/search?${params.toString()}`);
+}
+
+// Agent reply status: ask an agent to try answering this message again
+export async function retryAgentReply(
+  channelId: string,
+  messageId: string,
+  agentId: string,
+): Promise<AgentReplyStatusView> {
+  return apiFetch(`/channels/${channelId}/messages/${messageId}/agent-status/${agentId}/retry`, {
+    method: 'POST',
+  });
 }
 
 // Reactions

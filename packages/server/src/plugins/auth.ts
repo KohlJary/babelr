@@ -157,9 +157,17 @@ async function authPlugin(fastify: FastifyInstance) {
     const params = (request.params ?? {}) as Record<string, unknown>;
     let decision = checkScopes(request.method, request.routeOptions.url, params, scopes);
 
-    // A channel route aimed at a DM needs the DM scope.
-    if (decision.allowed && decision.rule.param === 'channelId' && decision.rule.scope) {
-      const dmScope = DM_SCOPE_FOR[decision.rule.scope];
+    // A channel route aimed at a DM needs the DM scope, and the DM scope
+    // alone decides: channels:* never reaches a DM, and dms:* reaches
+    // DM targets of channel routes (reactions, reply status) without
+    // also needing channels:*.
+    const rule = decision.rule;
+    if (
+      rule?.param === 'channelId' &&
+      rule.scope &&
+      (decision.allowed || decision.reason === 'missing_scope')
+    ) {
+      const dmScope = DM_SCOPE_FOR[rule.scope];
       const channelId = params.channelId;
       if (dmScope && typeof channelId === 'string' && /^[0-9a-f-]{36}$/i.test(channelId)) {
         const [ch] = await db
@@ -174,8 +182,8 @@ async function authPlugin(fastify: FastifyInstance) {
               ? `${dmScope}:${channelId}`
               : null;
           decision = granted
-            ? { allowed: true, rule: decision.rule, grantedBy: granted }
-            : { allowed: false, rule: decision.rule, reason: 'missing_scope' };
+            ? { allowed: true, rule, grantedBy: granted }
+            : { allowed: false, rule, reason: 'missing_scope' };
         }
       }
     }

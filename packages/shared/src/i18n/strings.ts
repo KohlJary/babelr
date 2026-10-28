@@ -319,6 +319,12 @@ export const UI_STRINGS = {
   'messages.translationConfidence': 'Translation confidence: {label} ({percent}%)',
   'messages.reactionCountOne': '{count} reaction',
   'messages.reactionCountMany': '{count} reactions',
+  'messages.agentWorking': '{name} is replying…',
+  'messages.agentFailed': '{name} couldn’t answer',
+  'messages.agentStalled': '{name} stopped replying',
+  'messages.agentRetrying': 'Asked {name} to try again…',
+  'messages.agentRetry': 'Retry',
+  'messages.agentRetryFailed': 'Retry didn’t go through: {error}',
   'messages.dropFiles': 'Drop files here...',
 
   // Events / calendar

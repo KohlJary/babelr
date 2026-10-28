@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useEffect, useRef, useState } from 'react';
-import type { MessageWithAuthor, ActorProfile, WikiRefKind } from '@babelr/shared';
+import type {
+  AgentReplyStatusView,
+  MessageWithAuthor,
+  ActorProfile,
+  WikiRefKind,
+} from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 import type { CachedTranslation } from '../translation';
 import { MessageItem } from './MessageItem';
@@ -15,6 +20,8 @@ interface MessageListProps {
   actor?: ActorProfile;
   messageReactions?: Map<string, Record<string, string[]>>;
   onToggleReaction?: (messageId: string, emoji: string) => void;
+  agentStatuses?: Map<string, AgentReplyStatusView[]>;
+  onRetryAgentReply?: (messageId: string, agentId: string) => Promise<void>;
   onOpenThread?: (messageId: string) => void;
   onEditMessage?: (messageId: string, content: string) => void;
   onDeleteMessage?: (messageId: string) => void;
@@ -37,6 +44,8 @@ export function MessageList({
   actor,
   messageReactions,
   onToggleReaction,
+  agentStatuses,
+  onRetryAgentReply,
   onOpenThread,
   onEditMessage,
   onDeleteMessage,
@@ -102,6 +111,13 @@ export function MessageList({
             messageReactions={messageReactions?.get(item.message.id)}
             onToggleReaction={
               onToggleReaction ? (emoji) => onToggleReaction(item.message.id, emoji) : undefined
+            }
+            agentStatuses={agentStatuses?.get(item.message.id)}
+            onRetryAgentReply={
+              // Only the message's author may ask for a retry (the server agrees).
+              onRetryAgentReply && actor?.id === item.message.authorId
+                ? (agentId) => onRetryAgentReply(item.message.id, agentId)
+                : undefined
             }
             onReply={onOpenThread ? () => onOpenThread(item.message.id) : undefined}
             replyCount={item.message.replyCount}

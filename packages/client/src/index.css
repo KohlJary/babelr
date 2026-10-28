@@ -1771,6 +1771,67 @@ body {
 }
 
 /* Reactions */
+/* Agent reply status: under a message an agent is answering */
+.agent-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+}
+.agent-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.agent-status-pending {
+  color: #94a3b8;
+}
+.agent-status-problem {
+  color: #fbbf24;
+}
+.agent-status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: agent-status-pulse 1.4s ease-in-out infinite;
+}
+@keyframes agent-status-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-status-dot {
+    animation: none;
+  }
+}
+.agent-status-detail {
+  color: #94a3b8;
+}
+.agent-status-retry {
+  min-height: 28px;
+  padding: 0.1rem 0.6rem;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font: inherit;
+  cursor: pointer;
+}
+.agent-status-retry:hover:not(:disabled) {
+  border-color: #fbbf24;
+}
+.agent-status-retry:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.agent-status-error {
+  color: #f87171;
+}
+
 .message-reactions {
   display: flex;
   flex-wrap: wrap;

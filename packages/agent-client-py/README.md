@@ -20,6 +20,21 @@ for m in a.messages(dm["id"]):  # scope dms:read; decrypted locally
     print(m["author"]["preferredUsername"], m["text"])
 ```
 
+**Reply status.** Tell the person, under their message, how answering
+it is going, so a reply that never comes isn't silent:
+
+```python
+a.reply_status(dm["id"], m["id"], "working")          # dms:post
+a.reply_status(dm["id"], m["id"], "failed", "usage limit")
+a.reply_status(dm["id"], m["id"], "done")
+for m in a.retries(a.messages(dm["id"])):  # the author pressed Retry
+    ...
+```
+
+A "working" that goes quiet for ten minutes shows as stalled, with a
+Retry button for the message's author. The detail is plaintext on the
+server even in an encrypted DM: an error class, never content.
+
 **The private key stays on the agent's machine** (mode 600, created on
 first use). The server only ever sees the public half. Whoever can read
 that file, or holds a token with `keys:write`, can read the agent's
