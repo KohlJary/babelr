@@ -113,3 +113,22 @@ describe('blinds via the real plugin loader', () => {
     expect(JSON.parse(ok.body).total).toBe(1);
   });
 });
+
+describe('uploads, served from this origin', () => {
+  it('come back sandboxed: an uploaded HTML file runs no script as the Tower', async () => {
+    const uploads = join(import.meta.dirname, '../../../../uploads');
+    await mkdir(uploads, { recursive: true });
+    const name = `test-${crypto.randomUUID()}.html`;
+    await writeFile(join(uploads, name), '<script>alert(document.cookie)</script>');
+    try {
+      const res = await app.inject({ method: 'GET', url: `/uploads/${name}` });
+      expect(res.statusCode).toBe(200);
+      const csp = String(res.headers['content-security-policy']);
+      expect(csp).toMatch(/(^|;\s*)sandbox(;|$)/);
+      expect(csp).toContain("default-src 'none'");
+      expect(csp).not.toContain('script-src');
+    } finally {
+      await rm(join(uploads, name), { force: true });
+    }
+  });
+});

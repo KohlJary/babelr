@@ -37,6 +37,10 @@ import roleRoutes from './routes/roles.ts';
 import searchRoutes from './routes/search.ts';
 import federationPlugin from './plugins/federation.ts';
 import uploadRoutes from './routes/uploads.ts';
+
+/** Applied to everything under /uploads/: no script, no plugins, no forms. */
+export const UPLOADS_CSP =
+  "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'";
 import fileRoutes from './routes/files.ts';
 import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
@@ -129,6 +133,14 @@ export async function buildApp() {
     root: uploadsDir,
     prefix: '/uploads/',
     decorateReply: false,
+    // Uploads are whatever people (and agents) send, served from this
+    // origin by extension. Helmet's CSP is off for the app, so without
+    // this an uploaded .html or .svg would run script as the Tower.
+    // A sandboxing CSP on every upload makes an opened file an opaque,
+    // script-less document; <img>/<video> embeds are unaffected.
+    setHeaders: (res) => {
+      res.setHeader('Content-Security-Policy', UPLOADS_CSP);
+    },
   });
 
   // Serve client build in production
