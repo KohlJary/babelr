@@ -4819,6 +4819,19 @@ textarea.modal-input {
   flex-direction: column;
   gap: 0.35rem;
 }
+.plans-preview-items {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+.plans-preview .plans-phase {
+  margin: 0.5rem 0;
+  padding: 0.55rem;
+}
 .plans-compose {
   display: flex;
   gap: 0.4rem;

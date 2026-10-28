@@ -830,12 +830,17 @@ function usePlan(slug: string, routeBase: string) {
   const [plan, setPlan] = useState<PlanDetail | null | 'missing'>(null);
   useEffect(() => {
     let live = true;
-    call<PlanDetail>(`${routeBase}/plans/${encodeURIComponent(slug)}`).then(
-      (d) => live && setPlan(d),
-      () => live && setPlan('missing'),
-    );
+    const load = () =>
+      call<PlanDetail>(`${routeBase}/plans/${encodeURIComponent(slug)}`).then(
+        (d) => live && setPlan(d),
+        () => live && setPlan((p) => (p && p !== 'missing' ? p : 'missing')),
+      );
+    void load();
+    // A meeting's working draft changes while people talk: keep up.
+    const id = setInterval(() => void load(), 15_000);
     return () => {
       live = false;
+      clearInterval(id);
     };
   }, [slug, routeBase]);
   return plan;
@@ -891,7 +896,8 @@ export function PlanInline(props: Record<string, unknown>) {
   );
 }
 
-/** The embed sidebar: the plan's goal and its phases at a glance. */
+/** The embed sidebar: the whole plan beside the conversation (a meeting's
+ *  working draft, say), refreshed as it changes. */
 export function PlanPreview(props: Record<string, unknown>) {
   const { slug, routeBase } = props as { slug: string; routeBase: string };
   const plan = usePlan(slug, routeBase);
@@ -900,16 +906,35 @@ export function PlanPreview(props: Record<string, unknown>) {
   return (
     <div className="plans-preview">
       <h2 className="poll-preview-question">{plan.title}</h2>
-      {plan.goal && <p>{plan.goal}</p>}
-      <ol className="plans-preview-phases">
-        {plan.phases.map((f) => (
-          <li key={f.id}>
-            <span className={`plans-chip plans-chip-${f.status}`}>{PHASE_LABEL[f.status]}</span>{' '}
-            {f.title}
-          </li>
+      {plan.goal && <p className="plans-goal-text">{plan.goal}</p>}
+      {plan.phases
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((f) => (
+          <section key={f.id} className={`plans-phase plans-phase-${f.status}`}>
+            <div className="plans-phase-top">
+              <h3>
+                <span className="plans-phase-n">Phase {f.position + 1}</span> {f.title}
+              </h3>
+              <span className={`plans-chip plans-chip-${f.status}`}>{PHASE_LABEL[f.status]}</span>
+            </div>
+            {f.goal && <p className="plans-phase-goal">{f.goal}</p>}
+            <ul className="plans-preview-items">
+              {plan.items
+                .filter((i) => i.phaseId === f.id)
+                .map((i) => (
+                  <li key={i.id} className={`plans-item-${i.status}`}>
+                    <span className={`plans-kind plans-kind-${i.kind}`}>{i.kind}</span>{' '}
+                    <span className="plans-item-title">{i.title}</span>
+                    {i.owner && <span className="plans-item-owner"> @{i.owner}</span>}
+                  </li>
+                ))}
+            </ul>
+          </section>
         ))}
-      </ol>
-      <p className="plans-meta">{progress(plan)}. Approve phases in Plans.</p>
+      <p className="plans-meta">
+        {progress(plan)}. Updates every 15 seconds; approve phases in Plans.
+      </p>
     </div>
   );
 }
