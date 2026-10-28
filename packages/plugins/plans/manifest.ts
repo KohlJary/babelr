@@ -162,10 +162,11 @@ function text(v: unknown, what: keyof typeof LIMITS, required = false): string {
 // those folders, and RoboKohl's CLAUDE.md. A filter can't recognize what's
 // behind it by content, only paths, diff headers and the wall's own names.
 const WALL: RegExp[] = [
-  /(^|[\s`'"([<])(?:\.\/)?(?:eval|data)\/[\w.*-]/m, // eval/x, `data/open`, ./data/x
+  /(^|[\s`'"([<])(?:\.\/)?(?:eval|data)\/[\w.*-]/im, // eval/x, `data/open`, ./data/x, EVAL/x
   /robokohl[\w.-]*\/(?:eval|data)\//i, // ~/robokohl/eval/...
   /robokohl-(?:eval|family)/i, // ~/.local/share/robokohl-eval, the family room
   /^(?:---|\+\+\+) [ab]\/(?:eval|data)\//m, // a pasted diff of a file there
+  /^diff --git a\/(?:eval|data)\//im, // its diff header alone
   /holdout_convs|ledger_runs/i, // the wall's own files
 ];
 

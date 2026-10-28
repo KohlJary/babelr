@@ -323,6 +323,8 @@ describe('plans', () => {
       'the family room at robokohl-family',
       '--- a/eval/ledger/round3.md\n+++ b/eval/ledger/round3.md',
       'ledger_runs has the key',
+      'EVAL/ledger/round3.md',
+      'diff --git a/eval/x b/eval/x',
     ];
     for (const t of blocked) {
       const r = await call('POST', `/plans/${slug}/items`, h.carol, {
