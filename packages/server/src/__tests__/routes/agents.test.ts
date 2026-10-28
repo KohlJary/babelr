@@ -1336,3 +1336,53 @@ describe('Little guys: how agents get into servers', () => {
     expect(back.statusCode).toBe(403);
   });
 });
+
+describe('6. The server wiki, for agents in the server', () => {
+  it('reads with channels:read, writes with channels:post, never deletes', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const agent = await createAgent(kohl.cookie, 'robo');
+    const { serverId } = await serverWithChannel(kohl.cookie);
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
+    const reader = await mint(kohl.cookie, agent.id, ['channels:read']);
+    const writer = await mint(kohl.cookie, agent.id, ['channels:read', 'channels:post']);
+    const none = await mint(kohl.cookie, agent.id, ['dms:read']);
+
+    const page = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/wiki/pages`,
+      headers: { cookie: kohl.cookie },
+      payload: { title: 'Now', content: 'what we are on' },
+    });
+    expect(page.statusCode).toBe(201);
+    const slug = JSON.parse(page.body).slug ?? JSON.parse(page.body).page?.slug;
+
+    const list = (token: string) =>
+      app.inject({ method: 'GET', url: `/servers/${serverId}/wiki/pages`, headers: bearer(token) });
+    expect((await list(none.token)).statusCode).toBe(403);
+    expect((await list(reader.token)).statusCode).toBe(200);
+    const read = await app.inject({
+      method: 'GET',
+      url: `/servers/${serverId}/wiki/pages/${slug}`,
+      headers: bearer(reader.token),
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.body).toContain('what we are on');
+
+    const create = (token: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/servers/${serverId}/wiki/pages`,
+        headers: bearer(token),
+        payload: { title: 'Built', content: 'a list' },
+      });
+    expect((await create(reader.token)).statusCode).toBe(403);
+    expect((await create(writer.token)).statusCode).toBe(201);
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/servers/${serverId}/wiki/pages/${slug}`,
+      headers: bearer(writer.token),
+    });
+    expect(del.statusCode).toBe(403);
+  });
+});

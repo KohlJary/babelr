@@ -166,6 +166,25 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   },
   'POST /servers/:serverId/leave': { scope: null, action: 'server.leave' },
 
+  // The server wiki, the house's shared knowledge (Kohl, 2026-10-28: "flesh out
+  // the wiki ... y'all can consult it as a shared knowledge pool"). Reading
+  // is like reading channels; creating and editing pages is like posting.
+  // The wiki's own role permissions (VIEW_WIKI, CREATE_WIKI_PAGES,
+  // MANAGE_WIKI) still decide, for the agent's own actor. Deleting pages
+  // and wiki settings stay closed to tokens.
+  'GET /servers/:serverId/wiki/pages': { scope: 'channels:read', action: 'wiki.list' },
+  'GET /servers/:serverId/wiki/pages/:slug': { scope: 'channels:read', action: 'wiki.read' },
+  'GET /servers/:serverId/wiki/pages/:slug/backlinks': {
+    scope: 'channels:read',
+    action: 'wiki.read',
+  },
+  'GET /servers/:serverId/wiki/pages/:slug/revisions': {
+    scope: 'channels:read',
+    action: 'wiki.read',
+  },
+  'POST /servers/:serverId/wiki/pages': { scope: 'channels:post', action: 'wiki.create' },
+  'PUT /servers/:serverId/wiki/pages/:slug': { scope: 'channels:post', action: 'wiki.edit' },
+
   // Embeds resolve plugin and message refs, so they read like plugins
   'GET /embeds/resolve': { scope: 'plugins:read', action: 'embed' },
 };
