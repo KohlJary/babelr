@@ -4812,6 +4812,13 @@ textarea.modal-input {
   color: #e2e8f0;
   font-size: 0.85rem;
 }
+.plans-preview-phases {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
 .plans-compose {
   display: flex;
   gap: 0.4rem;

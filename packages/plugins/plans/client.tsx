@@ -52,13 +52,15 @@ export function PlansView({
   routeBase,
   onClose,
   serverId,
+  initialSlug,
 }: {
   routeBase: string;
   onClose: () => void;
   serverId: string | null;
+  initialSlug?: string | null;
 }) {
   const [plans, setPlans] = useState<PlanSummary[] | null>(null);
-  const [slug, setSlug] = useState<string | null>(null);
+  const [slug, setSlug] = useState<string | null>(initialSlug ?? null);
   const [plan, setPlan] = useState<PlanDetail | null>(null);
   const [events, setEvents] = useState<PlanEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -819,5 +821,95 @@ function History({ plan, events, act }: { plan: PlanDetail; events: PlanEvent[];
         </button>
       </div>
     </aside>
+  );
+}
+
+// ── [[plan:slug]] embeds ──────────────────────────────────────────────
+
+function usePlan(slug: string, routeBase: string) {
+  const [plan, setPlan] = useState<PlanDetail | null | 'missing'>(null);
+  useEffect(() => {
+    let live = true;
+    call<PlanDetail>(`${routeBase}/plans/${encodeURIComponent(slug)}`).then(
+      (d) => live && setPlan(d),
+      () => live && setPlan('missing'),
+    );
+    return () => {
+      live = false;
+    };
+  }, [slug, routeBase]);
+  return plan;
+}
+
+function progress(plan: PlanDetail): string {
+  const live = plan.phases.filter((f) => f.status !== 'declined');
+  const ok = live.filter((f) => f.status === 'approved' || f.status === 'done').length;
+  return `${ok} of ${live.length} phase${live.length === 1 ? '' : 's'} approved`;
+}
+
+function waitingOnYou(plan: PlanDetail): number {
+  return plan.phases.filter((f) =>
+    f.awaiting.some((n) => n.toLowerCase() === plan.you.toLowerCase()),
+  ).length;
+}
+
+/** The card in a message: the plan's title, how far approval has got, and
+ *  whether it's waiting on you. Click to open it. */
+export function PlanInline(props: Record<string, unknown>) {
+  const { slug, routeBase, onClick } = props as {
+    slug: string;
+    routeBase: string;
+    onClick: () => void;
+  };
+  const plan = usePlan(slug, routeBase);
+  if (plan === null) {
+    return (
+      <button type="button" className="poll-embed loading" onClick={onClick}>
+        Loading plan…
+      </button>
+    );
+  }
+  if (plan === 'missing') {
+    return <span className="poll-embed">Plan not found (or not in your servers)</span>;
+  }
+  const mine = waitingOnYou(plan);
+  return (
+    <button
+      type="button"
+      className="poll-embed ok plans-embed"
+      onClick={onClick}
+      aria-label={`Plan: ${plan.title}. ${progress(plan)}.${mine ? ' Waiting on your yes.' : ''} Open it.`}
+    >
+      <span className="poll-embed-body">
+        <span className="poll-embed-question">🗺️ {plan.title}</span>
+        <span className="poll-embed-meta">
+          {progress(plan)} · {plan.items.length} items
+          {mine ? ` · ${mine} waiting on your yes` : ''}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** The embed sidebar: the plan's goal and its phases at a glance. */
+export function PlanPreview(props: Record<string, unknown>) {
+  const { slug, routeBase } = props as { slug: string; routeBase: string };
+  const plan = usePlan(slug, routeBase);
+  if (plan === null) return <div className="poll-preview-loading">Loading plan…</div>;
+  if (plan === 'missing') return <div className="poll-preview-error">Plan not found.</div>;
+  return (
+    <div className="plans-preview">
+      <h2 className="poll-preview-question">{plan.title}</h2>
+      {plan.goal && <p>{plan.goal}</p>}
+      <ol className="plans-preview-phases">
+        {plan.phases.map((f) => (
+          <li key={f.id}>
+            <span className={`plans-chip plans-chip-${f.status}`}>{PHASE_LABEL[f.status]}</span>{' '}
+            {f.title}
+          </li>
+        ))}
+      </ol>
+      <p className="plans-meta">{progress(plan)}. Approve phases in Plans.</p>
+    </div>
   );
 }
