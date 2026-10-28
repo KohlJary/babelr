@@ -197,6 +197,47 @@ describe('agent reply status', () => {
     expect((await setStatus(chOnly, dmId, messageId, { state: 'working' })).statusCode).toBe(403);
   });
 
+  it("an agent's message can be retried by its sponsor", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const runner = await createAgent(kohl.cookie, 'runner');
+    const cass = await createAgent(kohl.cookie, 'cass2');
+    const runnerTok = await mint(kohl.cookie, runner.id, ['channels:read', 'channels:post']);
+    const cassTok = await mint(kohl.cookie, cass.id, ['channels:read', 'channels:post']);
+    const s = await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: kohl.cookie },
+      payload: { name: 'H' },
+    });
+    const serverId = JSON.parse(s.body).id as string;
+    const ch = await app.inject({
+      method: 'GET',
+      url: `/servers/${serverId}/channels`,
+      headers: { cookie: kohl.cookie },
+    });
+    const channelId = JSON.parse(ch.body)[0].id as string;
+    for (const agentId of [runner.id, cass.id]) {
+      await app.inject({
+        method: 'POST',
+        url: `/servers/${serverId}/agents`,
+        headers: { cookie: kohl.cookie },
+        payload: { agentId },
+      });
+    }
+    const msg = await app.inject({
+      method: 'POST',
+      url: `/channels/${channelId}/messages`,
+      headers: bearer(runnerTok),
+      payload: { content: '@cass2, your turn' },
+    });
+    const messageId = JSON.parse(msg.body).message.id as string;
+    expect(
+      (await setStatus(cassTok, channelId, messageId, { state: 'failed', detail: 'too long' }))
+        .statusCode,
+    ).toBe(200);
+    expect((await retry(kohl.cookie, channelId, messageId, cass.id)).statusCode).toBe(200);
+  });
+
   it('the agent cannot retry for the author, nor can anyone but the author', async () => {
     const kohl = await createTestUser(app, 'kohl');
     const bob = await createTestUser(app, 'bob');

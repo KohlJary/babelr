@@ -144,7 +144,8 @@ export default async function agentStatusRoutes(fastify: FastifyInstance) {
     return status;
   });
 
-  // The message's author asks an agent to try again. Sessions only:
+  // The message's author (or, for an agent's message, its sponsor) asks an
+  // agent to try again. Sessions only:
   // the route isn't in the agent scope map, so no token reaches it.
   fastify.post<{ Params: { channelId: string; messageId: string; agentId: string } }>(
     '/channels/:channelId/messages/:messageId/agent-status/:agentId/retry',
@@ -156,8 +157,14 @@ export default async function agentStatusRoutes(fastify: FastifyInstance) {
       if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
       const message = await findMessage(channelId, messageId);
       if (!message) return reply.status(404).send({ error: 'Message not found' });
-      if (message.attributedTo !== me.id) {
-        return reply.status(403).send({ error: 'Only the message’s author can ask for a retry' });
+      // The author asks for a retry; for an agent's message (a meeting
+      // runner's "@cass, your turn"), so may the agent's sponsor, whom the
+      // server stamped on it.
+      const sponsor = (message.properties as { sponsor?: { id?: string } } | null)?.sponsor?.id;
+      if (message.attributedTo !== me.id && sponsor !== me.id) {
+        return reply
+          .status(403)
+          .send({ error: 'Only the message’s author (or its sponsor) can ask for a retry' });
       }
       const [current] = await db
         .select({ status: agentReplyStatus, agent: actors })

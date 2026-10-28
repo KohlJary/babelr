@@ -114,8 +114,11 @@ export function MessageList({
             }
             agentStatuses={agentStatuses?.get(item.message.id)}
             onRetryAgentReply={
-              // Only the message's author may ask for a retry (the server agrees).
-              onRetryAgentReply && actor?.id === item.message.authorId
+              // The author may ask for a retry, and so may the sponsor of an
+              // agent's message (the server agrees).
+              onRetryAgentReply &&
+              (actor?.id === item.message.authorId ||
+                (item.message.properties?.sponsor as { id?: string } | undefined)?.id === actor?.id)
                 ? (agentId) => onRetryAgentReply(item.message.id, agentId)
                 : undefined
             }
