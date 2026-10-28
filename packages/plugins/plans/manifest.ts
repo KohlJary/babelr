@@ -9,8 +9,8 @@ import {
   setField as setFieldOf,
   split,
   SEND_STATUSES,
-} from './outreach.ts';
-import type { SendStatus } from './outreach.ts';
+} from './outreach.js';
+import type { SendStatus } from './outreach.js';
 
 /**
  * Plans: the house's strategic planning, where everybody contributes and

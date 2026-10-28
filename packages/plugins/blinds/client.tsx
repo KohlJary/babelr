@@ -271,9 +271,13 @@ function RankStep({ bundle, ranks, locked, onSave }: RankStepProps) {
                 return (
                   <li key={label} className="blind-rank-item">
                     <span className="blind-rank-label">{label}</span>
-                    <span className="blind-rank-snippet">
-                      {a.text.length > 90 ? `${a.text.slice(0, 90)}…` : a.text}
-                    </span>
+                    {/* Re-read while ranking: the full answer opens in place. */}
+                    <details className="blind-rank-answer">
+                      <summary className="blind-rank-snippet">
+                        {a.text.length > 90 ? `${a.text.slice(0, 90)}…` : a.text}
+                      </summary>
+                      <div className="blind-rank-full">{a.text}</div>
+                    </details>
                     <span className="blind-rank-buttons">
                       <button
                         type="button"

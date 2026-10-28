@@ -4358,9 +4358,26 @@ textarea.modal-input {
   white-space: nowrap;
   min-width: 0;
 }
+.blind-rank-answer {
+  min-width: 0;
+}
+.blind-rank-answer summary {
+  cursor: pointer;
+}
+.blind-rank-answer[open] summary {
+  white-space: normal;
+}
+.blind-rank-full {
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+}
 .blind-rank-buttons {
   display: flex;
   gap: 0.25rem;
+  align-self: start;
 }
 .blind-rank-buttons button {
   min-width: 44px;
