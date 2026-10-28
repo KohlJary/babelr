@@ -311,4 +311,52 @@ describe('plans', () => {
     ).toBe(400);
     expect((await call('POST', `/phases/${phaseId}/propose`, h.bob)).status).toBe(404);
   });
+
+  it("keeps RoboKohl's eval/ and data/ out of every text field (the wall's backstop)", async () => {
+    const h = await house();
+    const { slug, phaseId } = await planWithPhase(h);
+    const blocked = [
+      'see eval/holdout_convs.json',
+      'from `data/open/convos.md`',
+      'cat ~/robokohl/data/moves_raw.jsonl',
+      'in ~/.local/share/robokohl-eval/',
+      'the family room at robokohl-family',
+      '--- a/eval/ledger/round3.md\n+++ b/eval/ledger/round3.md',
+      'ledger_runs has the key',
+    ];
+    for (const t of blocked) {
+      const r = await call('POST', `/plans/${slug}/items`, h.carol, {
+        kind: 'build',
+        title: 'x',
+        body: t,
+        phaseId,
+      });
+      expect(r.status, t).toBe(400);
+      expect(r.json().error, t).toMatch(/wall/);
+    }
+    expect((await call('PATCH', `/plans/${slug}`, h.carol, { goal: 'read data/x' })).status).toBe(
+      400,
+    );
+    expect(
+      (await call('POST', '/plans', h.carol, { serverId: h.serverId, title: 'dump of eval/x' }))
+        .status,
+    ).toBe(400);
+    // Ordinary text about evals and data still goes through.
+    for (const t of [
+      'the eval ran; data looks good',
+      "backend/data/chroma is Cass's",
+      'see docs/eval.md',
+    ]) {
+      const r = await call('POST', `/plans/${slug}/items`, h.carol, {
+        kind: 'build',
+        title: 'x',
+        body: t,
+        phaseId,
+      });
+      expect(r.status, t).toBe(201);
+    }
+    // Nothing blocked reached the record.
+    const events = (await call('GET', `/plans/${slug}/events`, h.kohl)).json();
+    expect(JSON.stringify(events)).not.toMatch(/holdout_convs|robokohl-eval|moves_raw/);
+  });
 });

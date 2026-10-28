@@ -152,7 +152,30 @@ function text(v: unknown, what: keyof typeof LIMITS, required = false): string {
     throw new PlanError(`${what} must be a string up to ${LIMITS[what]} chars`, 400);
   }
   if (required && !v.trim()) throw new PlanError(`${what} is required`, 400);
+  wallCheck(v);
   return v;
+}
+
+// RoboKohl's wall (Plans phase 3): nothing from its eval/ or data/ goes into
+// a plan, phase, item or comment, so plan text never becomes a route past
+// it. A backstop, not the wall: the wall is the queue adapter never reading
+// those folders, and RoboKohl's CLAUDE.md. A filter can't recognize what's
+// behind it by content, only paths, diff headers and the wall's own names.
+const WALL: RegExp[] = [
+  /(^|[\s`'"([<])(?:\.\/)?(?:eval|data)\/[\w.*-]/m, // eval/x, `data/open`, ./data/x
+  /robokohl[\w.-]*\/(?:eval|data)\//i, // ~/robokohl/eval/...
+  /robokohl-(?:eval|family)/i, // ~/.local/share/robokohl-eval, the family room
+  /^(?:---|\+\+\+) [ab]\/(?:eval|data)\//m, // a pasted diff of a file there
+  /holdout_convs|ledger_runs/i, // the wall's own files
+];
+
+export function wallCheck(v: string): void {
+  if (WALL.some((re) => re.test(v))) {
+    throw new PlanError(
+      "plans can't carry anything from behind RoboKohl's wall (its eval/ or data/, the family room); describe it without the path or the contents",
+      400,
+    );
+  }
 }
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
