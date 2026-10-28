@@ -4762,6 +4762,88 @@ textarea.modal-input {
   border-radius: 6px;
   color: #e2e8f0;
 }
+.review-draft-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+.review-draft-head h3 {
+  margin: 0;
+}
+.review-draft-tools {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.review-toggle {
+  display: inline-flex;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.review-toggle button,
+.review-copy {
+  min-height: 32px;
+  padding: 0 0.6rem;
+  background: #0f172a;
+  border: none;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.review-toggle button[aria-pressed='true'] {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+.review-copy {
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  color: #e2e8f0;
+  background: #14532d;
+}
+.review-copied {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: #86efac;
+}
+/* The rendered draft reads like the post will: normal text flow, real headings. */
+.review-body-rendered {
+  white-space: normal;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+.review-body-rendered > :first-child {
+  margin-top: 0;
+}
+.review-body-rendered h1,
+.review-body-rendered h2,
+.review-body-rendered h3 {
+  line-height: 1.3;
+  margin: 1.2em 0 0.4em;
+  color: #f1f5f9;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: revert;
+}
+.review-body-rendered a {
+  color: #7dd3fc;
+}
+.review-body-rendered blockquote {
+  margin: 0.8em 0;
+  padding-left: 0.9em;
+  border-left: 3px solid #475569;
+  color: #cbd5e1;
+}
+.review-body-rendered hr {
+  border: none;
+  border-top: 1px solid #334155;
+  margin: 1.4em 0;
+}
+
 .review-compose label {
   display: block;
   margin-bottom: 0.3rem;

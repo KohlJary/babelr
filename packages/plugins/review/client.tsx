@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Hippocratic-3.0
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import type { Decision, ReviewItem, ReviewMessage } from './manifest.js';
 
 /**
@@ -307,10 +309,7 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
                     <p>{current.why}</p>
                   </section>
                 )}
-                <section className="review-draft">
-                  <h3>Draft as decided</h3>
-                  <div className="review-body">{current.editedBody ?? current.body}</div>
-                </section>
+                <DraftView title="Draft as decided" text={current.editedBody ?? current.body} />
               </article>
             </div>
           )}
@@ -345,10 +344,10 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
                     <p>{current.why}</p>
                   </section>
                 )}
-                <section className="review-draft">
-                  <h3>{current.decision === 'edit' ? 'Draft (your edit)' : 'Draft'}</h3>
-                  <div className="review-body">{current.editedBody ?? current.body}</div>
-                </section>
+                <DraftView
+                  title={current.decision === 'edit' ? 'Draft (your edit)' : 'Draft'}
+                  text={current.editedBody ?? current.body}
+                />
 
                 {mode !== 'view' && (
                   <section className="review-compose">
@@ -437,6 +436,123 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
         </div>
       )}
     </div>
+  );
+}
+
+// ── The draft ────────────────────────────────────────────────────────
+
+type DraftMode = 'rendered' | 'markdown';
+const DRAFT_MODE_KEY = 'review.draftMode';
+
+function storedMode(): DraftMode {
+  try {
+    return localStorage.getItem(DRAFT_MODE_KEY) === 'markdown' ? 'markdown' : 'rendered';
+  } catch {
+    return 'rendered';
+  }
+}
+
+/** The draft as it reads once published: standard markdown (a single
+ *  newline doesn't break a line), sanitized. */
+export function renderDraft(text: string): string {
+  const html = marked.parse(text, { gfm: true, breaks: false, async: false }) as string;
+  return DOMPurify.sanitize(html);
+}
+
+/** Put the draft on the clipboard as rich text (and plain text), so it
+ *  pastes into Substack or an email with its formatting. */
+async function copyRich(text: string): Promise<void> {
+  const html = renderDraft(text);
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      }),
+    ]);
+    return;
+  }
+  // Older browsers: select a rendered copy and let the browser copy it.
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+  holder.style.position = 'fixed';
+  holder.style.left = '-9999px';
+  document.body.appendChild(holder);
+  const range = document.createRange();
+  range.selectNodeContents(holder);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+  const ok = document.execCommand('copy');
+  sel?.removeAllRanges();
+  holder.remove();
+  if (!ok) throw new Error('the browser refused to copy');
+}
+
+function DraftView({ title, text }: { title: string; text: string }) {
+  const [mode, setMode] = useState<DraftMode>(storedMode);
+  const [copied, setCopied] = useState<string | null>(null);
+  const html = useMemo(() => (mode === 'rendered' ? renderDraft(text) : ''), [mode, text]);
+
+  const pick = (m: DraftMode) => {
+    setMode(m);
+    try {
+      localStorage.setItem(DRAFT_MODE_KEY, m);
+    } catch {
+      // a remembered preference is a convenience
+    }
+  };
+
+  const copy = async () => {
+    try {
+      await copyRich(text);
+      setCopied('Copied with formatting. Paste it into Substack.');
+    } catch (err) {
+      setCopied(`Couldn't copy: ${(err as Error).message}`);
+    }
+    setTimeout(() => setCopied(null), 4000);
+  };
+
+  return (
+    <section className="review-draft">
+      <div className="review-draft-head">
+        <h3>{title}</h3>
+        <div className="review-draft-tools">
+          <div className="review-toggle" role="group" aria-label="Show the draft as">
+            <button
+              type="button"
+              aria-pressed={mode === 'rendered'}
+              onClick={() => pick('rendered')}
+            >
+              Rendered
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'markdown'}
+              onClick={() => pick('markdown')}
+            >
+              Markdown
+            </button>
+          </div>
+          <button type="button" className="review-copy" onClick={() => void copy()}>
+            Copy for Substack
+          </button>
+        </div>
+      </div>
+      {mode === 'rendered' ? (
+        <div
+          className="review-body review-body-rendered"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      ) : (
+        <div className="review-body">{text}</div>
+      )}
+      {copied && (
+        <div className="review-copied" role="status">
+          {copied}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -14,7 +14,9 @@
   "dependencies": {
     "@babelr/plugin-sdk": "*",
     "@babelr/shared": "*",
-    "drizzle-orm": "^0.39.3"
+    "drizzle-orm": "^0.39.3",
+    "marked": "^18.0.0",
+    "dompurify": "^3.3.3"
   },
   "peerDependencies": {
     "react": "^19.0.0"
