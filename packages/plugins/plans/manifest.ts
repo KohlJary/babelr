@@ -986,6 +986,12 @@ export default definePlugin({
             body: b.body !== undefined ? text(b.body, 'body') : item.body,
             owner: b.owner !== undefined ? ownerOf(b.owner) : item.owner,
             phaseId: b.phaseId !== undefined ? await phaseIn(plan, b.phaseId) : item.phase_id,
+            // Order within the plan: moving an item up or down says nothing
+            // new, so it never voids an approval.
+            position:
+              b.position !== undefined && Number.isInteger(b.position)
+                ? (b.position as number)
+                : Number(item.position),
           };
           const changes: Record<string, { before: unknown; after: unknown }> = {};
           const before = {
@@ -994,6 +1000,7 @@ export default definePlugin({
             body: item.body,
             owner: item.owner,
             phaseId: item.phase_id,
+            position: Number(item.position),
           };
           for (const k of Object.keys(next) as (keyof typeof next)[]) {
             if (next[k] !== before[k]) changes[k] = { before: before[k], after: next[k] };
@@ -1001,7 +1008,8 @@ export default definePlugin({
           if (Object.keys(changes).length) {
             await db.execute(
               sql`UPDATE plugin_plans_items SET kind = ${next.kind}, title = ${next.title}, body = ${next.body},
-                  owner = ${next.owner}, phase_id = ${next.phaseId}, updated_at = NOW()
+                  owner = ${next.owner}, phase_id = ${next.phaseId}, position = ${next.position},
+                  updated_at = NOW()
                   WHERE id = ${item.id}`,
             );
             await log(

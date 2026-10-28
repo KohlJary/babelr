@@ -236,6 +236,24 @@ describe('plans', () => {
     expect(events.filter((e: { action: string }) => e.action === 'approval-void')).toHaveLength(2);
   });
 
+  it('reordering items never voids an approval', async () => {
+    const h = await house();
+    const { slug, phaseId, itemId } = await planWithPhase(h);
+    await call('POST', `/plans/${slug}/items`, h.carol, {
+      phaseId,
+      kind: 'research',
+      title: 'second',
+    });
+    await call('POST', `/phases/${phaseId}/propose`, h.carol);
+    await call('POST', `/phases/${phaseId}/approve`, h.kohl);
+    const moved = (await call('PATCH', `/items/${itemId}`, h.carol, { position: 99 })).json();
+    expect(moved.phases[0].status).toBe('approved');
+    expect(moved.items.map((i: { title: string }) => i.title)).toEqual([
+      'second',
+      'Build the thing',
+    ]);
+  });
+
   it('declining needs a reason; a declined phase can be proposed again', async () => {
     const h = await house();
     const { slug, phaseId } = await planWithPhase(h);
