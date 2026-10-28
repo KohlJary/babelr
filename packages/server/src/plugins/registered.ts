@@ -16,12 +16,14 @@ import type { PluginManifest } from '@babelr/plugin-sdk';
 import blindsManifest from '@babelr/plugin-blinds';
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
+import plansManifest from '@babelr/plugin-plans';
 import pmManifest from '@babelr/plugin-project-management';
 import reviewManifest from '@babelr/plugin-review';
 
 const manifests: PluginManifest[] = [
   blindsManifest,
   helloManifest,
+  plansManifest,
   pollsManifest,
   pmManifest,
   reviewManifest,
