@@ -162,6 +162,7 @@ export function registerBuiltinViews(): void {
     label: 'Calendar',
     icon: '📅',
     isAvailable: () => true,
+    everywhere: true,
     View: CalendarView,
   });
 

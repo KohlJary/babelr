@@ -193,6 +193,8 @@ export interface ClientViewDefinition {
   label: string;
   icon?: unknown;
   isAvailable?: (host: unknown) => boolean;
+  /** Also listed in the DM sidebar, not only in a server's. */
+  everywhere?: boolean;
   /** React component function for the view. Receives
    *  `{ host, viewState }` — the host's context bag plus the free-form
    *  per-view state the host persists. Plugin authors write normal

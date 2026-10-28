@@ -50,6 +50,7 @@ export async function initPlugins(): Promise<void> {
           label: def.label,
           icon: def.icon as ViewDefinition['icon'],
           isAvailable: def.isAvailable as ViewDefinition['isAvailable'],
+          everywhere: def.everywhere,
           View: def.render as unknown as ViewDefinition['View'],
         });
       },

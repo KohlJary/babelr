@@ -10,8 +10,8 @@ import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
  *   - embed kind `blind`: [[blind:<round>]]. Inline = progress card;
  *     preview = the phone-first grader (one answer at a time).
  *   - view `blinds`: the rounds you grade, and the grader, in the main
- *     panel. In the toolbar when you grade at least one round (checked
- *     once at load); also opened from the embed's "Open grader".
+ *     panel. In the sidebar (servers and DMs alike) while you grade at
+ *     least one round; also opened from the embed's "Open grader".
  */
 /**
  * Client-side manifest. Unlike polls, the blinds manifest.ts imports
@@ -31,12 +31,15 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   const { BlindInline, BlindPreview, BlindsView, fetchRounds } = await import('./client.js');
   const routeBase = api.routeBase;
   let grades = false;
-  void fetchRounds(routeBase).then(
-    (rounds) => {
-      grades = rounds.length > 0;
-    },
-    () => {},
-  );
+  const check = () =>
+    fetchRounds(routeBase).then(
+      (rounds) => {
+        grades = rounds.length > 0;
+      },
+      () => {},
+    );
+  void check();
+  setInterval(() => void check(), 60_000);
 
   const InlineBound = (props: unknown) =>
     createElement(BlindInline as never, { ...(props as Record<string, unknown>), routeBase });
@@ -60,6 +63,8 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   api.registerView({
     id: 'blinds',
     label: 'Blinds',
+    icon: '🕶️',
+    everywhere: true,
     isAvailable: () => grades,
     render: (props) => {
       const host = props.host as { closeView: () => void };

@@ -29,7 +29,12 @@ interface ChannelSidebarProps {
   onEditChannel?: (channelId: string) => void;
   /** View entries auto-generated from the view registry. Each entry
    *  has already been filtered by isAvailable. */
-  viewEntries?: Array<{ id: string; label: string; icon?: import('react').ReactNode }>;
+  viewEntries?: Array<{
+    id: string;
+    label: string;
+    icon?: import('react').ReactNode;
+    everywhere?: boolean;
+  }>;
   onOpenView?: (id: string) => void;
   /** Rendered content from the plugin sidebar-slot registry. ChatView
    *  builds this; the sidebar just slots it in below the built-in
@@ -86,7 +91,7 @@ export function ChannelSidebar({
             </button>
           )}
           {viewEntries
-            ?.filter((v) => v.id === 'calendar')
+            ?.filter((v) => v.everywhere)
             .map((v) => (
               <button
                 key={v.id}

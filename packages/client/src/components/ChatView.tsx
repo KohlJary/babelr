@@ -458,7 +458,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               };
               return v.isAvailable(hostCheck);
             })
-            .map((v) => ({ id: v.id, label: v.label, icon: v.icon }))}
+            .map((v) => ({ id: v.id, label: v.label, icon: v.icon, everywhere: v.everywhere }))}
           onOpenView={openView}
           onJoinVoice={(channelId) => {
             if (voice.state.channelId === channelId) return;

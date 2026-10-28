@@ -70,6 +70,9 @@ export interface ViewDefinition {
   /** When does this view's entry button appear? Common predicate:
    *  "needs a selected server" for server-scoped views. */
   isAvailable?: (host: ViewHostContext) => boolean;
+  /** Also listed in the DM sidebar, not only in a server's. For views
+   *  that don't belong to a server (the calendar, your review inbox). */
+  everywhere?: boolean;
   /** React component that renders the view's main-panel content. Hosts
    *  mount it via createElement so hooks inside are tracked against
    *  this component, not the host's render cycle. */
