@@ -4403,6 +4403,201 @@ textarea.modal-input {
   min-height: 44px;
 }
 
+/* Review plugin: an agent's drafts, one at a time ----------------------- */
+.review-view {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem;
+  max-width: 48rem;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+.review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.review-count {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+.review-progress {
+  height: 4px;
+  margin: 0.6rem 0 0.9rem;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.review-progress span {
+  display: block;
+  height: 100%;
+  background: #22c55e;
+  transition: width 0.2s;
+}
+.review-error {
+  color: #f87171;
+  margin-bottom: 0.5rem;
+}
+.review-empty {
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 3rem;
+}
+.review-item {
+  flex: 1;
+}
+.review-item-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+.review-title {
+  margin: 0.3rem 0 0.2rem;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+.review-ref {
+  font-family: ui-monospace, monospace;
+  color: #94a3b8;
+  margin-right: 0.3rem;
+}
+.review-meta {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+.review-decided {
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: #1e293b;
+  border-left: 3px solid #64748b;
+}
+.review-decided-approve {
+  border-left-color: #22c55e;
+}
+.review-decided-veto {
+  border-left-color: #ef4444;
+}
+.review-decided-edit {
+  border-left-color: #38bdf8;
+}
+.review-decided-hold {
+  border-left-color: #eab308;
+}
+.review-why,
+.review-draft,
+.review-compose {
+  margin-top: 0.9rem;
+}
+.review-why h3,
+.review-draft h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+.review-why p {
+  margin: 0;
+  font-style: italic;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+}
+.review-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+  padding: 0.75rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+}
+.review-compose label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+.review-compose textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6rem;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+.review-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.review-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem 0 calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  margin-top: 1rem;
+  background: var(--bg, #0b1220);
+  border-top: 1px solid #1e293b;
+}
+.review-actions button,
+.review-compose-actions button,
+.review-bar button {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font: inherit;
+  cursor: pointer;
+}
+.review-actions button:not(.review-nav) {
+  flex: 1;
+}
+.review-actions button:disabled,
+.review-compose-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.review-actions .review-primary,
+.review-compose-actions .review-primary {
+  background: #15803d;
+  border-color: #16a34a;
+}
+.review-actions .review-veto,
+.review-compose-actions .review-veto {
+  background: #7f1d1d;
+  border-color: #b91c1c;
+}
+.review-view kbd {
+  margin-left: 0.3rem;
+  padding: 0 0.3rem;
+  font-size: 0.7rem;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  color: #94a3b8;
+}
+@media (hover: none) {
+  .review-view kbd {
+    display: none;
+  }
+}
+
 /* Project-management plugin — kanban + board list ---------------------- */
 .pm-list-row {
   display: flex;

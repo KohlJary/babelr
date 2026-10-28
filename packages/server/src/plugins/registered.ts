@@ -17,7 +17,14 @@ import blindsManifest from '@babelr/plugin-blinds';
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
 import pmManifest from '@babelr/plugin-project-management';
+import reviewManifest from '@babelr/plugin-review';
 
-const manifests: PluginManifest[] = [blindsManifest, helloManifest, pollsManifest, pmManifest];
+const manifests: PluginManifest[] = [
+  blindsManifest,
+  helloManifest,
+  pollsManifest,
+  pmManifest,
+  reviewManifest,
+];
 
 export const registeredPlugins: PluginManifest[] = manifests;
