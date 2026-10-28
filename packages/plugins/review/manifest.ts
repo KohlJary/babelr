@@ -31,6 +31,15 @@ import { sql } from 'drizzle-orm';
  * Reviewer routes (sessions):
  *   GET    /inbox
  *   POST   /items/:id/decision {decision, reason?, body?}
+ * Both, about one item (agents address it by ref, the reviewer by id):
+ *   GET    /items/:key/messages
+ *   POST   /items/:key/messages {body}
+ *
+ * The chat lets the reviewer talk a draft over with the agent. Each item
+ * says whether it's awaiting the agent's reply (the last message is the
+ * reviewer's), so an agent knows what to answer. An agent revising a
+ * draft does it the usual way, a PUT with the new content, which brings
+ * the item back undecided. Same visibility as the item: two actors.
  */
 
 export type Decision = 'approve' | 'hold' | 'veto' | 'edit';
@@ -51,10 +60,28 @@ export interface ReviewItem {
   decidedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  messageCount: number;
+  /** The last chat message is the reviewer's: the agent owes a reply. */
+  awaitingReply: boolean;
+}
+
+export interface ReviewMessage {
+  id: string;
+  from: 'agent' | 'reviewer';
+  authorName: string;
+  body: string;
+  createdAt: string;
 }
 
 const REF_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
-export const LIMITS = { title: 300, meta: 500, why: 4000, body: 100_000, reason: 4000 };
+export const LIMITS = {
+  title: 300,
+  meta: 500,
+  why: 4000,
+  body: 100_000,
+  reason: 4000,
+  message: 20_000,
+};
 
 export class ReviewError extends Error {
   constructor(
@@ -110,6 +137,8 @@ interface ItemRow {
   decided_at: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
+  message_count: number | string;
+  last_author: string | null;
 }
 
 const iso = (v: string | Date) => new Date(v).toISOString();
@@ -130,12 +159,17 @@ function toItem(r: ItemRow): ReviewItem {
     decidedAt: r.decided_at ? iso(r.decided_at) : null,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
+    messageCount: Number(r.message_count),
+    awaitingReply: r.last_author !== null && r.last_author !== r.agent_id,
   };
 }
 
 const SELECT = sql`SELECT i.id, i.ref, i.agent_id, a.preferred_username AS username,
   a.display_name, i.title, i.meta, i.why, i.body, i.revision, i.decision, i.reason,
-  i.edited_body, i.decided_at, i.created_at, i.updated_at
+  i.edited_body, i.decided_at, i.created_at, i.updated_at,
+  (SELECT count(*) FROM plugin_review_messages m WHERE m.item_id = i.id) AS message_count,
+  (SELECT m.author_id FROM plugin_review_messages m WHERE m.item_id = i.id
+    ORDER BY m.seq DESC LIMIT 1) AS last_author
   FROM plugin_review_items i JOIN actors a ON a.id::text = i.agent_id`;
 
 type Actor = {
@@ -182,6 +216,23 @@ export default definePlugin({
 
         CREATE INDEX IF NOT EXISTS plugin_review_items_reviewer_idx
           ON plugin_review_items (reviewer_id) WHERE closed_at IS NULL;
+      `,
+    },
+    {
+      id: 2,
+      name: 'messages',
+      up: `
+        CREATE TABLE IF NOT EXISTS plugin_review_messages (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          seq BIGSERIAL,
+          item_id UUID NOT NULL REFERENCES plugin_review_items(id) ON DELETE CASCADE,
+          author_id TEXT NOT NULL,
+          body TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS plugin_review_messages_item_idx
+          ON plugin_review_messages (item_id, seq);
       `,
     },
   ],
@@ -285,6 +336,80 @@ export default definePlugin({
         return fail(reply, err);
       }
     });
+
+    // ── Chat about one item ────────────────────────────────────────
+
+    /** The open item `key` names for this actor: by ref for its agent,
+     *  by id for its reviewer. Anyone else: the missing-item 404. */
+    async function itemFor(actor: Actor | null | undefined, key: string): Promise<ItemRow> {
+      if (!actor) throw new ReviewError('Not authenticated', 401);
+      let rows: ItemRow[];
+      if (isAgent(actor)) {
+        rows = (await fastify.db.execute(
+          sql`${SELECT} WHERE i.agent_id = ${actor.id} AND i.ref = ${ref(key)}
+            AND i.closed_at IS NULL`,
+        )) as unknown as ItemRow[];
+      } else {
+        const me = reviewerOf(actor);
+        if (!/^[0-9a-f-]{36}$/i.test(key)) throw new ReviewError('item not found', 404);
+        rows = (await fastify.db.execute(
+          sql`${SELECT} WHERE i.id = ${key} AND i.reviewer_id = ${me.id} AND i.closed_at IS NULL`,
+        )) as unknown as ItemRow[];
+      }
+      if (!rows[0]) throw new ReviewError('item not found', 404);
+      return rows[0];
+    }
+
+    interface MessageRow {
+      id: string;
+      author_id: string;
+      author_name: string;
+      body: string;
+      created_at: string | Date;
+    }
+
+    async function messagesOf(item: ItemRow): Promise<ReviewMessage[]> {
+      const rows = (await fastify.db.execute(
+        sql`SELECT m.id, m.author_id, COALESCE(a.display_name, a.preferred_username) AS author_name,
+            m.body, m.created_at
+          FROM plugin_review_messages m LEFT JOIN actors a ON a.id::text = m.author_id
+          WHERE m.item_id = ${item.id} ORDER BY m.seq`,
+      )) as unknown as MessageRow[];
+      return rows.map((m) => ({
+        id: m.id,
+        from: m.author_id === item.agent_id ? 'agent' : 'reviewer',
+        authorName: m.author_name ?? '',
+        body: m.body,
+        createdAt: iso(m.created_at),
+      }));
+    }
+
+    fastify.get<{ Params: { key: string } }>('/items/:key/messages', async (request, reply) => {
+      try {
+        const item = await itemFor(request.actor as Actor, request.params.key);
+        return await messagesOf(item);
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
+
+    fastify.post<{ Params: { key: string }; Body: { body?: unknown } }>(
+      '/items/:key/messages',
+      async (request, reply) => {
+        try {
+          const actor = request.actor as Actor;
+          const item = await itemFor(actor, request.params.key);
+          const body = text(request.body?.body, 'message', true);
+          await fastify.db.execute(
+            sql`INSERT INTO plugin_review_messages (item_id, author_id, body)
+              VALUES (${item.id}, ${actor.id}, ${body})`,
+          );
+          return reply.status(201).send(await messagesOf(item));
+        } catch (err) {
+          return fail(reply, err);
+        }
+      },
+    );
 
     // ── Reviewer ───────────────────────────────────────────────────
 

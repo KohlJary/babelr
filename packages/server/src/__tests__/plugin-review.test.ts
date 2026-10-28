@@ -24,7 +24,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await cleanDb(db);
-  await db.execute(sql`TRUNCATE plugin_review_items`);
+  await db.execute(sql`TRUNCATE plugin_review_items CASCADE`);
   wsSent.length = 0;
 });
 
@@ -160,5 +160,52 @@ describe('review plugin', () => {
     const again = await call('PUT', '/items/0001', robo, { ...ITEM, body: 'Dear F, v2' });
     expect(again.json()).toMatchObject({ changed: true, item: { revision: 3 } });
     expect((await call('GET', '/inbox', kohl)).json()).toHaveLength(1);
+  });
+});
+
+describe('review chat', () => {
+  it('the reviewer and the agent talk an item over; the agent sees what it owes', async () => {
+    const { kohl, robo } = await cast();
+    await call('PUT', '/items/0001', robo, ITEM);
+    const id = (await call('GET', '/inbox', kohl)).json()[0].id;
+
+    const asked = await call('POST', `/items/${id}/messages`, kohl, {
+      body: 'shorter, and lose the PS',
+    });
+    expect(asked.status).toBe(201);
+    let mine = (await call('GET', '/items', robo)).json()[0];
+    expect(mine).toMatchObject({ messageCount: 1, awaitingReply: true });
+
+    // The agent addresses the item by its own ref.
+    const thread = (await call('GET', '/items/0001/messages', robo)).json();
+    expect(thread).toEqual([
+      expect.objectContaining({ from: 'reviewer', body: 'shorter, and lose the PS' }),
+    ]);
+    await call('POST', '/items/0001/messages', robo, { body: 'done: new draft is up' });
+    await call('PUT', '/items/0001', robo, { ...ITEM, body: 'Dear F, short' });
+    mine = (await call('GET', '/items', robo)).json()[0];
+    expect(mine).toMatchObject({ messageCount: 2, awaitingReply: false, revision: 2 });
+
+    const inbox = (await call('GET', '/inbox', kohl)).json()[0];
+    expect(inbox).toMatchObject({ body: 'Dear F, short', decision: null, messageCount: 2 });
+    const seen = (await call('GET', `/items/${id}/messages`, kohl)).json();
+    expect(seen.map((m: { from: string; authorName: string }) => [m.from, m.authorName])).toEqual([
+      ['reviewer', 'kohl'],
+      ['agent', 'Robo'],
+    ]);
+  });
+
+  it('nobody else reads or writes the chat, and a closed item has none', async () => {
+    const { kohl, mallory, robo } = await cast();
+    await call('PUT', '/items/0001', robo, ITEM);
+    const id = (await call('GET', '/inbox', kohl)).json()[0].id;
+    await call('POST', `/items/${id}/messages`, kohl, { body: 'private' });
+    expect((await call('GET', `/items/${id}/messages`, mallory)).status).toBe(404);
+    expect((await call('POST', `/items/${id}/messages`, mallory, { body: 'x' })).status).toBe(404);
+    expect((await call('POST', `/items/${id}/messages`, kohl, { body: '  ' })).status).toBe(400);
+    expect((await call('GET', `/items/${id}/messages`, robo)).status).toBe(404); // agents use refs
+    await call('DELETE', '/items/0001', robo);
+    expect((await call('GET', `/items/${id}/messages`, kohl)).status).toBe(404);
+    expect(wsSent).toEqual([]);
   });
 });
