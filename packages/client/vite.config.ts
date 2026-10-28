@@ -21,6 +21,15 @@ const proxyWsTarget = proxyHttpTarget.replace(/^http/, 'ws');
 const allowedHosts = ['localhost', '127.0.0.1', 'babelr-a.local', 'babelr-b.local'];
 
 export default defineConfig({
+  build: {
+    // Keep the previous build's chunks. The service worker can serve an
+    // open tab (or a reload) the old precached index, which lazy-loads
+    // chunks by their old hashed names; wiping dist on every server
+    // restart 404'd them, and plugin UIs (polls) silently vanished.
+    // Unchanged files keep their names, so dist grows only by what
+    // changed; clear it by hand if it ever matters.
+    emptyOutDir: false,
+  },
   plugins: [
     react(),
     VitePWA({
