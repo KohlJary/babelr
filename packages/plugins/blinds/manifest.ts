@@ -49,7 +49,16 @@ import { join, resolve, sep } from 'node:path';
  *     `ratings.<grader>.json`.
  *     Babelr never unblinds: robokohl's `blinds unblind` joins
  *     ratings.json with the key, outside this server. unblind refuses
- *     unless ratings.json has locked_at. That is a check, not a
+ *     unless ratings.json has locked_at.
+ *   - The Unblind button asks; it doesn't open anything. On a round
+ *     this grader has locked, POST .../unblind writes
+ *     `unblind-request.json` (the grader's name and the time) into the
+ *     round directory. The producer watches for it, unblinds with its
+ *     key, and writes `results.json` back: per-arm scores, or an
+ *     `error`. Babelr reads results.json only for a grader who has
+ *     locked, so nobody still grading sees a score. (With several
+ *     graders the files are `unblind-request.<grader>.json` and
+ *     `results.<grader>.json`, like the ratings.) That is a check, not a
  *     guarantee: a hand-written ratings.json with locked_at passes it,
  *     and key.json is readable on disk by anyone with file access.
  *
@@ -112,6 +121,28 @@ export interface BlindRoundPayload {
   lockedAt: string | null;
   graded: number;
   total: number;
+  /** Present once this grader has locked. */
+  unblind?: BlindUnblind;
+}
+
+/** One arm's scores, as the producer computed them from the key. */
+export interface ArmScores {
+  answers: number;
+  /** Per rubric field: bool → {yes, rated}; scale → {mean, rated}. */
+  fields: Record<string, { yes?: number; mean?: number | null; rated: number }>;
+  mean_rank?: number;
+}
+
+/** What the producer writes back after unblinding. */
+export interface BlindResults {
+  unblindedAt: string | null;
+  arms: Record<string, ArmScores>;
+  error: string | null;
+}
+
+export interface BlindUnblind {
+  requested: boolean;
+  results: BlindResults | null;
 }
 
 export interface BlindRoundSummary {
@@ -132,6 +163,12 @@ const ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 /** Babelr's own username rule (routes/auth.ts), so it's also safe in a filename. */
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const GRADER_RATINGS_RE = /^ratings\.[a-zA-Z0-9_]{3,32}\.json$/;
+/** The unblind handshake: Babelr writes the request, reads the results. */
+export const REQUEST_FILE = 'unblind-request.json';
+export const RESULTS_FILE = 'results.json';
+const GRADER_REQUEST_RE = /^unblind-request\.[a-zA-Z0-9_]{3,32}\.json$/;
+const GRADER_RESULTS_RE = /^results\.[a-zA-Z0-9_]{3,32}\.json$/;
+const MAX_RESULTS_BYTES = 256 * 1024;
 const MAX_NOTE = 4000;
 const MAX_BUNDLE_BYTES = 5 * 1024 * 1024;
 
@@ -170,6 +207,15 @@ export function ratingsFileFor(bundle: BlindBundle, grader: string): string {
   return gradersFor(bundle).length === 1 ? RATINGS_FILE : `ratings.${grader}.json`;
 }
 
+/** This grader's unblind request and results files, named like the ratings. */
+export function unblindFilesFor(bundle: BlindBundle, grader: string) {
+  const alone = gradersFor(bundle).length === 1;
+  return {
+    request: alone ? REQUEST_FILE : `unblind-request.${grader}.json`,
+    results: alone ? RESULTS_FILE : `results.${grader}.json`,
+  };
+}
+
 /**
  * Resolve a file inside a round's bundle directory. This is the only
  * path builder the plugin uses, and it only ever hands out blind.json
@@ -179,9 +225,17 @@ export function ratingsFileFor(bundle: BlindBundle, grader: string): string {
  */
 export function bundleFile(round: string, name: string, mode: 'read' | 'write'): string {
   const ok =
-    mode === 'read' ? name === BUNDLE_FILE : name === RATINGS_FILE || GRADER_RATINGS_RE.test(name);
+    mode === 'read'
+      ? name === BUNDLE_FILE || name === RESULTS_FILE || GRADER_RESULTS_RE.test(name)
+      : name === RATINGS_FILE ||
+        GRADER_RATINGS_RE.test(name) ||
+        name === REQUEST_FILE ||
+        GRADER_REQUEST_RE.test(name);
   if (!ok) {
-    const allowed = mode === 'read' ? BUNDLE_FILE : `${RATINGS_FILE} or ratings.<grader>.json`;
+    const allowed =
+      mode === 'read'
+        ? `${BUNDLE_FILE} or ${RESULTS_FILE}`
+        : `${RATINGS_FILE} or ${REQUEST_FILE} (or their per-grader forms)`;
     throw new BundleError(`refusing to ${mode} ${name}: only ${allowed} is allowed`, 400);
   }
   if (!isValidRound(round)) throw new BundleError('invalid round name', 400);
@@ -315,6 +369,67 @@ export async function loadBundle(round: string): Promise<BlindBundle> {
     throw new BundleError('blind.json is not valid JSON', 422);
   }
   return sanitizeBundle(parsed, round);
+}
+
+function num(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
+/** Validate a parsed results.json, copying out only numbers and names. */
+export function sanitizeResults(raw: unknown): BlindResults {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  if (typeof r.error === 'string') {
+    return { unblindedAt: null, arms: {}, error: r.error.slice(0, 500) };
+  }
+  const armsIn = (r.arms && typeof r.arms === 'object' ? r.arms : {}) as Record<string, unknown>;
+  const arms: Record<string, ArmScores> = {};
+  for (const [name, a] of Object.entries(armsIn).slice(0, 50)) {
+    if (!a || typeof a !== 'object' || name.length > 64) continue;
+    const row = a as Record<string, unknown>;
+    const fields: ArmScores['fields'] = {};
+    const fin = (row.fields && typeof row.fields === 'object' ? row.fields : {}) as Record<
+      string,
+      unknown
+    >;
+    for (const [id, v] of Object.entries(fin).slice(0, 50)) {
+      if (!ID_RE.test(id) || !v || typeof v !== 'object') continue;
+      const f = v as Record<string, unknown>;
+      fields[id] = {
+        rated: num(f.rated) ?? 0,
+        ...(num(f.yes) !== undefined ? { yes: num(f.yes) } : {}),
+        ...('mean' in f ? { mean: num(f.mean) ?? null } : {}),
+      };
+    }
+    arms[name] = {
+      answers: num(row.answers) ?? 0,
+      fields,
+      ...(num(row.mean_rank) !== undefined ? { mean_rank: num(row.mean_rank) } : {}),
+    };
+  }
+  const at = typeof r.unblinded_at === 'string' ? r.unblinded_at.slice(0, 64) : null;
+  return { unblindedAt: at, arms, error: null };
+}
+
+/** This round's results file, if the producer has written one. */
+export async function loadResults(round: string, name: string): Promise<BlindResults | null> {
+  const p = bundleFile(round, name, 'read');
+  let st;
+  try {
+    st = await lstat(p);
+  } catch {
+    return null;
+  }
+  if (!st.isFile() || st.size > MAX_RESULTS_BYTES) {
+    return { unblindedAt: null, arms: {}, error: `${name} is not a readable results file` };
+  }
+  const fh = await open(p, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  try {
+    return sanitizeResults(JSON.parse(await fh.readFile('utf8')));
+  } catch {
+    return { unblindedAt: null, arms: {}, error: `${name} is not valid JSON` };
+  } finally {
+    await fh.close();
+  }
 }
 
 /** Round directories that contain a blind.json. Stats only; reads nothing. */
@@ -547,14 +662,33 @@ export default definePlugin({
       const all = await loadRatings(round, grader);
       const ratings: Record<string, AnswerRating> = {};
       for (const a of bundle.answers) if (all[a.label]) ratings[a.label] = all[a.label];
+      const locked = await lockedAt(round, grader);
       return {
         bundle,
         ratings,
         ranks: bundle.rank ? await loadRanks(round, grader) : {},
-        lockedAt: await lockedAt(round, grader),
+        lockedAt: locked,
         graded: bundle.answers.filter((a) => isGraded(bundle, ratings[a.label])).length,
         total: bundle.answers.length,
+        // Scores exist only for a grader who has locked: never read the
+        // results file for anyone still grading.
+        ...(locked ? { unblind: await unblindState(bundle, round, grader) } : {}),
       };
+    }
+
+    async function unblindState(
+      bundle: BlindBundle,
+      round: string,
+      grader: string,
+    ): Promise<BlindUnblind> {
+      const files = unblindFilesFor(bundle, grader);
+      let requested = true;
+      try {
+        await lstat(bundleFile(round, files.request, 'write'));
+      } catch {
+        requested = false;
+      }
+      return { requested, results: await loadResults(round, files.results) };
     }
 
     /**
@@ -700,6 +834,44 @@ export default definePlugin({
             ),
           );
           return { promptId, order };
+        } catch (err) {
+          return fail(reply, err);
+        }
+      },
+    );
+
+    // Ask the producer to unblind this grader's locked ratings. Writes
+    // the request file and nothing else; asking twice is fine.
+    fastify.post<{ Params: { round: string } }>(
+      '/rounds/:round/unblind',
+      async (request, reply) => {
+        try {
+          const { round } = request.params;
+          const grader = me(request);
+          const bundle = await gradeable(round, grader);
+          if (!(await lockedAt(round, grader))) {
+            throw new BundleError('Lock the round first: unblinding comes after grading', 409);
+          }
+          const target = bundleFile(round, unblindFilesFor(bundle, grader).request, 'write');
+          try {
+            const fh = await open(
+              target,
+              fsConstants.O_WRONLY |
+                fsConstants.O_CREAT |
+                fsConstants.O_EXCL |
+                fsConstants.O_NOFOLLOW,
+              0o600,
+            );
+            try {
+              const doc = { round, grader, requested_at: new Date().toISOString() };
+              await fh.writeFile(JSON.stringify(doc, null, 2) + '\n', 'utf8');
+            } finally {
+              await fh.close();
+            }
+          } catch (e) {
+            if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+          }
+          return await unblindState(bundle, round, grader);
         } catch (err) {
           return fail(reply, err);
         }

@@ -195,7 +195,16 @@ describe('blinds manifest', () => {
 describe('bundleFile: the only path builder', () => {
   it('hands out blind.json for reads and nothing else', () => {
     expect(blinds.bundleFile('r1', 'blind.json', 'read')).toBe(join(dir, 'r1', 'blind.json'));
-    for (const name of ['key.json', 'raw.json', 'ratings.json', 'blind.md', '../key.json']) {
+    expect(blinds.bundleFile('r1', 'results.json', 'read')).toBe(join(dir, 'r1', 'results.json'));
+    for (const name of [
+      'key.json',
+      'raw.json',
+      'ratings.json',
+      'blind.md',
+      '../key.json',
+      'source.json',
+      'unblind-request.json',
+    ]) {
       expect(() => blinds.bundleFile('r1', name, 'read')).toThrow(/refusing/);
     }
   });
@@ -577,5 +586,101 @@ describe('several graders', () => {
     expect(await list(other)).toEqual([
       { round: 'r1', title: 'Round 1', graded: 1, total: 3, lockedAt: null },
     ]);
+  });
+});
+
+describe('unblind: Babelr asks, the producer answers', () => {
+  const RESULTS = {
+    round: 'r1',
+    unblinded_at: '2026-10-28T13:00:00.000Z',
+    arms: {
+      bare: {
+        answers: 2,
+        fields: { stunt: { yes: 1, rated: 2 }, would_do: { mean: 1.5, rated: 2 } },
+        mean_rank: 1.5,
+      },
+      robokohl: {
+        answers: 1,
+        fields: { stunt: { yes: 1, rated: 1 }, would_do: { mean: 2, rated: 1 } },
+        mean_rank: 1,
+      },
+    },
+    secret: 'dropped',
+  };
+
+  it('only after this grader locks; writes the request and nothing else', async () => {
+    const d = await writeRound('r1');
+    expect((await req('POST', '/rounds/r1/unblind', grader)).statusCode).toBe(409);
+    expect(JSON.parse((await req('GET', '/rounds/r1', grader)).body).unblind).toBeUndefined();
+
+    await req('POST', '/rounds/r1/lock', grader);
+    fsPaths.length = 0;
+    const res = await req('POST', '/rounds/r1/unblind', grader);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ requested: true, results: null });
+    const asked = JSON.parse(await readFile(join(d, 'unblind-request.json'), 'utf8'));
+    expect(asked).toMatchObject({ round: 'r1', grader: 'kohl' });
+    // Asking twice is fine.
+    expect((await req('POST', '/rounds/r1/unblind', grader)).statusCode).toBe(200);
+    // Still never near the key.
+    expect(fsPaths.some((p) => /key\.json|raw\.json|source\.json/.test(p))).toBe(false);
+  });
+
+  it('shows the scores the producer writes back, known fields only', async () => {
+    const d = await writeRound('r1');
+    await req('POST', '/rounds/r1/lock', grader);
+    await req('POST', '/rounds/r1/unblind', grader);
+    await writeFile(join(d, 'results.json'), JSON.stringify(RESULTS));
+    const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    expect(body.unblind.requested).toBe(true);
+    expect(body.unblind.results).toEqual({
+      unblindedAt: '2026-10-28T13:00:00.000Z',
+      error: null,
+      arms: {
+        bare: {
+          answers: 2,
+          fields: { stunt: { yes: 1, rated: 2 }, would_do: { mean: 1.5, rated: 2 } },
+          mean_rank: 1.5,
+        },
+        robokohl: {
+          answers: 1,
+          fields: { stunt: { yes: 1, rated: 1 }, would_do: { mean: 2, rated: 1 } },
+          mean_rank: 1,
+        },
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain('dropped');
+  });
+
+  it('passes on a producer error', async () => {
+    const d = await writeRound('r1');
+    await req('POST', '/rounds/r1/lock', grader);
+    await writeFile(join(d, 'results.json'), JSON.stringify({ error: 'no source.json' }));
+    const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    expect(body.unblind.results).toEqual({ unblindedAt: null, arms: {}, error: 'no source.json' });
+  });
+
+  it('a grader still grading never sees the scores, even if they exist', async () => {
+    const d = await writeRound('r1', { ...BUNDLE, graders: ['kohl', 'mallory'] });
+    await req('POST', '/rounds/r1/lock', grader);
+    await req('POST', '/rounds/r1/unblind', grader);
+    expect(await readFile(join(d, 'unblind-request.kohl.json'), 'utf8')).toContain('kohl');
+    await writeFile(join(d, 'results.kohl.json'), JSON.stringify(RESULTS));
+    await writeFile(join(d, 'results.json'), JSON.stringify(RESULTS));
+    fsPaths.length = 0;
+    const theirs = JSON.parse((await req('GET', '/rounds/r1', other)).body);
+    expect(theirs.unblind).toBeUndefined();
+    expect(JSON.stringify(theirs)).not.toContain('robokohl');
+    expect(fsPaths.some((p) => p.includes('results'))).toBe(false);
+    const mine = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    expect(Object.keys(mine.unblind.results.arms)).toEqual(['bare', 'robokohl']);
+  });
+
+  it('refuses a symlinked results.json', async () => {
+    const d = await writeRound('r1');
+    await req('POST', '/rounds/r1/lock', grader);
+    await symlink(join(d, 'key.json'), join(d, 'results.json'));
+    const body = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    expect(body.unblind.results.error).toMatch(/not a readable results file/);
   });
 });

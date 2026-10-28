@@ -4,6 +4,7 @@ import type {
   AnswerRating,
   BlindBundle,
   BlindRoundPayload,
+  BlindResults,
   BlindRoundSummary,
   BlindRubricField,
   RatingValue,
@@ -440,6 +441,35 @@ export function BlindGrader(props: Record<string, unknown>) {
     }
   };
 
+  // A round opened after it was locked goes straight to its results.
+  const jumpedToLock = useRef(false);
+  useEffect(() => {
+    if (data?.lockedAt && !jumpedToLock.current) {
+      jumpedToLock.current = true;
+      setStep('lock');
+    }
+  }, [data?.lockedAt]);
+
+  // While an unblind is asked for and the scores aren't back (or came
+  // back with an error the producer will retry), check every 5 seconds.
+  const unblind = data?.unblind;
+  const waiting = !!unblind?.requested && (!unblind.results || !!unblind.results.error);
+  useEffect(() => {
+    if (!waiting) return;
+    const id = setInterval(() => void reload(), 5000);
+    return () => clearInterval(id);
+  }, [waiting, reload]);
+
+  const requestUnblind = async () => {
+    setError(null);
+    try {
+      await api(`${routeBase}/rounds/${encodeURIComponent(slug)}/unblind`, 'POST');
+      await reload();
+    } catch (err) {
+      setError(`Unblind failed: ${(err as Error).message}`);
+    }
+  };
+
   const lock = async () => {
     setError(null);
     try {
@@ -583,10 +613,15 @@ export function BlindGrader(props: Record<string, unknown>) {
             {locked ? 'Locked' : 'Finish'}
           </h3>
           {locked ? (
-            <p>
-              Locked {new Date(state.data.lockedAt!).toLocaleString()}. Ratings were exported to
-              ratings.json. Unblind with robokohl, outside Babelr.
-            </p>
+            <>
+              <p>Locked {new Date(state.data.lockedAt!).toLocaleString()}.</p>
+              <UnblindPanel
+                bundle={bundle}
+                requested={!!state.data.unblind?.requested}
+                results={state.data.unblind?.results ?? null}
+                onRequest={() => void requestUnblind()}
+              />
+            </>
           ) : (
             <>
               <p>
@@ -677,6 +712,99 @@ export function BlindGrader(props: Record<string, unknown>) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Unblind ─────────────────────────────────────────────────────────
+
+/**
+ * The scores after unblinding. Babelr never sees the key: the button
+ * leaves a request beside the round, and the tool that made the round
+ * unblinds and writes the scores back.
+ */
+function UnblindPanel({
+  bundle,
+  requested,
+  results,
+  onRequest,
+}: {
+  bundle: BlindBundle;
+  requested: boolean;
+  results: BlindResults | null;
+  onRequest: () => void;
+}) {
+  if (results && !results.error) {
+    const arms = Object.entries(results.arms);
+    const ranked = arms.some(([, a]) => a.mean_rank !== undefined);
+    return (
+      <div className="blind-results">
+        <div className="blind-results-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Arm</th>
+                {bundle.rubric.map((f) => (
+                  <th key={f.id} scope="col">
+                    {f.label}
+                  </th>
+                ))}
+                {ranked && <th scope="col">Mean rank</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {arms.map(([name, a]) => (
+                <tr key={name}>
+                  <th scope="row">{name}</th>
+                  {bundle.rubric.map((f) => {
+                    const v = a.fields[f.id];
+                    if (!v) return <td key={f.id}>–</td>;
+                    return (
+                      <td key={f.id}>
+                        {f.type === 'bool'
+                          ? `${v.yes ?? 0} / ${v.rated}`
+                          : `${v.mean ?? '–'} (n=${v.rated})`}
+                      </td>
+                    );
+                  })}
+                  {ranked && <td>{a.mean_rank ?? '–'}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="blind-results-note">
+          Yes/no fields: yes out of rated. Scales: mean. Rank: 1 is best.
+          {results.unblindedAt
+            ? ` Unblinded ${new Date(results.unblindedAt).toLocaleString()}.`
+            : ''}
+        </p>
+      </div>
+    );
+  }
+  if (results?.error) {
+    return (
+      <p className="blind-warning">
+        Unblinding didn't work: {results.error}. It tries again every minute.
+      </p>
+    );
+  }
+  if (requested) {
+    return (
+      <p className="blind-results-note" role="status">
+        Unblinding… the scores show up here within a minute.
+      </p>
+    );
+  }
+  return (
+    <>
+      <p>
+        See which answer came from where. Babelr never opens the key: this asks the tool that made
+        the round to unblind it and send the scores back.
+      </p>
+      <button type="button" className="blind-lock-button" onClick={onRequest}>
+        Unblind
+      </button>
+    </>
   );
 }
 

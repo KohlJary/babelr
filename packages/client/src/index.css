@@ -4386,6 +4386,33 @@ textarea.modal-input {
 .blind-view-bar {
   margin-bottom: 0.5rem;
 }
+.blind-results-scroll {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.blind-results table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  min-width: 100%;
+}
+.blind-results th,
+.blind-results td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #334155;
+  text-align: left;
+  white-space: nowrap;
+}
+.blind-results thead th {
+  color: #94a3b8;
+  font-weight: 600;
+}
+.blind-results tbody th {
+  font-family: ui-monospace, monospace;
+}
+.blind-results-note {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
 .blind-rounds h2 {
   margin: 0.75rem 0 0.5rem;
 }
