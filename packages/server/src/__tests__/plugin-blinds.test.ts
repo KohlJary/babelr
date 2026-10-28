@@ -14,7 +14,8 @@ import { join } from 'node:path';
  *   - only blind.json is ever read from a bundle directory (key.json and
  *     raw.json sit next to it, unreadable, and every fs path the plugin
  *     touches is recorded and checked)
- *   - every route is 403 for anyone but BLINDS_GRADER, reads included
+ *   - every route is 403 signed out; a round you don't grade is a 404,
+ *     reads included; each grader sees and exports only their own
  *   - nothing is broadcast
  *   - lock freezes the round (409 after) and exports ratings.json
  *
@@ -146,8 +147,10 @@ beforeAll(async () => {
       `DROP TABLE IF EXISTS plugin_blinds_rounds, plugin_blinds_ratings, plugin_blinds_ranks`,
     ),
   );
-  for (const stmt of (blindsManifest.migrations![0].up as string).split(/;\s*(?:\n|$)/)) {
-    if (stmt.trim()) await db.execute(sql.raw(stmt));
+  for (const m of blindsManifest.migrations!) {
+    for (const stmt of (m.up as string).split(/;\s*(?:\n|$)/)) {
+      if (stmt.trim()) await db.execute(sql.raw(stmt));
+    }
   }
   await app.register(async (scoped: FastifyInstance) => blindsManifest.serverRoutes!(scoped), {
     prefix: '/plugins/blinds',
@@ -197,9 +200,18 @@ describe('bundleFile: the only path builder', () => {
     }
   });
 
-  it('hands out ratings.json for writes and nothing else', () => {
+  it('hands out ratings exports for writes and nothing else', () => {
     expect(blinds.bundleFile('r1', 'ratings.json', 'write')).toBe(join(dir, 'r1', 'ratings.json'));
-    for (const name of ['blind.json', 'key.json']) {
+    expect(blinds.bundleFile('r1', 'ratings.kohl.json', 'write')).toBe(
+      join(dir, 'r1', 'ratings.kohl.json'),
+    );
+    for (const name of [
+      'blind.json',
+      'key.json',
+      'ratings.json.key',
+      'ratings.../x.json',
+      'ratings..json',
+    ]) {
       expect(() => blinds.bundleFile('r1', name, 'write')).toThrow(/refusing/);
     }
   });
@@ -220,13 +232,18 @@ describe('grader gate', () => {
     ['POST', '/rounds/r1/lock'],
   ];
 
-  it('403s every route, reads included, for another user', async () => {
+  it('404s another user on every round route, reads included, and lists them nothing', async () => {
     await writeRound('r1');
     for (const [m, u, b] of routes) {
       const res = await req(m, u, other, b);
-      expect(res.statusCode, `${m} ${u}`).toBe(403);
+      expect(res.statusCode, `${m} ${u}`).toBe(u === '/rounds' ? 200 : 404);
       expect(res.body).not.toContain('answer one');
+      expect(res.body).not.toContain('Round 1');
     }
+    // Same answer as a round that doesn't exist, so it says nothing.
+    expect((await req('GET', '/rounds/nope', other)).body).toBe(
+      (await req('GET', '/rounds/r1', other)).body,
+    );
   });
 
   it('403s every route when unauthenticated', async () => {
@@ -236,11 +253,13 @@ describe('grader gate', () => {
     }
   });
 
-  it('403s everyone, the would-be grader too, when BLINDS_GRADER is unset', async () => {
+  it('shuts out everyone, the would-be grader too, when nothing names a grader', async () => {
     await writeRound('r1');
     delete process.env.BLINDS_GRADER;
     for (const [m, u, b] of routes) {
-      expect((await req(m, u, grader, b)).statusCode, `${m} ${u}`).toBe(403);
+      const res = await req(m, u, grader, b);
+      expect(res.statusCode, `${m} ${u}`).toBe(u === '/rounds' ? 200 : 404);
+      expect(res.body).not.toContain('Round 1');
     }
   });
 
@@ -469,6 +488,16 @@ describe('lock: failure and races', () => {
 });
 
 describe('sanitizeBundle', () => {
+  it('rejects graders that are not local usernames', () => {
+    const bad = (graders: unknown) => () => blinds.sanitizeBundle({ ...BUNDLE, graders }, 'r1');
+    expect(bad('kohl')).toThrow(/graders/);
+    expect(bad(['kohl@elsewhere.example'])).toThrow(/graders/);
+    expect(bad(['../x'])).toThrow(/graders/);
+    expect(blinds.sanitizeBundle({ ...BUNDLE, graders: ['kohl', 'kohl'] }, 'r1').graders).toEqual([
+      'kohl',
+    ]);
+  });
+
   it('rejects malformed rubrics and mismatched rounds', () => {
     const bad = (patch: Record<string, unknown>) => () =>
       blinds.sanitizeBundle({ ...BUNDLE, ...patch }, 'r1');
@@ -477,5 +506,76 @@ describe('sanitizeBundle', () => {
     expect(bad({ rubric: [{ id: 'x', label: 'x', type: 'stars' }] })).toThrow();
     expect(bad({ answers: [{ label: 'P1-A', prompt_id: 'P9', text: 't' }] })).toThrow(/prompt_id/);
     expect(bad({ answers: [BUNDLE.answers[1], BUNDLE.answers[1]] })).toThrow(/duplicate/);
+  });
+});
+
+describe('several graders', () => {
+  it('a round names its own graders, overriding BLINDS_GRADER', async () => {
+    await writeRound('r1', { ...BUNDLE, graders: ['mallory'] });
+    expect((await req('GET', '/rounds/r1', grader)).statusCode).toBe(404);
+    expect((await req('GET', '/rounds/r1', other)).statusCode).toBe(200);
+  });
+
+  it('BLINDS_GRADER takes a comma-separated list', async () => {
+    await writeRound('r1');
+    process.env.BLINDS_GRADER = 'kohl, mallory';
+    expect((await req('GET', '/rounds/r1', grader)).statusCode).toBe(200);
+    expect((await req('GET', '/rounds/r1', other)).statusCode).toBe(200);
+  });
+
+  it('each grader rates, ranks, locks and exports alone', async () => {
+    const d = await writeRound('r1', { ...BUNDLE, graders: ['kohl', 'mallory'] });
+    await req('PUT', '/rounds/r1/ratings/P1-A', grader, { field: 'stunt', value: true });
+    await req('PUT', '/rounds/r1/ratings/P1-A', grader, { note: 'kohl note' });
+    await req('PUT', '/rounds/r1/ranks/P1', grader, { order: ['P1-B', 'P1-A'] });
+    await req('PUT', '/rounds/r1/ratings/P1-A', other, { field: 'stunt', value: false });
+
+    // Neither sees the other's work, or whether they've started.
+    const mine = JSON.parse((await req('GET', '/rounds/r1', grader)).body);
+    const theirs = JSON.parse((await req('GET', '/rounds/r1', other)).body);
+    expect(mine.ratings['P1-A']).toEqual({ fields: { stunt: true }, note: 'kohl note' });
+    expect(theirs.ratings['P1-A']).toEqual({ fields: { stunt: false }, note: '' });
+    expect(theirs.ranks).toEqual({});
+    expect(JSON.stringify(theirs)).not.toContain('kohl note');
+
+    // Kohl locks; Mallory can still grade, and her lock is her own file.
+    const res = await req('POST', '/rounds/r1/lock', grader);
+    expect(JSON.parse(res.body).file).toBe('ratings.kohl.json');
+    expect(
+      (await req('PUT', '/rounds/r1/ratings/P1-A', grader, { field: 'stunt', value: false }))
+        .statusCode,
+    ).toBe(409);
+    expect(
+      (await req('PUT', '/rounds/r1/ratings/P1-B', other, { field: 'stunt', value: true }))
+        .statusCode,
+    ).toBe(200);
+    expect(JSON.parse((await req('GET', '/rounds/r1', other)).body).lockedAt).toBeNull();
+    expect((await req('POST', '/rounds/r1/lock', other)).statusCode).toBe(200);
+
+    const k = JSON.parse(await readFile(join(d, 'ratings.kohl.json'), 'utf8'));
+    const m = JSON.parse(await readFile(join(d, 'ratings.mallory.json'), 'utf8'));
+    expect(k.grader).toBe('kohl');
+    expect(k.ratings['P1-A'].fields).toEqual({ stunt: true });
+    expect(k.ranks).toEqual({ P1: ['P1-B', 'P1-A'] });
+    expect(m.ratings['P1-A'].fields).toEqual({ stunt: false });
+    expect(m.ratings['P1-B'].fields).toEqual({ stunt: true });
+    expect(m.ranks).toEqual({});
+    await expect(stat(join(d, 'ratings.json'))).rejects.toThrow(/ENOENT/);
+  });
+
+  it('lists each grader only their own rounds, with their own progress', async () => {
+    await writeRound('r1', { ...BUNDLE, graders: ['kohl', 'mallory'] });
+    await writeRound('r2', { ...BUNDLE, round: 'r2', title: 'Kohl only' });
+    await req('PUT', '/rounds/r1/ratings/P2-A', other, { field: 'stunt', value: true });
+    await req('PUT', '/rounds/r1/ratings/P2-A', other, { field: 'would_do', value: 0 });
+    const list = (ck: string) =>
+      req('GET', '/rounds', ck).then((r: { body: string }) => JSON.parse(r.body));
+    expect(await list(grader)).toEqual([
+      { round: 'r1', title: 'Round 1', graded: 0, total: 3, lockedAt: null },
+      { round: 'r2', title: 'Kohl only', graded: 0, total: 3, lockedAt: null },
+    ]);
+    expect(await list(other)).toEqual([
+      { round: 'r1', title: 'Round 1', graded: 1, total: 3, lockedAt: null },
+    ]);
   });
 });

@@ -9,7 +9,7 @@ import { join } from 'node:path';
  * Blinds through the real app: buildApp() with the real plugin loader
  * (not serverRoutes mounted by hand), against the test DB only.
  * Checks the loader-mounted surface: no by-slug federation route for
- * `blind`, and a real route 403s a non-grader.
+ * `blind`, and a real route 404s a non-grader.
  */
 
 const TEST_DB_URL =
@@ -85,7 +85,7 @@ describe('blinds via the real plugin loader', () => {
     }
   });
 
-  it('403s a non-grader on a real route and serves the grader', async () => {
+  it('404s a non-grader on a real route and serves the grader', async () => {
     const other = await register('mallory');
     const grader = (
       await app.inject({
@@ -100,8 +100,10 @@ describe('blinds via the real plugin loader', () => {
       url: '/plugins/blinds/rounds/r1',
       headers: { cookie: other },
     });
-    expect(denied.statusCode).toBe(403);
+    expect(denied.statusCode).toBe(404);
     expect(denied.body).not.toContain('P1-A');
+    const anon = await app.inject({ method: 'GET', url: '/plugins/blinds/rounds/r1' });
+    expect([401, 403]).toContain(anon.statusCode); // the loader's auth answers first
     const ok = await app.inject({
       method: 'GET',
       url: '/plugins/blinds/rounds/r1',

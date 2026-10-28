@@ -4,6 +4,7 @@ import type {
   AnswerRating,
   BlindBundle,
   BlindRoundPayload,
+  BlindRoundSummary,
   BlindRubricField,
   RatingValue,
 } from './manifest.js';
@@ -15,7 +16,8 @@ import type {
  *
  * Differences from polls, on purpose:
  *   - No WS subscription and no shared cross-component cache of
- *     ratings: the server never broadcasts, and there is one grader.
+ *     ratings: the server never broadcasts, and each grader sees only
+ *     their own.
  *   - Answer and prompt text render raw. Polls wraps labels in <T>,
  *     which sends text to the translation pipeline; blinded answers
  *     must not be reworded or sent anywhere.
@@ -441,9 +443,12 @@ export function BlindGrader(props: Record<string, unknown>) {
   const lock = async () => {
     setError(null);
     try {
-      await api(`${routeBase}/rounds/${encodeURIComponent(slug)}/lock`, 'POST');
+      const res = await api<{ file: string }>(
+        `${routeBase}/rounds/${encodeURIComponent(slug)}/lock`,
+        'POST',
+      );
       setConfirming(false);
-      setStatus('Round locked. ratings.json exported.');
+      setStatus(`Round locked. ${res.file} exported.`);
       await reload();
       roundChanged(slug);
     } catch (err) {
@@ -453,7 +458,7 @@ export function BlindGrader(props: Record<string, unknown>) {
 
   if (state.kind === 'loading') return <div className="poll-preview-loading">Loading round…</div>;
   if (state.kind === 'forbidden') {
-    return <div className="poll-preview-error">This round is visible to its grader only.</div>;
+    return <div className="poll-preview-error">This round is visible to its graders only.</div>;
   }
   if (state.kind === 'error') return <div className="poll-preview-error">{state.message}</div>;
 
@@ -677,23 +682,107 @@ export function BlindGrader(props: Record<string, unknown>) {
 
 export const BlindPreview = BlindGrader;
 
+type ListState =
+  | { kind: 'loading' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ok'; rounds: BlindRoundSummary[] };
+
+/** Rounds this account grades, newest name last (the server sorts). */
+export async function fetchRounds(routeBase: string): Promise<BlindRoundSummary[]> {
+  const res = await fetch(`${routeBase}/rounds`, { credentials: 'include', cache: 'no-store' });
+  if (res.status === 403) return [];
+  if (!res.ok) throw new Error(res.statusText);
+  return (await res.json()) as BlindRoundSummary[];
+}
+
+function RoundList({ routeBase, onOpen }: { routeBase: string; onOpen: (round: string) => void }) {
+  const [state, setState] = useState<ListState>({ kind: 'loading' });
+  useEffect(() => {
+    let live = true;
+    fetchRounds(routeBase).then(
+      (rounds) => live && setState({ kind: 'ok', rounds }),
+      (err: Error) => live && setState({ kind: 'error', message: err.message }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [routeBase]);
+
+  if (state.kind === 'loading') return <div className="poll-preview-loading">Loading rounds…</div>;
+  if (state.kind === 'error') return <div className="poll-preview-error">{state.message}</div>;
+  if (state.rounds.length === 0) {
+    return (
+      <p className="poll-view-empty">Nothing to grade. Rounds you're a grader on show up here.</p>
+    );
+  }
+  const open = state.rounds.filter((r) => !r.lockedAt);
+  const done = state.rounds.filter((r) => r.lockedAt);
+  const item = (r: BlindRoundSummary) => (
+    <li key={r.round}>
+      <button
+        type="button"
+        className="poll-embed ok blind-embed"
+        onClick={() => onOpen(r.round)}
+        aria-label={`${r.title}: ${r.graded} of ${r.total} graded${r.lockedAt ? ', locked' : ''}`}
+      >
+        <span className="poll-embed-body">
+          <span className="poll-embed-question">{r.title}</span>
+          <span className="poll-embed-meta">
+            {r.graded} of {r.total} graded{r.lockedAt ? ' · locked' : ''}
+          </span>
+          <span className="blind-progress" aria-hidden="true">
+            <span
+              className="blind-progress-bar"
+              style={{ width: `${r.total ? (r.graded / r.total) * 100 : 0}%` }}
+            />
+          </span>
+        </span>
+      </button>
+    </li>
+  );
+  return (
+    <div className="blind-rounds">
+      {open.length > 0 && (
+        <>
+          <h2 className="poll-preview-question">To grade</h2>
+          <ul className="blind-round-list">{open.map(item)}</ul>
+        </>
+      )}
+      {done.length > 0 && (
+        <>
+          <h2 className="poll-preview-question">Locked</h2>
+          <ul className="blind-round-list">{done.map(item)}</ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function BlindsView(props: Record<string, unknown>) {
   const { round, routeBase, onClose } = props as {
     round?: string;
     routeBase: string;
     onClose: () => void;
   };
+  // Opened from an embed: that round. From the toolbar: the list, and
+  // Back from a round you picked returns to it.
+  const [picked, setPicked] = useState<string | null>(null);
+  const showing = round ?? picked;
   return (
     <div className="blind-view">
       <div className="blind-view-bar">
-        <button type="button" className="blind-secondary" onClick={onClose}>
+        <button
+          type="button"
+          className="blind-secondary"
+          onClick={() => (picked && !round ? setPicked(null) : onClose())}
+        >
           ← Back
         </button>
       </div>
-      {round ? (
-        <BlindGrader slug={round} routeBase={routeBase} />
+      {showing ? (
+        <BlindGrader key={showing} slug={showing} routeBase={routeBase} />
       ) : (
-        <p className="poll-view-empty">Open a [[blind:round]] embed to grade it.</p>
+        <RoundList routeBase={routeBase} onOpen={setPicked} />
       )}
     </div>
   );
