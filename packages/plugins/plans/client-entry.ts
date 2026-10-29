@@ -50,6 +50,7 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
         onClose: host.closeView,
         serverId: host.selectedServer?.id ?? null,
         initialSlug: (props.viewState?.slug as string | undefined) ?? null,
+        dm: api.dm,
       });
     },
   });

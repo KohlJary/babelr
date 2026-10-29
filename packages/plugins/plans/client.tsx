@@ -79,11 +79,13 @@ export function PlansView({
   onClose,
   serverId,
   initialSlug,
+  dm,
 }: {
   routeBase: string;
   onClose: () => void;
   serverId: string | null;
   initialSlug?: string | null;
+  dm?: DMCrypto;
 }) {
   const [plans, setPlans] = useState<PlanSummary[] | null>(null);
   const [slug, setSlug] = useState<string | null>(initialSlug ?? null);
@@ -290,7 +292,7 @@ export function PlansView({
           </main>
 
           {chat ? (
-            <ChatPane routeBase={routeBase} agent="robokohl" />
+            <ChatPane routeBase={routeBase} agent="robokohl" dm={dm} />
           ) : (
             plan && !creating && !onYou && <History plan={plan} events={events} act={act} />
           )}
@@ -762,14 +764,53 @@ export function ActMap({
 // ── chat: Kohl's DM with an agent, beside what they're both looking at ─
 
 interface ChatMsg {
-  message: { id: string; content: string; published: string; inReplyTo?: string };
+  message: {
+    id: string;
+    content: string;
+    published: string;
+    inReplyTo?: string;
+    properties?: { encrypted?: boolean; iv?: string };
+  };
   author: { preferredUsername: string; displayName: string | null };
 }
 
-function ChatPane({ routeBase, agent }: { routeBase: string; agent: string }) {
+/** The host's DM encryption (PluginClientApi.dm): DMs are end to end. */
+type DMCrypto = {
+  decrypt: (content: string, iv: string, partnerId: string) => Promise<string | null>;
+  encrypt: (
+    plaintext: string,
+    partnerId: string,
+  ) => Promise<{ content: string; properties: { encrypted: true; iv: string } }>;
+};
+
+const UNREADABLE = "[couldn't read this message]";
+const QUEUE_CARD = /^\[queue\] \*\*\d{4}\*\*/;
+
+/** An old [queue] card: its first line, the rest on request (some are 100K+). */
+function QueueCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const first = text.split('\n')[0];
+  return (
+    <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="plans-md" dangerouslySetInnerHTML={{ __html: md(first) }} />
+      {open && <div className="plans-md" dangerouslySetInnerHTML={{ __html: md(text) }} />}
+    </details>
+  );
+}
+
+function ChatPane({
+  routeBase,
+  agent,
+  dm: crypto,
+}: {
+  routeBase: string;
+  agent: string;
+  dm?: DMCrypto;
+}) {
   // Core routes sit beside the plugin's: /api/plugins/plans -> /api.
   const api = routeBase.replace(/\/plugins\/[^/]+$/, '');
   const [dm, setDm] = useState<string | null | undefined>(undefined);
+  const [partner, setPartner] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -777,13 +818,16 @@ function ChatPane({ routeBase, agent }: { routeBase: string; agent: string }) {
   const end = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void call<{ id: string; participants: { preferredUsername: string }[] }[]>(`${api}/dms`)
-      .then((ds) =>
-        setDm(
-          ds.find((d) => d.participants.some((p) => p.preferredUsername.toLowerCase() === agent))
-            ?.id ?? null,
-        ),
-      )
+    void call<{ id: string; participants: { id: string; preferredUsername: string }[] }[]>(
+      `${api}/dms`,
+    )
+      .then((ds) => {
+        const isAgent = (p: { preferredUsername: string }) =>
+          p.preferredUsername.toLowerCase() === agent;
+        const d = ds.find((x) => x.participants.some(isAgent));
+        setPartner(d?.participants.find(isAgent)?.id ?? null);
+        setDm(d?.id ?? null);
+      })
       .catch((e: Error) => setError(e.message));
   }, [api, agent]);
 
@@ -791,13 +835,23 @@ function ChatPane({ routeBase, agent }: { routeBase: string; agent: string }) {
     if (!dm) return;
     try {
       const r = await call<{ messages: ChatMsg[] }>(`${api}/dms/${dm}/messages?limit=40`);
-      setMsgs(
-        [...r.messages].sort((a, b) => a.message.published.localeCompare(b.message.published)),
+      // Never show ciphertext: what can't be decrypted says so.
+      const read = await Promise.all(
+        r.messages.map(async (m) => {
+          const p = m.message.properties;
+          if (!p?.encrypted) return m;
+          const plain =
+            crypto && partner && p.iv
+              ? await crypto.decrypt(m.message.content, p.iv, partner)
+              : null;
+          return { ...m, message: { ...m.message, content: plain ?? UNREADABLE } };
+        }),
       );
+      setMsgs(read.sort((a, b) => a.message.published.localeCompare(b.message.published)));
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [api, dm]);
+  }, [api, dm, crypto, partner]);
 
   useEffect(() => {
     void load();
@@ -814,7 +868,8 @@ function ChatPane({ routeBase, agent }: { routeBase: string; agent: string }) {
     if (!dm || !text.trim()) return;
     setSending(true);
     try {
-      await call(`${api}/dms/${dm}/messages`, 'POST', { content: text.trim() });
+      if (!crypto || !partner) throw new Error("can't encrypt this DM here yet");
+      await call(`${api}/dms/${dm}/messages`, 'POST', await crypto.encrypt(text.trim(), partner));
       setText('');
       await load();
     } catch (e) {
@@ -840,10 +895,14 @@ function ChatPane({ routeBase, agent }: { routeBase: string; agent: string }) {
               key={m.message.id}
               className={`plans-chat-msg${m.author.preferredUsername.toLowerCase() === agent ? ' plans-chat-them' : ' plans-chat-me'}`}
             >
-              <div
-                className="plans-md"
-                dangerouslySetInnerHTML={{ __html: md(m.message.content) }}
-              />
+              {QUEUE_CARD.test(m.message.content) ? (
+                <QueueCard text={m.message.content} />
+              ) : (
+                <div
+                  className="plans-md"
+                  dangerouslySetInnerHTML={{ __html: md(m.message.content) }}
+                />
+              )}
             </div>
           ))}
           <div ref={end} />

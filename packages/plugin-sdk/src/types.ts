@@ -223,4 +223,14 @@ export interface PluginClientApi {
    *  `/plugins/polls`. Plugin fetches should prepend it so they hit the
    *  right namespace regardless of where Babelr is mounted. */
   routeBase: string;
+  /** DMs are end-to-end encrypted and the server refuses plaintext: a
+   *  plugin that reads or writes one goes through the user's own keys
+   *  here. `partnerId` is the other participant's actor id. */
+  dm: {
+    decrypt: (content: string, iv: string, partnerId: string) => Promise<string | null>;
+    encrypt: (
+      plaintext: string,
+      partnerId: string,
+    ) => Promise<{ content: string; properties: { encrypted: true; iv: string } }>;
+  };
 }

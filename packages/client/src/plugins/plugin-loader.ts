@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { pluginDM } from '../crypto/dm';
 import type {
   PluginClientApi,
   ClientEmbedDefinition,
@@ -75,6 +76,7 @@ export async function initPlugins(): Promise<void> {
         });
       },
       routeBase: `/api/plugins/${manifest.id}`,
+      dm: pluginDM,
     };
     try {
       await setup(api);
