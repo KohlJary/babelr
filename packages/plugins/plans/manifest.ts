@@ -1154,6 +1154,7 @@ export default definePlugin({
           }
           const b = request.body ?? {};
           const surface = 'import';
+          const phaseId = await phaseIn(plan, b.phaseId);
           const title = text(b.title, 'title', true);
           const owner = ownerOf(b.owner);
           const o = (b.outreach ?? {}) as Record<string, unknown>;
@@ -1222,7 +1223,7 @@ export default definePlugin({
           )) as unknown as { n: number }[];
           const rows = (await db.execute(
             sql`INSERT INTO plugin_plans_items (plan_id, phase_id, position, kind, title, body, owner, status, created_by)
-                VALUES (${plan.id}, NULL, ${Number(pos[0].n)}, 'outreach', ${title}, ${draftOf(raw)},
+                VALUES (${plan.id}, ${phaseId}, ${Number(pos[0].n)}, 'outreach', ${title}, ${draftOf(raw)},
                         ${owner}, ${status}, ${actor.id})
                 RETURNING id`,
           )) as unknown as { id: string }[];
@@ -1240,7 +1241,7 @@ export default definePlugin({
             surface,
             'outreach-imported',
             { ref, title, sendStatus, revisions: drafts.length, approvalCarried: false },
-            { itemId },
+            { phaseId, itemId },
           );
           for (const e of history) {
             await log(
