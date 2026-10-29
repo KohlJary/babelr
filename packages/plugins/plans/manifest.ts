@@ -11,7 +11,7 @@ import {
   SEND_STATUSES,
 } from './outreach.js';
 import type { SendStatus } from './outreach.js';
-import { makesCycle, place } from './order.js';
+import { makesCycle, place, PHASES_NEXT_MAX } from './order.js';
 import type { Node, Placed } from './order.js';
 
 /**
@@ -182,8 +182,11 @@ export interface OnYouPhase {
 
 /** GET /on-you: what's on Kohl, Next first, the rest folded. */
 export interface OnYou {
-  /** Proposed phases waiting on Kohl's yes. */
+  /** Proposed phases waiting on Kohl's yes, all of them. */
   phases: OnYouPhase[];
+  /** The ones to show first: each plan's earliest waiting phase, at most two
+   * (a plan's later phases mostly follow its earlier ones). */
+  phasesNext: OnYouPhase[];
   /** The top three ready Kohl items by rank. */
   next: OnYouEntry[];
   /** Other ready Kohl items. */
@@ -1616,8 +1619,12 @@ export default definePlugin({
         };
         const all = [...where.values()];
         const week = now - 7 * 24 * 3600 * 1000;
+        const firsts = phases.filter(
+          (p, i) => phases.findIndex((q) => q.planSlug === p.planSlug) === i,
+        );
         const out: OnYou = {
           phases,
+          phasesNext: firsts.slice(0, PHASES_NEXT_MAX),
           next: b.next.map(entry),
           more: b.more.map(entry),
           blocked: b.blocked.map(entry),

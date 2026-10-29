@@ -339,6 +339,15 @@ function OnYouView({
     </li>
   );
 
+  const phaseRow = (p: OnYou['phases'][number]) => (
+    <li key={p.phase.id} className="plans-onyou-row">
+      <button type="button" className="plans-onyou-open" onClick={() => onOpen(p.planSlug)}>
+        <span className="plans-item-title">{p.phase.title}</span>
+        <span className="plans-onyou-where">{p.planTitle}</span>
+      </button>
+    </li>
+  );
+
   const fold = (label: string, xs: OnYouEntry[], offset?: number) =>
     xs.length > 0 && (
       <details className="plans-onyou-fold">
@@ -353,23 +362,20 @@ function OnYouView({
     <article className="plans-plan plans-onyou">
       <h2>On you</h2>
       {error && <div className="plans-error">{error}</div>}
-      {data.phases.length > 0 && (
+      {data.phasesNext.length > 0 && (
         <section className="plans-phase">
           <h3>Phases waiting on your yes</h3>
-          <ul>
-            {data.phases.map((p) => (
-              <li key={p.phase.id} className="plans-onyou-row">
-                <button
-                  type="button"
-                  className="plans-onyou-open"
-                  onClick={() => onOpen(p.planSlug)}
-                >
-                  <span className="plans-item-title">{p.phase.title}</span>
-                  <span className="plans-onyou-where">{p.planTitle}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ul>{data.phasesNext.map(phaseRow)}</ul>
+          {data.phases.length > data.phasesNext.length && (
+            <details className="plans-onyou-fold">
+              <summary>{data.phases.length - data.phasesNext.length} more phases waiting</summary>
+              <ul>
+                {data.phases
+                  .filter((p) => !data.phasesNext.some((q) => q.phase.id === p.phase.id))
+                  .map(phaseRow)}
+              </ul>
+            </details>
+          )}
         </section>
       )}
       <section className="plans-phase">

@@ -861,6 +861,14 @@ describe('plans', () => {
       const h = await house();
       const { slug, phaseId } = await planWithPhase(h);
       await call('POST', `/phases/${phaseId}/propose`, h.carol);
+      const p2 = (await call('POST', `/plans/${slug}/phases`, h.carol, { title: 'Phase 2' })).json()
+        .phases[1].id as string;
+      await call('POST', `/plans/${slug}/items`, h.carol, {
+        phaseId: p2,
+        kind: 'build',
+        title: 'b',
+      });
+      await call('POST', `/phases/${p2}/propose`, h.carol);
       await call('POST', `/plans/${slug}/items`, h.cass, {
         kind: 'outreach',
         title: '0042 A Researcher',
@@ -868,6 +876,11 @@ describe('plans', () => {
       });
       const on = (await call('GET', '/on-you', h.kohl)).json();
       expect(on.phases.map((p: { phase: { title: string } }) => p.phase.title)).toEqual([
+        'Phase 1',
+        'Phase 2',
+      ]);
+      // One per plan first: a plan's later phases mostly follow its earlier ones.
+      expect(on.phasesNext.map((p: { phase: { title: string } }) => p.phase.title)).toEqual([
         'Phase 1',
       ]);
       expect(titles(on.next)).toEqual(['0042 A Researcher']);

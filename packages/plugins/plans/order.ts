@@ -41,6 +41,7 @@ export interface Buckets {
 }
 
 export const NEXT_MAX = 3;
+export const PHASES_NEXT_MAX = 2;
 
 /** Would `id` waiting on `after` close a loop? (Does `after` already wait on `id`?) */
 export function makesCycle(
