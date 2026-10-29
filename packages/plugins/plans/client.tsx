@@ -643,7 +643,9 @@ export function ActMap({
           n.state === 'lit'
             ? n.item.why || 'next'
             : n.state === 'waiting'
-              ? `@${n.item.owner ?? '?'}`
+              ? n.item.outreach?.sendStatus === 'approved'
+                ? 'you approved it; waiting to go out'
+                : `@${n.item.owner ?? '?'}`
               : STATE_WORD[n.state];
         return (
           <button
