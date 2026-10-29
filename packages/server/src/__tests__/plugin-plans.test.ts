@@ -128,6 +128,22 @@ async function planWithPhase(h: Awaited<ReturnType<typeof house>>, extra = {}) {
   return { slug, phaseId, itemId };
 }
 
+/** A queue file as RoboKohl writes it. */
+const RAW = [
+  '---',
+  'status: pending',
+  'kind: email',
+  'to: A Researcher  # check the address',
+  'room: researchers',
+  'why: say hi',
+  'created: 2026-10-28',
+  'origin: drafted by robokohl',
+  '---',
+  '',
+  'Hello there.',
+  '',
+].join('\n');
+
 describe('plans', () => {
   it('members shape plans; outsiders see nothing; every change is on the record', async () => {
     const h = await house();
@@ -363,21 +379,6 @@ describe('plans', () => {
   });
 
   describe("outreach (RoboKohl's queue)", () => {
-    const RAW = [
-      '---',
-      'status: pending',
-      'kind: email',
-      'to: A Researcher  # check the address',
-      'room: researchers',
-      'why: say hi',
-      'created: 2026-10-28',
-      'origin: drafted by robokohl',
-      '---',
-      '',
-      'Hello there.',
-      '',
-    ].join('\n');
-
     async function outreachItem(h: Awaited<ReturnType<typeof house>>) {
       const { slug } = await planWithPhase(h);
       const r = await call('POST', `/plans/${slug}/items`, h.cass, {
@@ -744,6 +745,132 @@ describe('plans', () => {
         })
       ).json();
       expect(d.phases.find((f: { id: string }) => f.id === phaseId).status).toBe('approved');
+    });
+  });
+
+  describe("on you: what waits on what, and the order of Kohl's list", () => {
+    async function items(
+      h: Awaited<ReturnType<typeof house>>,
+      slug: string,
+      phaseId: string,
+      specs: [string, string][],
+    ) {
+      const ids: Record<string, string> = {};
+      for (const [title, owner] of specs) {
+        const d = (
+          await call('POST', `/plans/${slug}/items`, h.carol, {
+            phaseId,
+            kind: 'build',
+            title,
+            owner,
+          })
+        ).json();
+        ids[title] = d.items.find((i: { title: string }) => i.title === title).id;
+      }
+      return ids;
+    }
+    const titles = (xs: { item: { title: string } }[]) => xs.map((x) => x.item.title);
+
+    it('ready, blocked and stuck; Next is the top three by rank, with no cap per path', async () => {
+      const h = await house();
+      const { slug, phaseId } = await planWithPhase(h);
+      const id = await items(h, slug, phaseId, [
+        ['hired', 'kohl'],
+        ['patrons', 'kohl'],
+        ['contract', 'kohl'],
+        ['fourth', 'kohl'],
+        ['after hired', 'kohl'],
+        ['build it', 'daedalus'],
+        ['after build', 'kohl'],
+        ['vetoed thing', 'kohl'],
+        ['after veto', 'kohl'],
+      ]);
+      const after = (t: string, on: string[]) =>
+        call('PATCH', `/items/${id[t]}`, h.cass, { after: on.map((o) => id[o]) });
+      expect((await after('after hired', ['hired'])).status).toBe(200);
+      await after('after build', ['build it']);
+      await after('after veto', ['vetoed thing']);
+      await call('POST', `/items/${id['vetoed thing']}/status`, h.kohl, { status: 'declined' });
+      // A loop is refused.
+      expect((await after('hired', ['after hired'])).status).toBe(409);
+      // RoboKohl ranks; three parallel paths can all be Next.
+      for (const [t, r] of [
+        ['contract', 1],
+        ['patrons', 2],
+        ['hired', 3],
+      ] as const) {
+        await call('PATCH', `/items/${id[t]}`, h.cass, { rank: r, why: `why ${t}` });
+      }
+      const on = (await call('GET', '/on-you', h.kohl)).json();
+      expect(titles(on.next)).toEqual(['contract', 'patrons', 'hired']);
+      expect(on.next[2].unlocks).toBe(1); // "after hired"
+      expect(on.next[0].item.why).toBe('why contract');
+      expect(titles(on.more)).toEqual(['fourth']);
+      expect(titles(on.blocked).sort()).toEqual(['after build', 'after hired']);
+      const wait = on.blocked.find(
+        (b: { item: { title: string } }) => b.item.title === 'after build',
+      );
+      expect(wait.waitingOn).toEqual([
+        { id: id['build it'], title: 'build it', owner: 'daedalus' },
+      ]);
+      expect(titles(on.stuck)).toEqual(['after veto']);
+      expect(on.stuck[0].stuckOn.title).toBe('vetoed thing');
+      // An agent reads the same list.
+      expect(titles((await call('GET', '/on-you', h.cass)).json().next)).toEqual(titles(on.next));
+
+      // Upstream done: the next one up is ready.
+      await call('POST', `/items/${id['build it']}/status`, h.carol, {
+        status: 'done',
+        resolution: 'x',
+      });
+      const on2 = (await call('GET', '/on-you', h.kohl)).json();
+      expect(titles(on2.more)).toContain('after build');
+      expect(titles(on2.shipped)).toEqual(['build it']);
+    });
+
+    it("Kohl's rank is pinned against agents, and ordering never voids an approval", async () => {
+      const h = await house();
+      const { slug, phaseId, itemId } = await planWithPhase(h);
+      const id = await items(h, slug, phaseId, [['mine', 'kohl']]);
+      await call('POST', `/phases/${phaseId}/propose`, h.carol);
+      await call('POST', `/phases/${phaseId}/approve`, h.kohl);
+      let d = (await call('PATCH', `/items/${id.mine}`, h.kohl, { rank: 1 })).json();
+      expect(d.items.find((i: { id: string }) => i.id === id.mine)).toMatchObject({
+        rank: 1,
+        rankedBy: 'kohl',
+      });
+      expect((await call('PATCH', `/items/${id.mine}`, h.cass, { rank: 2 })).status).toBe(409);
+      // Why and links are still the agent's to set; none of it voids the phase's yes.
+      d = (
+        await call('PATCH', `/items/${id.mine}`, h.cass, {
+          why: 'it unblocks the rest',
+          after: [itemId],
+        })
+      ).json();
+      expect(d.phases[0].status).toBe('approved');
+      expect(d.items.find((i: { id: string }) => i.id === id.mine).after).toEqual([itemId]);
+      // Kohl clears the pin; then the agent can rank it.
+      await call('PATCH', `/items/${id.mine}`, h.kohl, { rank: null });
+      expect((await call('PATCH', `/items/${id.mine}`, h.cass, { rank: 2 })).status).toBe(200);
+      expect((await call('PATCH', `/items/${id.mine}`, h.cass, { why: 'two\nlines' })).status).toBe(
+        400,
+      );
+    });
+
+    it('proposed phases and outreach drafts waiting on a send are on Kohl too', async () => {
+      const h = await house();
+      const { slug, phaseId } = await planWithPhase(h);
+      await call('POST', `/phases/${phaseId}/propose`, h.carol);
+      await call('POST', `/plans/${slug}/items`, h.cass, {
+        kind: 'outreach',
+        title: '0042 A Researcher',
+        outreach: { raw: RAW, ref: '0042' },
+      });
+      const on = (await call('GET', '/on-you', h.kohl)).json();
+      expect(on.phases.map((p: { phase: { title: string } }) => p.phase.title)).toEqual([
+        'Phase 1',
+      ]);
+      expect(titles(on.next)).toEqual(['0042 A Researcher']);
     });
   });
 });

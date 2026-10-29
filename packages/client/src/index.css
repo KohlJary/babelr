@@ -4692,6 +4692,48 @@ textarea.modal-input {
 .plans-item-body {
   padding: 0 0 0.6rem 0.5rem;
 }
+.plans-onyou-tab {
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid #1e293b;
+}
+.plans-onyou ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plans-onyou-row {
+  border-top: 1px solid #1e293b;
+  padding: 0.45rem 0;
+}
+.plans-view button.plans-onyou-open {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.plans-onyou-where {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+.plans-onyou-order {
+  margin-left: 0.6rem;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+.plans-onyou-fold {
+  margin: 0.6rem 0;
+}
+.plans-onyou-fold > summary {
+  cursor: pointer;
+  color: #94a3b8;
+}
 .plans-draft {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

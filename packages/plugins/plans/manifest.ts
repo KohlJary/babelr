@@ -11,6 +11,8 @@ import {
   SEND_STATUSES,
 } from './outreach.js';
 import type { SendStatus } from './outreach.js';
+import { makesCycle, place } from './order.js';
+import type { Node, Placed } from './order.js';
 
 /**
  * Plans: the house's strategic planning, where everybody contributes and
@@ -86,6 +88,14 @@ export interface PlanItem {
   updatedAt: string;
   /** Outreach items only: the queue file and where its send stands. */
   outreach?: Outreach;
+  /** Items (any plan) this one waits on: ready when they're all done. */
+  after: string[];
+  /** Order on Kohl's list (1 is first); null is unranked. */
+  rank: number | null;
+  /** One line: why now. */
+  why: string;
+  /** Who set the rank; "kohl" pins it against agents. */
+  rankedBy: string | null;
 }
 
 export interface Outreach {
@@ -150,6 +160,41 @@ export interface PlanSummary extends Plan {
   phaseCounts: Record<PhaseStatus, number>;
   itemCounts: { total: number; done: number };
   awaitingMe: number;
+}
+
+export interface OnYouEntry {
+  item: PlanItem;
+  planSlug: string;
+  planTitle: string;
+  phaseTitle: string | null;
+  /** Kohl items still to do downstream of this one. */
+  unlocks: number;
+  stale?: boolean;
+  waitingOn?: { id: string; title: string; owner: string | null }[];
+  stuckOn?: { id: string; title: string };
+}
+
+export interface OnYouPhase {
+  phase: PlanPhase;
+  planSlug: string;
+  planTitle: string;
+}
+
+/** GET /on-you: what's on Kohl, Next first, the rest folded. */
+export interface OnYou {
+  /** Proposed phases waiting on Kohl's yes. */
+  phases: OnYouPhase[];
+  /** The top three ready Kohl items by rank. */
+  next: OnYouEntry[];
+  /** Other ready Kohl items. */
+  more: OnYouEntry[];
+  /** Kohl items waiting on something not done yet. */
+  blocked: OnYouEntry[];
+  /** Kohl items downstream of a declined item. */
+  stuck: OnYouEntry[];
+  inFlight: OnYouEntry[];
+  /** Done or sent in the last seven days. */
+  shipped: OnYouEntry[];
 }
 
 export interface PlanEvent {
@@ -305,6 +350,10 @@ interface ItemRow {
   o_raw: string | null;
   o_rev: number | null;
   o_approved_rev: number | null;
+  rank: number | null;
+  why: string;
+  ranked_by: string | null;
+  after_ids: string[] | string | null;
 }
 interface ApprovalRow {
   phase_id: string;
@@ -356,6 +405,10 @@ function toItem(r: ItemRow): PlanItem {
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
     ...(r.o_raw !== null && r.o_raw !== undefined ? { outreach: toOutreach(r) } : {}),
+    after: json<string[]>(r.after_ids ?? '[]') ?? [],
+    rank: r.rank === null || r.rank === undefined ? null : Number(r.rank),
+    why: r.why ?? '',
+    rankedBy: r.ranked_by ?? null,
   };
 }
 
@@ -394,7 +447,9 @@ const PLAN_SELECT = sql`SELECT p.*, COALESCE(a.preferred_username, '') AS create
 const PHASE_SELECT = sql`SELECT f.*, COALESCE(a.preferred_username, '') AS created_by_name
   FROM plugin_plans_phases f LEFT JOIN actors a ON a.id::text = f.created_by`;
 const ITEM_SELECT = sql`SELECT i.*, COALESCE(a.preferred_username, '') AS created_by_name,
-    o.ref AS o_ref, o.raw AS o_raw, o.rev AS o_rev, o.approved_rev AS o_approved_rev
+    o.ref AS o_ref, o.raw AS o_raw, o.rev AS o_rev, o.approved_rev AS o_approved_rev,
+    COALESCE((SELECT json_agg(x.after_id::text ORDER BY x.after_id) FROM plugin_plans_after x
+      WHERE x.item_id = i.id), '[]'::json) AS after_ids
   FROM plugin_plans_items i LEFT JOIN actors a ON a.id::text = i.created_by
   LEFT JOIN plugin_plans_outreach o ON o.item_id = i.id`;
 
@@ -508,6 +563,23 @@ export default definePlugin({
           at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (item_id, rev)
         );
+      `,
+    },
+    {
+      id: 3,
+      name: 'order',
+      up: `
+        ALTER TABLE plugin_plans_items ADD COLUMN IF NOT EXISTS rank INTEGER;
+        ALTER TABLE plugin_plans_items ADD COLUMN IF NOT EXISTS why TEXT NOT NULL DEFAULT '';
+        ALTER TABLE plugin_plans_items ADD COLUMN IF NOT EXISTS ranked_by TEXT;
+
+        CREATE TABLE IF NOT EXISTS plugin_plans_after (
+          item_id UUID NOT NULL REFERENCES plugin_plans_items(id) ON DELETE CASCADE,
+          after_id UUID NOT NULL REFERENCES plugin_plans_items(id) ON DELETE CASCADE,
+          PRIMARY KEY (item_id, after_id),
+          CHECK (item_id <> after_id)
+        );
+        CREATE INDEX IF NOT EXISTS plugin_plans_after_after_idx ON plugin_plans_after (after_id);
       `,
     },
   ],
@@ -1314,8 +1386,10 @@ export default definePlugin({
           if (b.planSlug !== undefined && b.planSlug !== plan.slug) {
             return await detail(await moveItem(plan, item, actor, surface, b), actor);
           }
+          const rest = await reorder(plan, item, actor, surface, b);
+          if (!Object.keys(rest).length) return await detail(plan, actor);
           if (item.kind === 'outreach' && item.o_raw !== null) {
-            await reviseOutreach(plan, item, actor, surface, b);
+            await reviseOutreach(plan, item, actor, surface, rest);
             return await detail(plan, actor);
           }
           const next = {
@@ -1372,6 +1446,196 @@ export default definePlugin({
         }
       },
     );
+
+    // ── order: what waits on what, and Kohl's list (Plans phase 5) ──────
+
+    /**
+     * Apply `after`, `rank` and `why` from a PATCH; return the other keys.
+     * Ordering says nothing new about the work, so it never voids an
+     * approval. A rank Kohl set is pinned: an agent can't change it.
+     */
+    async function reorder(
+      plan: Plan,
+      item: ItemRow,
+      actor: Actor,
+      surface: string,
+      b: Record<string, unknown>,
+    ): Promise<Record<string, unknown>> {
+      const { after, rank, why, ...rest } = b;
+      const changes: Record<string, { before: unknown; after: unknown }> = {};
+      if (after !== undefined) {
+        if (
+          !Array.isArray(after) ||
+          after.length > 50 ||
+          !after.every((a) => typeof a === 'string')
+        ) {
+          throw new PlanError('after must be a list of item ids', 400);
+        }
+        const ids = [...new Set(after as string[])].sort();
+        for (const a of ids) {
+          if (a === item.id) throw new PlanError("an item can't wait on itself", 400);
+          await itemFor(actor, a); // exists, and the caller can see it
+        }
+        const rows = (await db.execute(
+          sql`SELECT item_id::text AS item_id, after_id::text AS after_id FROM plugin_plans_after`,
+        )) as unknown as { item_id: string; after_id: string }[];
+        const edges = new Map<string, string[]>();
+        for (const r of rows) {
+          if (r.item_id === item.id) continue;
+          edges.set(r.item_id, [...(edges.get(r.item_id) ?? []), r.after_id]);
+        }
+        const loop = makesCycle(item.id, ids, edges);
+        if (loop) throw new PlanError(`that makes a loop: ${loop} already waits on this item`, 409);
+        const before = json<string[]>(item.after_ids ?? '[]') ?? [];
+        if (before.join() !== ids.join()) {
+          await db.execute(sql`DELETE FROM plugin_plans_after WHERE item_id = ${item.id}`);
+          for (const a of ids) {
+            await db.execute(
+              sql`INSERT INTO plugin_plans_after (item_id, after_id) VALUES (${item.id}, ${a})`,
+            );
+          }
+          changes.after = { before, after: ids };
+        }
+      }
+      if (rank !== undefined) {
+        if (rank !== null && !(Number.isInteger(rank) && (rank as number) >= 1)) {
+          throw new PlanError('rank must be a whole number from 1, or null', 400);
+        }
+        const kohl = await isKohl(plan, actor);
+        if (!kohl && item.ranked_by === 'kohl' && rank !== item.rank) {
+          throw new PlanError("Kohl set this item's rank; only Kohl changes it", 409);
+        }
+        const by = rank === null ? null : kohl ? 'kohl' : actor.preferredUsername.toLowerCase();
+        if (rank !== item.rank || by !== item.ranked_by) {
+          await db.execute(
+            sql`UPDATE plugin_plans_items SET rank = ${rank as number | null}, ranked_by = ${by}
+                WHERE id = ${item.id}`,
+          );
+          changes.rank = { before: item.rank, after: rank };
+        }
+      }
+      if (why !== undefined) {
+        const w = text(why, 'title');
+        if (w.includes('\n')) throw new PlanError('why is one line', 400);
+        if (w !== item.why) {
+          await db.execute(sql`UPDATE plugin_plans_items SET why = ${w} WHERE id = ${item.id}`);
+          changes.why = { before: item.why, after: w };
+        }
+      }
+      if (Object.keys(changes).length) {
+        await log(
+          plan,
+          actor,
+          surface,
+          'item-ordered',
+          { changes },
+          {
+            phaseId: item.phase_id,
+            itemId: item.id,
+          },
+        );
+      }
+      return rest;
+    }
+
+    // Everything on Kohl, across every plan the caller can see. Agents read
+    // it too (RoboKohl's DM shows Next); it's Kohl's list whoever asks.
+    fastify.get('/on-you', async (request, reply) => {
+      try {
+        const actor = me(request);
+        const rows = (await db.execute(
+          sql`${PLAN_SELECT} ORDER BY p.created_at`,
+        )) as unknown as PlanRow[];
+        const member = new Map<string, boolean>();
+        const owners = new Map<string, string | null>();
+        const where = new Map<string, { item: PlanItem; plan: Plan; phase: string | null }>();
+        const phases: OnYouPhase[] = [];
+        for (const r of rows) {
+          if (!member.has(r.server_id)) {
+            member.set(r.server_id, await canAccess(fastify, actor, r.server_id));
+            owners.set(r.server_id, await ownerName(r.server_id));
+          }
+          if (!member.get(r.server_id)) continue;
+          const plan = toPlan(r);
+          const d = await detail(plan, actor);
+          const owner = (owners.get(r.server_id) ?? '').toLowerCase();
+          for (const f of d.phases) {
+            if (f.awaiting.some((n) => n.toLowerCase() === owner)) {
+              phases.push({ phase: f, planSlug: plan.slug, planTitle: plan.title });
+            }
+          }
+          for (const it of d.items) {
+            where.set(it.id, {
+              item: it,
+              plan,
+              phase: d.phases.find((f) => f.id === it.phaseId)?.title ?? null,
+            });
+          }
+        }
+        const STALE_MS = 5 * 24 * 3600 * 1000;
+        const now = Date.now();
+        const nodes: Node[] = [...where.values()].map(({ item, plan }) => {
+          const owner = (owners.get(plan.serverId) ?? '').toLowerCase();
+          const waitingSend =
+            !!item.outreach && ['pending', 'edited'].includes(item.outreach.sendStatus);
+          return {
+            id: item.id,
+            status: item.status,
+            after: item.after,
+            onKohl: waitingSend || (!!owner && item.owner?.toLowerCase() === owner),
+            owner: item.owner,
+            rank: item.rank,
+            createdAt: item.createdAt,
+            stale: !!item.outreach && now - Date.parse(item.updatedAt) > STALE_MS,
+          };
+        });
+        const stale = new Set(nodes.filter((n) => n.stale).map((n) => n.id));
+        const b = place(nodes);
+        const entry = (p: Placed): OnYouEntry => {
+          const w = where.get(p.id)!;
+          return {
+            item: w.item,
+            planSlug: w.plan.slug,
+            planTitle: w.plan.title,
+            phaseTitle: w.phase,
+            unlocks: p.unlocks,
+            ...(stale.has(p.id) ? { stale: true } : {}),
+            ...(p.waitingOn
+              ? {
+                  waitingOn: p.waitingOn.map((id) => ({
+                    id,
+                    title: where.get(id)?.item.title ?? '',
+                    owner: where.get(id)?.item.owner ?? null,
+                  })),
+                }
+              : {}),
+            ...(p.stuckOn
+              ? { stuckOn: { id: p.stuckOn, title: where.get(p.stuckOn)?.item.title ?? '' } }
+              : {}),
+          };
+        };
+        const all = [...where.values()];
+        const week = now - 7 * 24 * 3600 * 1000;
+        const out: OnYou = {
+          phases,
+          next: b.next.map(entry),
+          more: b.more.map(entry),
+          blocked: b.blocked.map(entry),
+          stuck: b.stuck.map(entry),
+          inFlight: all
+            .filter((w) => w.item.status === 'in_progress')
+            .sort((x, y) => x.item.updatedAt.localeCompare(y.item.updatedAt))
+            .map((w) => entry({ id: w.item.id, unlocks: 0 })),
+          shipped: all
+            .filter((w) => w.item.status === 'done' && Date.parse(w.item.updatedAt) >= week)
+            .sort((x, y) => y.item.updatedAt.localeCompare(x.item.updatedAt))
+            .map((w) => entry({ id: w.item.id, unlocks: 0 })),
+        };
+        return out;
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
 
     // ── outreach (RoboKohl's queue, Plans phase 3) ──────────────────────
 

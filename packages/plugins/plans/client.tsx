@@ -4,6 +4,8 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type {
   ItemKind,
+  OnYou,
+  OnYouEntry,
   PlanDetail,
   PlanEvent,
   PlanItem,
@@ -65,6 +67,8 @@ export function PlansView({
   const [events, setEvents] = useState<PlanEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Land on what's on Kohl unless a link named a plan: the filter is the point.
+  const [onYou, setOnYou] = useState(!initialSlug);
 
   const loadList = useCallback(async () => {
     try {
@@ -146,17 +150,30 @@ export function PlansView({
 
       <div className="plans-layout">
         <nav className="plans-list" aria-label="Plans">
+          <button
+            type="button"
+            className={`plans-list-item plans-onyou-tab${onYou ? ' plans-current' : ''}`}
+            aria-current={onYou ? 'true' : undefined}
+            onClick={() => {
+              setOnYou(true);
+              setCreating(false);
+            }}
+          >
+            <span className="plans-list-title">On you</span>
+            <span className="plans-list-meta">the next step on every path</span>
+          </button>
           {plans?.length === 0 && <p className="plans-hint">No plans yet.</p>}
           <ul>
             {(plans ?? []).map((p) => (
               <li key={p.id}>
                 <button
                   type="button"
-                  className={`plans-list-item${p.slug === slug ? ' plans-current' : ''}`}
-                  aria-current={p.slug === slug ? 'true' : undefined}
+                  className={`plans-list-item${!onYou && p.slug === slug ? ' plans-current' : ''}`}
+                  aria-current={!onYou && p.slug === slug ? 'true' : undefined}
                   onClick={() => {
                     setSlug(p.slug);
                     setCreating(false);
+                    setOnYou(false);
                   }}
                 >
                   <span className="plans-list-title">{p.title}</span>
@@ -185,6 +202,15 @@ export function PlansView({
               }}
               onCancel={() => setCreating(false)}
             />
+          ) : onYou ? (
+            <OnYouView
+              routeBase={routeBase}
+              decides={plan?.decidesSends ?? false}
+              onOpen={(s) => {
+                setSlug(s);
+                setOnYou(false);
+              }}
+            />
           ) : plan ? (
             <PlanBody plan={plan} events={events} act={act} />
           ) : (
@@ -192,9 +218,174 @@ export function PlansView({
           )}
         </main>
 
-        {plan && !creating && <History plan={plan} events={events} act={act} />}
+        {plan && !creating && !onYou && <History plan={plan} events={events} act={act} />}
       </div>
     </div>
+  );
+}
+
+// ── on you: the next step on every path ───────────────────────────────
+
+function OnYouView({
+  routeBase,
+  decides,
+  onOpen,
+}: {
+  routeBase: string;
+  decides: boolean;
+  onOpen: (slug: string) => void;
+}) {
+  const [data, setData] = useState<OnYou | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setData(await call<OnYou>(`${routeBase}/on-you`));
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, [routeBase]);
+
+  useEffect(() => {
+    void load();
+    const id = setInterval(() => void load(), 15_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  /** Kohl moves a ready item up or down: the whole ready order becomes Kohl's (pinned). */
+  const move = async (from: number, to: number) => {
+    if (!data) return;
+    const ready = [...data.next, ...data.more];
+    if (to < 0 || to >= ready.length) return;
+    const [x] = ready.splice(from, 1);
+    ready.splice(to, 0, x);
+    try {
+      for (const [i, e] of ready.entries()) {
+        if (e.item.rank !== i + 1 || e.item.rankedBy !== 'kohl') {
+          await call(`${routeBase}/items/${e.item.id}`, 'PATCH', { rank: i + 1 });
+        }
+      }
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    void load();
+  };
+  const unpin = async (e: OnYouEntry) => {
+    try {
+      await call(`${routeBase}/items/${e.item.id}`, 'PATCH', { rank: null });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    void load();
+  };
+
+  if (!data) return <p className="plans-hint">{error ?? 'Loading…'}</p>;
+  const nothing = !data.next.length && !data.phases.length;
+
+  const row = (e: OnYouEntry, i?: number) => (
+    <li key={e.item.id} className="plans-onyou-row">
+      <button type="button" className="plans-onyou-open" onClick={() => onOpen(e.planSlug)}>
+        <span className={`plans-kind plans-kind-${e.item.kind}`}>{e.item.kind}</span>
+        <span className="plans-item-title">{e.item.title}</span>
+        <span className="plans-onyou-where">
+          {e.planTitle}
+          {e.phaseTitle ? ` · ${e.phaseTitle}` : ''}
+        </span>
+      </button>
+      <div className="plans-meta">
+        {e.item.why && <>{e.item.why} · </>}
+        {e.unlocks > 0 && <>unlocks {e.unlocks} · </>}
+        {e.stale && <>stale draft · </>}
+        {e.waitingOn && (
+          <>
+            waiting on{' '}
+            {e.waitingOn.map((w) => `"${w.title}"${w.owner ? ` (@${w.owner})` : ''}`).join(', ')}
+            {' · '}
+          </>
+        )}
+        {e.stuckOn && <>stuck: "{e.stuckOn.title}" was declined · </>}
+        {e.item.rankedBy === 'kohl'
+          ? 'your order'
+          : e.item.rankedBy
+            ? `ranked by ${e.item.rankedBy}`
+            : 'unranked'}
+        {decides && i !== undefined && (
+          <span className="plans-onyou-order">
+            <button
+              type="button"
+              className="plans-link"
+              aria-label="Move up"
+              onClick={() => void move(i, i - 1)}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="plans-link"
+              aria-label="Move down"
+              onClick={() => void move(i, i + 1)}
+            >
+              ↓
+            </button>
+            {e.item.rankedBy === 'kohl' && (
+              <button type="button" className="plans-link" onClick={() => void unpin(e)}>
+                let RoboKohl rank it
+              </button>
+            )}
+          </span>
+        )}
+      </div>
+    </li>
+  );
+
+  const fold = (label: string, xs: OnYouEntry[], offset?: number) =>
+    xs.length > 0 && (
+      <details className="plans-onyou-fold">
+        <summary>
+          {label} ({xs.length})
+        </summary>
+        <ul>{xs.map((e, k) => row(e, offset === undefined ? undefined : offset + k))}</ul>
+      </details>
+    );
+
+  return (
+    <article className="plans-plan plans-onyou">
+      <h2>On you</h2>
+      {error && <div className="plans-error">{error}</div>}
+      {data.phases.length > 0 && (
+        <section className="plans-phase">
+          <h3>Phases waiting on your yes</h3>
+          <ul>
+            {data.phases.map((p) => (
+              <li key={p.phase.id} className="plans-onyou-row">
+                <button
+                  type="button"
+                  className="plans-onyou-open"
+                  onClick={() => onOpen(p.planSlug)}
+                >
+                  <span className="plans-item-title">{p.phase.title}</span>
+                  <span className="plans-onyou-where">{p.planTitle}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <section className="plans-phase">
+        <h3>Next</h3>
+        {nothing ? (
+          <p className="plans-hint">Nothing's waiting on you.</p>
+        ) : (
+          <ul>{data.next.map((e, i) => row(e, i))}</ul>
+        )}
+      </section>
+      {fold('More on you', data.more, data.next.length)}
+      {fold('Waiting on something first', data.blocked)}
+      {fold('Stuck behind something declined', data.stuck)}
+      {fold('In flight', data.inFlight)}
+      {fold('Shipped this week', data.shipped)}
+    </article>
   );
 }
 
@@ -908,6 +1099,8 @@ function describe(e: PlanEvent, plan: PlanDetail): string {
       return `edited "${item ?? ''}" (${Object.keys((d.changes as object) ?? {}).join(', ')})`;
     case 'item-status':
       return `moved "${item ?? ''}" to ${String(d.after).replace('_', ' ')}${d.resolution ? `: ${d.resolution as string}` : ''}`;
+    case 'item-ordered':
+      return `reordered "${item ?? ''}" (${Object.keys((d.changes as object) ?? {}).join(', ')})`;
     case 'send-approve':
       return `approved "${item ?? ''}" to send (rev ${String(d.rev)})`;
     case 'send-veto':
