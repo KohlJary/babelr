@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Step 3e: DMs are end-to-end encrypted, and the server refuses
  * plaintext there, on every path that writes a DM message: the DM and

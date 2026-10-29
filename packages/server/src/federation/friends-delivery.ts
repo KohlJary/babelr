@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import { actors } from '../db/schema/actors.ts';
 import { serializeActivity } from './jsonld.ts';

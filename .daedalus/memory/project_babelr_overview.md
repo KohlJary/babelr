@@ -12,7 +12,7 @@ Babelr is a federated chat system with a tone-preserving LLM translation layer a
 - Every architectural decision should preserve the privacy story (server never touches translated plaintext)
 - ActivityPub-shaped data model from day one even though federation is Phase 2
 - Tone preservation is THE differentiator — not a v2 feature
-- Hippocratic License (HL3) from commit one, non-negotiable
+- MIT since 2026-10-29 (Kohl's call); HL3 through commit 35f4326, and those versions stay HL3
 - Stack: TypeScript (Fastify/NestJS) + Postgres backend, React frontend, WebSockets
 - Client-side translation via BYO API key (Phase 1), browser-local inference later
 - Build order: scaffolding → raw chat → translation MVP → tone pipeline → servers/channels/DMs → E2E → browser-local → polish

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 
 /**
  * Subscribe to plugin-namespaced WS messages. Abstracts the

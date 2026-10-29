@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState } from 'react';
 import type { ActorProfile, PresenceStatus } from '@babelr/shared';
 import { PERMISSIONS } from '@babelr/shared';

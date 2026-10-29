@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import './fastify-augment.js';
 export * from './types.js';
 export * from './access.js';

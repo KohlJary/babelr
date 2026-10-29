@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Historical location of the translation prompt helpers. The
  * canonical copy now lives in `@babelr/shared/translation-prompt`

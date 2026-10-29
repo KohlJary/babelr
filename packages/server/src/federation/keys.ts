@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { generateKeyPairSync } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { actors } from '../db/schema/actors.ts';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import type Fastify from 'fastify';
 import { eq } from 'drizzle-orm';

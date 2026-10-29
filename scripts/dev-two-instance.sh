@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: Hippocratic-3.0
+# SPDX-License-Identifier: MIT
 #
 # Spin up two Babelr instances side-by-side for local federation testing.
 #

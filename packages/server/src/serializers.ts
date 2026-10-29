@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { eq, and, lt, desc, inArray } from 'drizzle-orm';
 import { objects } from './db/schema/objects.ts';
 import { actors } from './db/schema/actors.ts';

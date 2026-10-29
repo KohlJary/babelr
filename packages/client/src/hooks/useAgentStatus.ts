@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AgentReplyStatusView, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';

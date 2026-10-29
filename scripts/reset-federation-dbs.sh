@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: Hippocratic-3.0
+# SPDX-License-Identifier: MIT
 #
 # Drop and recreate both federation-testing databases from scratch.
 # Run this when accumulated state from prior test runs is getting

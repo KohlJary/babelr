@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { and, eq, inArray } from 'drizzle-orm';
 import { extractWikiSlugs } from '@babelr/shared';
 import { wikiPages, wikiPageLinks } from './db/schema/wiki.ts';

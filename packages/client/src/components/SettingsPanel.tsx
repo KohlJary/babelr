@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState } from 'react';
 import type { TranslationSettings } from '../translation';
 import type { ActorProfile } from '@babelr/shared';

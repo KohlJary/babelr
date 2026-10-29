@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { createSign, createVerify, createHash } from 'node:crypto';
 
 const SIGNED_HEADERS = '(request-target) host date digest';

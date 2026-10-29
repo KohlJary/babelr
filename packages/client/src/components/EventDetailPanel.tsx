@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useMemo, useState } from 'react';
 import type { EventView, EventRsvpStatus, ActorProfile, ChannelView } from '@babelr/shared';
 import { useChat } from '../hooks/useChat';

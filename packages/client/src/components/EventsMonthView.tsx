@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useMemo } from 'react';
 import type { EventView } from '@babelr/shared';
 import { monthGridDates, isSameMonth, isSameDay } from '../utils/calendar';

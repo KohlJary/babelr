@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { actors } from '../db/schema/actors.ts';
 import { objects } from '../db/schema/objects.ts';
 

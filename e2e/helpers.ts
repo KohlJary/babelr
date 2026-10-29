@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { type Page, expect } from '@playwright/test';
 
 const PERSISTENT_USER = {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { parseWikiRefs } from '@babelr/shared';

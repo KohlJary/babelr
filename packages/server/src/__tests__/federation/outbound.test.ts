@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Outbound federation tests. Verify that route handlers enqueue
  * delivery activities when content is created/updated/deleted on

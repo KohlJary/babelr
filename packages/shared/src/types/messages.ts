@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { PresenceStatus } from './ws.js';
 
 export interface MessageView {

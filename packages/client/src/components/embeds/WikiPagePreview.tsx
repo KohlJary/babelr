@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useEffect, useState } from 'react';
 import type { WikiPageView } from '@babelr/shared';
 import * as api from '../../api';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { stripApiPrefix } from './api-prefix.ts';

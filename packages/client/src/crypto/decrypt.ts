@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 
 function fromBase64(b64: string): ArrayBuffer {
   const binary = atob(b64);

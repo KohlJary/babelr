@@ -2,7 +2,7 @@
   "name": "@babelr/plugin-hello",
   "version": "0.1.0",
   "private": true,
-  "license": "Hippocratic-3.0",
+  "license": "MIT",
   "type": "module",
   "main": "./manifest.ts",
   "types": "./manifest.ts",

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useEffect, useMemo, useState } from 'react';
 import type { ServerRoleView } from '@babelr/shared';
 import { PERMISSION_CATEGORIES, PERMISSION_LABELS, type Permission } from '@babelr/shared';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * DM consent over federation: inbound DMs from remote actors follow the
  * recipient's policy and blocks, leaving stops inbound delivery, and a

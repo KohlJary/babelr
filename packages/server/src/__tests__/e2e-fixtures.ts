@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { randomBytes } from 'node:crypto';
 
 /** A fresh, well-formed 12-byte AES-GCM IV (16 base64 chars). */

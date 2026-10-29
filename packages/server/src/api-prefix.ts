@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 
 /**
  * The web client calls `/api/...`. In development Vite's proxy strips the

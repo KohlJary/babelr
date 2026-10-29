@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { ActorProfile } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 

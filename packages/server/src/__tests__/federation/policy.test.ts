@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { describe, it, expect } from 'vitest';
 import { extractDomain, isDomainAllowed, isActorAllowed } from '../../federation/policy.ts';
 import type { Config } from '../../config.ts';

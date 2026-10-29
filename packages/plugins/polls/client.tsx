@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useEffect, useState, useCallback } from 'react';
 import type { PollPayload } from './manifest.js';
 // In-tree plugins import client-internal components directly.

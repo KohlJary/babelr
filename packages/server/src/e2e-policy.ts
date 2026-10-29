@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { objects } from './db/schema/objects.ts';
 import { isDMRow } from './dm-consent.ts';
 import { IV_RE } from './message-provenance.ts';

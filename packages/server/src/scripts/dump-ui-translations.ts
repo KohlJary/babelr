@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Dump precomputed UI translations from the database into a JSON file
  * checked into the repo. The boot-time seed plugin reads this file on

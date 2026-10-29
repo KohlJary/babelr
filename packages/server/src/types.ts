@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { Database } from './db/index.ts';
 import type { Config } from './config.ts';
 import type { actors } from './db/schema/actors.ts';

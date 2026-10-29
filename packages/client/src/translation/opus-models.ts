@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 
 // Map ISO 639-1 UI codes to OPUS model language codes
 export const OPUS_CODES: Record<string, string> = {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { cpus } from 'node:os';
 import * as mediasoup from 'mediasoup';
 import type {

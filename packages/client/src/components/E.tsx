@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { ActorProfile, WikiRefKind } from '@babelr/shared';
 import { renderWithEmbeds } from '../utils/render-with-embeds';

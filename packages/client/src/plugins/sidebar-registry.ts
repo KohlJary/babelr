@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { ComponentType } from 'react';
 import type { ActorProfile, ChannelView } from '@babelr/shared';
 

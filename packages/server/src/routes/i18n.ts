@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import '../types.ts';

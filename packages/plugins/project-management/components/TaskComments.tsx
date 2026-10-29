@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useChat } from '../../../client/src/hooks/useChat.js';
 import { useTranslation } from '../../../client/src/hooks/useTranslation.js';
 import { useTranslationSettings } from '../../../client/src/hooks/useTranslationSettings.js';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Step 3e over federation: a remote DM (a Note addressed to a local
  * actor) must carry babelrEncrypted and a well-formed babelrIv, or it

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { TranslationResult } from '@babelr/shared';
 import { buildPrompt, parseResponse } from './prompt.ts';
 import type { TestCase } from './test-cases.ts';

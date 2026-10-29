@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useAuth } from './hooks/useAuth';
 import { AuthForm } from './components/AuthForm';
 import { TwoFactorChallenge } from './components/TwoFactorChallenge';

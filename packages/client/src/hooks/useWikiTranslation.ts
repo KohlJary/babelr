@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { chunkWikiContent, reassembleWikiChunks, type WikiChunk } from '@babelr/shared';
 import {

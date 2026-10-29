@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { MessageView, AuthorView, AgentReplyStatusView, DMConversation } from './messages.js';
 import type { FriendshipView } from './friends.js';
 

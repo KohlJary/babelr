@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import type { Database } from './db/index.ts';

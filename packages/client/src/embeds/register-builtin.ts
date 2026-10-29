@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { createElement } from 'react';
 import { registerEmbed } from './registry';
 import type { EmbedInlineProps, EmbedPreviewProps } from './registry';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Outreach items: RoboKohl's queue files, kept byte for byte (Plans phase 3).
  *

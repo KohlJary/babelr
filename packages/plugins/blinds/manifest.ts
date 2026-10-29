@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { definePlugin } from '@babelr/plugin-sdk';
 import { sql, type SQL } from 'drizzle-orm';
 import { lstat, open, readdir, unlink } from 'node:fs/promises';

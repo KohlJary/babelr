@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * DM consent (step 3d): "nobody is anyone's bitch". Everyone can say
  * no (policies, requests, blocks) and everyone can leave.

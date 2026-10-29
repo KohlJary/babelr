@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useEffect, useCallback } from 'react';
 import type { PresenceStatus, WsServerMessage } from '@babelr/shared';
 import { useWebSocket } from './useWebSocket';

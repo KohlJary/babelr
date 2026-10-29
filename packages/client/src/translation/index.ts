@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 export { AnthropicProvider } from './anthropic-provider';
 export { OpenAIProvider } from './openai-provider';
 export { OllamaProvider } from './ollama-provider';

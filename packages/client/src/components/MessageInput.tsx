@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useRef } from 'react';
 import { useT } from '../i18n/I18nProvider';
 

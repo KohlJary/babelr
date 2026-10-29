@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { AuthorView } from './messages.js';
 
 export type EventOwnerType = 'user' | 'server';

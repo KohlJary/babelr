@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState } from 'react';
 import { T } from '../../../client/src/components/T.js';
 import { TaskComments } from './TaskComments.js';

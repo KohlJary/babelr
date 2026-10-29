@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Leaving a DM stops live delivery, over a real WebSocket. The other
  * tests stub the WS layer; this one mounts the real plugin and route.

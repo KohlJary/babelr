@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Permission } from '@babelr/shared';
 import { PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from '@babelr/shared';

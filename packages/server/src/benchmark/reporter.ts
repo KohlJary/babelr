@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RunResult } from './runner.ts';

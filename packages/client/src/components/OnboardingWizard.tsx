@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useEffect } from 'react';
 import type { ActorProfile, ServerView } from '@babelr/shared';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';

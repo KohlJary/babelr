@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { parseArgs } from 'node:util';
 import { join } from 'node:path';
 import { TEST_SUITES, getSuite, getAllCases, type TestCase } from './test-cases.ts';

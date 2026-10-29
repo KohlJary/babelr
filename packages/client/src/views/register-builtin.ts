@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { createElement, useEffect, useState } from 'react';
 import { registerView, type ViewProps } from './registry';
 import { EventsPanel } from '../components/EventsPanel';

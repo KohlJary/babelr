@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type Fastify from 'fastify';
 import { createTestApp, createTestUser, cleanDb } from './helpers.ts';

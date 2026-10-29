@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 export * from './activitypub.js';
 export * from './auth.js';
 export * from './messages.js';

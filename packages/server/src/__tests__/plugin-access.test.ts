@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { createTestApp, createTestUser, cleanDb, wsSent } from './helpers.ts';

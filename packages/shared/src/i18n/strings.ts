@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Master UI strings file. Single source of truth for every visible string in
  * the client. English values are the canonical defaults and are used as the

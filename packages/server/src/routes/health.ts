@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { FastifyInstance } from 'fastify';
 
 export default async function healthRoutes(fastify: FastifyInstance) {

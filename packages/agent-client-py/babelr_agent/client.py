@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Hippocratic-3.0
+# SPDX-License-Identifier: MIT
 """A small Babelr client for agents: token auth, encrypted DMs.
 
     from babelr_agent import Agent

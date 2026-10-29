@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
 import * as argon2 from 'argon2';
 import { eq, and, ne, sql } from 'drizzle-orm';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useRef, useCallback } from 'react';
 import type * as mediasoupClient from 'mediasoup-client';
 import type { WsServerMessage, WsClientMessage, VoiceSlot } from '@babelr/shared';

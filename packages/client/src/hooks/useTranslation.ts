@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { MessageWithAuthor } from '@babelr/shared';
 import {

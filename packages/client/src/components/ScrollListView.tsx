@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useMemo, useState, type ReactNode } from 'react';
 
 export interface ScrollListViewProps<T> {

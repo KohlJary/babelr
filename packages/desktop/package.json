@@ -2,7 +2,7 @@
   "name": "@babelr/desktop",
   "version": "0.1.0",
   "private": true,
-  "license": "Hippocratic-3.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",

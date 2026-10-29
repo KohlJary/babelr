@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useCallback } from 'react';
 import type { TranslationSettings } from '../translation';
 

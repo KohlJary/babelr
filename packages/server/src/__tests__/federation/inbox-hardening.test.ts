@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createHash, createSign } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 /**
  * Federation test helpers. Creates simulated remote actors with signing
  * keys and provides utilities to sign and inject activities into inbox

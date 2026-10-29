@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 
 /**
  * Shared parser for `[[...]]` refs embedded in markdown content.

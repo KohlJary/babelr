@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Hippocratic-3.0
+# SPDX-License-Identifier: MIT
 # Multi-stage Dockerfile for Babelr
 
 # --- Stage 1: Install dependencies ---

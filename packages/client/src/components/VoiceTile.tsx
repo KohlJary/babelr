@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useEffect, useRef } from 'react';
 import type { AuthorView } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';

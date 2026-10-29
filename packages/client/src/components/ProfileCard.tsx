@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useEffect, useRef } from 'react';
 import type { UserProfile } from '../api';
 import * as api from '../api';

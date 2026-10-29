@@ -38,8 +38,6 @@ Structurally closer to Pentecost than to Esperanto: everyone hearing in their ow
 
 **Discord-shaped UX** -- Servers, channels, DMs, real-time WebSocket messaging. Three-panel layout with server sidebar, channel list, and chat area.
 
-**Hippocratic License** -- Universal translation and federated workspaces are infrastructure for human flourishing, not commodities to be metered. The [Hippocratic License 3.0](LICENSE.md) structurally excludes surveillance and human-rights-violating deployments.
-
 ## Quick Start
 
 ```bash
@@ -225,10 +223,8 @@ Babelr was written almost entirely by Claude instances working as Daedalus (the 
 
 ## License
 
-Babelr is licensed under the [Hippocratic License 3.0](LICENSE.md) (HL3-FULL).
+Babelr is licensed under the [MIT License](LICENSE.md).
 
-This means you are free to use, modify, and distribute this software, provided you comply with the ethical standards defined in the license. These include prohibitions on human rights violations, mass surveillance, and environmental destruction.
-
-Universal translation is uniquely dangerous if inverted for surveillance. The license is not an afterthought -- it is a structural commitment.
+Versions up to and including commit 35f4326 were released under the Hippocratic License 3.0 and stay under it.
 
 Copyright (c) 2026 Kohl Jary and contributors

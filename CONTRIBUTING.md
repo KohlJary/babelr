@@ -1,6 +1,6 @@
 # Contributing to Babelr
 
-Babelr is licensed under the [Hippocratic License 3.0](LICENSE.md). By contributing, you agree that your contributions will be licensed under the same terms.
+Babelr is licensed under the [MIT License](LICENSE.md). By contributing, you agree that your contributions will be licensed under the same terms.
 
 ## Development Setup
 
@@ -41,7 +41,7 @@ The monorepo uses npm workspaces. The `shared` and `plugin-sdk` packages must be
 
 - **TypeScript strict mode** throughout
 - **ESLint** (flat config) + **Prettier** (single quotes, trailing commas)
-- **SPDX license headers** on every source file: `// SPDX-License-Identifier: Hippocratic-3.0`
+- **SPDX license headers** on every source file: `// SPDX-License-Identifier: MIT`
 - Run `npm run lint` and `npm run format:check` before submitting
 
 ## Git Workflow

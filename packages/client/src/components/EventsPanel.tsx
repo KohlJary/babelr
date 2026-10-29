@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useState, useMemo, useEffect } from 'react';
 import * as api from '../api';
 import type { EventView, ActorProfile, ChannelView } from '@babelr/shared';

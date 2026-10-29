@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Hippocratic-3.0
+// SPDX-License-Identifier: MIT
 import { useEffect, useState, useCallback } from 'react';
 import { ListDetailView } from '../../client/src/components/ListDetailView.js';
 import { T } from '../../client/src/components/T.js';

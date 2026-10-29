@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Hippocratic-3.0
+# SPDX-License-Identifier: MIT
 """Babelr's DM encryption, in Python, byte-compatible with the web client.
 
 The web client (packages/client/src/crypto) does:

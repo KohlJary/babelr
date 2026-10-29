@@ -2,7 +2,7 @@
   "name": "babelr",
   "version": "0.1.0",
   "private": true,
-  "license": "Hippocratic-3.0",
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*",
