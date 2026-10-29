@@ -1137,6 +1137,130 @@ export default definePlugin({
       },
     );
 
+    // Queue history into Plans (phase 3): a queue file in any state, its
+    // drafts as revisions and its decisions as events. Everything imported is
+    // claimed by the name the file or git recorded, unverified, with the
+    // importer as the actor. An imported approval is history only: approvedRev
+    // stays empty, because the send is Kohl's click on a revision in Plans.
+    const HISTORY_ACTIONS = ['drafted', 'edited', 'approved', 'vetoed', 'sent', 'note'];
+    fastify.post<{ Params: { slug: string }; Body: Record<string, unknown> }>(
+      '/plans/:slug/items/import',
+      async (request, reply) => {
+        try {
+          const actor = me(request);
+          const plan = await planFor(actor, request.params.slug);
+          if (!isAgent(actor) && !(await isKohl(plan, actor))) {
+            throw new PlanError('only an agent of the house or Kohl imports queue history', 403);
+          }
+          const b = request.body ?? {};
+          const surface = 'import';
+          const title = text(b.title, 'title', true);
+          const owner = ownerOf(b.owner);
+          const o = (b.outreach ?? {}) as Record<string, unknown>;
+          const raw = text(o.raw, 'body', true);
+          const ref = String(o.ref ?? '');
+          if (!/^\d{4}$/.test(ref)) throw new PlanError('outreach.ref must be four digits', 400);
+          const { head, meta } = split(raw);
+          if (!head || !meta.to || !meta.room || !draftOf(raw).trim()) {
+            throw new PlanError('outreach.raw must be a queue file with to, room and a draft', 400);
+          }
+          const sendStatus = (SEND_STATUSES as readonly string[]).includes(meta.status)
+            ? meta.status
+            : null;
+          if (!sendStatus) throw new PlanError(`unknown queue status ${meta.status}`, 400);
+          const taken = (await db.execute(
+            sql`SELECT 1 FROM plugin_plans_outreach WHERE ref = ${ref}`,
+          )) as unknown as unknown[];
+          if (taken.length) throw new PlanError(`ref ${ref} is already in Plans`, 409);
+
+          const name = (v: unknown, what: string) => {
+            const s = typeof v === 'string' ? v.trim() : '';
+            if (!/^[\w .@-]{1,60}$/.test(s))
+              throw new PlanError(`${what} must be a short name`, 400);
+            return s;
+          };
+          const when = (v: unknown) => {
+            const s = typeof v === 'string' ? v : '';
+            if (!/^\d{4}-\d{2}-\d{2}([T ][\d:.+-]+Z?)?$/.test(s)) {
+              throw new PlanError('at must be a date (YYYY-MM-DD, optionally with a time)', 400);
+            }
+            return s;
+          };
+          const revs = Array.isArray(b.revisions) ? (b.revisions as Record<string, unknown>[]) : [];
+          if (!revs.length || revs.length > 200) {
+            throw new PlanError('revisions: 1 to 200, the original first', 400);
+          }
+          const drafts = revs.map((r) => ({
+            draft: text(r.draft, 'body', true),
+            by: name(r.by, 'revisions[].by'),
+            at: when(r.at),
+            note: causeOf(r),
+          }));
+          if (drafts[drafts.length - 1].draft !== draftOf(raw)) {
+            throw new PlanError("the last revision must be the file's current draft", 400);
+          }
+          const history = (
+            Array.isArray(b.events) ? (b.events as Record<string, unknown>[]) : []
+          ).map((e) => {
+            if (typeof e.action !== 'string' || !HISTORY_ACTIONS.includes(e.action)) {
+              throw new PlanError(
+                `events[].action must be one of ${HISTORY_ACTIONS.join(', ')}`,
+                400,
+              );
+            }
+            const d = e.detail && typeof e.detail === 'object' ? (e.detail as object) : {};
+            if (JSON.stringify(d).length > 4000)
+              throw new PlanError('events[].detail is too long', 400);
+            return { action: e.action, by: name(e.by, 'events[].by'), at: when(e.at), detail: d };
+          });
+          if (history.length > 500) throw new PlanError('events: at most 500', 400);
+
+          const status: ItemStatus =
+            sendStatus === 'sent' ? 'done' : sendStatus === 'vetoed' ? 'declined' : 'open';
+          const pos = (await db.execute(
+            sql`SELECT COALESCE(MAX(position), -1) + 1 AS n FROM plugin_plans_items WHERE plan_id = ${plan.id}`,
+          )) as unknown as { n: number }[];
+          const rows = (await db.execute(
+            sql`INSERT INTO plugin_plans_items (plan_id, phase_id, position, kind, title, body, owner, status, created_by)
+                VALUES (${plan.id}, NULL, ${Number(pos[0].n)}, 'outreach', ${title}, ${draftOf(raw)},
+                        ${owner}, ${status}, ${actor.id})
+                RETURNING id`,
+          )) as unknown as { id: string }[];
+          const itemId = rows[0].id;
+          await db.execute(
+            sql`INSERT INTO plugin_plans_outreach (item_id, ref, raw, rev)
+                VALUES (${itemId}, ${ref}, ${raw}, ${drafts.length})`,
+          );
+          for (const [i, r] of drafts.entries()) {
+            await addRevision(itemId, i + 1, r.draft, actor, surface, null, r.note, r.by);
+          }
+          await log(
+            plan,
+            actor,
+            surface,
+            'outreach-imported',
+            { ref, title, sendStatus, revisions: drafts.length, approvalCarried: false },
+            { itemId },
+          );
+          for (const e of history) {
+            await log(
+              plan,
+              actor,
+              surface,
+              `history-${e.action}`,
+              { ...e.detail, by: e.by, at: e.at },
+              {
+                itemId,
+              },
+            );
+          }
+          return reply.status(201).send(await detail(plan, actor));
+        } catch (err) {
+          return fail(reply, err);
+        }
+      },
+    );
+
     fastify.patch<{ Params: { id: string }; Body: Record<string, unknown> }>(
       '/items/:id',
       async (request, reply) => {

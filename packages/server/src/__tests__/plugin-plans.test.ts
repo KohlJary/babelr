@@ -629,6 +629,75 @@ describe('plans', () => {
       expect((await call('GET', '/events?after=0', h.bob)).json().events).toEqual([]);
     });
 
+    it('imports queue history: any status, drafts as claimed revisions, decisions as events, no approval carried', async () => {
+      const h = await house();
+      const { slug } = await planWithPhase(h);
+      const approved =
+        RAW.replace(
+          'status: pending',
+          'status: approved\napproved: 2026-10-27\napproved_by: kohl',
+        ).replace('Hello there.', 'Hi, short.') + '\n<!-- original -->\n\nHello there.\n';
+      const body = {
+        title: '0007 A Researcher',
+        outreach: { ref: '0007', raw: approved },
+        revisions: [
+          { draft: '\nHello there.\n', by: 'robokohl', at: '2026-10-25', causeMsg: 'git:abc1234' },
+          { draft: '\nHi, short.\n\n', by: 'kohl', at: '2026-10-26' },
+        ],
+        events: [
+          { action: 'edited', by: 'kohl', at: '2026-10-26' },
+          { action: 'approved', by: 'kohl', at: '2026-10-27' },
+          {
+            action: 'note',
+            by: 'robokohl',
+            at: '2026-10-27',
+            detail: { wf: 'WF #13: stamped as Kohl' },
+          },
+        ],
+      };
+      expect((await call('POST', `/plans/${slug}/items/import`, h.carol, body)).status).toBe(403);
+      const bad = { ...body, revisions: body.revisions.slice(0, 1) };
+      expect((await call('POST', `/plans/${slug}/items/import`, h.cass, bad)).status).toBe(400);
+
+      const r = await call('POST', `/plans/${slug}/items/import`, h.cass, body);
+      expect(r.status).toBe(201);
+      const it = r
+        .json()
+        .items.find((i: { outreach?: { ref: string } }) => i.outreach?.ref === '0007');
+      expect(it.status).toBe('open');
+      expect(it.outreach).toMatchObject({ sendStatus: 'approved', rev: 2, approvedRev: null });
+      expect(it.outreach.raw).toBe(approved);
+
+      const revs = (await call('GET', `/items/${it.id}/revisions`, h.kohl)).json();
+      expect(
+        revs.map((x: { claimed: string; verified: boolean; surface: string }) => [
+          x.claimed,
+          x.verified,
+          x.surface,
+        ]),
+      ).toEqual([
+        ['robokohl', false, 'import'],
+        ['kohl', false, 'import'],
+      ]);
+      const events = (await call('GET', `/plans/${slug}/events`, h.kohl)).json();
+      const mine = events.filter((e: { itemId: string }) => e.itemId === it.id);
+      expect(mine.map((e: { action: string }) => e.action)).toEqual([
+        'outreach-imported',
+        'history-edited',
+        'history-approved',
+        'history-note',
+      ]);
+      expect(mine[0].detail.approvalCarried).toBe(false);
+      expect(mine[2].detail).toMatchObject({ by: 'kohl', at: '2026-10-27' });
+      expect((await call('POST', `/plans/${slug}/items/import`, h.cass, body)).status).toBe(409);
+
+      // Approving it takes Kohl's click on the current revision, like any other.
+      const d = (
+        await call('POST', `/items/${it.id}/send`, h.kohl, { action: 'approve', rev: 2 })
+      ).json();
+      expect(d.items.find((i: { id: string }) => i.id === it.id).outreach.approvedRev).toBe(2);
+    });
+
     it('an outreach item needs its room, and never voids its phase approval', async () => {
       const h = await house();
       const { slug, phaseId } = await planWithPhase(h);
