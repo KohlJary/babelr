@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: MIT
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { ReactNode } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type {
@@ -21,6 +30,9 @@ import type {
  */
 
 const SURFACE = { 'x-plans-surface': 'plans-view' };
+
+/** The item to open, scroll to and highlight when the plan page loads. */
+const FocusItem = createContext<string | null>(null);
 const KINDS: ItemKind[] = ['build', 'outreach', 'research', 'decision', 'ask'];
 
 async function call<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
@@ -69,6 +81,7 @@ export function PlansView({
   const [creating, setCreating] = useState(false);
   // Land on what's on Kohl unless a link named a plan: the filter is the point.
   const [onYou, setOnYou] = useState(!initialSlug);
+  const [focus, setFocus] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     try {
@@ -206,13 +219,16 @@ export function PlansView({
             <OnYouView
               routeBase={routeBase}
               decides={plan?.decidesSends ?? false}
-              onOpen={(s) => {
+              onOpen={(s, itemId) => {
                 setSlug(s);
+                setFocus(itemId ?? null);
                 setOnYou(false);
               }}
             />
           ) : plan ? (
-            <PlanBody plan={plan} events={events} act={act} />
+            <FocusItem.Provider value={focus}>
+              <PlanBody plan={plan} events={events} act={act} />
+            </FocusItem.Provider>
           ) : (
             <p className="plans-hint">Pick a plan, or start one.</p>
           )}
@@ -233,19 +249,43 @@ function OnYouView({
 }: {
   routeBase: string;
   decides: boolean;
-  onOpen: (slug: string) => void;
+  onOpen: (slug: string, itemId?: string) => void;
 }) {
   const [data, setData] = useState<OnYou | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Each plan's history, for an outreach draft's approval line.
+  const [events, setEvents] = useState<Record<string, PlanEvent[]>>({});
 
   const load = useCallback(async () => {
     try {
-      setData(await call<OnYou>(`${routeBase}/on-you`));
+      const d = await call<OnYou>(`${routeBase}/on-you`);
+      setData(d);
       setError(null);
+      const slugs = [...new Set([...d.next, ...d.more, ...d.blocked].map((e) => e.planSlug))];
+      const got = await Promise.all(
+        slugs.map((s) => call<PlanEvent[]>(`${routeBase}/plans/${s}/events`).catch(() => [])),
+      );
+      setEvents(Object.fromEntries(slugs.map((s, i) => [s, got[i]])));
     } catch (err) {
       setError((err as Error).message);
     }
   }, [routeBase]);
+
+  /** The plan page's item controls, here: act, then read the list again. */
+  const act = useCallback<Act>(
+    async (url, method, body) => {
+      setError(null);
+      try {
+        await call(`${routeBase}${url}`, method, body);
+        await load();
+        return true;
+      } catch (err) {
+        setError((err as Error).message);
+        return false;
+      }
+    },
+    [routeBase, load],
+  );
 
   useEffect(() => {
     void load();
@@ -283,16 +323,28 @@ function OnYouView({
   if (!data) return <p className="plans-hint">{error ?? 'Loading…'}</p>;
   const nothing = !data.next.length && !data.phases.length;
 
-  const row = (e: OnYouEntry, i?: number) => (
+  const row = (e: OnYouEntry, i?: number, openFirst = false) => (
     <li key={e.item.id} className="plans-onyou-row">
-      <button type="button" className="plans-onyou-open" onClick={() => onOpen(e.planSlug)}>
-        <span className={`plans-kind plans-kind-${e.item.kind}`}>{e.item.kind}</span>
-        <span className="plans-item-title">{e.item.title}</span>
-        <span className="plans-onyou-where">
-          {e.planTitle}
-          {e.phaseTitle ? ` · ${e.phaseTitle}` : ''}
-        </span>
-      </button>
+      <ItemRow
+        plan={{ decidesSends: decides }}
+        item={e.item}
+        events={events[e.planSlug] ?? []}
+        act={act}
+        defaultOpen={openFirst}
+        context={
+          <div className="plans-onyou-where">
+            in {e.planTitle}
+            {e.phaseTitle ? ` · ${e.phaseTitle}` : ''} ·{' '}
+            <button
+              type="button"
+              className="plans-link"
+              onClick={() => onOpen(e.planSlug, e.item.id)}
+            >
+              open in plan
+            </button>
+          </div>
+        }
+      />
       <div className="plans-meta">
         {e.item.why && <>{e.item.why} · </>}
         {e.unlocks > 0 && <>unlocks {e.unlocks} · </>}
@@ -383,7 +435,7 @@ function OnYouView({
         {nothing ? (
           <p className="plans-hint">Nothing's waiting on you.</p>
         ) : (
-          <ul>{data.next.map((e, i) => row(e, i))}</ul>
+          <ul>{data.next.map((e, i) => row(e, i, true))}</ul>
         )}
       </section>
       {fold('More on you', data.more, data.next.length)}
@@ -801,18 +853,34 @@ function ItemRow({
   item,
   events,
   act,
+  defaultOpen = false,
+  context,
 }: {
-  plan: PlanDetail;
+  plan: Pick<PlanDetail, 'decidesSends'>;
   item: PlanItem;
   events: PlanEvent[];
   act: Act;
+  defaultOpen?: boolean;
+  /** Where it lives, when shown outside its plan (On you). */
+  context?: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const focus = useContext(FocusItem);
+  const focused = focus === item.id;
+  const [open, setOpen] = useState(defaultOpen || focused);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focused) return;
+    setOpen(true);
+    ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [focused]);
   const [finishing, setFinishing] = useState(false);
   const [resolution, setResolution] = useState('');
   const o = item.outreach;
   return (
-    <div className={`plans-item plans-item-${item.status}`}>
+    <div
+      ref={ref}
+      className={`plans-item plans-item-${item.status}${focused ? ' plans-item-focus' : ''}`}
+    >
       <button
         type="button"
         className="plans-item-head"
@@ -840,6 +908,7 @@ function ItemRow({
               <strong>Resolution:</strong> {item.resolution}
             </div>
           )}
+          {context}
           <div className="plans-meta">added by {item.createdBy.name}</div>
           {o ? null : finishing ? (
             <div className="plans-form">
@@ -955,7 +1024,7 @@ function SendPanel({
   events,
   act,
 }: {
-  plan: PlanDetail;
+  plan: Pick<PlanDetail, 'decidesSends'>;
   item: PlanItem;
   outreach: NonNullable<PlanItem['outreach']>;
   events: PlanEvent[];

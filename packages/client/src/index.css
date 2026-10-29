@@ -4727,6 +4727,14 @@ textarea.modal-input {
   display: inline-flex;
   gap: 0.4rem;
 }
+.plans-item-focus {
+  outline: 2px solid #fde047;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.plans-onyou-row > .plans-meta {
+  padding-left: 0.5rem;
+}
 .plans-onyou-fold {
   margin: 0.6rem 0;
 }
