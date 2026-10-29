@@ -4488,7 +4488,8 @@ textarea.modal-input {
   .plans-layout {
     grid-template-columns: 13rem minmax(0, 1fr);
   }
-  .plans-history {
+  .plans-history,
+  .plans-chat {
     grid-column: 2;
   }
 }
@@ -4496,7 +4497,8 @@ textarea.modal-input {
   .plans-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-  .plans-history {
+  .plans-history,
+  .plans-chat {
     grid-column: 1;
   }
 }
@@ -5057,6 +5059,64 @@ textarea.modal-input {
   font: inherit;
   font-size: 0.85rem;
   cursor: pointer;
+}
+.plans-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  position: sticky;
+  top: 0.5rem;
+  height: calc(100vh - 8rem);
+  min-height: 22rem;
+}
+.plans-chat-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+.plans-chat-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 0.25rem;
+}
+.plans-chat-msg {
+  max-width: 92%;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.plans-chat-msg .plans-md > :first-child {
+  margin-top: 0;
+}
+.plans-chat-msg .plans-md > :last-child {
+  margin-bottom: 0;
+}
+.plans-chat-me {
+  align-self: flex-end;
+  background: #1e3a5f;
+}
+.plans-chat-them {
+  align-self: flex-start;
+  background: #1e293b;
+}
+.plans-chat-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.plans-chat-form textarea {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
 }
 .plans-history {
   display: flex;

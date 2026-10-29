@@ -204,6 +204,15 @@ export interface MapAct {
   nodes: Record<string, MapNode>;
 }
 
+/** What a person has open in Plans, so an agent in their DM sees the same thing. */
+export interface Viewing {
+  view: 'map' | 'list' | 'plan';
+  planSlug?: string;
+  itemId?: string;
+  actId?: string;
+  at: string;
+}
+
 /** GET /on-you: what's on Kohl, Next first, the rest folded. */
 export interface OnYou {
   /** The map: each act that still has Kohl work in it. */
@@ -1719,6 +1728,66 @@ export default definePlugin({
         return fail(reply, err);
       }
     });
+
+    // ── viewing: what Kohl has open, for the agent in the chat pane ─────
+    //
+    // A person's page reports what's open (view, plan, item, act); agents
+    // read it, so "this one" in a DM means what's on Kohl's screen. Kept in
+    // memory with a short history: an agent asks for the state as of a
+    // message's time, so a click after sending doesn't change what the
+    // message was about. A restart forgets it (404 until the next click).
+    const VIEW_KEEP = 50;
+    const viewings = new Map<string, Viewing[]>();
+    const ID_RE = /^[\w.:-]{1,200}$/;
+
+    fastify.put<{ Body: Record<string, unknown> }>('/viewing', async (request, reply) => {
+      try {
+        const actor = me(request);
+        if (isAgent(actor)) throw new PlanError('only a person reports what they have open', 403);
+        const b = request.body ?? {};
+        if (!['map', 'list', 'plan'].includes(b.view as string)) {
+          throw new PlanError('view must be map, list or plan', 400);
+        }
+        const v: Viewing = { view: b.view as Viewing['view'], at: new Date().toISOString() };
+        for (const k of ['planSlug', 'itemId', 'actId'] as const) {
+          if (b[k] === undefined || b[k] === null) continue;
+          if (typeof b[k] !== 'string' || !ID_RE.test(b[k] as string)) {
+            throw new PlanError(`${k} must be an id`, 400);
+          }
+          v[k] = b[k] as string;
+        }
+        const name = actor.preferredUsername.toLowerCase();
+        const list = [...(viewings.get(name) ?? []), v].slice(-VIEW_KEEP);
+        viewings.set(name, list);
+        return v;
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
+
+    // Your own, or (agents only) someone else's: ?user=jaryk. ?at=ISO gives
+    // what was open at that moment, e.g. when a message was sent.
+    fastify.get<{ Querystring: { user?: string; at?: string } }>(
+      '/viewing',
+      async (request, reply) => {
+        try {
+          const actor = me(request);
+          const name = (request.query.user ?? actor.preferredUsername).toLowerCase();
+          if (name !== actor.preferredUsername.toLowerCase() && !isAgent(actor)) {
+            throw new PlanError('only agents read what someone else has open', 403);
+          }
+          const at = request.query.at === undefined ? null : Date.parse(request.query.at);
+          if (at !== null && Number.isNaN(at)) throw new PlanError('at must be a time', 400);
+          const list = viewings.get(name) ?? [];
+          const v =
+            at === null ? list.at(-1) : [...list].reverse().find((x) => Date.parse(x.at) <= at);
+          if (!v) throw new PlanError('nothing reported yet', 404);
+          return v;
+        } catch (err) {
+          return fail(reply, err);
+        }
+      },
+    );
 
     // ── outreach (RoboKohl's queue, Plans phase 3) ──────────────────────
 

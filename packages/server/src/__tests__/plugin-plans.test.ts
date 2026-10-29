@@ -31,7 +31,7 @@ beforeEach(async () => {
 type Who = { cookie?: string; token?: string };
 
 async function call(
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'PUT',
   url: string,
   who: Who,
   payload?: unknown,
@@ -927,5 +927,28 @@ describe('plans', () => {
       ]);
       expect(titles(on.next)).toEqual(['0042 A Researcher']);
     });
+  });
+
+  it('what Kohl has open: a person reports it, agents read it, as of a time', async () => {
+    const h = await house();
+    expect((await call('GET', '/viewing?user=kohl', h.cass)).status).toBe(404);
+    const first = (
+      await call('PUT', '/viewing', h.kohl, { view: 'map', actId: 'a1', itemId: 'i1' })
+    ).json();
+    await new Promise((r) => setTimeout(r, 5));
+    await call('PUT', '/viewing', h.kohl, { view: 'plan', planSlug: 'act-1' });
+    expect((await call('GET', '/viewing?user=kohl', h.cass)).json()).toMatchObject({
+      view: 'plan',
+      planSlug: 'act-1',
+    });
+    // As of when a message went out, not what was clicked after.
+    const then = (
+      await call('GET', `/viewing?user=kohl&at=${encodeURIComponent(first.at)}`, h.cass)
+    ).json();
+    expect(then).toMatchObject({ view: 'map', itemId: 'i1' });
+    expect((await call('GET', '/viewing', h.kohl)).json().view).toBe('plan');
+    expect((await call('GET', '/viewing?user=kohl', h.carol)).status).toBe(403);
+    expect((await call('PUT', '/viewing', h.cass, { view: 'map' })).status).toBe(403);
+    expect((await call('PUT', '/viewing', h.kohl, { view: 'nope' })).status).toBe(400);
   });
 });

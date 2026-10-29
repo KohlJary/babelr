@@ -35,6 +35,16 @@ const SURFACE = { 'x-plans-surface': 'plans-view' };
 
 /** The item to open, scroll to and highlight when the plan page loads. */
 const FocusItem = createContext<string | null>(null);
+
+/** Tell the page an item was opened, so the agent in the chat pane sees it too. */
+const OpenedItem = createContext<(itemId: string) => void>(() => {});
+
+type ViewingIn = {
+  view: 'map' | 'list' | 'plan';
+  planSlug?: string;
+  itemId?: string;
+  actId?: string;
+};
 const KINDS: ItemKind[] = ['build', 'outreach', 'research', 'decision', 'ask'];
 
 async function call<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
@@ -84,6 +94,39 @@ export function PlansView({
   // Land on what's on Kohl unless a link named a plan: the filter is the point.
   const [onYou, setOnYou] = useState(!initialSlug);
   const [focus, setFocus] = useState<string | null>(null);
+  const [chat, setChat] = useState(() => {
+    try {
+      return localStorage.getItem('plans:chat') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('plans:chat', chat ? '1' : '0');
+    } catch {
+      /* a convenience only */
+    }
+  }, [chat]);
+
+  // What's open, reported (debounced) so RoboKohl's replies are about it.
+  const viewing = useRef<ViewingIn>({ view: 'map' });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const report = useCallback(
+    (v: ViewingIn) => {
+      viewing.current = v;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => {
+        void call(`${routeBase}/viewing`, 'PUT', viewing.current).catch(() => {});
+      }, 400);
+    },
+    [routeBase],
+  );
+  const opened = useCallback((itemId: string) => report({ ...viewing.current, itemId }), [report]);
+  useEffect(() => {
+    if (!onYou && slug)
+      report({ view: 'plan', planSlug: slug, ...(focus ? { itemId: focus } : {}) });
+  }, [onYou, slug, focus, report]);
 
   const loadList = useCallback(async () => {
     try {
@@ -157,87 +200,102 @@ export function PlansView({
               ? `${awaitingMe} phase${awaitingMe === 1 ? '' : 's'} waiting on your yes`
               : 'Plans'}
         </span>
+        <button
+          type="button"
+          className={chat ? 'plans-primary' : 'plans-secondary'}
+          aria-pressed={chat}
+          onClick={() => setChat((c) => !c)}
+        >
+          Chat with RoboKohl
+        </button>
         <button type="button" className="plans-primary" onClick={() => setCreating(true)}>
           New plan
         </button>
       </header>
       {error && <div className="plans-error">{error}</div>}
 
-      <div className="plans-layout">
-        <nav className="plans-list" aria-label="Plans">
-          <button
-            type="button"
-            className={`plans-list-item plans-onyou-tab${onYou ? ' plans-current' : ''}`}
-            aria-current={onYou ? 'true' : undefined}
-            onClick={() => {
-              setOnYou(true);
-              setCreating(false);
-            }}
-          >
-            <span className="plans-list-title">On you</span>
-            <span className="plans-list-meta">the next step on every path</span>
-          </button>
-          {plans?.length === 0 && <p className="plans-hint">No plans yet.</p>}
-          <ul>
-            {(plans ?? []).map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  className={`plans-list-item${!onYou && p.slug === slug ? ' plans-current' : ''}`}
-                  aria-current={!onYou && p.slug === slug ? 'true' : undefined}
-                  onClick={() => {
-                    setSlug(p.slug);
-                    setCreating(false);
-                    setOnYou(false);
-                  }}
-                >
-                  <span className="plans-list-title">{p.title}</span>
-                  <span className="plans-list-meta">
-                    {p.status} · {p.phaseCounts.approved + p.phaseCounts.done}/
-                    {Object.values(p.phaseCounts).reduce((a, b) => a + b, 0) -
-                      p.phaseCounts.declined}{' '}
-                    phases · {p.itemCounts.done}/{p.itemCounts.total} items
-                  </span>
-                  {p.awaitingMe > 0 && <span className="plans-badge-you">Needs your yes</span>}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        <main className="plans-main">
-          {creating ? (
-            <NewPlan
-              routeBase={routeBase}
-              serverId={serverId}
-              onCreated={(s) => {
+      <OpenedItem.Provider value={opened}>
+        <div className={`plans-layout${chat ? ' plans-layout-chat' : ''}`}>
+          <nav className="plans-list" aria-label="Plans">
+            <button
+              type="button"
+              className={`plans-list-item plans-onyou-tab${onYou ? ' plans-current' : ''}`}
+              aria-current={onYou ? 'true' : undefined}
+              onClick={() => {
+                setOnYou(true);
                 setCreating(false);
-                setSlug(s);
-                void loadList();
               }}
-              onCancel={() => setCreating(false)}
-            />
-          ) : onYou ? (
-            <OnYouView
-              routeBase={routeBase}
-              decides={plan?.decidesSends ?? false}
-              onOpen={(s, itemId) => {
-                setSlug(s);
-                setFocus(itemId ?? null);
-                setOnYou(false);
-              }}
-            />
-          ) : plan ? (
-            <FocusItem.Provider value={focus}>
-              <PlanBody plan={plan} events={events} act={act} />
-            </FocusItem.Provider>
-          ) : (
-            <p className="plans-hint">Pick a plan, or start one.</p>
-          )}
-        </main>
+            >
+              <span className="plans-list-title">On you</span>
+              <span className="plans-list-meta">the next step on every path</span>
+            </button>
+            {plans?.length === 0 && <p className="plans-hint">No plans yet.</p>}
+            <ul>
+              {(plans ?? []).map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    className={`plans-list-item${!onYou && p.slug === slug ? ' plans-current' : ''}`}
+                    aria-current={!onYou && p.slug === slug ? 'true' : undefined}
+                    onClick={() => {
+                      setSlug(p.slug);
+                      setCreating(false);
+                      setOnYou(false);
+                    }}
+                  >
+                    <span className="plans-list-title">{p.title}</span>
+                    <span className="plans-list-meta">
+                      {p.status} · {p.phaseCounts.approved + p.phaseCounts.done}/
+                      {Object.values(p.phaseCounts).reduce((a, b) => a + b, 0) -
+                        p.phaseCounts.declined}{' '}
+                      phases · {p.itemCounts.done}/{p.itemCounts.total} items
+                    </span>
+                    {p.awaitingMe > 0 && <span className="plans-badge-you">Needs your yes</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-        {plan && !creating && !onYou && <History plan={plan} events={events} act={act} />}
-      </div>
+          <main className="plans-main">
+            {creating ? (
+              <NewPlan
+                routeBase={routeBase}
+                serverId={serverId}
+                onCreated={(s) => {
+                  setCreating(false);
+                  setSlug(s);
+                  void loadList();
+                }}
+                onCancel={() => setCreating(false)}
+              />
+            ) : onYou ? (
+              <OnYouView
+                routeBase={routeBase}
+                decides={plan?.decidesSends ?? false}
+                onOpen={(s, itemId) => {
+                  setSlug(s);
+                  setFocus(itemId ?? null);
+                  setOnYou(false);
+                }}
+                onViewing={report}
+              />
+            ) : plan ? (
+              <FocusItem.Provider value={focus}>
+                <PlanBody plan={plan} events={events} act={act} />
+              </FocusItem.Provider>
+            ) : (
+              <p className="plans-hint">Pick a plan, or start one.</p>
+            )}
+          </main>
+
+          {chat ? (
+            <ChatPane routeBase={routeBase} agent="robokohl" />
+          ) : (
+            plan && !creating && !onYou && <History plan={plan} events={events} act={act} />
+          )}
+        </div>
+      </OpenedItem.Provider>
     </div>
   );
 }
@@ -248,10 +306,12 @@ function OnYouView({
   routeBase,
   decides,
   onOpen,
+  onViewing,
 }: {
   routeBase: string;
   decides: boolean;
   onOpen: (slug: string, itemId?: string) => void;
+  onViewing: (v: ViewingIn) => void;
 }) {
   const [data, setData] = useState<OnYou | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -324,6 +384,35 @@ function OnYouView({
     }
     void load();
   };
+
+  // Report the map's act and picked step (or the list) as what's open.
+  const lastKey = useRef('');
+  useEffect(() => {
+    if (!data) return;
+    const map = mode === 'map' && data.acts.length > 0;
+    const a =
+      data.acts.find((x) => x.id === actId) ??
+      data.acts.find((x) => Object.values(x.nodes).some((n) => n.next === 1)) ??
+      data.acts[0];
+    const pick =
+      a &&
+      (a.nodes[picked ?? ''] ??
+        Object.values(a.nodes)
+          .filter((n) => n.next)
+          .sort((x, y) => (x.next ?? 0) - (y.next ?? 0))[0]);
+    const key = map ? `map:${a?.id ?? ''}:${pick?.item.id ?? ''}` : 'list';
+    if (key === lastKey.current) return;
+    lastKey.current = key;
+    onViewing(
+      map
+        ? {
+            view: 'map',
+            ...(a ? { actId: a.id } : {}),
+            ...(pick ? { itemId: pick.item.id, planSlug: pick.planSlug } : {}),
+          }
+        : { view: 'list' },
+    );
+  }, [data, mode, actId, picked, onViewing]);
 
   if (!data) return <p className="plans-hint">{error ?? 'Loading…'}</p>;
   const nothing = !data.next.length && !data.phases.length;
@@ -667,6 +756,124 @@ export function ActMap({
         );
       })}
     </div>
+  );
+}
+
+// ── chat: Kohl's DM with an agent, beside what they're both looking at ─
+
+interface ChatMsg {
+  message: { id: string; content: string; published: string; inReplyTo?: string };
+  author: { preferredUsername: string; displayName: string | null };
+}
+
+function ChatPane({ routeBase, agent }: { routeBase: string; agent: string }) {
+  // Core routes sit beside the plugin's: /api/plugins/plans -> /api.
+  const api = routeBase.replace(/\/plugins\/[^/]+$/, '');
+  const [dm, setDm] = useState<string | null | undefined>(undefined);
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const end = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    void call<{ id: string; participants: { preferredUsername: string }[] }[]>(`${api}/dms`)
+      .then((ds) =>
+        setDm(
+          ds.find((d) => d.participants.some((p) => p.preferredUsername.toLowerCase() === agent))
+            ?.id ?? null,
+        ),
+      )
+      .catch((e: Error) => setError(e.message));
+  }, [api, agent]);
+
+  const load = useCallback(async () => {
+    if (!dm) return;
+    try {
+      const r = await call<{ messages: ChatMsg[] }>(`${api}/dms/${dm}/messages?limit=40`);
+      setMsgs(
+        [...r.messages].sort((a, b) => a.message.published.localeCompare(b.message.published)),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [api, dm]);
+
+  useEffect(() => {
+    void load();
+    const id = setInterval(() => void load(), 4000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const last = msgs.at(-1)?.message.id;
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [last]);
+
+  const send = async () => {
+    if (!dm || !text.trim()) return;
+    setSending(true);
+    try {
+      await call(`${api}/dms/${dm}/messages`, 'POST', { content: text.trim() });
+      setText('');
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <aside className="plans-chat" aria-label={`Chat with @${agent}`}>
+      <div className="plans-chat-head">
+        <strong>@{agent}</strong>
+        <span className="plans-meta">sees what you have open here</span>
+      </div>
+      {error && <div className="plans-error">{error}</div>}
+      {dm === null ? (
+        <p className="plans-hint">No DM with @{agent} yet. Start one, then come back.</p>
+      ) : (
+        <div className="plans-chat-log">
+          {msgs.map((m) => (
+            <div
+              key={m.message.id}
+              className={`plans-chat-msg${m.author.preferredUsername.toLowerCase() === agent ? ' plans-chat-them' : ' plans-chat-me'}`}
+            >
+              <div
+                className="plans-md"
+                dangerouslySetInnerHTML={{ __html: md(m.message.content) }}
+              />
+            </div>
+          ))}
+          <div ref={end} />
+        </div>
+      )}
+      <form
+        className="plans-chat-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <textarea
+          rows={3}
+          value={text}
+          placeholder={`Ask @${agent} about what's open`}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
+          disabled={!dm}
+        />
+        <button type="submit" className="plans-primary" disabled={!dm || sending || !text.trim()}>
+          Send
+        </button>
+      </form>
+    </aside>
   );
 }
 
@@ -1091,6 +1298,7 @@ function ItemRow({
   const focused = focus === item.id;
   const [open, setOpen] = useState(defaultOpen || focused);
   const ref = useRef<HTMLDivElement>(null);
+  const openedItem = useContext(OpenedItem);
   useEffect(() => {
     if (!focused) return;
     setOpen(true);
@@ -1107,7 +1315,10 @@ function ItemRow({
       <button
         type="button"
         className="plans-item-head"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open) openedItem(item.id);
+          setOpen((o) => !o);
+        }}
         aria-expanded={open}
       >
         <span className={`plans-kind plans-kind-${item.kind}`}>{item.kind}</span>
