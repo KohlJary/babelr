@@ -75,6 +75,10 @@ export function edit(text: string, newDraft: string, by: string, today: string):
   if (newDraft.replace(/^\s+/, '').startsWith('---\n')) {
     throw new Error('the new draft starts with a frontmatter block; pass the draft body only');
   }
+  if (newDraft.includes(ORIGINAL)) {
+    // The original is kept below the marker already; a second copy would nest.
+    throw new Error(`the new draft contains ${ORIGINAL}; pass the draft body only`);
+  }
   const body = split(text).body;
   const headEnd = text.length - body.length;
   const kept = originalOf(text);

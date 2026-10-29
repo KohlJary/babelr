@@ -529,6 +529,106 @@ describe('plans', () => {
       );
     });
 
+    it('header fields: to/room void an approval, why/steer do not, status is server-owned', async () => {
+      const h = await house();
+      const { item } = await outreachItem(h);
+      await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'approve', rev: 1 });
+      const find = (d: { items: { id: string }[] }) =>
+        d.items.find((i) => i.id === item.id) as unknown as {
+          outreach: { raw: string; approvedRev: number | null; sendStatus: string; rev: number };
+        };
+
+      let it = find(
+        (
+          await call('PATCH', `/items/${item.id}`, h.cass, { fields: { why: 'say hi, briefly' } })
+        ).json(),
+      );
+      expect(it.outreach).toMatchObject({ approvedRev: 1, sendStatus: 'approved', rev: 1 });
+      expect(it.outreach.raw).toContain('why: say hi, briefly');
+
+      it = find(
+        (
+          await call('PATCH', `/items/${item.id}`, h.cass, { fields: { to: 'Another Researcher' } })
+        ).json(),
+      );
+      expect(it.outreach).toMatchObject({ approvedRev: null, sendStatus: 'edited', rev: 1 });
+      expect(it.outreach.raw).toContain('to: Another Researcher  # check the address'); // comment kept
+      expect(it.outreach.raw).toContain('edited_by: cass');
+
+      expect(
+        (
+          await call('PATCH', `/items/${item.id}`, h.cass, {
+            body: 'Hi.\n\n<!-- original -->\n\nHello there.\n',
+          })
+        ).status,
+      ).toBe(400); // the original is already kept; a second copy would nest
+      for (const fields of [{ status: 'approved' }, { approved_by: 'kohl' }, { to: 'a\nb' }]) {
+        expect((await call('PATCH', `/items/${item.id}`, h.cass, { fields })).status).toBe(400);
+      }
+    });
+
+    it("hold is Kohl's, changes nothing, and keeps an approval", async () => {
+      const h = await house();
+      const { slug, item } = await outreachItem(h);
+      await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'approve', rev: 1 });
+      expect(
+        (await call('POST', `/items/${item.id}/send`, h.cass, { action: 'hold' })).status,
+      ).toBe(403);
+      const d = (
+        await call('POST', `/items/${item.id}/send`, h.kohl, {
+          action: 'hold',
+          note: 'after Friday',
+        })
+      ).json();
+      const it = d.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach).toMatchObject({ approvedRev: 1, sendStatus: 'approved' });
+      const ev = (await call('GET', `/plans/${slug}/events`, h.kohl)).json().pop();
+      expect(ev).toMatchObject({ action: 'send-hold', detail: { rev: 1, note: 'after Friday' } });
+    });
+
+    it('find by ref across plans, move between plans, and one event feed for all of them', async () => {
+      const h = await house();
+      const { slug, item } = await outreachItem(h);
+      await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'approve', rev: 1 });
+      const other = (
+        await call('POST', '/plans', h.carol, {
+          serverId: h.serverId,
+          title: 'Outreach inbox',
+          goal: 'Drafts with no plan yet',
+        })
+      ).json();
+
+      const found = (await call('GET', '/outreach?ref=0042', h.cass)).json();
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({ id: item.id, planSlug: slug, outreach: { ref: '0042' } });
+      expect((await call('GET', '/outreach?ref=0043', h.cass)).status).toBe(404);
+      expect((await call('GET', '/outreach?ref=0042', h.bob)).status).toBe(404); // not in the server
+      expect((await call('GET', '/outreach?ref=42', h.cass)).status).toBe(400);
+
+      expect(
+        (await call('PATCH', `/items/${item.id}`, h.cass, { planSlug: other.slug, title: 'x' }))
+          .status,
+      ).toBe(400); // move first, then edit
+      const moved = (
+        await call('PATCH', `/items/${item.id}`, h.cass, { planSlug: other.slug })
+      ).json();
+      expect(moved.slug).toBe(other.slug);
+      const it = moved.items.find((i: { id: string }) => i.id === item.id);
+      expect(it.outreach).toMatchObject({ approvedRev: 1 }); // a send approval is about the draft
+      expect((await call('GET', '/outreach?ref=0042', h.cass)).json()[0].planSlug).toBe(other.slug);
+
+      const feed = (await call('GET', '/events?after=0', h.cass)).json();
+      const actions = feed.events.map(
+        (e: { planSlug: string; action: string }) => `${e.planSlug}:${e.action}`,
+      );
+      expect(actions).toContain(`${slug}:item-moved-out`);
+      expect(actions).toContain(`${other.slug}:item-moved-in`);
+      expect(feed.cursor).toBe(feed.events[feed.events.length - 1].seq);
+      const again = (await call('GET', `/events?after=${feed.cursor}`, h.cass)).json();
+      expect(again).toEqual({ events: [], cursor: feed.cursor });
+      expect((await call('GET', '/events?after=0', h.bob)).json().events).toEqual([]);
+    });
+
     it('an outreach item needs its room, and never voids its phase approval', async () => {
       const h = await house();
       const { slug, phaseId } = await planWithPhase(h);

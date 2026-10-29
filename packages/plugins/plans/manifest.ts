@@ -1011,6 +1011,58 @@ export default definePlugin({
 
     // ── items ──────────────────────────────────────────────────────────
 
+    /** Move an item to another plan (and optionally a phase of it). History
+     * stays where it happened; each plan logs its side. A send approval is
+     * about the draft, not its plan, so it holds; phase approvals on both
+     * sides don't, since what they approved changed. */
+    async function moveItem(
+      plan: Plan,
+      item: ItemRow,
+      actor: Actor,
+      surface: string,
+      b: Record<string, unknown>,
+    ): Promise<Plan> {
+      const extra = Object.keys(b).filter((k) => k !== 'planSlug' && k !== 'phaseId');
+      if (extra.length) {
+        throw new PlanError(`move first, then edit (${extra.join(', ')} came with planSlug)`, 400);
+      }
+      if (typeof b.planSlug !== 'string') throw new PlanError('planSlug must be a plan slug', 400);
+      const target = await planFor(actor, b.planSlug);
+      const phaseId = await phaseIn(target, b.phaseId);
+      const pos = (await db.execute(
+        sql`SELECT COALESCE(MAX(position), -1) + 1 AS n FROM plugin_plans_items WHERE plan_id = ${target.id}`,
+      )) as unknown as { n: number }[];
+      await db.execute(
+        sql`UPDATE plugin_plans_items SET plan_id = ${target.id}, phase_id = ${phaseId},
+            position = ${Number(pos[0]?.n ?? 0)}, updated_at = NOW() WHERE id = ${item.id}`,
+      );
+      await log(
+        plan,
+        actor,
+        surface,
+        'item-moved-out',
+        { to: target.slug, title: item.title },
+        {
+          phaseId: item.phase_id,
+          itemId: item.id,
+        },
+      );
+      await log(
+        target,
+        actor,
+        surface,
+        'item-moved-in',
+        { from: plan.slug, title: item.title },
+        {
+          phaseId,
+          itemId: item.id,
+        },
+      );
+      await voidApproval(plan, item.phase_id, actor, surface);
+      await voidApproval(target, phaseId, actor, surface);
+      return target;
+    }
+
     async function phaseIn(plan: Plan, phaseId: unknown): Promise<string | null> {
       if (phaseId === undefined || phaseId === null) return null;
       if (typeof phaseId !== 'string' || !UUID_RE.test(phaseId)) {
@@ -1093,6 +1145,9 @@ export default definePlugin({
           const { plan, item } = await itemFor(actor, request.params.id);
           const b = request.body ?? {};
           const surface = surfaceOf(request.headers, actor);
+          if (b.planSlug !== undefined && b.planSlug !== plan.slug) {
+            return await detail(await moveItem(plan, item, actor, surface, b), actor);
+          }
           if (item.kind === 'outreach' && item.o_raw !== null) {
             await reviseOutreach(plan, item, actor, surface, b);
             return await detail(plan, actor);
@@ -1247,6 +1302,88 @@ export default definePlugin({
       }
     }
 
+    /** Header lines a PATCH may set. Status and the approved/sent/edited/vetoed
+     * stamps stay server-owned: send actions and draft edits write them. */
+    const OUTREACH_FIELDS = ['to', 'room', 'why', 'steer'];
+    /** Where it goes: changing these after Kohl's yes changes what that yes sent. */
+    const MATERIAL_FIELDS = new Set(['to', 'room']);
+
+    async function reviseHeader(
+      plan: Plan,
+      item: ItemRow,
+      actor: Actor,
+      surface: string,
+      v: unknown,
+    ): Promise<ItemRow> {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) {
+        throw new PlanError('fields must be an object', 400);
+      }
+      const entries = Object.entries(v as Record<string, unknown>);
+      const bad = entries.map(([k]) => k).filter((k) => !OUTREACH_FIELDS.includes(k));
+      if (bad.length) {
+        throw new PlanError(
+          `fields can set only ${OUTREACH_FIELDS.join(', ')} (not ${bad.join(', ')})`,
+          400,
+        );
+      }
+      let raw = item.o_raw as string;
+      const { meta } = split(raw);
+      const changes: Record<string, { before: string | null; after: string }> = {};
+      for (const [k, val] of entries) {
+        const s = text(val, 'text').trim();
+        // One header line, and no " #": queue.py would read the rest as a comment.
+        if (/\n|\s#/.test(s)) throw new PlanError(`${k} must be one line without " #"`, 400);
+        if ((meta[k] ?? null) === s) continue;
+        raw = setFieldOf(raw, k, s);
+        changes[k] = { before: meta[k] ?? null, after: s };
+      }
+      if (!Object.keys(changes).length) return item;
+      const material = Object.keys(changes).some((k) => MATERIAL_FIELDS.has(k));
+      const voids = material && meta.status === 'approved';
+      if (voids) {
+        // As queue.edit marks a draft changed after approval.
+        for (const [k, val] of [
+          ['status', 'edited'],
+          ['edited', today()],
+          ['edited_by', await queueName(plan, actor)],
+        ]) {
+          raw = setFieldOf(raw, k, val);
+        }
+      }
+      await db.execute(
+        sql`UPDATE plugin_plans_outreach SET raw = ${raw},
+            approved_rev = CASE WHEN ${material} THEN NULL ELSE approved_rev END
+            WHERE item_id = ${item.id}`,
+      );
+      await db.execute(sql`UPDATE plugin_plans_items SET updated_at = NOW() WHERE id = ${item.id}`);
+      await log(
+        plan,
+        actor,
+        surface,
+        'outreach-fields',
+        { changes },
+        {
+          phaseId: item.phase_id,
+          itemId: item.id,
+        },
+      );
+      if (material && (item.o_approved_rev !== null || voids)) {
+        await log(
+          plan,
+          actor,
+          surface,
+          'send-approval-void',
+          {
+            why: 'where it goes changed after Kohl approved it',
+            approvedRev: item.o_approved_rev === null ? null : Number(item.o_approved_rev),
+            fields: Object.keys(changes).filter((k) => MATERIAL_FIELDS.has(k)),
+          },
+          { phaseId: item.phase_id, itemId: item.id },
+        );
+      }
+      return (await itemFor(actor, item.id)).item;
+    }
+
     async function reviseOutreach(
       plan: Plan,
       item: ItemRow,
@@ -1286,6 +1423,7 @@ export default definePlugin({
           { phaseId, itemId: item.id },
         );
       }
+      if (b.fields !== undefined) item = await reviseHeader(plan, item, actor, surface, b.fields);
       if (b.body === undefined) return;
       const draft = text(b.body, 'body', true);
       const rev = Number(item.o_rev);
@@ -1383,8 +1521,24 @@ export default definePlugin({
             if (outside) raw = setFieldOf(raw, 'sent_outside_queue', 'true');
             detailOut = { ...detailOut, outsideQueue: outside };
             status = 'done';
+          } else if (action === 'hold') {
+            // "Not now, leave it": nothing changes, approval included; the
+            // event is the whole record (On-you shows it held until the next one).
+            const note = b.note === undefined ? null : text(b.note, 'text');
+            await log(
+              plan,
+              actor,
+              surface,
+              'send-hold',
+              { rev, ...(note ? { note } : {}) },
+              {
+                phaseId: item.phase_id,
+                itemId: item.id,
+              },
+            );
+            return await detail(plan, actor);
           } else {
-            throw new PlanError('action must be approve, veto or sent', 400);
+            throw new PlanError('action must be approve, veto, hold or sent', 400);
           }
           await saveOutreach(plan, item, actor, surface, raw, false);
           await db.execute(
@@ -1503,6 +1657,79 @@ export default definePlugin({
           },
         );
         return reply.status(201).send({ ok: true });
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
+
+    // Outreach items across every plan the caller can see; ?ref=0017 for one.
+    fastify.get<{ Querystring: { ref?: string } }>('/outreach', async (request, reply) => {
+      try {
+        const actor = me(request);
+        const { ref } = request.query;
+        if (ref !== undefined && !/^\d{4}$/.test(ref)) {
+          throw new PlanError('ref must be four digits', 400);
+        }
+        const rows = (await db.execute(
+          ref !== undefined
+            ? sql`${ITEM_SELECT} WHERE o.ref = ${ref}`
+            : sql`${ITEM_SELECT} WHERE o.item_id IS NOT NULL ORDER BY o.ref NULLS LAST, i.created_at`,
+        )) as unknown as ItemRow[];
+        const plans = new Map<string, Plan | null>();
+        const out: (PlanItem & { planSlug: string })[] = [];
+        for (const r of rows) {
+          if (!plans.has(r.plan_id)) {
+            plans.set(
+              r.plan_id,
+              await planById(actor, r.plan_id).catch((e) => {
+                if (e instanceof PlanError) return null;
+                throw e;
+              }),
+            );
+          }
+          const plan = plans.get(r.plan_id);
+          if (plan) out.push({ ...toItem(r), planSlug: plan.slug });
+        }
+        if (ref !== undefined && !out.length)
+          throw new PlanError('no outreach item with that ref', 404);
+        return out;
+      } catch (err) {
+        return fail(reply, err);
+      }
+    });
+
+    // Every plan's events the caller can see, one cursor: seq is global.
+    // `cursor` is the last seq read, shown or not, so a poller never rereads.
+    fastify.get<{ Querystring: { after?: string } }>('/events', async (request, reply) => {
+      try {
+        const actor = me(request);
+        const after = Number.parseInt(request.query.after ?? '0', 10) || 0;
+        const rows = (await db.execute(
+          sql`SELECT e.*, p.slug AS plan_slug, p.server_id AS server_id
+              FROM plugin_plans_events e JOIN plugin_plans_plans p ON p.id = e.plan_id
+              WHERE e.seq > ${after} ORDER BY e.seq LIMIT 1000`,
+        )) as unknown as (EventRow & { plan_slug: string; server_id: string })[];
+        const member = new Map<string, boolean>();
+        const events: (PlanEvent & { planSlug: string })[] = [];
+        for (const r of rows) {
+          if (!member.has(r.server_id)) {
+            member.set(r.server_id, await canAccess(fastify, actor, r.server_id));
+          }
+          if (!member.get(r.server_id)) continue;
+          events.push({
+            seq: Number(r.seq),
+            planSlug: r.plan_slug,
+            phaseId: r.phase_id,
+            itemId: r.item_id,
+            actor: { id: r.actor_id, name: r.actor_name },
+            surface: r.surface,
+            action: r.action,
+            detail: json<Record<string, unknown>>(r.detail),
+            at: iso(r.at),
+          });
+        }
+        const cursor = rows.length ? Number(rows[rows.length - 1].seq) : after;
+        return { events, cursor };
       } catch (err) {
         return fail(reply, err);
       }
