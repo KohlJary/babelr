@@ -186,7 +186,7 @@ export function PlansView({
               onCancel={() => setCreating(false)}
             />
           ) : plan ? (
-            <PlanBody plan={plan} act={act} />
+            <PlanBody plan={plan} events={events} act={act} />
           ) : (
             <p className="plans-hint">Pick a plan, or start one.</p>
           )}
@@ -300,7 +300,7 @@ function NewPlan({
 
 type Act = (url: string, method: string, body?: unknown) => Promise<boolean>;
 
-function PlanBody({ plan, act }: { plan: PlanDetail; act: Act }) {
+function PlanBody({ plan, events, act }: { plan: PlanDetail; events: PlanEvent[]; act: Act }) {
   const [editing, setEditing] = useState(false);
   const [goal, setGoal] = useState(plan.goal);
   const [narrative, setNarrative] = useState(plan.narrative);
@@ -378,6 +378,7 @@ function PlanBody({ plan, act }: { plan: PlanDetail; act: Act }) {
           plan={plan}
           phase={f}
           items={plan.items.filter((i) => i.phaseId === f.id)}
+          events={events}
           act={act}
         />
       ))}
@@ -386,7 +387,7 @@ function PlanBody({ plan, act }: { plan: PlanDetail; act: Act }) {
         <section className="plans-phase">
           <h3>Not in a phase</h3>
           {loose.map((i) => (
-            <ItemRow key={i.id} plan={plan} item={i} act={act} />
+            <ItemRow key={i.id} plan={plan} item={i} events={events} act={act} />
           ))}
         </section>
       )}
@@ -417,11 +418,13 @@ function PhaseCard({
   plan,
   phase,
   items,
+  events,
   act,
 }: {
   plan: PlanDetail;
   phase: PlanPhase;
   items: PlanItem[];
+  events: PlanEvent[];
   act: Act;
 }) {
   const [declining, setDeclining] = useState(false);
@@ -443,7 +446,12 @@ function PhaseCard({
         <span className={`plans-chip plans-chip-${phase.status}`}>{PHASE_LABEL[phase.status]}</span>
       </div>
       {phase.goal && <p className="plans-phase-goal">{phase.goal}</p>}
-      {phase.status === 'proposed' && (
+      {phase.holdingPen && (
+        <div className="plans-meta">
+          A holding pen, not a step: each draft here gets its own yes. Open one to approve it.
+        </div>
+      )}
+      {phase.status === 'proposed' && !phase.holdingPen && (
         <div className="plans-meta">
           {phase.approvals.length > 0 &&
             `Yes from ${phase.approvals.map((a) => a.name).join(', ')}. `}
@@ -455,7 +463,7 @@ function PhaseCard({
       )}
 
       {items.map((i) => (
-        <ItemRow key={i.id} plan={plan} item={i} act={act} />
+        <ItemRow key={i.id} plan={plan} item={i} events={events} act={act} />
       ))}
 
       {adding ? (
@@ -553,7 +561,7 @@ function PhaseCard({
         </div>
       )}
 
-      <div className="plans-row plans-phase-actions">
+      <div className="plans-row plans-phase-actions" hidden={phase.holdingPen}>
         {(phase.status === 'draft' || phase.status === 'declined') && (
           <button
             type="button"
@@ -591,11 +599,21 @@ function PhaseCard({
   );
 }
 
-function ItemRow({ plan, item, act }: { plan: PlanDetail; item: PlanItem; act: Act }) {
+function ItemRow({
+  plan,
+  item,
+  events,
+  act,
+}: {
+  plan: PlanDetail;
+  item: PlanItem;
+  events: PlanEvent[];
+  act: Act;
+}) {
   const [open, setOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [resolution, setResolution] = useState('');
-  void plan;
+  const o = item.outreach;
   return (
     <div className={`plans-item plans-item-${item.status}`}>
       <button
@@ -607,12 +625,18 @@ function ItemRow({ plan, item, act }: { plan: PlanDetail; item: PlanItem; act: A
         <span className={`plans-kind plans-kind-${item.kind}`}>{item.kind}</span>
         <span className="plans-item-title">{item.title}</span>
         {item.owner && <span className="plans-item-owner">@{item.owner}</span>}
-        <span className="plans-item-status">{item.status.replace('_', ' ')}</span>
+        <span className="plans-item-status">
+          {o ? SEND_LABEL[o.sendStatus] : item.status.replace('_', ' ')}
+        </span>
       </button>
       {open && (
         <div className="plans-item-body">
-          {item.body && (
-            <div className="plans-md" dangerouslySetInnerHTML={{ __html: md(item.body) }} />
+          {o ? (
+            <SendPanel plan={plan} item={item} outreach={o} events={events} act={act} />
+          ) : (
+            item.body && (
+              <div className="plans-md" dangerouslySetInnerHTML={{ __html: md(item.body) }} />
+            )
           )}
           {item.resolution && (
             <div className="plans-resolution">
@@ -620,7 +644,7 @@ function ItemRow({ plan, item, act }: { plan: PlanDetail; item: PlanItem; act: A
             </div>
           )}
           <div className="plans-meta">added by {item.createdBy.name}</div>
-          {finishing ? (
+          {o ? null : finishing ? (
             <div className="plans-form">
               <textarea
                 rows={2}
@@ -702,6 +726,155 @@ function ItemRow({ plan, item, act }: { plan: PlanDetail; item: PlanItem; act: A
   );
 }
 
+// ── outreach: Kohl's yes on one draft ─────────────────────────────────
+
+const SEND_LABEL: Record<NonNullable<PlanItem['outreach']>['sendStatus'], string> = {
+  pending: 'waiting on Kohl',
+  edited: 'edited, waiting on Kohl',
+  approved: 'approved to send',
+  vetoed: 'vetoed',
+  sent: 'sent',
+};
+
+/** Where an outreach draft's approval stands, in words. */
+function approvalLine(o: NonNullable<PlanItem['outreach']>, mine: PlanEvent[]): string {
+  if (o.sendStatus === 'sent') return `rev ${o.rev}, sent`;
+  if (o.sendStatus === 'vetoed') return `rev ${o.rev}, vetoed`;
+  if (o.approvedRev === o.rev) return `rev ${o.rev}, approved to send`;
+  const last = [...mine].reverse().find((e) => e.action === 'send-approve');
+  if (last && Number(last.detail.rev) !== o.rev) {
+    return `rev ${o.rev}, not approved; rev ${String(last.detail.rev)} was, before it changed`;
+  }
+  if (mine.some((e) => e.action === 'history-approved')) {
+    return `rev ${o.rev}, not approved here; the queue's approval didn't carry over`;
+  }
+  return `rev ${o.rev}, not approved`;
+}
+
+function SendPanel({
+  plan,
+  item,
+  outreach: o,
+  events,
+  act,
+}: {
+  plan: PlanDetail;
+  item: PlanItem;
+  outreach: NonNullable<PlanItem['outreach']>;
+  events: PlanEvent[];
+  act: Act;
+}) {
+  const [mode, setMode] = useState<null | 'hold' | 'veto' | 'sent'>(null);
+  const [note, setNote] = useState('');
+  const mine = events.filter((e) => e.itemId === item.id);
+  const lastDecision = [...mine].reverse().find((e) => e.action.startsWith('send-'));
+  const send = async (body: Record<string, unknown>) => {
+    if (await act(`/items/${item.id}/send`, 'POST', body)) {
+      setMode(null);
+      setNote('');
+    }
+  };
+  const done = o.sendStatus === 'sent' || o.sendStatus === 'vetoed';
+  const approved = o.approvedRev === o.rev && o.sendStatus === 'approved';
+
+  return (
+    <div className="plans-send">
+      <div className="plans-meta">
+        {o.ref && <>#{o.ref} · </>}to {o.to || '?'} · room {o.room || '?'} ·{' '}
+        <strong>{approvalLine(o, mine)}</strong>
+        {lastDecision?.action === 'send-hold' && (
+          <> · held{lastDecision.detail.note ? `: ${lastDecision.detail.note as string}` : ''}</>
+        )}
+      </div>
+      <pre className="plans-draft">{item.body.replace(/^\n+/, '')}</pre>
+
+      {plan.decidesSends && !done && mode === null && (
+        <div className="plans-row">
+          {!approved && (
+            <button
+              type="button"
+              className="plans-approve"
+              onClick={() => void send({ action: 'approve', rev: o.rev })}
+            >
+              Approve rev {o.rev}
+            </button>
+          )}
+          <button type="button" className="plans-secondary" onClick={() => setMode('hold')}>
+            Hold
+          </button>
+          <button type="button" className="plans-danger" onClick={() => setMode('veto')}>
+            Veto
+          </button>
+          <button type="button" className="plans-secondary" onClick={() => setMode('sent')}>
+            Mark sent
+          </button>
+        </div>
+      )}
+      {mode === 'hold' || mode === 'veto' ? (
+        <div className="plans-form">
+          <textarea
+            rows={2}
+            placeholder={
+              mode === 'veto' ? 'Why not? (required)' : 'Note (optional): not now because…'
+            }
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          <div className="plans-row">
+            <button type="button" className="plans-secondary" onClick={() => setMode(null)}>
+              Cancel
+            </button>
+            {mode === 'hold' ? (
+              <button
+                type="button"
+                className="plans-primary"
+                onClick={() =>
+                  void send({ action: 'hold', ...(note.trim() ? { note: note.trim() } : {}) })
+                }
+              >
+                Hold it
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="plans-danger"
+                disabled={!note.trim()}
+                onClick={() => void send({ action: 'veto', reason: note.trim() })}
+              >
+                Veto
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+      {mode === 'sent' && (
+        <div className="plans-form">
+          <div className="plans-warn">
+            {approved
+              ? `Mark rev ${o.rev} as sent?`
+              : `Rev ${o.rev} isn't approved here, so this records it as sent outside the queue.`}
+          </div>
+          <div className="plans-row">
+            <button type="button" className="plans-secondary" onClick={() => setMode(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="plans-primary"
+              onClick={() => void send({ action: 'sent' })}
+            >
+              It went out
+            </button>
+          </div>
+        </div>
+      )}
+      {!plan.decidesSends && !done && (
+        <div className="plans-meta">Only Kohl, from Kohl's own account, approves a send.</div>
+      )}
+    </div>
+  );
+}
+
 // ── discussion and history ────────────────────────────────────────────
 
 function describe(e: PlanEvent, plan: PlanDetail): string {
@@ -735,6 +908,18 @@ function describe(e: PlanEvent, plan: PlanDetail): string {
       return `edited "${item ?? ''}" (${Object.keys((d.changes as object) ?? {}).join(', ')})`;
     case 'item-status':
       return `moved "${item ?? ''}" to ${String(d.after).replace('_', ' ')}${d.resolution ? `: ${d.resolution as string}` : ''}`;
+    case 'send-approve':
+      return `approved "${item ?? ''}" to send (rev ${String(d.rev)})`;
+    case 'send-veto':
+      return `vetoed "${item ?? ''}": ${String(d.reason ?? '')}`;
+    case 'send-hold':
+      return `held "${item ?? ''}" (rev ${String(d.rev)})${d.note ? `: ${d.note as string}` : ''}`;
+    case 'send-sent':
+      return `marked "${item ?? ''}" sent${d.outsideQueue ? ' (outside the queue)' : ''}`;
+    case 'send-approval-void':
+      return `"${item ?? ''}" changed after its send approval, so it needs a new yes`;
+    case 'outreach-revised':
+      return `revised "${item ?? ''}" (rev ${String(d.rev ?? '')})`;
     default:
       return e.action;
   }

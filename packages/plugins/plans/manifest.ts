@@ -112,6 +112,9 @@ export interface PlanPhase {
   approvals: { name: string; at: string }[];
   /** Usernames still to say yes, while proposed. */
   awaiting: string[];
+  /** Every item is an outreach draft: each gets its own send yes, and the
+   * phase is never proposed or approved as a whole (an inbox, not a step). */
+  holdingPen: boolean;
   createdBy: Who;
   updatedAt: string;
 }
@@ -139,6 +142,8 @@ export interface PlanDetail extends Plan {
   canApprove: boolean;
   /** The caller's username. */
   you: string;
+  /** Whether the caller is Kohl, as a person: the one who decides a send. */
+  decidesSends: boolean;
 }
 
 export interface PlanSummary extends Plan {
@@ -367,6 +372,15 @@ function toOutreach(r: ItemRow): Outreach {
     approvedRev: r.o_approved_rev === null ? null : Number(r.o_approved_rev),
     raw: r.o_raw as string,
   };
+}
+
+/** A phase that holds outreach drafts and nothing else. */
+export function isPen(
+  items: { kind: string; phase_id: string | null }[],
+  phaseId: string,
+): boolean {
+  const mine = items.filter((i) => i.phase_id === phaseId);
+  return mine.length > 0 && mine.every((i) => i.kind === 'outreach');
 }
 
 /** Required approvers who haven't said yes. */
@@ -630,8 +644,10 @@ export default definePlugin({
           (n) => n.toLowerCase() === actor.preferredUsername.toLowerCase(),
         ),
         you: actor.preferredUsername,
+        decidesSends: await isKohl(plan, actor),
         phases: phases.map((f) => {
           const mine = approvals.filter((a) => a.phase_id === f.id);
+          const pen = isPen(items, f.id);
           return {
             id: f.id,
             position: Number(f.position),
@@ -640,8 +656,9 @@ export default definePlugin({
             status: f.status,
             declineReason: f.decline_reason,
             approvals: mine.map((a) => ({ name: a.actor_name, at: iso(a.approved_at) })),
+            holdingPen: pen,
             awaiting:
-              f.status === 'proposed'
+              f.status === 'proposed' && !pen
                 ? awaiting(
                     approvers,
                     mine.map((a) => a.actor_name),
@@ -876,6 +893,19 @@ export default definePlugin({
       },
     );
 
+    /** Refuse a whole-phase yes on a holding pen: its drafts are approved one by one. */
+    async function notAPen(phaseId: string) {
+      const items = (await db.execute(
+        sql`SELECT kind, phase_id FROM plugin_plans_items WHERE phase_id = ${phaseId}`,
+      )) as unknown as Pick<ItemRow, 'kind' | 'phase_id'>[];
+      if (isPen(items, phaseId)) {
+        throw new PlanError(
+          'this phase only holds outreach drafts: each gets its own yes (Approve on the draft)',
+          409,
+        );
+      }
+    }
+
     async function setPhase(
       plan: Plan,
       phase: PhaseRow,
@@ -900,6 +930,7 @@ export default definePlugin({
         if (phase.status !== 'draft' && phase.status !== 'declined') {
           throw new PlanError(`a ${phase.status} phase can't be proposed`, 409);
         }
+        await notAPen(phase.id);
         await db.execute(sql`DELETE FROM plugin_plans_approvals WHERE phase_id = ${phase.id}`);
         await setPhase(
           plan,
@@ -933,6 +964,7 @@ export default definePlugin({
             409,
           );
         }
+        await notAPen(phase.id);
         const surface = surfaceOf(request.headers, actor);
         await db.execute(
           sql`INSERT INTO plugin_plans_approvals (phase_id, actor_id, actor_name)

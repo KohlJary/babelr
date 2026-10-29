@@ -4692,6 +4692,19 @@ textarea.modal-input {
 .plans-item-body {
   padding: 0 0 0.6rem 0.5rem;
 }
+.plans-draft {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 0.9rem;
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.4rem 0;
+  max-height: 24rem;
+  overflow-y: auto;
+}
 .plans-resolution {
   margin: 0.4rem 0;
   font-size: 0.9rem;

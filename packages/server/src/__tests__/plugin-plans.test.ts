@@ -454,6 +454,28 @@ describe('plans', () => {
       expect(revs[0].draft).toBe('\nHello there.\n'); // revision 1 is the original
     });
 
+    it('a phase of drafts is a holding pen: no whole-phase yes, and the page knows who decides a send', async () => {
+      const h = await house();
+      const { slug, phaseId } = await planWithPhase(h);
+      expect((await call('GET', `/plans/${slug}`, h.kohl)).json().phases[0].holdingPen).toBe(false);
+      const pen = (
+        await call('POST', `/plans/${slug}/phases`, h.carol, { title: 'Waiting on Kohl' })
+      ).json().phases[1].id as string;
+      await call('POST', `/plans/${slug}/items`, h.cass, {
+        phaseId: pen,
+        kind: 'outreach',
+        title: '0042 A Researcher',
+        outreach: { raw: RAW, ref: '0042' },
+      });
+      const d = (await call('GET', `/plans/${slug}`, h.kohl)).json();
+      expect(d.decidesSends).toBe(true);
+      expect(d.phases.map((f: { holdingPen: boolean }) => f.holdingPen)).toEqual([false, true]);
+      expect((await call('GET', `/plans/${slug}`, h.carol)).json().decidesSends).toBe(false);
+      expect((await call('GET', `/plans/${slug}`, h.cass)).json().decidesSends).toBe(false);
+      expect((await call('POST', `/phases/${pen}/propose`, h.kohl)).status).toBe(409);
+      expect((await call('POST', `/phases/${phaseId}/propose`, h.kohl)).status).toBe(200);
+    });
+
     it('only Kohl, as a person, decides a send: an agent token is refused whatever surface it claims', async () => {
       const h = await house();
       const { item } = await outreachItem(h);
