@@ -278,7 +278,7 @@ export function ReviewView({ routeBase, onClose }: { routeBase: string; onClose:
             <p className="review-empty">
               {readOnly
                 ? 'Nothing decided yet. Approved and vetoed items land here.'
-                : "Nothing waiting on you. Agents' drafts show up here."}
+                : 'Nothing waiting on you here. Outreach drafts are decided in Plans now: open Plans, then On you.'}
             </p>
           )}
 

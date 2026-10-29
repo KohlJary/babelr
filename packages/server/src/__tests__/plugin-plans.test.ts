@@ -132,7 +132,7 @@ async function planWithPhase(h: Awaited<ReturnType<typeof house>>, extra = {}) {
 const RAW = [
   '---',
   'status: pending',
-  'kind: email',
+  'kind: dm', // not email or Substack: no sign-off rule (tested on its own)
   'to: A Researcher  # check the address',
   'room: researchers',
   'why: say hi',
@@ -483,6 +483,39 @@ describe('plans', () => {
       expect(
         (await call('POST', `/items/${item.id}/send`, h.cass, { action: 'sent' })).status,
       ).toBe(403);
+    });
+
+    it("an agent's email or Substack draft signs off ☉ ⊖; Kohl's own edits are exempt", async () => {
+      const h = await house();
+      const { slug } = await planWithPhase(h);
+      const email = RAW.replace('kind: dm', 'kind: email');
+      const add = (raw: string, ref: string) =>
+        call('POST', `/plans/${slug}/items`, h.cass, {
+          kind: 'outreach',
+          title: ref,
+          outreach: { raw, ref },
+        });
+      const refused = await add(email, '0050');
+      expect(refused.status).toBe(400);
+      expect(refused.json().error).toContain('missing ☉ ⊖');
+      // Signed, with notes after: the sign-off counts only above "## Before sending".
+      const signed = email.replace('Hello there.\n', 'Hello there.\n\n☉ ⊖\n');
+      const r = await add(signed, '0051');
+      expect(r.status).toBe(201);
+      const id = r.json().items.find((i: { title: string }) => i.title === '0051').id;
+      const unsigned = await call('PATCH', `/items/${id}`, h.cass, {
+        body: 'Shorter.\n\n## Before sending\n\n☉ ⊖',
+      });
+      expect(unsigned.status).toBe(400);
+      expect(
+        (await call('PATCH', `/items/${id}`, h.cass, { body: 'Shorter.\n\n☉ ⊖ ☿' })).status,
+      ).toBe(200);
+      expect(
+        (await call('PATCH', `/items/${id}`, h.kohl, { body: 'Kohl writes it bare.' })).status,
+      ).toBe(200);
+      // A Substack post is held to it by its room, whatever its kind.
+      const post = RAW.replace('room: researchers', 'room: substack').replace("'0042'", '');
+      expect((await add(post, '0052')).status).toBe(400);
     });
 
     it('a phase of drafts is a holding pen: no whole-phase yes, and the page knows who decides a send', async () => {

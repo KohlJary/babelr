@@ -163,3 +163,25 @@ export function lineDiff(before: string, after: string): string {
   while (j < m) out.push('+' + b[j++]);
   return out.join('\n');
 }
+
+/** Kohl; RoboKohl (salt); Mercury (claude.ai). */
+export const KOHL_SIGN = '☉';
+export const ROBOKOHL_SIGN = '⊖';
+export const MERCURY_SIGN = '☿';
+
+/** Emails and Substack posts carry the alchemical sign-off (Kohl, 2026-10-29: a hard rule). queue.needs_signoff. */
+export function needsSignoff(kind: string | undefined, to: string, room = ''): boolean {
+  return kind === 'email' || `${to} ${room}`.toLowerCase().includes('substack');
+}
+
+/** null if the draft signs off ☉ and ⊖ before any "## Before sending" notes. queue.signoff_problem. */
+export function signoffProblem(draft: string): string | null {
+  const body = draft.split('\n## Before ')[0];
+  const missing = [KOHL_SIGN, ROBOKOHL_SIGN].filter((s) => !body.includes(s));
+  if (!missing.length) return null;
+  return (
+    'emails and Substack posts sign off with the alchemical symbols (Kohl, 2026-10-29): ' +
+    `missing ${missing.join(' ')}. ☉ Kohl, ⊖ RoboKohl, plus ☿ when Mercury (claude.ai) ` +
+    'weighed in, e.g. a last line `☉ ⊖ ☿`'
+  );
+}

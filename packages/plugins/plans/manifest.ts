@@ -9,6 +9,8 @@ import {
   setField as setFieldOf,
   split,
   SEND_STATUSES,
+  needsSignoff,
+  signoffProblem,
 } from './outreach.js';
 import type { SendStatus } from './outreach.js';
 import { acts, makesCycle, place, PHASES_NEXT_MAX } from './order.js';
@@ -1253,6 +1255,13 @@ export default definePlugin({
           const kind = kindOf(b.kind);
           const title = text(b.title, 'title', true);
           const outreach = kind === 'outreach' ? outreachIn(b.outreach) : null;
+          if (outreach && !(await isKohl(plan, actor))) {
+            const { meta } = split(outreach.raw);
+            if (needsSignoff(meta.kind, meta.to ?? '', meta.room ?? '')) {
+              const problem = signoffProblem(draftOf(outreach.raw));
+              if (problem) throw new PlanError(problem, 400);
+            }
+          }
           const body = outreach ? draftOf(outreach.raw) : text(b.body, 'body');
           const owner = ownerOf(b.owner);
           const pos = (await db.execute(
@@ -2018,6 +2027,13 @@ export default definePlugin({
       // (2026-10-28): lessons count them. No flag ever picks the actor.
       const claimed = isAgent(actor) && b.claimed === 'kohl' ? 'kohl' : null;
       const by = claimed ?? (await queueName(plan, actor));
+      // queue.edit's rule, ported: an agent's email or Substack draft signs
+      // off ☉ ⊖. Kohl's own edits are exempt.
+      const head = split(item.o_raw as string).meta;
+      if (by !== 'kohl' && needsSignoff(head.kind, head.to ?? '', head.room ?? '')) {
+        const problem = signoffProblem(draft);
+        if (problem) throw new PlanError(problem, 400);
+      }
       let raw: string;
       try {
         raw = editDraft(item.o_raw as string, draft, by, today());
