@@ -1994,6 +1994,9 @@ export default definePlugin({
           if (item.kind !== 'outreach' || item.o_raw === null) {
             throw new PlanError('only outreach items are sent', 400);
           }
+          if (b.action === 'executed') {
+            return await executed(plan, item, actor, surface, b);
+          }
           if (!(await isKohl(plan, actor))) {
             throw new PlanError("only Kohl decides a send, from Kohl's own account", 403);
           }
@@ -2067,6 +2070,55 @@ export default definePlugin({
         }
       },
     );
+
+    /**
+     * An executor reports it carried out what Kohl approved. It decides
+     * nothing: only the exact revision Kohl approved, still current and
+     * still approved, can be recorded as sent this way, with a receipt of
+     * where it went. Anything else is a 409; the executor stops and asks.
+     */
+    async function executed(
+      plan: Plan,
+      item: ItemRow,
+      actor: Actor,
+      surface: string,
+      b: Record<string, unknown>,
+    ) {
+      const rev = Number(item.o_rev);
+      const { meta } = split(item.o_raw as string);
+      const approved = item.o_approved_rev === null ? null : Number(item.o_approved_rev);
+      if (meta.status !== 'approved' || approved !== rev || Number(b.rev) !== rev) {
+        throw new PlanError(
+          `only the revision Kohl approved, still current, is executed (current rev ${rev}, approved ${approved ?? 'none'}, status ${meta.status})`,
+          409,
+        );
+      }
+      const r = (b.receipt ?? {}) as Record<string, unknown>;
+      const line = (v: unknown, what: string) => {
+        const t = text(v, 'title', true);
+        if (/[\n#]/.test(t)) throw new PlanError(`receipt.${what} is one line, without #`, 400);
+        return t;
+      };
+      const receipt = {
+        where: line(r.where, 'where'),
+        ref: line(r.ref, 'ref'),
+        at: line(r.at, 'at'),
+      };
+      const by = actor.preferredUsername.toLowerCase();
+      let raw = decide(item.o_raw as string, 'sent', by, today());
+      raw = setFieldOf(raw, 'sent_via', `${receipt.where} ${receipt.ref}`);
+      await saveOutreach(plan, item, actor, surface, raw, false);
+      await db.execute(sql`UPDATE plugin_plans_items SET status = 'done' WHERE id = ${item.id}`);
+      await log(
+        plan,
+        actor,
+        surface,
+        'send-executed',
+        { rev, approvedRev: approved, receipt, by },
+        { phaseId: item.phase_id, itemId: item.id },
+      );
+      return await detail(plan, actor);
+    }
 
     fastify.get<{ Params: { id: string } }>('/items/:id/revisions', async (request, reply) => {
       try {

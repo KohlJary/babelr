@@ -1405,6 +1405,8 @@ function describe(e: PlanEvent, plan: PlanDetail): string {
       return `held "${item ?? ''}" (rev ${String(d.rev)})${d.note ? `: ${d.note as string}` : ''}`;
     case 'send-sent':
       return `marked "${item ?? ''}" sent${d.outsideQueue ? ' (outside the queue)' : ''}`;
+    case 'send-executed':
+      return `carried out "${item ?? ''}" as approved (rev ${String(d.rev)}): ${String((d.receipt as { where?: string })?.where ?? '')} ${String((d.receipt as { ref?: string })?.ref ?? '')}`;
     case 'send-approval-void':
       return `"${item ?? ''}" changed after its send approval, so it needs a new yes`;
     case 'outreach-revised':

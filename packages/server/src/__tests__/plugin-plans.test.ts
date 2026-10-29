@@ -455,6 +455,36 @@ describe('plans', () => {
       expect(revs[0].draft).toBe('\nHello there.\n'); // revision 1 is the original
     });
 
+    it('an executor records sent only for the revision Kohl approved, with a receipt', async () => {
+      const h = await house();
+      const { slug, item } = await outreachItem(h);
+      const exec = (rev: number) =>
+        call('POST', `/items/${item.id}/send`, h.cass, {
+          action: 'executed',
+          rev,
+          receipt: { where: 'github', ref: 'KohlJary/KohlJary@90d4bbe', at: '2026-10-29T17:00' },
+        });
+      expect((await exec(1)).status).toBe(409); // not approved yet
+      await call('POST', `/items/${item.id}/send`, h.kohl, { action: 'approve', rev: 1 });
+      expect((await exec(2)).status).toBe(409); // not the approved revision
+      const r = await exec(1);
+      expect(r.status).toBe(200);
+      const it = r.json().items.find((i: { id: string }) => i.id === item.id);
+      expect(it.status).toBe('done');
+      expect(it.outreach.sendStatus).toBe('sent');
+      expect(it.outreach.raw).toContain('sent_by: cass');
+      expect(it.outreach.raw).toContain('sent_via: github KohlJary/KohlJary@90d4bbe');
+      expect((await exec(1)).status).toBe(409); // already out
+      const ev = (await call('GET', `/plans/${slug}/events`, h.kohl))
+        .json()
+        .find((e: { action: string }) => e.action === 'send-executed');
+      expect(ev.detail).toMatchObject({ rev: 1, approvedRev: 1, by: 'cass' });
+      // An executor can't use Kohl's own sent.
+      expect(
+        (await call('POST', `/items/${item.id}/send`, h.cass, { action: 'sent' })).status,
+      ).toBe(403);
+    });
+
     it('a phase of drafts is a holding pen: no whole-phase yes, and the page knows who decides a send', async () => {
       const h = await house();
       const { slug, phaseId } = await planWithPhase(h);
