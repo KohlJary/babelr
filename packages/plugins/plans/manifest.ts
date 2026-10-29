@@ -158,7 +158,16 @@ export interface PlanEvent {
   at: string;
 }
 
-export const LIMITS = { title: 300, goal: 4000, narrative: 20_000, body: 50_000, text: 20_000 };
+// raw: an outreach item's queue file and its drafts. Release reviews carry the
+// plate's whole diff (0023 is 197 KB), so they get room an item body doesn't.
+export const LIMITS = {
+  title: 300,
+  goal: 4000,
+  narrative: 20_000,
+  body: 50_000,
+  text: 20_000,
+  raw: 1_000_000,
+};
 
 export class PlanError extends Error {
   constructor(
@@ -1158,7 +1167,7 @@ export default definePlugin({
           const title = text(b.title, 'title', true);
           const owner = ownerOf(b.owner);
           const o = (b.outreach ?? {}) as Record<string, unknown>;
-          const raw = text(o.raw, 'body', true);
+          const raw = text(o.raw, 'raw', true);
           const ref = String(o.ref ?? '');
           if (!/^\d{4}$/.test(ref)) throw new PlanError('outreach.ref must be four digits', 400);
           const { head, meta } = split(raw);
@@ -1192,7 +1201,7 @@ export default definePlugin({
             throw new PlanError('revisions: 1 to 200, the original first', 400);
           }
           const drafts = revs.map((r) => ({
-            draft: text(r.draft, 'body', true),
+            draft: text(r.draft, 'raw', true),
             by: name(r.by, 'revisions[].by'),
             at: when(r.at),
             note: causeOf(r),
@@ -1351,7 +1360,7 @@ export default definePlugin({
 
     function outreachIn(v: unknown): { raw: string; ref: string | null } {
       const o = (v ?? {}) as Record<string, unknown>;
-      const raw = text(o.raw, 'body', true);
+      const raw = text(o.raw, 'raw', true);
       const ref = o.ref === undefined || o.ref === null ? null : String(o.ref);
       if (ref !== null && !/^\d{4}$/.test(ref))
         throw new PlanError('outreach.ref must be four digits', 400);
@@ -1550,7 +1559,7 @@ export default definePlugin({
       }
       if (b.fields !== undefined) item = await reviseHeader(plan, item, actor, surface, b.fields);
       if (b.body === undefined) return;
-      const draft = text(b.body, 'body', true);
+      const draft = text(b.body, 'raw', true);
       const rev = Number(item.o_rev);
       const seenRev = b.seenRev === undefined ? rev : Number(b.seenRev);
       if (!Number.isInteger(seenRev) || seenRev < 1 || seenRev > rev) {
