@@ -4735,6 +4735,228 @@ textarea.modal-input {
 .plans-onyou-row > .plans-meta {
   padding-left: 0.5rem;
 }
+.plans-map-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  margin: 0.4rem 0 0.6rem;
+}
+.plans-map-head select {
+  margin-left: auto;
+}
+.plans-map-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+/* The board: a night map with faint contour lines, the one loud thing here. */
+.plans-map {
+  --map-ink: #0a1324;
+  --map-line: #1c2a44;
+  --map-trail: #9fb3cf;
+  --map-lamp: #f5b942;
+  --map-other: #6cc4e8;
+  --map-dim: #42526b;
+  --map-broken: #ef7a7a;
+  --map-crest: #b9a6f5;
+  position: relative;
+  flex: 3 1 min(22rem, 100%);
+  min-width: 0;
+  border: 1px solid var(--map-line);
+  border-radius: 14px;
+  background:
+    repeating-radial-gradient(
+      ellipse at 30% 110%,
+      transparent 0 38px,
+      rgba(120, 150, 200, 0.05) 38px 39px
+    ),
+    repeating-radial-gradient(
+      ellipse at 85% -10%,
+      transparent 0 52px,
+      rgba(120, 150, 200, 0.04) 52px 53px
+    ),
+    var(--map-ink);
+  overflow: hidden;
+}
+.plans-map-panel {
+  flex: 2 1 min(18rem, 100%);
+  min-width: 0;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 0.25rem 0.75rem;
+}
+.plans-map-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plans-map-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.plans-edge {
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+}
+.plans-edge-ahead {
+  stroke: var(--map-dim);
+  stroke-dasharray: 1 7; /* a dotted trail, still to walk */
+}
+.plans-edge-walked {
+  stroke: var(--map-trail);
+  stroke-width: 3;
+}
+.plans-edge-broken {
+  stroke: var(--map-broken);
+  stroke-dasharray: 6 6;
+  opacity: 0.7;
+}
+.plans-view .plans-node {
+  position: absolute;
+  transform: translate(-50%, -22px);
+  width: clamp(5.5rem, 30%, 8.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #cbd5e1;
+  font: inherit;
+  cursor: pointer;
+}
+.plans-node-glyph {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--map-dim);
+  background: var(--map-ink);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.plans-node-title {
+  font-size: 0.75rem;
+  line-height: 1.25;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.4rem;
+  background: var(--map-ink); /* the trail runs behind the name, not through it */
+}
+.plans-view .plans-node:focus-visible {
+  outline: none;
+}
+.plans-view .plans-node:focus-visible .plans-node-glyph,
+.plans-node-picked .plans-node-glyph {
+  box-shadow:
+    0 0 0 3px var(--map-ink),
+    0 0 0 5px #e2e8f0;
+}
+.plans-node-done .plans-node-glyph {
+  background: var(--map-trail);
+  border-color: var(--map-trail);
+  color: var(--map-ink);
+  font-weight: 700;
+}
+.plans-node-done .plans-node-title {
+  color: #8796ad;
+}
+.plans-node-lit .plans-node-glyph {
+  width: 52px;
+  height: 52px;
+  margin-top: -4px;
+  border-color: var(--map-lamp);
+  background: radial-gradient(circle, #3b2a0c 0%, var(--map-ink) 75%);
+  color: var(--map-lamp);
+  box-shadow: 0 0 18px 2px rgba(245, 185, 66, 0.45);
+  animation: plans-lamp 2.6s ease-in-out infinite;
+}
+.plans-node-lit .plans-node-title {
+  color: #fde7b0;
+  font-weight: 600;
+}
+.plans-node-lit.plans-node-picked .plans-node-glyph {
+  box-shadow:
+    0 0 0 3px var(--map-ink),
+    0 0 0 5px var(--map-lamp),
+    0 0 22px 4px rgba(245, 185, 66, 0.5);
+}
+@keyframes plans-lamp {
+  50% {
+    box-shadow: 0 0 26px 6px rgba(245, 185, 66, 0.6);
+  }
+}
+.plans-node-rank {
+  position: absolute;
+  top: -10px;
+  left: calc(50% + 16px);
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding: 0 0.25rem;
+  border-radius: 0.65rem;
+  background: var(--map-lamp);
+  color: var(--map-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3rem;
+  z-index: 1;
+}
+.plans-node-ready .plans-node-glyph {
+  border-color: #d6a64a;
+  color: #e9c98a;
+}
+.plans-node-waiting .plans-node-glyph {
+  border-color: var(--map-other);
+  border-style: dashed;
+  color: var(--map-other);
+}
+.plans-node-locked {
+  opacity: 0.5;
+}
+.plans-node-stuck {
+  opacity: 0.55;
+}
+.plans-node-stuck .plans-node-glyph {
+  border-color: var(--map-broken);
+  color: var(--map-broken);
+}
+/* The goal at the top: a crest, not a step. */
+.plans-view .plans-node-boss {
+  cursor: default;
+  transform: translate(-50%, -30px);
+  width: 13rem;
+}
+.plans-node-boss .plans-node-glyph {
+  width: 60px;
+  height: 60px;
+  border: none;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, #6d5bc4, #2b2358);
+  color: #efeaff;
+  font-size: 1.6rem;
+}
+.plans-node-boss .plans-node-title {
+  color: var(--map-crest);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .plans-node-lit .plans-node-glyph {
+    animation: none;
+  }
+}
 .plans-onyou-fold {
   margin: 0.6rem 0;
 }

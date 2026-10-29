@@ -815,6 +815,18 @@ describe('plans', () => {
       ]);
       expect(titles(on.stuck)).toEqual(['after veto']);
       expect(on.stuck[0].stuckOn.title).toBe('vetoed thing');
+      // The map: one act per linked piece with Kohl work left; lone items stay in the list.
+      expect(on.acts).toHaveLength(3);
+      const act = on.acts.find((x: { rows: string[][] }) => x.rows[0][0] === id.hired);
+      expect(act.rows).toEqual([[id.hired], [id['after hired']]]);
+      expect(act.tops).toEqual([id['after hired']]);
+      expect(act.boss.goal).toBe('She decides what to build next');
+      expect(act.nodes[id.hired]).toMatchObject({ state: 'lit', next: 3 });
+      expect(act.nodes[id['after hired']].state).toBe('locked');
+      const built = on.acts.find((x: { rows: string[][] }) => x.rows[0][0] === id['build it']);
+      expect(built.nodes[id['build it']].state).toBe('waiting');
+      const vetoed = on.acts.find((x: { rows: string[][] }) => x.rows[0][0] === id['vetoed thing']);
+      expect(vetoed.nodes[id['after veto']].state).toBe('stuck');
       // An agent reads the same list.
       expect(titles((await call('GET', '/on-you', h.cass)).json().next)).toEqual(titles(on.next));
 

@@ -13,6 +13,8 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import type {
   ItemKind,
+  MapAct,
+  MapNode,
   OnYou,
   OnYouEntry,
   PlanDetail,
@@ -255,6 +257,9 @@ function OnYouView({
   const [error, setError] = useState<string | null>(null);
   // Each plan's history, for an outreach draft's approval line.
   const [events, setEvents] = useState<Record<string, PlanEvent[]>>({});
+  const [mode, setMode] = useState<'map' | 'list'>('map');
+  const [actId, setActId] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -322,6 +327,23 @@ function OnYouView({
 
   if (!data) return <p className="plans-hint">{error ?? 'Loading…'}</p>;
   const nothing = !data.next.length && !data.phases.length;
+  const showMap = mode === 'map' && data.acts.length > 0;
+  // The act with the rank-1 step in it, unless one was picked.
+  const shown =
+    data.acts.find((a) => a.id === actId) ??
+    data.acts.find((a) => Object.values(a.nodes).some((n) => n.next === 1)) ??
+    data.acts[0];
+  const onMap = new Set(data.acts.flatMap((a) => Object.keys(a.nodes)));
+  const node: MapNode | undefined =
+    shown &&
+    (shown.nodes[picked ?? ''] ??
+      Object.values(shown.nodes)
+        .filter((n) => n.next)
+        .sort((x, y) => (x.next ?? 0) - (y.next ?? 0))[0]);
+  const entryOf = (n: MapNode): OnYouEntry =>
+    [...data.next, ...data.more, ...data.blocked, ...data.stuck].find(
+      (e) => e.item.id === n.item.id,
+    ) ?? { ...n, unlocks: 0 };
 
   const row = (e: OnYouEntry, i?: number, openFirst = false) => (
     <li key={e.item.id} className="plans-onyou-row">
@@ -412,7 +434,27 @@ function OnYouView({
 
   return (
     <article className="plans-plan plans-onyou">
-      <h2>On you</h2>
+      <div className="plans-plan-top">
+        <h2>On you</h2>
+        {data.acts.length > 0 && (
+          <div className="plans-row">
+            <button
+              type="button"
+              className={mode === 'map' ? 'plans-primary' : 'plans-secondary'}
+              onClick={() => setMode('map')}
+            >
+              Map
+            </button>
+            <button
+              type="button"
+              className={mode === 'list' ? 'plans-primary' : 'plans-secondary'}
+              onClick={() => setMode('list')}
+            >
+              List
+            </button>
+          </div>
+        )}
+      </div>
       {error && <div className="plans-error">{error}</div>}
       {data.phasesNext.length > 0 && (
         <section className="plans-phase">
@@ -430,20 +472,199 @@ function OnYouView({
           )}
         </section>
       )}
-      <section className="plans-phase">
-        <h3>Next</h3>
-        {nothing ? (
-          <p className="plans-hint">Nothing's waiting on you.</p>
-        ) : (
-          <ul>{data.next.map((e, i) => row(e, i, true))}</ul>
-        )}
-      </section>
+      {showMap && shown ? (
+        <>
+          <ActHeader
+            acts={data.acts}
+            act={shown}
+            onPick={(id) => {
+              setActId(id);
+              setPicked(null);
+            }}
+          />
+          <div className="plans-map-wrap">
+            <ActMap act={shown} picked={node?.item.id ?? null} onPick={setPicked} />
+            <aside className="plans-map-panel" aria-label="The step you picked">
+              {node ? (
+                <ul>{row(entryOf(node), undefined, true)}</ul>
+              ) : (
+                <p className="plans-hint">Pick a step on the map.</p>
+              )}
+            </aside>
+          </div>
+          {data.next.some((e) => !onMap.has(e.item.id)) && (
+            <section className="plans-phase">
+              <h3>Next, off the map</h3>
+              <ul>{data.next.map((e, i) => (onMap.has(e.item.id) ? null : row(e, i, false)))}</ul>
+            </section>
+          )}
+        </>
+      ) : (
+        <section className="plans-phase">
+          <h3>Next</h3>
+          {nothing ? (
+            <p className="plans-hint">Nothing's waiting on you.</p>
+          ) : (
+            <ul>{data.next.map((e, i) => row(e, i, true))}</ul>
+          )}
+        </section>
+      )}
       {fold('More on you', data.more, data.next.length)}
       {fold('Waiting on something first', data.blocked)}
       {fold('Stuck behind something declined', data.stuck)}
       {fold('In flight', data.inFlight)}
       {fold('Shipped this week', data.shipped)}
     </article>
+  );
+}
+
+// ── the map: an act drawn bottom to top, its goal at the top ──────────
+
+const GLYPH: Record<ItemKind, string> = {
+  outreach: '✎',
+  build: '⚒',
+  research: '⌕',
+  decision: '⚖',
+  ask: '?',
+};
+const STATE_WORD: Record<MapNode['state'], string> = {
+  done: 'done',
+  lit: 'next',
+  ready: 'ready, not in Next',
+  waiting: "someone else's",
+  locked: 'waiting on an earlier step',
+  stuck: 'stuck behind something declined',
+};
+const ROW_H = 92;
+
+export function ActHeader({
+  acts,
+  act,
+  onPick,
+}: {
+  acts: MapAct[];
+  act: MapAct;
+  onPick: (id: string) => void;
+}) {
+  const ns = Object.values(act.nodes);
+  const count = (st: MapNode['state']) => ns.filter((n) => n.state === st).length;
+  const name = (a: MapAct) => a.boss.goal || a.boss.planTitle;
+  return (
+    <div className="plans-map-head">
+      <strong>
+        Act {acts.indexOf(act) + 1} · {name(act)}
+      </strong>
+      <span className="plans-meta">
+        {count('done')} walked · {count('lit')} lit · {ns.length - count('done') - count('lit')}{' '}
+        ahead
+      </span>
+      {acts.length > 1 && (
+        <select value={act.id} onChange={(e) => onPick(e.target.value)} aria-label="Act">
+          {acts.map((a, i) => (
+            <option key={a.id} value={a.id}>
+              Act {i + 1} · {name(a)}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
+export function ActMap({
+  act,
+  picked,
+  onPick,
+}: {
+  act: MapAct;
+  picked: string | null;
+  onPick: (id: string) => void;
+}) {
+  // Display rows top to bottom: the boss, then the act's rows from the top down.
+  const levels = act.rows.length + 1;
+  const height = levels * ROW_H;
+  const pos = new Map<string, { x: number; y: number }>();
+  act.rows.forEach((row, r) =>
+    row.forEach((id, i) =>
+      pos.set(id, { x: ((i + 1) / (row.length + 1)) * 100, y: (levels - 1 - r + 0.5) * ROW_H }),
+    ),
+  );
+  const boss = { x: 50, y: 0.5 * ROW_H };
+  const edges: { from: { x: number; y: number }; to: { x: number; y: number }; cls: string }[] = [];
+  for (const [id, n] of Object.entries(act.nodes)) {
+    for (const a of n.item.after) {
+      const from = pos.get(a);
+      const to = pos.get(id);
+      if (!from || !to) continue;
+      const up = act.nodes[a].state;
+      edges.push({
+        from,
+        to,
+        cls: up === 'done' ? 'walked' : n.state === 'stuck' ? 'broken' : 'ahead',
+      });
+    }
+  }
+  for (const t of act.tops) {
+    const from = pos.get(t);
+    if (from) edges.push({ from, to: boss, cls: 'ahead' });
+  }
+
+  return (
+    <div className="plans-map" style={{ height: height + 24 }}>
+      <svg
+        className="plans-map-edges"
+        viewBox={`0 0 100 ${height}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        {edges.map((e, k) => (
+          <line
+            key={k}
+            x1={e.from.x}
+            y1={e.from.y}
+            x2={e.to.x}
+            y2={e.to.y}
+            className={`plans-edge plans-edge-${e.cls}`}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </svg>
+      <div
+        className="plans-node plans-node-boss"
+        style={{ left: `${boss.x}%`, top: boss.y }}
+        title={act.boss.planTitle}
+      >
+        <span className="plans-node-glyph">♛</span>
+        <span className="plans-node-title">{act.boss.goal || act.boss.planTitle}</span>
+      </div>
+      {[...pos.entries()].map(([id, p]) => {
+        const n = act.nodes[id];
+        const tip =
+          n.state === 'lit'
+            ? n.item.why || 'next'
+            : n.state === 'waiting'
+              ? `@${n.item.owner ?? '?'}`
+              : STATE_WORD[n.state];
+        return (
+          <button
+            key={id}
+            type="button"
+            className={`plans-node plans-node-${n.state}${picked === id ? ' plans-node-picked' : ''}`}
+            style={{ left: `${p.x}%`, top: p.y }}
+            title={`${n.item.title} (${tip})`}
+            aria-label={`${n.item.title}, ${STATE_WORD[n.state]}`}
+            aria-pressed={picked === id}
+            onClick={() => onPick(id)}
+          >
+            {n.next && <span className="plans-node-rank">{n.next}</span>}
+            <span className="plans-node-glyph">
+              {n.state === 'done' ? '✓' : n.state === 'stuck' ? '✕' : GLYPH[n.item.kind]}
+            </span>
+            <span className="plans-node-title">{n.item.title}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

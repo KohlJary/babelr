@@ -131,3 +131,70 @@ export function place(nodes: Node[]): Buckets {
   );
   return out;
 }
+
+// ── the map: acts laid out bottom to top (Plans phase 5, map view) ─────
+
+export interface Act {
+  /** Every item in this connected piece of the `after` graph. */
+  ids: string[];
+  /** Rows bottom to top: row 0 waits on nothing here; row n on something in row n-1. */
+  rows: string[][];
+  /** The tops: nothing here waits on them. The boss sits above them. */
+  tops: string[];
+}
+
+/**
+ * The connected pieces of the `after` graph that still have Kohl work in
+ * them, each laid out in rows: an item's row is its longest `after` chain,
+ * and each row is ordered by where its items' parents sit (fewer crossings).
+ * A lone item with no links isn't an act; it stays in the list.
+ */
+export function acts(nodes: Node[]): Act[] {
+  const by = new Map(nodes.map((n) => [n.id, n]));
+  const after = (n: Node) => n.after.filter((a) => by.has(a));
+  const root = new Map<string, string>(nodes.map((n) => [n.id, n.id]));
+  const find = (x: string): string => {
+    while (root.get(x) !== x) {
+      const up = root.get(root.get(x) as string) as string;
+      root.set(x, up);
+      x = up;
+    }
+    return x;
+  };
+  for (const n of nodes) for (const a of after(n)) root.set(find(n.id), find(a));
+  const groups = new Map<string, Node[]>();
+  for (const n of nodes) groups.set(find(n.id), [...(groups.get(find(n.id)) ?? []), n]);
+
+  const depth = new Map<string, number>();
+  const rowOf = (n: Node): number => {
+    if (depth.has(n.id)) return depth.get(n.id) as number;
+    depth.set(n.id, 0); // a loop can't be stored, but never recurse forever
+    const d = Math.max(-1, ...after(n).map((a) => rowOf(by.get(a) as Node))) + 1;
+    depth.set(n.id, d);
+    return d;
+  };
+
+  const out: Act[] = [];
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    if (!g.some((n) => n.onKohl && n.status !== 'done' && n.status !== 'declined')) continue;
+    const rows: Node[][] = [];
+    for (const n of g) (rows[rowOf(n)] ??= []).push(n);
+    const col = new Map<string, number>();
+    rows.forEach((row, r) => {
+      const key = (n: Node) => {
+        const ps = after(n).map((a) => col.get(a) ?? 0);
+        return r === 0 || !ps.length ? 0 : ps.reduce((x, y) => x + y, 0) / ps.length;
+      };
+      row.sort((a, b) => key(a) - key(b) || a.createdAt.localeCompare(b.createdAt));
+      row.forEach((n, i) => col.set(n.id, (i + 1) / (row.length + 1)));
+    });
+    const waitedOn = new Set(g.flatMap(after));
+    out.push({
+      ids: g.map((n) => n.id),
+      rows: rows.map((row) => row.map((n) => n.id)),
+      tops: g.filter((n) => !waitedOn.has(n.id)).map((n) => n.id),
+    });
+  }
+  return out;
+}

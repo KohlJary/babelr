@@ -11,7 +11,7 @@ import {
   SEND_STATUSES,
 } from './outreach.js';
 import type { SendStatus } from './outreach.js';
-import { makesCycle, place, PHASES_NEXT_MAX } from './order.js';
+import { acts, makesCycle, place, PHASES_NEXT_MAX } from './order.js';
 import type { Node, Placed } from './order.js';
 
 /**
@@ -180,8 +180,34 @@ export interface OnYouPhase {
   planTitle: string;
 }
 
+export type MapState = 'done' | 'lit' | 'ready' | 'waiting' | 'locked' | 'stuck';
+
+export interface MapNode {
+  item: PlanItem;
+  planSlug: string;
+  planTitle: string;
+  phaseTitle: string | null;
+  /** done: walked. lit: in Next (clickable, with `next` its place). ready:
+   * Kohl's, ready, not in Next. waiting: someone else's. locked: Kohl's,
+   * waiting on something. stuck: behind (or is) something declined. */
+  state: MapState;
+  next?: number;
+}
+
+/** A connected piece of the `after` graph, drawn bottom to top under its boss. */
+export interface MapAct {
+  id: string;
+  /** The goal at the top: the plan most of its top items belong to. */
+  boss: { planSlug: string; planTitle: string; goal: string };
+  rows: string[][];
+  tops: string[];
+  nodes: Record<string, MapNode>;
+}
+
 /** GET /on-you: what's on Kohl, Next first, the rest folded. */
 export interface OnYou {
+  /** The map: each act that still has Kohl work in it. */
+  acts: MapAct[];
   /** Proposed phases waiting on Kohl's yes, all of them. */
   phases: OnYouPhase[];
   /** The ones to show first: each plan's earliest waiting phase, at most two
@@ -1622,7 +1648,57 @@ export default definePlugin({
         const firsts = phases.filter(
           (p, i) => phases.findIndex((q) => q.planSlug === p.planSlug) === i,
         );
+        const lit = new Map(b.next.map((p, i) => [p.id, i + 1]));
+        const ready = new Set(b.more.map((p) => p.id));
+        const locked = new Set(b.blocked.map((p) => p.id));
+        const stuckIds = new Set(b.stuck.map((p) => p.id));
+        const stateOf = (n: Node): MapState =>
+          n.status === 'done'
+            ? 'done'
+            : n.status === 'declined' || stuckIds.has(n.id)
+              ? 'stuck'
+              : lit.has(n.id)
+                ? 'lit'
+                : ready.has(n.id)
+                  ? 'ready'
+                  : locked.has(n.id)
+                    ? 'locked'
+                    : 'waiting';
+        const byId = new Map(nodes.map((n) => [n.id, n]));
+        const mapActs: MapAct[] = acts(nodes).map((a) => {
+          const votes = new Map<string, number>();
+          for (const t of a.tops) {
+            const pl = where.get(t)!.plan.id;
+            votes.set(pl, (votes.get(pl) ?? 0) + 1);
+          }
+          const top = [...votes.entries()].sort((x, y) => y[1] - x[1])[0][0];
+          const bossPlan = [...where.values()].find((w) => w.plan.id === top)!.plan;
+          return {
+            id: a.rows[0][0],
+            boss: { planSlug: bossPlan.slug, planTitle: bossPlan.title, goal: bossPlan.goal },
+            rows: a.rows,
+            tops: a.tops,
+            nodes: Object.fromEntries(
+              a.ids.map((id) => {
+                const w = where.get(id)!;
+                const state = stateOf(byId.get(id)!);
+                return [
+                  id,
+                  {
+                    item: w.item,
+                    planSlug: w.plan.slug,
+                    planTitle: w.plan.title,
+                    phaseTitle: w.phase,
+                    state,
+                    ...(lit.has(id) ? { next: lit.get(id) } : {}),
+                  },
+                ];
+              }),
+            ),
+          };
+        });
         const out: OnYou = {
+          acts: mapActs,
           phases,
           phasesNext: firsts.slice(0, PHASES_NEXT_MAX),
           next: b.next.map(entry),
