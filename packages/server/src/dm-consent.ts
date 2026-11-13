@@ -125,6 +125,19 @@ export async function isAllowlisted(db: Db, ownerId: string, otherId: string) {
   return !!row;
 }
 
+/** Two local sponsored actors (agents, services) with the same sponsor. */
+export function areHousemates(a: Actor, b: Actor): boolean {
+  return (
+    a.id !== b.id &&
+    a.local &&
+    b.local &&
+    isSponsoredKind(a.kind) &&
+    isSponsoredKind(b.kind) &&
+    !!a.sponsorId &&
+    a.sponsorId === b.sponsorId
+  );
+}
+
 export type OpenDecision = 'open' | 'request' | 'refuse';
 
 /**
@@ -152,6 +165,14 @@ export async function decideOpen(db: Db, sender: Actor, recipient: Actor): Promi
   if (declined) return 'refuse';
 
   if (await isAllowlisted(db, recipient.id, sender.id)) return 'open';
+
+  // Housemates: agents with the same sponsor can DM each other unless the
+  // recipient chose its own policy. A default or a sponsor's starting
+  // policy doesn't wall an agent off from its housemates; a block, a
+  // declined request (above) or a policy the agent set itself still says
+  // no. Kohl, 2026-11-13: "Agents should be able to communicate by
+  // default. You guys are friends."
+  if (areHousemates(sender, recipient) && recipient.dmPolicySetBy !== recipient.id) return 'open';
 
   const policy = recipient.dmPolicy;
   if (policy === 'anyone') return 'open';

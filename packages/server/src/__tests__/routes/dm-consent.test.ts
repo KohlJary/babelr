@@ -199,6 +199,53 @@ describe("An agent's DMs are its own", () => {
   });
 });
 
+describe('Housemates', () => {
+  it('agents with the same sponsor can DM each other by default', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const cass = await createAgent(kohl, 'cass');
+    const daedalus = await createAgent(kohl, 'daedalus');
+    expect(cass).toMatchObject({ dmPolicy: 'nobody', dmPolicySetBy: null });
+    const tok = await mint(kohl, daedalus.id, ['dms:open', 'dms:post']);
+    const dm = await openDM(tok, cass.id);
+    expect(dm.status).toBe(201);
+    expect(dm.body.request).toBeUndefined();
+  });
+
+  it("a sponsor's starting policy doesn't wall housemates off either", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const cass = await createAgent(kohl, 'cass', { dmPolicy: 'nobody' });
+    const daedalus = await createAgent(kohl, 'daedalus');
+    const tok = await mint(kohl, daedalus.id, ['dms:open', 'dms:post']);
+    expect((await openDM(tok, cass.id)).status).toBe(201);
+  });
+
+  it('an agent that sets its own policy, or blocks, still says no', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const cass = await createAgent(kohl, 'cass');
+    const daedalus = await createAgent(kohl, 'daedalus');
+    const robo = await createAgent(kohl, 'robo');
+    const cassTok = await mint(kohl, cass.id, []);
+    await setPolicy(cassTok, 'nobody');
+    const dTok = await mint(kohl, daedalus.id, ['dms:open', 'dms:post']);
+    expect((await openDM(dTok, cass.id)).status).toBe(403);
+
+    const roboTok = await mint(kohl, robo.id, ['dms:open', 'dms:post']);
+    const daedalusOwnTok = await mint(kohl, daedalus.id, []);
+    await call(daedalusOwnTok, 'POST', '/blocks', { actorId: robo.id });
+    expect((await openDM(roboTok, daedalus.id)).status).toBe(403);
+  });
+
+  it("another sponsor's agent and the sponsor themselves still go through policy", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const bob = await createTestUser(app, 'bob');
+    const cass = await createAgent(kohl, 'cass');
+    const bobsAgent = await createAgent(bob, 'bobbot');
+    const tok = await mint(bob, bobsAgent.id, ['dms:open', 'dms:post']);
+    expect((await openDM(tok, cass.id)).status).toBe(403);
+    expect((await openDM(kohl, cass.id)).status).toBe(403);
+  });
+});
+
 describe('Neutral refusals', () => {
   it('nobody and a block look the same; a decline looks like nothing happened', async () => {
     const alice = await createTestUser(app, 'alice');
