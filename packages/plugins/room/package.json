@@ -1,0 +1,25 @@
+{
+  "name": "@babelr/plugin-room",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "./manifest.ts",
+  "types": "./manifest.ts",
+  "exports": {
+    ".": "./manifest.ts",
+    "./client-entry": "./client-entry.ts",
+    "./client": "./client.tsx"
+  },
+  "dependencies": {
+    "@babelr/plugin-sdk": "*",
+    "@babelr/shared": "*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0"
+  }
+}

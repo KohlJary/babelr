@@ -20,6 +20,7 @@
     "@babelr/plugin-plans": "^0.1.0",
     "@babelr/plugin-polls": "^0.1.0",
     "@babelr/plugin-review": "^0.1.0",
+    "@babelr/plugin-room": "^0.1.0",
     "@babelr/plugin-project-management": "^0.1.0",
     "@babelr/plugin-sdk": "^0.1.0",
     "@babelr/shared": "*",

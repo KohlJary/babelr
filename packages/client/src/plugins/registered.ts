@@ -16,6 +16,7 @@ import pollsManifest from '@babelr/plugin-polls';
 import plansManifest from '@babelr/plugin-plans';
 import pmManifest from '@babelr/plugin-project-management';
 import reviewManifest from '@babelr/plugin-review';
+import roomManifest from '@babelr/plugin-room';
 // blinds' server manifest imports node:fs, so the client takes its
 // browser-safe clientManifest from client-entry instead.
 import {
@@ -26,6 +27,7 @@ import { setupClient as pollsSetupClient } from '@babelr/plugin-polls/client-ent
 import { setupClient as plansSetupClient } from '@babelr/plugin-plans/client-entry';
 import { setupClient as pmSetupClient } from '@babelr/plugin-project-management/client-entry';
 import { setupClient as reviewSetupClient } from '@babelr/plugin-review/client-entry';
+import { setupClient as roomSetupClient } from '@babelr/plugin-room/client-entry';
 
 export interface RegisteredPlugin {
   manifest: PluginManifest;
@@ -41,4 +43,5 @@ export const registeredPlugins: RegisteredPlugin[] = [
   { manifest: pollsManifest, setupClient: pollsSetupClient },
   { manifest: pmManifest, setupClient: pmSetupClient },
   { manifest: reviewManifest, setupClient: reviewSetupClient },
+  { manifest: roomManifest, setupClient: roomSetupClient },
 ];
