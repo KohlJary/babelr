@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ListDetailView } from '../../client/src/components/ListDetailView.js';
 
 /**
@@ -137,29 +137,145 @@ function PieceDetail({ routeBase, piece }: { routeBase: string; piece: Piece }) 
   );
 }
 
+interface HomepagePage {
+  slug: string;
+  title: string;
+  html: string;
+}
+interface Homepage {
+  tagline?: string | null;
+  pages?: HomepagePage[];
+  stylesheet?: string | null;
+  featured?: { title?: string; type?: string; excerpt?: string }[];
+  updated_at?: string | null;
+}
+
+// Her pages render in a frame that runs no scripts; it only shows her HTML
+// and CSS, and loads images and songs from her room.
+const FRAME_CSP =
+  "default-src 'none'; img-src 'self' data: https:; media-src 'self'; " +
+  "style-src 'unsafe-inline'; font-src 'self' data: https:";
+
+/** One of her pages as a standalone document: her stylesheet inlined, her
+ * assets/ paths pointed at the room, outside links opening a new tab. */
+export function buildCard(html: string, stylesheet: string, assetBase: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script, base, link, meta[http-equiv]').forEach((el) => el.remove());
+  const csp = doc.createElement('meta');
+  csp.setAttribute('http-equiv', 'Content-Security-Policy');
+  csp.setAttribute('content', FRAME_CSP);
+  doc.head.prepend(csp);
+  const style = doc.createElement('style');
+  style.textContent = stylesheet;
+  doc.head.append(style);
+  doc.querySelectorAll('[src]').forEach((el) => {
+    const src = el.getAttribute('src') ?? '';
+    const m = /^(?:\.\/)?assets\/([^/?#]+)$/.exec(src);
+    if (m) el.setAttribute('src', `${assetBase}/${encodeURIComponent(decodeURIComponent(m[1]))}`);
+  });
+  doc.querySelectorAll('a[href]').forEach((a) => {
+    if (/^(https?:|mailto:)/i.test(a.getAttribute('href') ?? '')) {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+  return '<!doctype html>' + doc.documentElement.outerHTML;
+}
+
+/** Which of her pages an in-page link goes to ("about.html", "pages/about.html"), if any. */
+export function cardFor(href: string, slugs: string[]): string | null {
+  const m = /^(?:\.\/)?(?:pages\/)?([A-Za-z0-9_-]+)\.html(?:#.*)?$/.exec(href);
+  if (!m) return null;
+  return slugs.includes(m[1]) ? m[1] : null;
+}
+
+function HomepageCards({ routeBase, data }: { routeBase: string; data: Homepage }) {
+  const pages = data.pages ?? [];
+  const slugs = pages.map((p) => p.slug);
+  const [slug, setSlug] = useState<string>(slugs[0] ?? 'index');
+  const frame = useRef<HTMLIFrameElement>(null);
+  const page = pages.find((p) => p.slug === slug) ?? pages[0];
+  const srcDoc = useMemo(
+    () =>
+      page
+        ? buildCard(page.html, data.stylesheet ?? '', `${routeBase}/sections/homepage/assets`)
+        : '',
+    [page, data.stylesheet, routeBase],
+  );
+
+  const onLoad = () => {
+    const doc = frame.current?.contentDocument;
+    if (!doc || !frame.current) return;
+    frame.current.style.height = `${Math.max(320, doc.documentElement.scrollHeight + 8)}px`;
+    doc.addEventListener('click', (ev) => {
+      const a = (ev.target as Element | null)?.closest?.('a[href]');
+      if (!a || a.getAttribute('target') === '_blank') return;
+      ev.preventDefault();
+      const next = cardFor(a.getAttribute('href') ?? '', slugs);
+      if (next) setSlug(next);
+    });
+  };
+
+  return (
+    <>
+      {data.tagline && <p style={{ fontStyle: 'italic' }}>{data.tagline}</p>}
+      {pages.length > 1 && (
+        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', margin: '0.5rem 0' }}>
+          {pages.map((p) => (
+            <button
+              key={p.slug}
+              type="button"
+              onClick={() => setSlug(p.slug)}
+              aria-pressed={p.slug === page?.slug}
+              style={{
+                padding: '0.2rem 0.7rem',
+                borderRadius: 4,
+                border: '1px solid var(--border, #555)',
+                background: p.slug === page?.slug ? 'var(--accent, #555)' : 'transparent',
+                color: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              {p.slug === 'index' ? 'home' : p.title}
+            </button>
+          ))}
+        </nav>
+      )}
+      {page ? (
+        <iframe
+          ref={frame}
+          title={page.title}
+          srcDoc={srcDoc}
+          onLoad={onLoad}
+          sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+          style={{
+            width: '100%',
+            minHeight: 320,
+            border: '1px solid var(--border, #444)',
+            borderRadius: 6,
+            background: '#fff',
+          }}
+        />
+      ) : (
+        <p>Her homepage has no pages yet.</p>
+      )}
+      {data.updated_at && (
+        <p style={{ opacity: 0.6, fontSize: '0.85em' }}>
+          Last changed {new Date(data.updated_at).toLocaleString()}
+        </p>
+      )}
+    </>
+  );
+}
+
 function SectionDetail({ routeBase, name }: { routeBase: string; name: string }) {
   const { data, error } = useJson<Record<string, unknown>>(`${routeBase}/sections/${name}`);
   if (error) return <p>{error}</p>;
   if (!data) return <p>Loading…</p>;
   let body: ReactNode;
   if (name === 'homepage') {
-    const featured = (data.featured as { title?: string; type?: string }[] | undefined) ?? [];
     body = data.exists ? (
-      <>
-        {typeof data.tagline === 'string' && <p style={{ fontStyle: 'italic' }}>{data.tagline}</p>}
-        {featured.length > 0 && (
-          <>
-            <h3>Featured</h3>
-            <ul>
-              {featured.map((f, i) => (
-                <li key={i}>
-                  {f.title || 'Untitled'} ({f.type})
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </>
+      <HomepageCards routeBase={routeBase} data={data as unknown as Homepage} />
     ) : (
       <p>She hasn’t made her homepage yet.</p>
     );

@@ -117,6 +117,23 @@ export default definePlugin({
       forward(request, reply as never, `/sections/${encodeURIComponent(request.params.name)}`),
     );
 
+    // Images and songs she placed on her homepage's pages.
+    fastify.get<{ Params: { file: string } }>(
+      '/sections/homepage/assets/:file',
+      async (request, reply) => {
+        const file = request.params.file;
+        if (!file || file === '.' || file === '..' || file.includes('/')) {
+          return reply.status(400).send({ error: 'Bad path' });
+        }
+        return forward(
+          request,
+          reply as never,
+          `/sections/homepage/assets/${encodeURIComponent(file)}`,
+          true,
+        );
+      },
+    );
+
     // Piece ids can be paths (writing under creative_output), so a wildcard.
     fastify.get<{ Params: { '*': string } }>('/pieces/*', async (request, reply) => {
       const rest = request.params['*'] ?? '';

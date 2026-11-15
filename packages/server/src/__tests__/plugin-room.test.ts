@@ -58,6 +58,12 @@ beforeAll(async () => {
         .end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
       return;
     }
+    if (req.url === '/room/sections/homepage/assets/painting-img-1.png') {
+      res
+        .writeHead(200, { 'content-type': 'image/png' })
+        .end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      return;
+    }
     if (req.url === '/room/pieces/writing/poem/tides.md') {
       res
         .writeHead(200, { 'content-type': 'application/json' })
@@ -133,6 +139,22 @@ describe('room plugin', () => {
     expect(img.rawPayload[0]).toBe(0x89);
     const poem = await get('/pieces/writing/poem/tides.md', { cookie: kohl.cookie });
     expect(JSON.parse(poem.body).content).toBe('The moon pulls.');
+  });
+
+  it('passes through images and songs she placed on her homepage', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const img = await get('/sections/homepage/assets/painting-img-1.png', { cookie: kohl.cookie });
+    expect(img.statusCode).toBe(200);
+    expect(img.headers['content-type']).toBe('image/png');
+    expect(seen.at(-1)).toEqual({
+      path: '/room/sections/homepage/assets/painting-img-1.png',
+      auth: 'Bearer K',
+    });
+    const before = seen.length;
+    for (const bad of ['/sections/homepage/assets/%2e%2e', '/sections/homepage/assets/a%2Fb']) {
+      expect([400, 404]).toContain((await get(bad, { cookie: kohl.cookie })).statusCode);
+    }
+    expect(seen.length).toBe(before);
   });
 
   it('refuses dot segments', async () => {
