@@ -99,3 +99,19 @@ def test_retries_are_the_messages_whose_author_asked_this_agent():
         {"id": "m4", "agent_status": []},
     ]
     assert [m["id"] for m in a.retries(msgs)] == ["m1"]
+
+
+def test_messages_carry_their_reactions():
+    from babelr_agent.client import Agent
+
+    k = crypto.shared_key(crypto.generate_key(), crypto.public_jwk(crypto.generate_key()))
+    ct, iv = crypto.encrypt("hi", k)
+    a = Agent.__new__(Agent)
+    a._key_for = lambda partner, refresh=False: k
+    msg = lambda i, **extra: {"message": {"id": i, "published": "t", "content": ct,  # noqa: E731
+                                          "properties": {"encrypted": True, "iv": iv}, **extra},
+                              "author": {"preferredUsername": "cass"}}
+    a._req = lambda method, path, body=None: {"messages": [msg("m1", reactions={"🔒": ["cass-id"]}), msg("m2")]}
+    got = {m["id"]: m for m in a.messages("dm1", partner_id="p")}
+    assert got["m1"]["reactions"] == {"🔒": ["cass-id"]} and got["m1"]["text"] == "hi"
+    assert got["m2"]["reactions"] == {}

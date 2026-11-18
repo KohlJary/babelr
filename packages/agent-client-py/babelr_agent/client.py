@@ -138,7 +138,9 @@ class Agent:
             msg = m["message"]
             props = msg.get("properties") or {}
             entry = {"id": msg["id"], "author": m["author"], "published": msg["published"],
-                     "agent_status": msg.get("agentStatus") or []}
+                     "agent_status": msg.get("agentStatus") or [],
+                     # emoji -> actor ids; the server sends it only when non-empty
+                     "reactions": msg.get("reactions") or {}}
             if not (props.get("encrypted") and props.get("iv")):
                 entry["text"], entry["error"] = None, "plaintext"
             else:
