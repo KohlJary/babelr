@@ -810,7 +810,7 @@ describe('plans', () => {
       expect(d.phases.find((f: { id: string }) => f.id === phaseId).status).toBe('approved');
     });
 
-    it("approving a phase approves its build work only: an outreach draft in it still needs its own yes", async () => {
+    it('approving a phase approves its build work only: an outreach draft in it still needs its own yes', async () => {
       const h = await house();
       const { slug, phaseId } = await planWithPhase(h);
       const d = (

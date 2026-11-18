@@ -1198,7 +1198,9 @@ function PhaseCard({
           Waiting on {phase.awaiting.join(', ') || 'nobody'}.
           {drafts > 0 &&
             ` Approving it approves its build work only; ${
-              drafts === 1 ? 'the outreach draft in it still needs' : `its ${drafts} outreach drafts each still need`
+              drafts === 1
+                ? 'the outreach draft in it still needs'
+                : `its ${drafts} outreach drafts each still need`
             } its own yes before anything is sent.`}
         </div>
       )}
