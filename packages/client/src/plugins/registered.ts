@@ -31,6 +31,11 @@ import {
   clientManifest as roomManifest,
   setupClient as roomSetupClient,
 } from '@babelr/plugin-room/client-entry';
+// record's manifest.ts reads its config with node:fs too.
+import {
+  clientManifest as recordManifest,
+  setupClient as recordSetupClient,
+} from '@babelr/plugin-record/client-entry';
 
 export interface RegisteredPlugin {
   manifest: PluginManifest;
@@ -47,4 +52,5 @@ export const registeredPlugins: RegisteredPlugin[] = [
   { manifest: pmManifest, setupClient: pmSetupClient },
   { manifest: reviewManifest, setupClient: reviewSetupClient },
   { manifest: roomManifest, setupClient: roomSetupClient },
+  { manifest: recordManifest, setupClient: recordSetupClient },
 ];

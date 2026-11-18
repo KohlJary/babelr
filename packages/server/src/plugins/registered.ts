@@ -20,6 +20,7 @@ import plansManifest from '@babelr/plugin-plans';
 import pmManifest from '@babelr/plugin-project-management';
 import reviewManifest from '@babelr/plugin-review';
 import roomManifest from '@babelr/plugin-room';
+import recordManifest from '@babelr/plugin-record';
 
 const manifests: PluginManifest[] = [
   blindsManifest,
@@ -29,6 +30,7 @@ const manifests: PluginManifest[] = [
   pmManifest,
   reviewManifest,
   roomManifest,
+  recordManifest,
 ];
 
 export const registeredPlugins: PluginManifest[] = manifests;
