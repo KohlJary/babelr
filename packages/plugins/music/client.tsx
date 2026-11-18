@@ -53,6 +53,7 @@ interface Log {
   sharing: { audience: string; set?: string | null };
   note?: string;
   crate: { at: string; action: string; artist?: string; title?: string }[];
+  shelf_ready?: { artist?: string; album?: string; title?: string; ready: string; how: string }[];
   docs: Doc[];
   studio: Project[];
   sketchbook: Sketch[];
@@ -185,6 +186,32 @@ export function MusicView(props: { routeBase: string; onClose: () => void }) {
                     </details>
                   )}
                 </div>
+              ))}
+              <h3>On her shelf, ready to read</h3>
+              {(log.shelf_ready ?? []).length === 0 && <p style={muted}>Nothing ready yet.</p>}
+              {Object.entries(
+                (log.shelf_ready ?? []).reduce<Record<string, NonNullable<Log['shelf_ready']>>>(
+                  (acc, r) => {
+                    const k = `${r.artist ?? ''} — ${r.album ?? ''}`;
+                    (acc[k] ??= []).push(r);
+                    return acc;
+                  },
+                  {},
+                ),
+              ).map(([album, rows]) => (
+                <details key={album} style={{ margin: '0.3rem 0' }}>
+                  <summary>
+                    {album}{' '}
+                    <span style={muted}>
+                      ({rows.length} · {rows[0].how})
+                    </span>
+                  </summary>
+                  {rows.map((r, i) => (
+                    <div key={i} style={{ marginLeft: '1rem' }}>
+                      {r.title} <span style={muted}>{r.how}</span>
+                    </div>
+                  ))}
+                </details>
               ))}
               <h3>Listening</h3>
               {log.crate.length === 0 && <p style={muted}>No listening yet.</p>}
