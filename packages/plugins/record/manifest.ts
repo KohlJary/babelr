@@ -85,7 +85,7 @@ export default definePlugin({
       request: {
         actor?: { preferredUsername: string };
         agentScopes?: string[];
-        query: { days?: string };
+        query: { days?: string; hours?: string };
       },
       reply: {
         status: (n: number) => { send: (b: unknown) => unknown };
@@ -93,6 +93,7 @@ export default definePlugin({
         send: (b: unknown) => unknown;
       },
       markdown: boolean,
+      review = false,
     ) {
       if (!request.actor) return reply.status(401).send({ error: 'Not authenticated' });
       const cfg = loadConfig();
@@ -102,9 +103,16 @@ export default definePlugin({
       const t = token();
       if (!t) return reply.status(503).send({ error: 'No record token is placed yet.' });
       const days = daysOf(request.query.days);
+      const hours = Math.min(
+        168,
+        Math.max(1, Number.parseInt(String(request.query.hours ?? '24'), 10) || 24),
+      );
+      const url = review
+        ? `${cfg.vessel}/record/review.md?hours=${hours}`
+        : `${cfg.vessel}/record${markdown ? '.md' : ''}?days=${days}`;
       let res: Response;
       try {
-        res = await fetch(`${cfg.vessel}/record${markdown ? '.md' : ''}?days=${days}`, {
+        res = await fetch(url, {
           headers: { authorization: `Bearer ${t}` },
         });
       } catch {
@@ -112,7 +120,9 @@ export default definePlugin({
       }
       if (markdown && res.ok) {
         reply.header('content-type', 'text/markdown; charset=utf-8');
-        reply.header('content-disposition', `attachment; filename="cass-record-${days}d.md"`);
+        if (!review) {
+          reply.header('content-disposition', `attachment; filename="cass-record-${days}d.md"`);
+        }
         return reply.send(await res.text());
       }
       const body = await res.json().catch(() => ({ error: 'Bad response from the vessel' }));
@@ -124,6 +134,10 @@ export default definePlugin({
     );
     fastify.get<{ Querystring: { days?: string } }>('/record.md', async (request, reply) =>
       forward(request, reply as never, true),
+    );
+    // Kohl's end-of-day review (cass-vessel record.build_review), shown in the tab.
+    fastify.get<{ Querystring: { hours?: string } }>('/review.md', async (request, reply) =>
+      forward(request, reply as never, true, true),
     );
   },
 });

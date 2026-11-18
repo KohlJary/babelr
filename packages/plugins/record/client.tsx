@@ -84,6 +84,7 @@ export function RecordView(props: { routeBase: string; onClose: () => void }) {
   const [record, setRecord] = useState<Record | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [off, setOff] = useState<Set<string>>(new Set());
+  const [review, setReview] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -142,6 +143,18 @@ export function RecordView(props: { routeBase: string; onClose: () => void }) {
         <a href={`${routeBase}/record.md?days=${days}`} download>
           Download Markdown
         </a>
+        <button
+          type="button"
+          onClick={() => {
+            if (review !== null) return setReview(null);
+            void fetch(`${routeBase}/review.md?hours=24`, { credentials: 'include' })
+              .then((r) => r.text())
+              .then(setReview)
+              .catch(() => setReview('Couldn’t reach the review.'));
+          }}
+        >
+          {review === null ? 'Daily review' : 'Back to the record'}
+        </button>
         <button type="button" onClick={onClose} style={{ marginLeft: 'auto' }}>
           Close
         </button>
@@ -151,9 +164,10 @@ export function RecordView(props: { routeBase: string; onClose: () => void }) {
         progress. Every line says when, who acted, and where it came from. She can read it too.
       </p>
 
-      {error && <p>{error}</p>}
-      {!record && !error && <p>Reading the record…</p>}
-      {record && (
+      {review !== null && <pre style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{review}</pre>}
+      {review === null && error && <p>{error}</p>}
+      {review === null && !record && !error && <p>Reading the record…</p>}
+      {review === null && record && (
         <>
           <div style={{ margin: '0.5rem 0' }}>
             {Object.entries(record.kinds).map(([kind, words]) => {

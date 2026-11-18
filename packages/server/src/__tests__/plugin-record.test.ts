@@ -28,6 +28,10 @@ beforeAll(async () => {
       res.writeHead(401, { 'content-type': 'application/json' }).end('{"detail":"no"}');
       return;
     }
+    if ((req.url ?? '').startsWith('/record/review.md')) {
+      res.writeHead(200, { 'content-type': 'text/plain' }).end('# Daily review\n');
+      return;
+    }
     if ((req.url ?? '').startsWith('/record.md')) {
       res.writeHead(200, { 'content-type': 'text/plain' }).end('# Cass: the record\n');
       return;
@@ -79,6 +83,14 @@ describe('record plugin', () => {
     expect(md.headers['content-type']).toContain('text/markdown');
     expect(md.headers['content-disposition']).toContain('cass-record-30d.md');
     expect(md.body.startsWith('# Cass: the record')).toBe(true);
+  });
+
+  it('shows Kohl the daily review in place', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const res = await get('/review.md?hours=12', { cookie: kohl.cookie });
+    expect(res.body.startsWith('# Daily review')).toBe(true);
+    expect(res.headers['content-disposition']).toBeUndefined();
+    expect(seen.at(-1)).toEqual({ path: '/record/review.md?hours=12', auth: 'Bearer R' });
   });
 
   it('is not shown to anyone else, and the vessel is never asked', async () => {
