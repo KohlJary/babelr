@@ -137,6 +137,19 @@ export default definePlugin({
       return g.denied ?? (reply as unknown as Rep).send(g.body);
     });
 
+    fastify.get<{ Params: { key: string } }>('/music/cover/:key', async (request, reply) => {
+      const g = await gate(request as Req, reply as never);
+      if (g.denied) return g.denied;
+      const res = await fetch(
+        `${loadConfig().vessel}/record/music/cover/${encodeURIComponent(request.params.key)}`,
+        { headers: { authorization: `Bearer ${token()}` } },
+      ).catch(() => null);
+      if (!res || !res.ok) return reply.status(404).send({ error: 'No cover' });
+      reply.header('content-type', 'image/jpeg');
+      reply.header('cache-control', 'private, max-age=3600');
+      return reply.send(Buffer.from(await res.arrayBuffer()));
+    });
+
     fastify.get<{ Params: { kind: string; ident: string } }>(
       '/music/audio/:kind/:ident',
       async (request, reply) => {

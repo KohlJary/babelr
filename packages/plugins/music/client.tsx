@@ -49,8 +49,25 @@ interface Sketch {
   notes_heard?: string[];
   sound?: Record<string, number>;
 }
+interface Track {
+  title: string;
+  track?: string;
+  how?: string;
+  listened: { at: string; action: string }[];
+  note: Doc | null;
+}
+interface Album {
+  key: string;
+  artist: string;
+  album: string;
+  how?: string;
+  touched: boolean;
+  note: Doc | null;
+  tracks: Track[];
+}
 interface Log {
   sharing: { audience: string; set?: string | null };
+  albums?: Album[];
   note?: string;
   crate: { at: string; action: string; artist?: string; title?: string }[];
   shelf_ready?: { artist?: string; album?: string; title?: string; ready: string; how: string }[];
@@ -165,60 +182,9 @@ export function MusicView(props: { routeBase: string; onClose: () => void }) {
 
           {view === 'Crate' && (
             <div>
-              <h3>What she writes about songs</h3>
-              {log.docs.length === 0 && <p style={muted}>Nothing written yet.</p>}
-              {log.docs.map((d) => (
-                <div key={d.path} style={card}>
-                  <strong>{d.title}</strong>{' '}
-                  <span style={muted}>
-                    {d.path} · updated {when(d.updated)}
-                  </span>
-                  <pre style={pre}>{d.text}</pre>
-                  {d.earlier.length > 0 && (
-                    <details>
-                      <summary style={muted}>{d.earlier.length} earlier version(s)</summary>
-                      {[...d.earlier].reverse().map((v, i) => (
-                        <div key={i} style={{ ...card, opacity: 0.85 }}>
-                          <span style={muted}>{when(v.at)}</span>
-                          <pre style={pre}>{v.text}</pre>
-                        </div>
-                      ))}
-                    </details>
-                  )}
-                </div>
-              ))}
-              <h3>On her shelf, ready to read</h3>
-              {(log.shelf_ready ?? []).length === 0 && <p style={muted}>Nothing ready yet.</p>}
-              {Object.entries(
-                (log.shelf_ready ?? []).reduce<Record<string, NonNullable<Log['shelf_ready']>>>(
-                  (acc, r) => {
-                    const k = `${r.artist ?? ''} — ${r.album ?? ''}`;
-                    (acc[k] ??= []).push(r);
-                    return acc;
-                  },
-                  {},
-                ),
-              ).map(([album, rows]) => (
-                <details key={album} style={{ margin: '0.3rem 0' }}>
-                  <summary>
-                    {album}{' '}
-                    <span style={muted}>
-                      ({rows.length} · {rows[0].how})
-                    </span>
-                  </summary>
-                  {rows.map((r, i) => (
-                    <div key={i} style={{ marginLeft: '1rem' }}>
-                      {r.title} <span style={muted}>{r.how}</span>
-                    </div>
-                  ))}
-                </details>
-              ))}
-              <h3>Listening</h3>
-              {log.crate.length === 0 && <p style={muted}>No listening yet.</p>}
-              {[...log.crate].reverse().map((c, i) => (
-                <div key={i}>
-                  <span style={muted}>{when(c.at)}</span> {c.action}: {c.artist} – {c.title}
-                </div>
+              {(log.albums ?? []).length === 0 && <p style={muted}>Nothing on her shelf yet.</p>}
+              {(log.albums ?? []).map((a) => (
+                <AlbumCard key={a.key} a={a} cover={`${routeBase}/music/cover/${a.key}`} />
               ))}
             </div>
           )}
@@ -280,5 +246,112 @@ export function MusicView(props: { routeBase: string; onClose: () => void }) {
         </>
       )}
     </section>
+  );
+}
+
+function Take(props: { doc: Doc; label: string }) {
+  const { doc, label } = props;
+  return (
+    <div style={{ margin: '0.3rem 0 0.6rem' }}>
+      <div style={muted}>
+        {label} · {when(doc.updated)}
+      </div>
+      <pre style={pre}>{doc.text}</pre>
+      {doc.earlier.length > 0 && (
+        <details>
+          <summary style={muted}>how her take changed ({doc.earlier.length} earlier)</summary>
+          {[...doc.earlier].reverse().map((v, i) => (
+            <div
+              key={i}
+              style={{
+                borderLeft: '2px solid var(--border, #555)',
+                paddingLeft: 8,
+                margin: '0.4rem 0',
+              }}
+            >
+              <span style={muted}>{when(v.at)}</span>
+              <pre style={pre}>{v.text}</pre>
+            </div>
+          ))}
+        </details>
+      )}
+    </div>
+  );
+}
+
+function AlbumCard(props: { a: Album; cover: string }) {
+  const { a, cover } = props;
+  const [open, setOpen] = useState<string | null>(null);
+  const [art, setArt] = useState(true);
+  const written = a.tracks.filter((t) => t.note).length;
+  const heard = a.tracks.filter((t) => t.listened.length).length;
+  return (
+    <div style={{ ...card, opacity: a.touched ? 1 : 0.55 }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        {art ? (
+          <img
+            src={cover}
+            alt=""
+            width={110}
+            height={110}
+            style={{ objectFit: 'cover', borderRadius: 6 }}
+            onError={() => setArt(false)}
+          />
+        ) : (
+          <div
+            style={{
+              width: 110,
+              height: 110,
+              borderRadius: 6,
+              background: 'var(--border, #333)',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            💿
+          </div>
+        )}
+        <div style={{ flex: 1 }}>
+          <h3 style={{ margin: 0 }}>{a.album}</h3>
+          <div style={muted}>
+            {a.artist} · {a.tracks.length} tracks · {heard} heard · {written} written about ·{' '}
+            {a.how}
+          </div>
+          {a.note ? (
+            <Take doc={a.note} label="Her take on the album" />
+          ) : (
+            <p style={muted}>No take on the album yet.</p>
+          )}
+        </div>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        {a.tracks.map((t) => (
+          <div key={t.title}>
+            <button
+              type="button"
+              onClick={() => setOpen(open === t.title ? null : t.title)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                cursor: t.note ? 'pointer' : 'default',
+                padding: '2px 0',
+                textAlign: 'left',
+              }}
+            >
+              {t.note ? '✍️' : t.listened.length ? '🎧' : '·'} {t.title}{' '}
+              <span style={muted}>
+                {t.listened.length ? `last ${when(t.listened[t.listened.length - 1].at)}` : ''}
+              </span>
+            </button>
+            {open === t.title && t.note && (
+              <div style={{ marginLeft: '1.5rem' }}>
+                <Take doc={t.note} label="Her take" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
