@@ -6,7 +6,9 @@ import { join } from 'node:path';
 
 /**
  * Cass's record: what she planned, asked for, changed in herself and did in
- * the world, dated, attributed and sourced, read from her vessel's record
+ * the world, dated, attributed and sourced, for diagnostics and to follow her
+ * progress (Kohl: not surveillance; she reads it too, with my_record in her
+ * vessel). Read from her vessel's record
  * (cass-vessel record.py, routes/record.py). Kohl's: his accounts by
  * username from config, and the agent accounts he names for development
  * (Kohl, 2026-11-17: Daedalus instances too), through their agent tokens.

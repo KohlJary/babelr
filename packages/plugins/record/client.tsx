@@ -147,8 +147,8 @@ export function RecordView(props: { routeBase: string; onClose: () => void }) {
         </button>
       </div>
       <p style={muted}>
-        What she planned, asked for, changed and did. Every line says when, who acted, and where it
-        came from. Her room is what she chooses to share; this is the record.
+        What she planned, asked for, changed and did, for checking things work and following her
+        progress. Every line says when, who acted, and where it came from. She can read it too.
       </p>
 
       {error && <p>{error}</p>}
