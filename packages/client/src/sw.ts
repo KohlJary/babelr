@@ -1,7 +1,16 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
+import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
+
+// A new build takes over on the next load instead of waiting for every tab and the
+// installed app to close (registerType autoUpdate needs the worker to do this). Without
+// it, an open app kept an old index.html whose script no longer existed after a rebuild,
+// and plugins added since never appeared.
+void self.skipWaiting();
+clientsClaim();
+cleanupOutdatedCaches();
 
 // Precache the app shell (injected by vite-plugin-pwa at build time)
 precacheAndRoute(self.__WB_MANIFEST);
