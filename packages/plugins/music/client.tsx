@@ -72,6 +72,7 @@ interface Album {
   how?: string;
   touched: boolean;
   note: Doc | null;
+  other_notes?: Doc[];
   tracks: Track[];
 }
 interface Log {
@@ -331,6 +332,9 @@ function AlbumCard(props: { a: Album; cover: string }) {
           ) : (
             <p style={muted}>No take on the album yet.</p>
           )}
+          {(a.other_notes ?? []).map((d) => (
+            <Take key={d.path} doc={d} label={`Also hers: ${d.path.split('/').pop()}`} />
+          ))}
         </div>
       </div>
       <div style={{ marginTop: 6 }}>
