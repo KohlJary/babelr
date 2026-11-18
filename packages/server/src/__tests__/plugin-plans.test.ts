@@ -809,6 +809,26 @@ describe('plans', () => {
       ).json();
       expect(d.phases.find((f: { id: string }) => f.id === phaseId).status).toBe('approved');
     });
+
+    it("approving a phase approves its build work only: an outreach draft in it still needs its own yes", async () => {
+      const h = await house();
+      const { slug, phaseId } = await planWithPhase(h);
+      const d = (
+        await call('POST', `/plans/${slug}/items`, h.cass, {
+          kind: 'outreach',
+          title: 'x',
+          phaseId,
+          outreach: { raw: RAW },
+        })
+      ).json();
+      const draft = d.items.find((i: { kind: string }) => i.kind === 'outreach');
+      await call('POST', `/phases/${phaseId}/propose`, h.carol);
+      const after = (await call('POST', `/phases/${phaseId}/approve`, h.kohl)).json();
+      expect(after.phases.find((f: { id: string }) => f.id === phaseId).status).toBe('approved');
+      const it = after.items.find((i: { id: string }) => i.id === draft.id);
+      expect(it.outreach.approvedRev).toBeNull();
+      expect(it.outreach.sendStatus).not.toBe('approved');
+    });
   });
 
   describe("on you: what waits on what, and the order of Kohl's list", () => {

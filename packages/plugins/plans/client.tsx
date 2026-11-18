@@ -1174,6 +1174,8 @@ function PhaseCard({
   const [owner, setOwner] = useState('');
   const youSaid = !phase.awaiting.some((n) => n.toLowerCase() === plan.you.toLowerCase());
   const canSay = plan.canApprove && phase.status === 'proposed';
+  // Phase approval never stacks on a send approval (RoboKohl's rule 1): say so.
+  const drafts = items.filter((i) => i.kind === 'outreach').length;
 
   return (
     <section className={`plans-phase plans-phase-${phase.status}`}>
@@ -1194,6 +1196,10 @@ function PhaseCard({
           {phase.approvals.length > 0 &&
             `Yes from ${phase.approvals.map((a) => a.name).join(', ')}. `}
           Waiting on {phase.awaiting.join(', ') || 'nobody'}.
+          {drafts > 0 &&
+            ` Approving it approves its build work only; ${
+              drafts === 1 ? 'the outreach draft in it still needs' : `its ${drafts} outreach drafts each still need`
+            } its own yes before anything is sent.`}
         </div>
       )}
       {phase.status === 'declined' && phase.declineReason && (
