@@ -33,18 +33,16 @@ beforeAll(async () => {
       res.writeHead(200, { 'content-type': 'audio/mpeg' }).end(Buffer.from('ID3fake'));
       return;
     }
-    res
-      .writeHead(200, { 'content-type': 'application/json' })
-      .end(
-        JSON.stringify({
-          sharing: { audience },
-          timeline: [{ at: '2026-11-18T10:00', kind: 'sketch', what: 'sketch 1' }],
-          crate: [],
-          docs: [],
-          studio: [],
-          sketchbook: [],
-        }),
-      );
+    res.writeHead(200, { 'content-type': 'application/json' }).end(
+      JSON.stringify({
+        sharing: { audience },
+        timeline: [{ at: '2026-11-18T10:00', kind: 'sketch', what: 'sketch 1' }],
+        crate: [],
+        docs: [],
+        studio: [],
+        sketchbook: [],
+      }),
+    );
   });
   await new Promise<void>((r) => vessel.listen(0, '127.0.0.1', () => r()));
   const port = (vessel.address() as { port: number }).port;
