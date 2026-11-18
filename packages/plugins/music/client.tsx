@@ -55,6 +55,15 @@ interface Track {
   how?: string;
   listened: { at: string; action: string }[];
   note: Doc | null;
+  measured?: {
+    tempo: number;
+    meter: string;
+    key: string;
+    form: string;
+    lufs: number;
+    minutes: number;
+    words: number;
+  } | null;
 }
 interface Album {
   key: string;
@@ -334,19 +343,36 @@ function AlbumCard(props: { a: Album; cover: string }) {
                 background: 'none',
                 border: 'none',
                 color: 'inherit',
-                cursor: t.note ? 'pointer' : 'default',
+                cursor: 'pointer',
                 padding: '2px 0',
                 textAlign: 'left',
               }}
             >
-              {t.note ? '✍️' : t.listened.length ? '🎧' : '·'} {t.title}{' '}
+              {open === t.title ? '▾' : '▸'} {t.note ? '✍️' : t.listened.length ? '🎧' : '·'}{' '}
+              {t.title}{' '}
               <span style={muted}>
                 {t.listened.length ? `last ${when(t.listened[t.listened.length - 1].at)}` : ''}
               </span>
             </button>
-            {open === t.title && t.note && (
-              <div style={{ marginLeft: '1.5rem' }}>
-                <Take doc={t.note} label="Her take" />
+            {open === t.title && (
+              <div style={{ marginLeft: '1.5rem', marginBottom: '0.5rem' }}>
+                <div style={muted}>
+                  {t.listened.length
+                    ? t.listened.map((l) => `${l.action} ${when(l.at)}`).join(' · ')
+                    : 'not listened to yet'}
+                </div>
+                {t.measured && (
+                  <div style={muted}>
+                    measured: {t.measured.minutes} min · {t.measured.tempo} BPM in{' '}
+                    {t.measured.meter} · {t.measured.key} · {t.measured.lufs} LUFS · form{' '}
+                    {t.measured.form} · {t.measured.words} lyric lines
+                  </div>
+                )}
+                {t.note ? (
+                  <Take doc={t.note} label="Her take" />
+                ) : (
+                  <p style={muted}>No take written yet.</p>
+                )}
               </div>
             )}
           </div>
