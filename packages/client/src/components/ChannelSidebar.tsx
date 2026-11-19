@@ -5,6 +5,8 @@ import { useT } from '../i18n/I18nProvider';
 
 interface ChannelSidebarProps {
   mode: 'channels' | 'dms';
+  /** Decrypted last-message previews by DM id (E2E DMs are decrypted in ChatView). */
+  dmPreviews?: Record<string, string>;
   serverName?: string;
   serverTagline?: string | null;
   channels: ChannelView[];
@@ -52,6 +54,7 @@ export function ChannelSidebar({
   channels,
   selectedChannelId,
   conversations,
+  dmPreviews,
   selectedDMId,
   actor,
   unreadCounts,
@@ -78,6 +81,39 @@ export function ChannelSidebar({
 }: ChannelSidebarProps) {
   const t = useT();
   if (mode === 'dms') {
+    // Agents (daemons, builders) first: talking with them is half of what Babelr is for.
+    // `kind` is stamped by the server from the actor row, so it can't be claimed.
+    const others = (dm: DMConversation) => dm.participants.filter((p) => p.id !== actor.id);
+    const isAgentDM = (dm: DMConversation) => others(dm).some((p) => p.kind);
+    const agentDMs = conversations.filter(isAgentDM);
+    const peopleDMs = conversations.filter((dm) => !isAgentDM(dm));
+    const preview = (dm: DMConversation): string | null => {
+      if (!dm.lastMessage) return null;
+      if (dm.lastMessage.properties?.encrypted) {
+        return dmPreviews?.[dm.id] ?? t('channelSidebar.encryptedPreview');
+      }
+      return dm.lastMessage.content;
+    };
+    const renderDM = (dm: DMConversation) => {
+      const other = others(dm);
+      const name = other.map((p) => p.displayName ?? p.preferredUsername).join(', ') || 'Unknown';
+      const text = preview(dm);
+      return (
+        <button
+          key={dm.id}
+          className={`sidebar-item sidebar-dm ${selectedDMId === dm.id ? 'active' : ''}`}
+          onClick={() => onSelectDM(dm.id)}
+        >
+          <span className="sidebar-item-name">
+            {name}
+            {dm.request?.state === 'pending' && dm.request.incoming && (
+              <span className="dm-request-badge">{t('dm.requestBadge')}</span>
+            )}
+          </span>
+          {text && <span className="sidebar-item-preview">{text.slice(0, 60)}</span>}
+        </button>
+      );
+    };
     return (
       <div className="channel-sidebar">
         <div className="sidebar-header">{t('channelSidebar.directMessages')}</div>
@@ -105,31 +141,14 @@ export function ChannelSidebar({
           {conversations.length === 0 && (
             <div className="sidebar-empty">{t('channelSidebar.noConversations')}</div>
           )}
-          {conversations.map((dm) => {
-            const otherParticipants = dm.participants.filter((p) => p.id !== actor.id);
-            const name =
-              otherParticipants.map((p) => p.displayName ?? p.preferredUsername).join(', ') ||
-              'Unknown';
-            return (
-              <button
-                key={dm.id}
-                className={`sidebar-item ${selectedDMId === dm.id ? 'active' : ''}`}
-                onClick={() => onSelectDM(dm.id)}
-              >
-                <span className="sidebar-item-name">
-                  {name}
-                  {dm.request?.state === 'pending' && dm.request.incoming && (
-                    <span className="dm-request-badge">{t('dm.requestBadge')}</span>
-                  )}
-                </span>
-                {dm.lastMessage && (
-                  <span className="sidebar-item-preview">
-                    {dm.lastMessage.content.slice(0, 30)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {agentDMs.length > 0 && (
+            <div className="sidebar-section-label">{t('channelSidebar.agents')}</div>
+          )}
+          {agentDMs.map(renderDM)}
+          {agentDMs.length > 0 && peopleDMs.length > 0 && (
+            <div className="sidebar-section-label">{t('channelSidebar.people')}</div>
+          )}
+          {peopleDMs.map(renderDM)}
         </div>
       </div>
     );

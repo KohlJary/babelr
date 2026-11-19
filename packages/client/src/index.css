@@ -656,6 +656,34 @@ body {
   white-space: nowrap;
 }
 
+/* DM rows: name above its last line, so a preview never runs into the name */
+.sidebar-item.sidebar-dm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.sidebar-item.sidebar-dm .sidebar-item-preview {
+  max-width: 100%;
+  color: #777;
+}
+
+/* "Agents" / "People" in the DM list */
+.sidebar-section-label {
+  padding: 0.75rem 1rem 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+/* The ☰ that reopens the conversation drawer: phones only */
+.drawer-toggle {
+  display: none;
+}
+
 .sidebar-item.add-channel {
   color: #555;
   font-size: 0.8rem;
@@ -8559,6 +8587,48 @@ textarea.modal-input {
     box-shadow: 4px 0 12px rgba(0, 0, 0, 0.5);
   }
 
+  /* Picking a conversation closes the drawer; the header's ☰ opens it again */
+  .app-layout.drawer-closed .channel-sidebar {
+    display: none;
+  }
+  /* Phone header: the ☰ and the conversation's name first. Your own name and "connected"
+     drop out (Settings has you); Log out stays, compact, because it lives only here. */
+  .channel-header .connection-status,
+  .channel-header .username-btn {
+    display: none;
+  }
+  .channel-header .logout-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  .channel-header .user-info {
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+  .channel-header .channel-info {
+    min-width: 0;
+    flex: 1;
+  }
+  .channel-header .channel-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    margin-right: 0.25rem;
+    border: none;
+    background: transparent;
+    color: #e5e7eb;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
   /* When a view is active the channel sidebar is hidden to give
      the view full width. The chat-panel fills the remaining space. */
   .channel-sidebar:has(~ .chat-panel .tabbed-view),
@@ -8766,6 +8836,31 @@ textarea.modal-input {
 
 .dm-consent-menu {
   justify-content: flex-end;
+}
+
+/* Leave / Block sit behind this: one tap away, not leading the conversation.
+   With nothing else to say the bar is one slim row holding just the ⋯ */
+.dm-consent-bar:not(
+  :has(.dm-consent-request, .dm-consent-note, .dm-consent-menu, .dm-consent-error)
+) {
+  padding: 0.25rem 1rem;
+}
+.dm-consent-more {
+  align-self: flex-end;
+  min-width: 44px;
+  min-height: 28px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.dm-consent-more:hover,
+.dm-consent-more[aria-expanded='true'] {
+  color: #e5e7eb;
+  border-color: #555;
 }
 
 .dm-consent-actions button {

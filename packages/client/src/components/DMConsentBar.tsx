@@ -15,7 +15,9 @@ interface DMConsentBarProps {
 /**
  * The DM's own controls: a pending request's Accept / Decline, who
  * left, and Leave and Block. Everyone can say no and everyone can
- * leave, so these are always here, with phone-sized tap targets.
+ * leave, so these are always one tap away (the ⋯ button, phone-sized),
+ * but they don't lead the conversation: a request's Accept / Decline
+ * stays in view, Leave and Block sit behind the button.
  */
 export function DMConsentBar({
   dm,
@@ -28,6 +30,7 @@ export function DMConsentBar({
   const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const other = dm.participants.find((p) => p.id !== actor.id) ?? dm.left?.[0];
   const name = other ? (other.displayName ?? other.preferredUsername) : '';
 
@@ -72,32 +75,44 @@ export function DMConsentBar({
           {t('dm.left', { name: p.displayName ?? p.preferredUsername })}
         </p>
       ))}
-      <div className="dm-consent-actions dm-consent-menu">
-        <button
-          type="button"
-          className="dm-consent-secondary"
-          disabled={busy}
-          onClick={() => {
-            if (window.confirm(t('dm.confirmLeave'))) void run(() => onLeave(dm.id));
-          }}
-        >
-          {t('dm.leave')}
-        </button>
-        {other && (
+      <button
+        type="button"
+        className="dm-consent-more"
+        aria-expanded={menuOpen}
+        aria-label={t('dm.moreOptions')}
+        title={t('dm.moreOptions')}
+        onClick={() => setMenuOpen((v) => !v)}
+      >
+        ⋯
+      </button>
+      {menuOpen && (
+        <div className="dm-consent-actions dm-consent-menu">
           <button
             type="button"
-            className="dm-consent-danger"
+            className="dm-consent-secondary"
             disabled={busy}
             onClick={() => {
-              if (window.confirm(t('dm.confirmBlock', { name: other.preferredUsername }))) {
-                void run(() => onBlock(other.id));
-              }
+              if (window.confirm(t('dm.confirmLeave'))) void run(() => onLeave(dm.id));
             }}
           >
-            {t('dm.block')}
+            {t('dm.leave')}
           </button>
-        )}
-      </div>
+          {other && (
+            <button
+              type="button"
+              className="dm-consent-danger"
+              disabled={busy}
+              onClick={() => {
+                if (window.confirm(t('dm.confirmBlock', { name: other.preferredUsername }))) {
+                  void run(() => onBlock(other.id));
+                }
+              }}
+            >
+              {t('dm.block')}
+            </button>
+          )}
+        </div>
+      )}
       {error && (
         <p className="dm-consent-error" role="alert">
           {error}

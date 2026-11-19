@@ -14,6 +14,8 @@ interface ChannelHeaderProps {
   onOpenMentions: () => void;
   onOpenPins?: () => void;
   pinCount?: number;
+  /** Phones: the conversation list is a drawer; this reopens it. */
+  onOpenDrawer?: () => void;
 }
 
 export function ChannelHeader({
@@ -22,6 +24,7 @@ export function ChannelHeader({
   actor,
   connected,
   encrypted,
+  onOpenDrawer,
   onLogout,
   onOpenSettings,
   onOpenProfile,
@@ -32,6 +35,17 @@ export function ChannelHeader({
   const t = useT();
   return (
     <header className="channel-header">
+      {onOpenDrawer && (
+        <button
+          type="button"
+          className="drawer-toggle"
+          aria-label={t('channelHeader.openDrawer')}
+          title={t('channelHeader.openDrawer')}
+          onClick={onOpenDrawer}
+        >
+          ☰
+        </button>
+      )}
       <div className="channel-info">
         <div className="channel-info-top">
           <span className="channel-name">

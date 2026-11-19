@@ -775,6 +775,8 @@ export default async function serverRoutes(fastify: FastifyInstance) {
           role: (itemProps?.role as string) ?? 'member',
           roleIds: roleIdsByActor.get(m.member.id) ?? [],
           avatarUrl: (memberProps?.avatarUrl as string | undefined) ?? null,
+          // Agents and services are marked (from the actor row, never claimed), like message authors.
+          ...(isSponsoredKind(m.member.kind) ? { kind: m.member.kind as 'agent' | 'service' } : {}),
         };
       });
     },

@@ -51,6 +51,9 @@ export const UI_STRINGS = {
   // Channel sidebar
   'channelSidebar.directMessages': 'Direct Messages',
   'channelSidebar.newMessage': '+ New message',
+  'channelSidebar.agents': 'Agents',
+  'channelSidebar.people': 'People',
+  'channelSidebar.encryptedPreview': '🔒 Encrypted message',
   'channelSidebar.friends': 'Friends',
   'channelSidebar.noConversations': 'No conversations yet',
   'channelSidebar.createChannel': '+ Create channel',
@@ -66,6 +69,7 @@ export const UI_STRINGS = {
 
   // Channel header
   'channelHeader.connected': 'connected',
+  'channelHeader.openDrawer': 'Conversations',
   'channelHeader.reconnecting': 'reconnecting...',
   'channelHeader.logout': 'Log out',
   'channelHeader.mentions': 'Mentions',
@@ -629,6 +633,7 @@ export const UI_STRINGS = {
   'dmConsent.loadFailed': "Couldn't load your message settings.",
   'dm.leave': 'Leave',
   'dm.block': 'Block',
+  'dm.moreOptions': 'Conversation options',
   'dm.confirmLeave': "Leave this conversation? You'll stop getting its messages.",
   'dm.confirmBlock': 'Block @{name}? They can no longer message or mention you.',
   'dm.left': '{name} left',

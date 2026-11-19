@@ -117,6 +117,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   );
   const { conversations, selectedDM, selectDM, startDM, accept, decline, leave, block } = useDMs();
   const e2e = useE2E();
+  // Phones: the conversation list is a drawer; picking a conversation closes it.
+  const [drawerClosed, setDrawerClosed] = useState(false);
+  // DM list previews, decrypted here (the sidebar never shows ciphertext).
+  const [dmPreviews, setDmPreviews] = useState<Record<string, string>>({});
   const {
     members,
     reload: reloadMembers,
@@ -386,10 +390,32 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     return () => document.removeEventListener('click', handler);
   }, [selectedServer, dmMode]);
 
+  useEffect(() => {
+    if (!e2e.ready) return;
+    let cancelled = false;
+    void (async () => {
+      const out: Record<string, string> = {};
+      for (const dm of conversations) {
+        const last = dm.lastMessage;
+        const partner = dm.participants.filter((p) => p.id !== actor.id);
+        if (!last?.properties?.encrypted || partner.length !== 1) continue;
+        try {
+          out[dm.id] = await e2e.decrypt(last.content, last.properties.iv as string, partner[0].id);
+        } catch {
+          /* leave it out: the sidebar shows the encrypted placeholder */
+        }
+      }
+      if (!cancelled) setDmPreviews(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversations, e2e.ready, e2e.decrypt, actor.id]);
+
   return (
     <EmbedHostProvider host={{ actor, onPreviewEmbed: openEmbedPreview }}>
       {!actor.emailVerified && <VerificationBanner />}
-      <div className="app-layout">
+      <div className={`app-layout ${drawerClosed ? 'drawer-closed' : ''}`}>
         <ServerSidebar
           servers={servers}
           selectedServerId={selectedServer?.id ?? null}
@@ -409,16 +435,19 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           channels={channels}
           selectedChannelId={selectedChannel?.id ?? null}
           conversations={conversations}
+          dmPreviews={dmPreviews}
           selectedDMId={selectedDM?.id ?? null}
           actor={actor}
           unreadCounts={unreadCounts}
           onSelectChannel={(id) => {
             selectChannel(id);
             closeView();
+            setDrawerClosed(true);
           }}
           onSelectDM={(id) => {
             selectDM(id);
             closeView();
+            setDrawerClosed(true);
           }}
           onCreateChannel={() => setShowCreateChannel(true)}
           onNewDM={() => setShowNewDM(true)}
@@ -509,6 +538,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onLogout={onLogout}
                 onOpenSettings={() => openView('settings')}
                 onOpenProfile={() => openView('settings')}
+                onOpenDrawer={() => setDrawerClosed(false)}
                 onOpenMentions={() => openView('mentions')}
                 onOpenPins={activeChannelId ? () => setShowPins((v) => !v) : undefined}
                 pinCount={pinnedIds.size || undefined}

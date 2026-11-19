@@ -784,6 +784,8 @@ export interface MemberView {
    *  Excludes the implicit @everyone role. */
   roleIds: string[];
   avatarUrl?: string | null;
+  /** Present only for agents and services, stamped by the server. */
+  kind?: 'agent' | 'service';
 }
 
 export async function getMembers(serverId: string): Promise<MemberView[]> {

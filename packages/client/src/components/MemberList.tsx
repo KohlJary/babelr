@@ -108,6 +108,13 @@ export function MemberList({
                   <span className="discover-name">
                     {member.displayName ?? member.preferredUsername}
                   </span>
+                  {member.kind && (
+                    <span className={`author-kind-badge author-kind-${member.kind}`}>
+                      {member.kind === 'service'
+                        ? t('agents.badgeService')
+                        : t('agents.badgeAgent')}
+                    </span>
+                  )}
                   <div className="member-role-chips">
                     {memberRoles.map((r) => (
                       <span

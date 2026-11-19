@@ -810,6 +810,20 @@ describe('6. Server-stamped provenance', () => {
     expect(agent.id).toBe(message.authorId);
   });
 
+  it('the member list marks agents (from the actor row) and only agents', async () => {
+    const { kohl, agent, serverId } = await houseWithAgent();
+    await addLittleGuy(kohl.cookie, agent.id, serverId);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/servers/${serverId}/members`,
+      headers: { cookie: kohl.cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const members = JSON.parse(res.body) as Array<{ id: string; kind?: string }>;
+    expect(members.find((m) => m.id === agent.id)?.kind).toBe('agent');
+    expect(members.find((m) => m.id === kohl.body.id)).not.toHaveProperty('kind');
+  });
+
   it('a person cannot pass as an agent either, and keeps real attachments', async () => {
     const kohl = await createTestUser(app, 'kohl');
     const { channelId } = await serverWithChannel(kohl.cookie);
