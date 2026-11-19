@@ -654,10 +654,27 @@ export default definePlugin({
       return rows[0]?.name ?? null;
     }
 
+    /** The account a name means: a local username, or a name a local account
+     * answers to (its profile's aliases, e.g. "kohl" for the owner). A name
+     * no account answers to stays as written. */
+    async function accountName(name: string): Promise<string> {
+      const n = name.toLowerCase();
+      const rows = (await db.execute(
+        sql`SELECT preferred_username AS name FROM actors
+            WHERE local = true AND (lower(preferred_username) = ${n}
+                                    OR properties->'aliases' @> ${JSON.stringify([n])}::jsonb)
+            ORDER BY (lower(preferred_username) = ${n}) DESC LIMIT 1`,
+      )) as unknown as { name: string }[];
+      return rows[0]?.name ?? n;
+    }
+
     async function approversOf(plan: Plan): Promise<string[]> {
       const owner = await ownerName(plan.serverId);
       const out = owner ? [owner] : [];
-      for (const n of plan.needsYesFrom) if (!out.some((o) => o.toLowerCase() === n)) out.push(n);
+      for (const raw of plan.needsYesFrom) {
+        const n = await accountName(raw);
+        if (!out.some((o) => o.toLowerCase() === n.toLowerCase())) out.push(n);
+      }
       return out;
     }
 
@@ -902,7 +919,7 @@ export default definePlugin({
             const owner = (await ownerName(plan.serverId))?.toLowerCase();
             const mine = actor.preferredUsername.toLowerCase();
             for (const n of removed) {
-              if (n !== mine && owner !== mine) {
+              if ((await accountName(n)).toLowerCase() !== mine && owner !== mine) {
                 throw new PlanError(`only ${n} or the server's owner can take ${n} off`, 403);
               }
             }

@@ -31,6 +31,7 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
   const [displayName, setDisplayName] = useState(actor.displayName ?? '');
   const [bio, setBio] = useState(actor.summary ?? '');
   const [avatarUrl, setAvatarUrl] = useState(actor.avatarUrl ?? '');
+  const [aliases, setAliases] = useState((actor.aliases ?? []).join(', '));
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -43,6 +44,10 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
         displayName: displayName || undefined,
         summary: bio || undefined,
         avatarUrl: avatarUrl || undefined,
+        aliases: aliases
+          .split(/[\s,]+/)
+          .map((n) => n.replace(/^@/, ''))
+          .filter(Boolean),
       });
       onUpdate(updated);
       setStatus(t('profile.saved'));
@@ -134,6 +139,18 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
             rows={3}
             style={{ resize: 'vertical', fontFamily: 'inherit' }}
           />
+        </div>
+
+        <div className="settings-field">
+          <label>{t('profile.aliases')}</label>
+          <input
+            type="text"
+            placeholder="kohl"
+            value={aliases}
+            onChange={(e) => setAliases(e.target.value)}
+            className="modal-input"
+          />
+          <p className="settings-hint">{t('profile.aliasesHint')}</p>
         </div>
 
         {status && (

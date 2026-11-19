@@ -22,5 +22,7 @@ export interface ActorProfile {
   totpEnabled: boolean;
   avatarUrl?: string | null;
   summary?: string | null;
+  /** Other names this account answers to, e.g. in a plan's approvers. */
+  aliases?: string[];
   createdAt: Date;
 }

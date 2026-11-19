@@ -230,6 +230,40 @@ describe('plans', () => {
     expect((await call('PATCH', `/plans/${slug}`, h.cass, { needsYesFrom: [] })).status).toBe(200);
   });
 
+  it('an approver named by an alias is that account', async () => {
+    const h = await house();
+    const profile = (who: Who, aliases: unknown) =>
+      app.inject({
+        method: 'PUT',
+        url: '/auth/profile',
+        headers: { cookie: who.cookie ?? '' },
+        payload: { aliases },
+      });
+    // Cass knows Kohl by another name; the plan names that one.
+    const { slug, phaseId } = await planWithPhase(h, { needsYesFrom: ['boss', 'cass'] });
+    let d = (await call('GET', `/plans/${slug}`, h.kohl)).json();
+    expect(d.approvers).toEqual(['kohl', 'boss', 'cass']); // no account answers to it yet
+
+    const set = await profile(h.kohl, ['Boss', '@nope!']);
+    expect(set.statusCode).toBe(400);
+    expect((await profile(h.kohl, ['Boss', 'kohl'])).statusCode).toBe(200);
+    expect(JSON.parse((await profile(h.kohl, ['boss'])).body).aliases).toEqual(['boss']);
+    // Another account's name or alias can't be taken.
+    expect((await profile(h.carol, ['boss'])).statusCode).toBe(409);
+    expect((await profile(h.carol, ['kohl'])).statusCode).toBe(409);
+
+    d = (await call('GET', `/plans/${slug}`, h.kohl)).json();
+    expect(d.approvers).toEqual(['kohl', 'cass']);
+    await call('POST', `/phases/${phaseId}/propose`, h.carol);
+    await call('POST', `/phases/${phaseId}/approve`, h.kohl);
+    d = (await call('POST', `/phases/${phaseId}/approve`, h.cass)).json();
+    expect(d.phases[0].status).toBe('approved');
+    // The alias's owner can take the name off the plan.
+    expect((await call('PATCH', `/plans/${slug}`, h.kohl, { needsYesFrom: ['cass'] })).status).toBe(
+      200,
+    );
+  });
+
   it('changing what an approved phase says voids the approval', async () => {
     const h = await house();
     const { slug, phaseId, itemId } = await planWithPhase(h);

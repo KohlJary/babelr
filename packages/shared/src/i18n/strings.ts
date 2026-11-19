@@ -209,6 +209,9 @@ export const UI_STRINGS = {
   'profile.displayName': 'Display name',
   'profile.bio': 'Bio',
   'profile.bioPlaceholder': 'Tell people about yourself',
+  'profile.aliases': 'Also known as',
+  'profile.aliasesHint':
+    'Other names people use for you, comma-separated. A plan that names one of them as an approver means you.',
   'profile.avatar': 'Avatar',
   'profile.uploadAvatar': 'Upload avatar',
   'profile.preferredLanguage': 'Preferred language',

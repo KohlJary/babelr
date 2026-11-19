@@ -40,6 +40,7 @@ function toProfile(actor: typeof actors.$inferSelect): ActorProfile {
     totpEnabled: actor.totpEnabled ?? false,
     avatarUrl: (props?.avatarUrl as string) ?? null,
     summary: actor.summary,
+    aliases: Array.isArray(props?.aliases) ? (props.aliases as string[]) : [],
     createdAt: actor.createdAt,
   };
 }
@@ -382,22 +383,58 @@ export default async function authRoutes(fastify: FastifyInstance) {
       summary?: string;
       avatarUrl?: string;
       preferredLanguage?: string;
+      aliases?: unknown;
     };
   }>('/auth/profile', async (request, reply) => {
     if (!request.actor) {
       return reply.status(401).send({ error: 'Not authenticated' });
     }
 
-    const { displayName, summary, avatarUrl, preferredLanguage } = request.body;
+    const { displayName, summary, avatarUrl, preferredLanguage, aliases } = request.body;
     const updates: Record<string, unknown> = {};
+    const nextProps: Record<string, unknown> = {
+      ...((request.actor.properties as Record<string, unknown>) ?? {}),
+    };
 
     if (displayName !== undefined) updates.displayName = displayName || null;
     if (summary !== undefined) updates.summary = summary || null;
     if (preferredLanguage !== undefined) updates.preferredLanguage = preferredLanguage;
 
     if (avatarUrl !== undefined) {
-      const currentProps = (request.actor.properties as Record<string, unknown>) ?? {};
-      updates.properties = { ...currentProps, avatarUrl: avatarUrl || null };
+      nextProps.avatarUrl = avatarUrl || null;
+      updates.properties = nextProps;
+    }
+
+    // Other names this account answers to (Plans resolves an approver named by
+    // an alias to this account). Local usernames and other accounts' aliases
+    // can't be taken.
+    if (aliases !== undefined) {
+      const want = Array.isArray(aliases) ? aliases : null;
+      if (
+        !want ||
+        want.length > 8 ||
+        !want.every((n) => typeof n === 'string' && /^[a-zA-Z0-9_]{3,32}$/.test(n))
+      ) {
+        return reply
+          .status(400)
+          .send({ error: 'aliases must be up to 8 names (letters, digits, _; 3-32 long)' });
+      }
+      const mine = request.actor.preferredUsername.toLowerCase();
+      const list = [...new Set((want as string[]).map((n) => n.toLowerCase()))].filter(
+        (n) => n !== mine,
+      );
+      for (const n of list) {
+        const taken = (await db.execute(
+          sql`SELECT 1 FROM actors WHERE local = true AND id <> ${request.actor.id}
+              AND (lower(preferred_username) = ${n}
+                   OR properties->'aliases' @> ${JSON.stringify([n])}::jsonb) LIMIT 1`,
+        )) as unknown as unknown[];
+        if (taken.length) {
+          return reply.status(409).send({ error: `${n} is another account's name` });
+        }
+      }
+      nextProps.aliases = list;
+      updates.properties = nextProps;
     }
 
     const federatableFieldsTouched =

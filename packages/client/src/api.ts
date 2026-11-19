@@ -667,6 +667,7 @@ export async function updateProfile(profile: {
   summary?: string;
   avatarUrl?: string;
   preferredLanguage?: string;
+  aliases?: string[];
 }): Promise<ActorProfile> {
   return apiFetch('/auth/profile', {
     method: 'PUT',
