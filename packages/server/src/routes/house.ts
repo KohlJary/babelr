@@ -8,6 +8,7 @@ import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
 import type { HouseIntro, HouseMember, HouseView, NowLine } from '@babelr/shared';
 import { isSponsoredKind } from '../actor-kind.ts';
+import { decideOpen, findSharedDM, requestFor } from '../dm-consent.ts';
 
 /**
  * The House: the members who live where you are, daemons first.
@@ -112,6 +113,18 @@ export default async function houseRoutes(fastify: FastifyInstance) {
       : [];
     const sponsorById = new Map(sponsors.map((s) => [s.id, s]));
 
+    // Would a message from me reach them? (An open DM already, or their policy
+    // opens one.) The house only offers "Talk" when it would.
+    const canTalk = new Map<string, boolean>();
+    for (const a of [...agentRows, ...peopleRows]) {
+      if (a.id === me.id) continue;
+      const dm = await findSharedDM(db, me, a);
+      // A DM that's still a pending (or declined) request doesn't reach them.
+      const req = dm ? await requestFor(db, dm.id) : null;
+      const open = !!dm && (!req || req.state === 'accepted');
+      canTalk.set(a.id, open || (!dm && (await decideOpen(db, me, a)) === 'open'));
+    }
+
     const view = (a: Actor): HouseMember => {
       const sp = a.sponsorId ? sponsorById.get(a.sponsorId) : undefined;
       const sigil = props(a).sigil;
@@ -124,6 +137,7 @@ export default async function houseRoutes(fastify: FastifyInstance) {
         kind: a.kind as HouseMember['kind'],
         sigil: isSponsoredKind(a.kind) && typeof sigil === 'string' ? sigil : null,
         now: isSponsoredKind(a.kind) ? nowOf(a) : null,
+        canTalk: canTalk.get(a.id) ?? false,
         sponsor: sp
           ? { id: sp.id, preferredUsername: sp.preferredUsername, displayName: sp.displayName }
           : null,

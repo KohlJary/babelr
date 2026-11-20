@@ -101,6 +101,12 @@ body:has(.tour-guide) .house {
   color: var(--house-dim);
   max-width: 38rem;
 }
+.house-lede-small {
+  font-size: 1rem;
+}
+.house-drawer {
+  display: none;
+}
 .house-mast-actions {
   display: flex;
   flex-wrap: wrap;
@@ -625,6 +631,20 @@ body:has(.tour-guide) .house {
 
 /* ---- phones: one card at a time, swiped ---- */
 @media (max-width: 768px) {
+  .house-drawer {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--house-line);
+    background: transparent;
+    color: var(--house-ink);
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
   .house {
     padding-top: 1.5rem;
     gap: 2rem;

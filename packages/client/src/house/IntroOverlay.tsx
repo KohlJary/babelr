@@ -192,7 +192,7 @@ function TourGuide({ openView, startDM }: TourProps) {
       <Speaker m={m} by={s.by} />
       <p className="tour-text">{s.text}</p>
       <div className="tour-actions">
-        {m && m.id && (
+        {m && m.canTalk && (
           <button
             type="button"
             className="house-btn"

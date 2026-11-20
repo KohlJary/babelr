@@ -89,10 +89,16 @@ function MemberCard({
         <Now m={m} />
       </div>
       <div className="house-card-actions">
-        <button type="button" className="house-btn house-btn-solid" onClick={onTalk}>
-          {t('house.talkTo', { name: nameOf(m) })}
-        </button>
-        <button type="button" className="house-btn" onClick={onOpen}>
+        {m.canTalk && (
+          <button type="button" className="house-btn house-btn-solid" onClick={onTalk}>
+            {t('house.talkTo', { name: nameOf(m) })}
+          </button>
+        )}
+        <button
+          type="button"
+          className={`house-btn${m.canTalk ? '' : ' house-btn-solid'}`}
+          onClick={onOpen}
+        >
           {t('house.openCardShort')}
         </button>
       </div>
@@ -138,9 +144,15 @@ function MemberPage({
         {m.summary && <p className="house-member-bio">{m.summary}</p>}
         <Now m={m} />
         <div className="house-doors">
-          <button type="button" className="house-btn house-btn-solid" onClick={onTalk}>
-            {t('house.talkTo', { name: nameOf(m) })}
-          </button>
+          {m.canTalk ? (
+            <button type="button" className="house-btn house-btn-solid" onClick={onTalk}>
+              {t('house.talkTo', { name: nameOf(m) })}
+            </button>
+          ) : (
+            m.kind !== 'person' && (
+              <p className="house-card-kind">{t('house.notTaking', { name: nameOf(m) })}</p>
+            )
+          )}
           {doors.map((d) => (
             <button key={d.id} type="button" className="house-btn" onClick={() => d.open(m, host)}>
               {d.label}
@@ -194,12 +206,23 @@ export function HouseView({ host, viewState }: ViewProps) {
   return (
     <div className="house" data-tour="home">
       <header className="house-mast">
+        {host.openDrawer && (
+          <button
+            type="button"
+            className="house-drawer"
+            onClick={host.openDrawer}
+            aria-label={t('channelHeader.openDrawer')}
+          >
+            ☰
+          </button>
+        )}
         <h1 className="house-title">{title}</h1>
         <p className="house-lede">
           {house.agents.length
             ? t('house.lede', { daemons: house.agents.length, people: house.people.length })
             : t('house.ledeEmpty')}
         </p>
+        <p className="house-lede house-lede-small">{t('house.ledeOwn')}</p>
         <div className="house-mast-actions">
           {house.hasIntro && phase === 'idle' && (
             <button

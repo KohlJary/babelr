@@ -91,7 +91,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   useEffect(() => {
     // Someone who lives in or visits a house with daemons lands on the house.
     void loadHouse().then(() => {
-      if (currentHouse()?.agents.length) setActiveViewId((v) => v ?? 'house');
+      if (currentHouse()?.agents.length) {
+        setActiveViewId((v) => v ?? 'house');
+        setDrawerClosed(true);
+      }
     });
     void maybeAutoplay();
     const id = setInterval(() => void loadHouse(true), 60_000);
@@ -513,6 +516,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 closeView,
                 onActorUpdate,
                 startDM: openDMWith,
+                openDrawer: () => setDrawerClosed(false),
               };
               return v.isAvailable(hostCheck);
             })
@@ -554,6 +558,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               closeView,
               onActorUpdate,
               startDM: openDMWith,
+              openDrawer: () => setDrawerClosed(false),
             };
             return createElement(def.View, { host: hostCtx, viewState });
           })()}

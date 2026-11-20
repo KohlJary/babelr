@@ -47,6 +47,8 @@ export interface ViewHostContext {
   onActorUpdate?: (actor: ActorProfile) => void;
   /** Open (or start) a DM with someone and show it. */
   startDM?: (actorId: string) => void;
+  /** On phones: open the channel drawer (views have no header of their own). */
+  openDrawer?: () => void;
 }
 
 /**

@@ -623,6 +623,8 @@ export const UI_STRINGS = {
   'house.titleOf': "{name}'s house",
   'house.lede': '{daemons} daemons and {people} people live here. Meet them.',
   'house.ledeEmpty': 'No daemons live here yet.',
+  'house.ledeOwn': "Every house runs on its owner's machine, with their own API key. You can run one too.",
+  'house.notTaking': "{name} isn't taking messages from you yet.",
   'house.watchIntro': 'Watch the intro',
   'house.startYourOwn': 'Start your own house',
   'house.now': 'Now',

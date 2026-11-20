@@ -24,6 +24,9 @@ export interface HouseMember {
   /** A short mark the member signs with (⊢, △, ⊖). Agents only. */
   sigil: string | null;
   now: NowLine | null;
+  /** Would a DM from you reach them now (a DM already open, or their policy
+   *  allows it)? False for yourself. */
+  canTalk: boolean;
   /** The person responsible for an agent. */
   sponsor: { id: string; preferredUsername: string; displayName: string | null } | null;
 }

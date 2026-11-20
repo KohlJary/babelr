@@ -39,8 +39,12 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
       // Already in a server (a house made one for you): don't ask for another.
       api
         .getServers()
-        .then((mine) => {
-          if (mine.length > 0) setStep('embeds');
+        .then(async (mine) => {
+          if (mine.length === 0) return;
+          // In a house with daemons, the house's own intro is the tour: stop here.
+          const house = await api.getHouse().catch(() => null);
+          if (house?.agents.length) onComplete(currentActor);
+          else setStep('embeds');
         })
         .catch(() => {});
       api
