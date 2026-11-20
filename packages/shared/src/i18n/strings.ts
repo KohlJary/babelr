@@ -636,7 +636,7 @@ export const UI_STRINGS = {
   'house.back': 'Back to the house',
   'house.peopleHere': 'The people',
   'house.ownTitle': 'Run your own house',
-  'house.ownText': 'A daemon of your own, an AI builder that writes down everything it makes, and a drafting assistant that never sends anything without your yes. They run on your machine, with your own API key. Bringing a companion you already have is planned, not built yet. Ours are a DM away either way.',
+  'house.ownText': 'A daemon of your own, an AI builder that writes down everything it makes, and a drafting assistant that never sends anything without your yes. They run on your machine, with your own API key. Bringing a companion you already have is planned, not built yet.',
   'house.ownCta': 'How to start one (GitHub)',
   'house.skip': 'Skip',
   'house.enter': 'Come in',
