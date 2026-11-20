@@ -1179,6 +1179,42 @@ export default definePlugin({
       },
     );
 
+    // Undo a misclick: an approver takes a done or approved phase back to
+    // proposed. Its approvals are cleared, so it needs a fresh yes; the
+    // event log keeps the whole story (Kohl, 2026-11-20: two phases marked
+    // done by mistake had no way back).
+    fastify.post<{ Params: { id: string }; Body: { reason?: unknown } }>(
+      '/phases/:id/reopen',
+      async (request, reply) => {
+        try {
+          const actor = me(request);
+          const { plan, phase } = await phaseFor(actor, request.params.id);
+          const approvers = await approversOf(plan);
+          if (!approvers.some((n) => n.toLowerCase() === actor.preferredUsername.toLowerCase())) {
+            throw new PlanError('only an approver can reopen a phase', 403);
+          }
+          if (phase.status !== 'done' && phase.status !== 'approved') {
+            throw new PlanError(`a ${phase.status} phase can't be reopened`, 409);
+          }
+          const reason =
+            request.body?.reason === undefined ? null : text(request.body.reason, 'text');
+          await db.execute(sql`DELETE FROM plugin_plans_approvals WHERE phase_id = ${phase.id}`);
+          await setPhase(
+            plan,
+            phase,
+            actor,
+            surfaceOf(request.headers, actor),
+            'proposed',
+            'phase-reopened',
+            { from: phase.status, ...(reason ? { reason } : {}) },
+          );
+          return await detail(plan, actor);
+        } catch (err) {
+          return fail(reply, err);
+        }
+      },
+    );
+
     // ── items ──────────────────────────────────────────────────────────
 
     /** Move an item to another plan (and optionally a phase of it). History

@@ -214,6 +214,22 @@ describe('plans', () => {
     void slug;
   });
 
+  it('an approver can reopen a phase marked done or approved by mistake; it needs a fresh yes', async () => {
+    const h = await house();
+    const { phaseId } = await planWithPhase(h);
+    await call('POST', `/phases/${phaseId}/propose`, h.carol);
+    expect((await call('POST', `/phases/${phaseId}/reopen`, h.kohl)).status).toBe(409); // only done/approved
+    await call('POST', `/phases/${phaseId}/approve`, h.kohl);
+    await call('POST', `/phases/${phaseId}/done`, h.kohl, {});
+    expect((await call('POST', `/phases/${phaseId}/reopen`, h.carol)).status).toBe(403); // not an approver
+    const back = (await call('POST', `/phases/${phaseId}/reopen`, h.kohl)).json();
+    expect(back.phases[0]).toMatchObject({ status: 'proposed', approvals: [] });
+    const again = (await call('POST', `/phases/${phaseId}/approve`, h.kohl)).json();
+    expect(again.phases[0].status).toBe('approved');
+    const fromApproved = (await call('POST', `/phases/${phaseId}/reopen`, h.kohl)).json();
+    expect(fromApproved.phases[0]).toMatchObject({ status: 'proposed', approvals: [] });
+  });
+
   it('a plan that concerns Cass needs her yes too, and only she or the owner can drop her', async () => {
     const h = await house();
     const { slug, phaseId } = await planWithPhase(h, { needsYesFrom: ['cass'] });

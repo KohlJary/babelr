@@ -1340,6 +1340,16 @@ function PhaseCard({
             Mark phase done
           </button>
         )}
+        {plan.canApprove && (phase.status === 'approved' || phase.status === 'done') && (
+          <button
+            type="button"
+            className="plans-secondary"
+            title="Back to proposed: its approvals are cleared and it needs a fresh yes"
+            onClick={() => void act(`/phases/${phase.id}/reopen`, 'POST', {})}
+          >
+            Reopen
+          </button>
+        )}
       </div>
     </section>
   );
@@ -1667,6 +1677,8 @@ function describe(e: PlanEvent, plan: PlanDetail): string {
       return `declined "${phase ?? ''}": ${d.reason as string}`;
     case 'phase-done':
       return `marked "${phase ?? ''}" done`;
+    case 'phase-reopened':
+      return `reopened "${phase ?? ''}" (was ${d.from as string}); it needs a fresh yes`;
     case 'approval-void':
       return `"${phase ?? ''}" changed after approval, so it needs approval again`;
     case 'item-added':
