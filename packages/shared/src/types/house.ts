@@ -51,6 +51,8 @@ export interface TourStep {
   /** What to point at: 'rail', 'home', 'member:<username>', 'sidebar',
    *  'start-your-own', or a built-in view id to open ('wiki', 'plans'). */
   target?: string;
+  /** State for the view it opens, e.g. { "slug": "<plan>" } for plans. */
+  state?: Record<string, unknown>;
 }
 
 /** A house's intro: written by its members, each line signed by who wrote it. */

@@ -169,7 +169,7 @@ function TourGuide({ openView, startDM }: TourProps) {
     const target = s.target;
     if (target.startsWith('member:')) open.current('house', { member: target.slice(7) });
     else if (['home', 'start-your-own', 'rail'].includes(target)) open.current('house');
-    else if (target !== 'sidebar') open.current(target);
+    else if (target !== 'sidebar') open.current(target, s.state ?? {});
     const lit = () => {
       document.querySelectorAll('.tour-lit').forEach((el) => el.classList.remove('tour-lit'));
       document.querySelectorAll(`[data-tour="${CSS.escape(target)}"]`).forEach((el) => {
