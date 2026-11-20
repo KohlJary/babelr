@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // The client publishes this browser's key only when the account has none on the server.
 import { describe, expect, it, vi } from 'vitest';
-import { publishIfMissing } from '../../../client/src/hooks/publishKey';
+import { publishIfMissing } from '@babelr/shared';
 
 const key = {} as CryptoKey;
 const jwk = { kty: 'EC', crv: 'P-256', x: 'x', y: 'y' } as JsonWebKey;

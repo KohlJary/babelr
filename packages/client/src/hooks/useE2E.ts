@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { publishIfMissing } from './publishKey';
+import { publishIfMissing } from '@babelr/shared';
 import type { MessageWithAuthor } from '@babelr/shared';
 import {
   generateKeyPair,
