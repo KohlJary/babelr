@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { publishIfMissing } from './publishKey';
 import type { MessageWithAuthor } from '@babelr/shared';
 import {
   generateKeyPair,
@@ -41,6 +42,17 @@ export function useE2E(): E2EContext {
           await saveKeyPair(keyPair);
           const publicJwk = await exportPublicKeyJWK(keyPair.publicKey);
           await api.setPublicKey(publicJwk);
+        } else {
+          // The keypair lives in this browser, not in the account: a second account
+          // here, or an account on a re-created server, has no key on the server yet,
+          // and nobody (a daemon included) can encrypt a reply to it. Publish ours
+          // then. Never replace a key that's there: another device may hold it.
+          await publishIfMissing(keyPair.publicKey, {
+            getMe: api.getMe,
+            getUserPublicKey: api.getUserPublicKey,
+            setPublicKey: api.setPublicKey,
+            exportJwk: exportPublicKeyJWK,
+          });
         }
         privateKeyRef.current = keyPair.privateKey;
         setReady(true);
@@ -131,3 +143,4 @@ export function useE2E(): E2EContext {
 
   return { ready, encrypt, decrypt, decryptMsg, decryptMsgs };
 }
+
