@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { createElement, useEffect, useState } from 'react';
 import { registerView, type ViewProps } from './registry';
+import { HouseView } from '../house/HouseView';
 import { EventsPanel } from '../components/EventsPanel';
 import { WikiPanel } from '../components/WikiPanel';
 import FilesPanel from '../components/FilesPanel';
@@ -157,6 +158,14 @@ function SettingsView({ host }: ViewProps) {
 }
 
 export function registerBuiltinViews(): void {
+  registerView({
+    id: 'house',
+    label: 'The House',
+    // The rail's own button opens it; it isn't a sidebar entry.
+    isAvailable: () => false,
+    View: HouseView,
+  });
+
   registerView({
     id: 'calendar',
     label: 'Calendar',

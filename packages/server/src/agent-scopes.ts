@@ -35,6 +35,7 @@ export const AGENT_SCOPES = [
   'plugins:read',
   'plugins:write',
   'keys:write',
+  'status:write',
 ] as const;
 
 /**
@@ -142,6 +143,8 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   // that arrive after it.
   'GET /users/:userId/publickey': { scope: null, action: 'key.read' },
   'PUT /auth/publickey': { scope: 'keys:write', action: 'key.publish' },
+  // What the agent says it's doing now, in its own words (routes/house.ts).
+  'PUT /me/now': { scope: 'status:write', action: 'agent.now' },
 
   // Saying no and leaving: any token (see the header comment).
   'POST /dms/:dmId/leave': { scope: null, action: 'dm.leave' },

@@ -5,6 +5,8 @@ import * as api from '../api';
 import { useServers } from '../hooks/useServers';
 import { useChannels } from '../hooks/useChannels';
 import { useDMs } from '../hooks/useDMs';
+import { IntroOverlay } from '../house/IntroOverlay';
+import { loadHouse, maybeAutoplay, useHouseStore } from '../house/store';
 import { useChat } from '../hooks/useChat';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useTranslation } from '../hooks/useTranslation';
@@ -84,6 +86,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     setActiveViewId(null);
     setViewState({});
   };
+  // The House: members on the rail, the home view, and the intro on a first visit.
+  const { house } = useHouseStore();
+  useEffect(() => {
+    void maybeAutoplay();
+    const id = setInterval(() => void loadHouse(true), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const voice = useVoice(actor.id);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [embedSidebar, setEmbedSidebar] = useState<EmbedSidebarTarget | null>(null);
@@ -116,6 +125,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     dmMode ? null : (selectedServer?.id ?? null),
   );
   const { conversations, selectedDM, selectDM, startDM, accept, decline, leave, block } = useDMs();
+  // Talk to a house member: open (or start) the DM and show it.
+  const openDMWith = (actorId: string) => {
+    void (async () => {
+      setDmMode(true);
+      await startDM(actorId);
+      closeView();
+      setDrawerClosed(true);
+    })();
+  };
   const e2e = useE2E();
   // Phones: the conversation list is a drawer; picking a conversation closes it.
   const [drawerClosed, setDrawerClosed] = useState(false);
@@ -425,6 +443,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             selectServer(id);
           }}
           onSelectDMs={() => setDmMode(true)}
+          houseActive={activeViewId === 'house'}
+          houseMembers={house?.agents ?? []}
+          onOpenHouse={(member) => {
+            openView('house', member ? { member } : {});
+            setDrawerClosed(true);
+          }}
           onCreateServer={() => setShowCreateServer(true)}
           onOpenManual={() => openView('manual')}
         />
@@ -484,6 +508,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 openEmbedPreview,
                 closeView,
                 onActorUpdate,
+                startDM: openDMWith,
               };
               return v.isAvailable(hostCheck);
             })
@@ -524,6 +549,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               openEmbedPreview,
               closeView,
               onActorUpdate,
+              startDM: openDMWith,
             };
             return createElement(def.View, { host: hostCtx, viewState });
           })()}
@@ -816,6 +842,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             );
           })()}
       </div>
+      <IntroOverlay openView={openView} startDM={openDMWith} />
     </EmbedHostProvider>
   );
 }

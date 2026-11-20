@@ -22,6 +22,7 @@ import translateRoutes from '../routes/translate.ts';
 import fileRoutes from '../routes/files.ts';
 import auditRoutes from '../routes/audit.ts';
 import agentRoutes from '../routes/agents.ts';
+import houseRoutes from '../routes/house.ts';
 import serverAgentRoutes from '../routes/server-agents.ts';
 import actorRoutes from '../federation/actor.ts';
 import embedRoutes from '../routes/embeds.ts';
@@ -133,6 +134,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
   await app.register(fileRoutes);
   await app.register(auditRoutes);
+  await app.register(houseRoutes);
   await app.register(agentRoutes);
   await app.register(serverAgentRoutes);
   if (opts.actorProfiles) {

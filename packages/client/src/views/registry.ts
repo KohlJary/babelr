@@ -45,6 +45,8 @@ export interface ViewHostContext {
    *  Used by settings/profile views that modify displayName, language,
    *  avatar, etc. */
   onActorUpdate?: (actor: ActorProfile) => void;
+  /** Open (or start) a DM with someone and show it. */
+  startDM?: (actorId: string) => void;
 }
 
 /**

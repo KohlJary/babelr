@@ -1,0 +1,664 @@
+/* SPDX-License-Identifier: MIT */
+/*
+ * The House. One bold thing: each daemon's card takes its colour from its
+ * own face, blown up and dimmed behind it, so three cards are three worlds.
+ * Everything else stays quiet. The one accent is the red thread.
+ */
+:root {
+  --house-night: #0c0d10;
+  --house-ink: #ece8df;
+  --house-dim: #a29d93;
+  --house-line: rgba(236, 232, 223, 0.14);
+  --house-thread: #d6342c;
+  --house-now: #46d39a;
+}
+
+.house {
+  min-height: 100%;
+  overflow-y: auto;
+  background:
+    radial-gradient(1200px 500px at 20% -10%, rgba(214, 52, 44, 0.07), transparent 60%),
+    var(--house-night);
+  color: var(--house-ink);
+  padding: 2.5rem clamp(1rem, 4vw, 3.5rem) 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
+}
+.house > * {
+  flex-shrink: 0;
+}
+/* room under the tour guide, so it never covers what it's pointing at */
+body:has(.tour-guide) .house {
+  padding-bottom: 15rem;
+}
+.house-loading {
+  min-height: 60vh;
+}
+
+.house-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--house-line);
+  background: transparent;
+  color: var(--house-ink);
+  font: inherit;
+  font-size: 0.95rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.house-btn:hover {
+  border-color: rgba(236, 232, 223, 0.4);
+}
+.house-btn-solid {
+  background: var(--house-ink);
+  color: var(--house-night);
+  border-color: var(--house-ink);
+  font-weight: 650;
+}
+.house-btn-solid:hover {
+  background: #fff;
+}
+.house-btn:focus-visible,
+.house-link:focus-visible,
+.house-card-face:focus-visible {
+  outline: 2px solid var(--house-thread);
+  outline-offset: 3px;
+}
+.house-link {
+  background: none;
+  border: none;
+  color: var(--house-dim);
+  font: inherit;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+/* ---- mast ---- */
+.house-mast {
+  max-width: 46rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.house-title {
+  margin: 0;
+  font-size: clamp(2.6rem, 6vw, 4.6rem);
+  line-height: 0.95;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.house-lede {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--house-dim);
+  max-width: 38rem;
+}
+.house-mast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+/* ---- the cards ---- */
+.house-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
+}
+.house-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid var(--house-line);
+  background: #15161a;
+  min-height: 30rem;
+  animation: house-deal 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--deal, 0) * 110ms);
+}
+/* the card's own colours: its face, huge and dim, behind everything */
+.house-card-wash,
+.house-member .house-card-wash {
+  position: absolute;
+  inset: -20%;
+  z-index: -1;
+  background-image: var(--face);
+  background-size: cover;
+  background-position: center;
+  filter: blur(48px) saturate(1.4) brightness(0.42);
+  transform: scale(1.1);
+}
+.house-card-sigil {
+  position: absolute;
+  top: -0.6rem;
+  right: 0.6rem;
+  font-size: 8.5rem;
+  line-height: 1;
+  font-weight: 300;
+  color: var(--house-ink);
+  opacity: 0.2;
+  pointer-events: none;
+  user-select: none;
+}
+.house-card-face {
+  display: block;
+  margin: 1.25rem 1.25rem 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.house-face {
+  display: block;
+  object-fit: cover;
+  background: #222;
+}
+.house-face-card {
+  width: 9rem;
+  height: 9rem;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--house-line),
+    0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.house-face-small {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+}
+.house-face-big {
+  width: min(22rem, 70vw);
+  height: min(22rem, 70vw);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--house-line),
+    0 30px 80px rgba(0, 0, 0, 0.55);
+}
+.house-face-blank {
+  display: grid;
+  place-items: center;
+  font-size: 2.5rem;
+  color: var(--house-dim);
+}
+.house-face-small.house-face-blank {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.server-sidebar.tour-lit {
+  outline-offset: -3px;
+  border-radius: 0;
+}
+.house-card-body {
+  padding: 1.1rem 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+.house-card-name {
+  margin: 0;
+  font-size: 2.1rem;
+  font-weight: 820;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+.house-card-kind {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--house-dim);
+}
+.house-card-bio {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  max-width: 60ch;
+  overflow-wrap: anywhere;
+}
+.house-now {
+  margin: auto 0 0;
+  padding-top: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+.house-now-dot {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--house-now);
+  box-shadow: 0 0 0 4px rgba(70, 211, 154, 0.18);
+  transform: translateY(-0.05rem);
+}
+.house-now-old {
+  color: var(--house-dim);
+}
+.house-now-old .house-now-dot {
+  background: var(--house-dim);
+  box-shadow: none;
+}
+.house-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 1.25rem;
+}
+
+@keyframes house-deal {
+  from {
+    opacity: 0;
+    transform: translateY(2.5rem) rotate(calc(-4deg + var(--deal, 0) * 3deg));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- one member's card, opened ---- */
+.house-member {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid var(--house-line);
+  padding: clamp(1.25rem, 4vw, 3rem);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  align-items: center;
+  min-height: 70vh;
+}
+.house-back {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--house-line);
+  color: var(--house-ink);
+  border-radius: 999px;
+  min-height: 40px;
+  padding: 0 1rem;
+  cursor: pointer;
+  font: inherit;
+}
+.house-member-face {
+  position: relative;
+  margin-top: 2rem;
+}
+.house-member-sigil {
+  position: absolute;
+  right: -1.5rem;
+  bottom: -1rem;
+  font-size: 7rem;
+  line-height: 1;
+  color: var(--house-ink);
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+}
+.house-member-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.house-member-name {
+  margin: 0;
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 860;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+.house-member-bio {
+  margin: 0.5rem 0 0;
+  font-size: 1.2rem;
+  line-height: 1.55;
+  max-width: 55ch;
+}
+.house-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+/* ---- people ---- */
+.house-section-title {
+  margin: 0 0 0.9rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--house-dim);
+}
+.house-people ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.house-people button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  padding: 0.25rem 1rem 0.25rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--house-line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--house-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ---- start your own ---- */
+.house-own {
+  border-top: 1px solid var(--house-line);
+  padding-top: 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-width: 44rem;
+  align-items: flex-start;
+}
+.house-own-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 820;
+  letter-spacing: -0.03em;
+}
+.house-own-text {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.55;
+  color: var(--house-dim);
+}
+
+/* ---- the rail ---- */
+.server-icon.house-icon {
+  color: var(--house-ink);
+}
+.server-icon.house-icon.active {
+  background: var(--house-thread);
+  color: #fff;
+}
+.server-icon.house-member-icon {
+  position: relative;
+  overflow: visible;
+}
+.server-icon.house-member-icon .server-icon-img {
+  border-radius: 50%;
+}
+.house-member-live {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--house-now);
+  border: 2px solid #111;
+}
+
+/* ---- act 1: the prologue ---- */
+.intro-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: radial-gradient(900px 600px at 50% 30%, #15161b, #060607);
+  color: var(--house-ink);
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px))
+    env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px));
+}
+.intro-stage > * {
+  position: relative;
+}
+/* the room takes the colour of whoever's talking */
+.intro-stage > .intro-wash {
+  position: absolute;
+  inset: -15%;
+  background-image: var(--face);
+  background-size: cover;
+  background-position: center;
+  filter: blur(90px) saturate(1.5) brightness(0.3);
+  animation: intro-wash 1.6s ease both;
+  pointer-events: none;
+}
+@keyframes intro-wash {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.intro-room {
+  flex: 1;
+  overflow-y: auto;
+  width: min(46rem, 100%);
+  margin: 0 auto;
+  padding: 3rem 0 2rem;
+}
+.intro-channel {
+  margin: 0 0 2.5rem;
+  color: var(--house-dim);
+  font-size: 0.95rem;
+}
+.intro-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+.intro-line {
+  transition: opacity 600ms ease;
+}
+.intro-line-past {
+  opacity: 0.42;
+}
+.intro-speaker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+}
+.intro-face {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #222;
+  flex: none;
+}
+.intro-sigil {
+  color: var(--house-dim);
+  font-weight: 400;
+}
+.intro-text {
+  margin: 0.55rem 0 0 2.6rem;
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  line-height: 1.55;
+  max-width: 38rem;
+}
+.intro-caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--house-thread);
+  animation: intro-blink 1s steps(2) infinite;
+}
+@keyframes intro-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.intro-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  width: min(46rem, 100%);
+  margin: 0 auto;
+  padding: 1rem 0 1.5rem;
+  border-top: 1px solid var(--house-line);
+}
+.intro-credit {
+  color: var(--house-dim);
+  font-size: 0.85rem;
+}
+.intro-foot-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* ---- act 2: the tour ---- */
+.tour-guide {
+  position: fixed;
+  z-index: 1500;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(48rem, calc(100vw - 2rem));
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid var(--house-line);
+  border-top: 2px solid var(--house-thread);
+  background: rgba(12, 13, 16, 0.94);
+  backdrop-filter: blur(12px);
+  color: var(--house-ink);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.tour-text {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.55;
+}
+.tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.tour-actions .house-link {
+  margin-left: auto;
+}
+.tour-resume {
+  position: fixed;
+  z-index: 1500;
+  right: calc(1rem + env(safe-area-inset-right, 0px));
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+.tour-lit {
+  outline: 2px solid var(--house-thread) !important;
+  outline-offset: 4px;
+  border-radius: 12px;
+  animation: tour-lit 1.4s ease-out 1;
+}
+@keyframes tour-lit {
+  from {
+    box-shadow: 0 0 0 0 rgba(214, 52, 44, 0.7);
+  }
+  to {
+    box-shadow: 0 0 0 18px rgba(214, 52, 44, 0);
+  }
+}
+
+/* ---- act 3: the end ---- */
+.intro-end {
+  align-items: center;
+  justify-content: center;
+}
+.intro-end-card {
+  width: min(40rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.intro-end-text {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.5vw, 2.2rem);
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.intro-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- phones: one card at a time, swiped ---- */
+@media (max-width: 768px) {
+  .house {
+    padding-top: 1.5rem;
+    gap: 2rem;
+  }
+  .house-cards {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 1rem;
+    margin: 0 calc(-1 * clamp(1rem, 4vw, 3.5rem));
+    padding: 0 clamp(1rem, 4vw, 3.5rem) 0.5rem;
+  }
+  .house-card {
+    flex: 0 0 86%;
+    scroll-snap-align: center;
+    min-height: 27rem;
+  }
+  .house-member {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+  .house-member-face {
+    margin-top: 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .house-card,
+  .tour-lit,
+  .intro-caret,
+  .intro-stage > .intro-wash {
+    animation: none;
+  }
+  .intro-line {
+    transition: none;
+  }
+}

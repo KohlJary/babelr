@@ -46,6 +46,7 @@ import wikiSeedPlugin from './plugins/wiki-seed.ts';
 import embedRoutes from './routes/embeds.ts';
 import auditRoutes from './routes/audit.ts';
 import agentRoutes from './routes/agents.ts';
+import houseRoutes from './routes/house.ts';
 import serverAgentRoutes from './routes/server-agents.ts';
 import ssoRoutes from './routes/sso.ts';
 import voiceRoutes from './routes/voice.ts';
@@ -177,6 +178,7 @@ export async function buildApp() {
   await app.register(channelRoutes);
   await app.register(messageRoutes);
   await app.register(agentStatusRoutes);
+  await app.register(houseRoutes);
   await app.register(channelSettingsRoutes);
   await app.register(wsRoutes);
   await app.register(translateRoutes);

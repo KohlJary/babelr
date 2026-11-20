@@ -11,4 +11,5 @@ export * from './roles.js';
 export * from './files.js';
 export * from './audit.js';
 export * from './agents.js';
+export * from './house.js';
 export * from './dm-consent.js';

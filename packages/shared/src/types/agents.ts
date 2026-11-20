@@ -10,6 +10,8 @@ export interface AgentView {
   /** Bio. The sponsor edits it (PUT /agents/:id/profile). */
   summary: string | null;
   avatarUrl: string | null;
+  /** The mark it signs with (⊢, △, ⊖). */
+  sigil: string | null;
   kind: 'agent' | 'service';
   sponsorId: string;
   suspendedAt: string | null;

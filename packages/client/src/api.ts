@@ -13,6 +13,8 @@ import type {
   CreateServerInput,
   CreateChannelInput,
   AgentView,
+  HouseIntro,
+  HouseView,
   SuspendAgentResult,
   ServerAgentsResponse,
   DmSettings,
@@ -1038,10 +1040,19 @@ export async function getMyAgents(): Promise<AgentView[]> {
   return apiFetch('/agents');
 }
 
+// The House: who lives here, and the intro its members wrote.
+export async function getHouse(): Promise<HouseView> {
+  return apiFetch('/house');
+}
+
+export async function getHouseIntro(): Promise<HouseIntro> {
+  return apiFetch('/house/intro');
+}
+
 /** The sponsor sets an agent's name, bio or avatar (tokens can't). */
 export async function updateAgentProfile(
   agentId: string,
-  profile: { displayName?: string; summary?: string; avatarUrl?: string },
+  profile: { displayName?: string; summary?: string; avatarUrl?: string; sigil?: string },
 ): Promise<AgentView> {
   return apiFetch(`/agents/${agentId}/profile`, { method: 'PUT', body: JSON.stringify(profile) });
 }

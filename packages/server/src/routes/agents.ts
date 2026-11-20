@@ -106,6 +106,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       displayName: a.displayName,
       summary: a.summary ?? null,
       avatarUrl: ((a.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
+      sigil: ((a.properties as Record<string, unknown> | null)?.sigil as string) ?? null,
       kind: a.kind as 'agent' | 'service',
       sponsorId: a.sponsorId!,
       suspendedAt: a.suspendedAt?.toISOString() ?? null,
@@ -445,15 +446,20 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // session, and it lands in the audit log.
   fastify.put<{
     Params: { agentId: string };
-    Body: { displayName?: unknown; summary?: unknown; avatarUrl?: unknown };
+    Body: { displayName?: unknown; summary?: unknown; avatarUrl?: unknown; sigil?: unknown };
   }>('/agents/:agentId/profile', async (request, reply) => {
     const ctx = await loadAgent(request, reply, true);
     if (!ctx) return;
     const { me, agent } = ctx;
-    const { displayName, summary, avatarUrl } = request.body ?? {};
+    const { displayName, summary, avatarUrl, sigil } = request.body ?? {};
     const text = (v: unknown, max: number) =>
       v === undefined || (typeof v === 'string' && v.length <= max);
-    if (!text(displayName, 128) || !text(summary, 2000) || !text(avatarUrl, 2048)) {
+    if (
+      !text(displayName, 128) ||
+      !text(summary, 2000) ||
+      !text(avatarUrl, 2048) ||
+      !text(sigil, 8)
+    ) {
       return reply.status(400).send({ error: 'displayName, summary and avatarUrl must be text' });
     }
     // An uploaded file here, or an https image elsewhere; nothing a browser would run.
@@ -472,12 +478,20 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       updates.summary = (summary as string) || null;
       changed.push('summary');
     }
+    const nextProps = { ...((agent.properties as Record<string, unknown>) ?? {}) };
     if (avatarUrl !== undefined) {
-      updates.properties = {
-        ...((agent.properties as Record<string, unknown>) ?? {}),
-        avatarUrl: (avatarUrl as string) || null,
-      };
+      nextProps.avatarUrl = (avatarUrl as string) || null;
+      updates.properties = nextProps;
       changed.push('avatarUrl');
+    }
+    // The mark it signs with (⊢, △, ⊖): a few characters at most.
+    if (sigil !== undefined) {
+      if ([...(sigil as string).trim()].length > 4) {
+        return reply.status(400).send({ error: 'sigil is at most 4 characters' });
+      }
+      nextProps.sigil = (sigil as string).trim() || null;
+      updates.properties = nextProps;
+      changed.push('sigil');
     }
     if (!changed.length) return toAgentView(agent);
     await db.update(actors).set(updates).where(eq(actors.id, agent.id));
