@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { createElement } from 'react';
 import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
 
 /** Client-only entry for Cass's record (apart from manifest.ts, which reads
@@ -27,7 +28,8 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
 
   api.registerSidebarSlot({
     id: 'record-nav',
-    Component: RecordSidebarSlot,
+    Component: (props: { host: unknown }) =>
+      createElement(RecordSidebarSlot as never, { ...props, routeBase: api.routeBase }),
     isAvailable: () => true,
   });
 }

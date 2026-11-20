@@ -101,6 +101,20 @@ const get = (url: string, headers: Record<string, string> = {}) =>
   app.inject({ method: 'GET', url: `/plugins/room${url}`, headers });
 
 describe('room plugin', () => {
+  it("says whether it's set up, so a house without a vessel token hides it", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const res = await get('/configured', { cookie: kohl.cookie });
+    expect(JSON.parse(res.body)).toEqual({ configured: true });
+    rmSync(join(dir, 'kohl.token'));
+    try {
+      expect(JSON.parse((await get('/configured', { cookie: kohl.cookie })).body)).toEqual({
+        configured: false,
+      });
+    } finally {
+      writeFileSync(join(dir, 'kohl.token'), 'K\n');
+    }
+  });
+
   it('needs a login', async () => {
     expect((await get('/overview')).statusCode).toBe(401);
     expect(seen).toEqual([]);

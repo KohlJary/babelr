@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { createElement } from 'react';
 import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
 
 /** Client-only entry for Cass's music (manifest.ts reads its config with node:fs). */
@@ -24,7 +25,8 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   });
   api.registerSidebarSlot({
     id: 'music-nav',
-    Component: MusicSidebarSlot,
+    Component: (props: { host: unknown }) =>
+      createElement(MusicSidebarSlot as never, { ...props, routeBase: api.routeBase }),
     isAvailable: () => true,
   });
 }

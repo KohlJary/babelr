@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
@@ -133,7 +134,8 @@ export default async function houseRoutes(fastify: FastifyInstance) {
     const body: HouseView = {
       agents: agentRows.map(view).sort(byName),
       people: peopleRows.map(view).sort(byName),
-      hasIntro: !!process.env.HOUSE_INTRO_PATH,
+      // A house compose mounts an intro folder that's empty until the members write one.
+      hasIntro: !!process.env.HOUSE_INTRO_PATH && existsSync(process.env.HOUSE_INTRO_PATH),
     };
     return body;
   });

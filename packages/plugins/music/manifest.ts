@@ -132,6 +132,10 @@ export default definePlugin({
       return { body: got.body };
     }
 
+    // Whether this house has the plugin set up. Its sidebar entry hides when it
+    // isn't (a stranger's house, where there's no vessel token to read with).
+    fastify.get('/configured', async () => ({ configured: token() !== null }));
+
     fastify.get('/music', async (request, reply) => {
       const g = await gate(request as Req, reply as never);
       return g.denied ?? (reply as unknown as Rep).send(g.body);

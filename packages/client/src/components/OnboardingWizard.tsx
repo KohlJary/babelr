@@ -36,6 +36,13 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
 
   useEffect(() => {
     if (step === 'server') {
+      // Already in a server (a house made one for you): don't ask for another.
+      api
+        .getServers()
+        .then((mine) => {
+          if (mine.length > 0) setStep('embeds');
+        })
+        .catch(() => {});
       api
         .discoverServers()
         .then(setDiscoverable)

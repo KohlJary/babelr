@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { createElement } from 'react';
 import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
 
 /** Client-only entry for Cass's room (kept apart from manifest.ts so the
@@ -29,7 +30,8 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
 
   api.registerSidebarSlot({
     id: 'room-nav',
-    Component: RoomSidebarSlot,
+    Component: (props: { host: unknown }) =>
+      createElement(RoomSidebarSlot as never, { ...props, routeBase: api.routeBase }),
     isAvailable: () => true,
   });
 }

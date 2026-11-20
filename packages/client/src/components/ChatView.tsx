@@ -6,7 +6,7 @@ import { useServers } from '../hooks/useServers';
 import { useChannels } from '../hooks/useChannels';
 import { useDMs } from '../hooks/useDMs';
 import { IntroOverlay } from '../house/IntroOverlay';
-import { loadHouse, maybeAutoplay, useHouseStore } from '../house/store';
+import { currentHouse, loadHouse, maybeAutoplay, useHouseStore } from '../house/store';
 import { useChat } from '../hooks/useChat';
 import { useTranslationSettings } from '../hooks/useTranslationSettings';
 import { useTranslation } from '../hooks/useTranslation';
@@ -89,6 +89,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // The House: members on the rail, the home view, and the intro on a first visit.
   const { house } = useHouseStore();
   useEffect(() => {
+    // Someone who lives in or visits a house with daemons lands on the house.
+    void loadHouse().then(() => {
+      if (currentHouse()?.agents.length) setActiveViewId((v) => v ?? 'house');
+    });
     void maybeAutoplay();
     const id = setInterval(() => void loadHouse(true), 60_000);
     return () => clearInterval(id);

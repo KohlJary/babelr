@@ -111,6 +111,12 @@ export default definePlugin({
       return reply.status(res.status).send(body);
     }
 
+    // Whether this house has the plugin set up. Its sidebar entry hides when it
+    // isn't (a stranger's house, where there's no vessel token to read with).
+    fastify.get('/configured', async () => ({
+      configured: tokenFor('house') !== null || tokenFor('kohl') !== null,
+    }));
+
     fastify.get('/overview', async (request, reply) => forward(request, reply as never, ''));
 
     fastify.get<{ Params: { name: string } }>('/sections/:name', async (request, reply) =>

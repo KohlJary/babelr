@@ -61,8 +61,27 @@ const chip = (on: boolean) => ({
   color: 'inherit',
 });
 
-export function RecordSidebarSlot(props: { host: unknown }) {
+/** Is this plugin set up in this house? Unknown counts as no, so a stranger's
+ *  house never shows another daemon's rooms. */
+function useConfigured(routeBase: string): boolean {
+  const [ok, setOk] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch(`${routeBase}/configured`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { configured: false }))
+      .then((b: { configured?: boolean }) => live && setOk(!!b.configured))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [routeBase]);
+  return ok;
+}
+
+export function RecordSidebarSlot(props: { host: unknown; routeBase: string }) {
   const host = props.host as { openView: (id: string) => void };
+  const configured = useConfigured(props.routeBase);
+  if (!configured) return null;
   return (
     <button
       type="button"

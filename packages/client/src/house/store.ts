@@ -28,6 +28,11 @@ function set(next: Partial<State>) {
   listeners.forEach((l) => l());
 }
 
+/** The house as last loaded (null before the first load). */
+export function currentHouse(): HouseView | null {
+  return state.house;
+}
+
 export function useHouseStore(): State {
   return useSyncExternalStore(
     (l) => {
