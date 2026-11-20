@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY . .
-# --ignore-scripts skips the desktop app's Electron download; argon2 is the one
-# native module the server needs, so it's built on its own.
-RUN npm ci --no-audit --no-fund --ignore-scripts && npm rebuild argon2
+# --ignore-scripts skips the desktop app's Electron download; argon2 and mediasoup
+# (its voice worker) are the native modules the server needs, so they're built on their own.
+RUN npm ci --no-audit --no-fund --ignore-scripts && npm rebuild argon2 mediasoup
 RUN npm run build
 RUN mkdir -p /app/uploads && ln -sfn /app/uploads /app/packages/server/uploads
 
