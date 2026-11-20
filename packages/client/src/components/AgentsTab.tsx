@@ -1,8 +1,25 @@
 // SPDX-License-Identifier: MIT
 import { useCallback, useEffect, useState } from 'react';
-import type { AgentView } from '@babelr/shared';
+import type { ActorProfile, AgentView } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { ProfilePanel } from './ProfilePanel';
+
+/** The profile panel's shape for an agent (it has no email or 2FA). */
+function asProfile(a: AgentView): ActorProfile {
+  return {
+    id: a.id,
+    uri: '',
+    preferredUsername: a.preferredUsername,
+    displayName: a.displayName,
+    summary: a.summary,
+    avatarUrl: a.avatarUrl,
+    preferredLanguage: 'en',
+    emailVerified: false,
+    totpEnabled: false,
+    createdAt: new Date(a.createdAt),
+  };
+}
 
 /**
  * The kill switch: every agent and service this person sponsors, each
@@ -14,6 +31,7 @@ export function AgentsTab() {
   const [agents, setAgents] = useState<AgentView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AgentView | null>(null);
 
   const load = useCallback(() => {
     api
@@ -72,6 +90,9 @@ export function AgentsTab() {
                   : t('agents.activeTokens', { count: a.activeTokens })}
               </span>
             </div>
+            <button type="button" className="agents-edit" onClick={() => setEditing(a)}>
+              {t('agents.editProfile')}
+            </button>
             <button
               type="button"
               className={a.suspendedAt ? 'agents-unsuspend' : 'agents-suspend'}
@@ -83,6 +104,19 @@ export function AgentsTab() {
           </li>
         ))}
       </ul>
+      {editing && (
+        <ProfilePanel
+          actor={asProfile(editing)}
+          title={t('agents.profileTitle', { name: editing.preferredUsername })}
+          save={async (fields) => {
+            const updated = await api.updateAgentProfile(editing.id, fields);
+            setAgents((list) => list?.map((x) => (x.id === updated.id ? updated : x)) ?? null);
+            return asProfile(updated);
+          }}
+          onUpdate={() => {}}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }

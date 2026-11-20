@@ -1400,3 +1400,78 @@ describe('6. The server wiki, for agents in the server', () => {
     expect(del.statusCode).toBe(403);
   });
 });
+
+describe("The sponsor edits an agent's profile", () => {
+  const put = (
+    agentId: string,
+    payload: Record<string, unknown>,
+    headers: Record<string, string>,
+  ) => app.inject({ method: 'PUT', url: `/agents/${agentId}/profile`, headers, payload });
+
+  it('the sponsor sets name, bio and avatar; it shows on the agent and in the audit log', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const agent = await createAgent(kohl.cookie, 'daedalus');
+    const res = await put(
+      agent.id,
+      { displayName: 'Daedalus', summary: 'Builds the house.', avatarUrl: '/uploads/abc-123.png' },
+      { cookie: kohl.cookie },
+    );
+    expect(res.statusCode).toBe(200);
+    const view = JSON.parse(res.body);
+    expect(view).toMatchObject({
+      displayName: 'Daedalus',
+      summary: 'Builds the house.',
+      avatarUrl: '/uploads/abc-123.png',
+    });
+    const [row] = await db.select().from(actors).where(eq(actors.id, agent.id));
+    expect((row.properties as Record<string, unknown>).avatarUrl).toBe('/uploads/abc-123.png');
+    const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, 'agent.profile'));
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actorId).toBe(kohl.body.id);
+  });
+
+  it("nobody else can, and the agent's own token can't either", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const luna = await createTestUser(app, 'luna');
+    const agent = await createAgent(kohl.cookie, 'daedalus');
+    const { token } = await mint(kohl.cookie, agent.id, [
+      'channels:read',
+      'channels:post',
+      'dms:read',
+      'dms:post',
+    ]);
+    expect(
+      (await put(agent.id, { displayName: 'Mine now' }, { cookie: luna.cookie })).statusCode,
+    ).toBe(404);
+    expect((await put(agent.id, { displayName: 'Me' }, bearer(token))).statusCode).toBe(403);
+    const self = await app.inject({
+      method: 'PUT',
+      url: '/auth/profile',
+      headers: bearer(token),
+      payload: { avatarUrl: '/uploads/x.png' },
+    });
+    expect(self.statusCode).toBe(403); // still closed to tokens, as before
+    const [row] = await db.select().from(actors).where(eq(actors.id, agent.id));
+    expect(row.displayName).toBe('daedalus');
+  });
+
+  it('refuses an avatar a browser could run, and clears one on empty', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const agent = await createAgent(kohl.cookie, 'daedalus');
+    for (const bad of [
+      'javascript:alert(1)',
+      'http://x.test/a.png',
+      '/uploads/../etc/passwd',
+      'data:image/png;base64,AA',
+    ]) {
+      expect((await put(agent.id, { avatarUrl: bad }, { cookie: kohl.cookie })).statusCode).toBe(
+        400,
+      );
+    }
+    await put(agent.id, { avatarUrl: 'https://cdn.example/a.png' }, { cookie: kohl.cookie });
+    const cleared = JSON.parse(
+      (await put(agent.id, { avatarUrl: '' }, { cookie: kohl.cookie })).body,
+    );
+    expect(cleared.avatarUrl).toBeNull();
+  });
+});

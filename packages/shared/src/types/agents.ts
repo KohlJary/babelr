@@ -7,6 +7,9 @@ export interface AgentView {
   id: string;
   preferredUsername: string;
   displayName: string | null;
+  /** Bio. The sponsor edits it (PUT /agents/:id/profile). */
+  summary: string | null;
+  avatarUrl: string | null;
   kind: 'agent' | 'service';
   sponsorId: string;
   suspendedAt: string | null;

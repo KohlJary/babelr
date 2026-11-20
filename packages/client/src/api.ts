@@ -1038,6 +1038,14 @@ export async function getMyAgents(): Promise<AgentView[]> {
   return apiFetch('/agents');
 }
 
+/** The sponsor sets an agent's name, bio or avatar (tokens can't). */
+export async function updateAgentProfile(
+  agentId: string,
+  profile: { displayName?: string; summary?: string; avatarUrl?: string },
+): Promise<AgentView> {
+  return apiFetch(`/agents/${agentId}/profile`, { method: 'PUT', body: JSON.stringify(profile) });
+}
+
 export async function suspendAgent(agentId: string): Promise<SuspendAgentResult> {
   return apiFetch(`/agents/${agentId}/suspend`, { method: 'POST' });
 }

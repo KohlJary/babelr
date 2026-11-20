@@ -16,6 +16,7 @@ import { as2TypeForKind, isSponsoredKind } from '../actor-kind.ts';
 import { isValidScope } from '../agent-scopes.ts';
 import { defaultDmPolicy, isDmPolicy } from '../dm-consent.ts';
 import { dmAllowlist } from '../db/schema/dm-consent.ts';
+import { broadcastActorUpdate } from '../federation/delivery.ts';
 import {
   formatToken,
   hashSecret,
@@ -31,6 +32,9 @@ import type {
   CreatedAgentToken,
   AuditLogEntry,
 } from '@babelr/shared';
+
+/** An agent's avatar: an uploaded file here, or an https image elsewhere. */
+const AVATAR_URL_RE = /^(\/uploads\/[A-Za-z0-9_-][A-Za-z0-9._-]*|https:\/\/[^\s"'<>]+)$/;
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -100,6 +104,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       id: a.id,
       preferredUsername: a.preferredUsername,
       displayName: a.displayName,
+      summary: a.summary ?? null,
+      avatarUrl: ((a.properties as Record<string, unknown> | null)?.avatarUrl as string) ?? null,
       kind: a.kind as 'agent' | 'service',
       sponsorId: a.sponsorId!,
       suspendedAt: a.suspendedAt?.toISOString() ?? null,
@@ -432,6 +438,58 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       return toTokenView(row);
     },
   );
+
+  // The sponsor edits the agent's profile: name, bio, avatar. Tokens can't
+  // (agent-scopes.ts never maps profile routes: a token shouldn't change who
+  // the agent appears to be), so this is the only way, from the sponsor's
+  // session, and it lands in the audit log.
+  fastify.put<{
+    Params: { agentId: string };
+    Body: { displayName?: unknown; summary?: unknown; avatarUrl?: unknown };
+  }>('/agents/:agentId/profile', async (request, reply) => {
+    const ctx = await loadAgent(request, reply, true);
+    if (!ctx) return;
+    const { me, agent } = ctx;
+    const { displayName, summary, avatarUrl } = request.body ?? {};
+    const text = (v: unknown, max: number) =>
+      v === undefined || (typeof v === 'string' && v.length <= max);
+    if (!text(displayName, 128) || !text(summary, 2000) || !text(avatarUrl, 2048)) {
+      return reply.status(400).send({ error: 'displayName, summary and avatarUrl must be text' });
+    }
+    // An uploaded file here, or an https image elsewhere; nothing a browser would run.
+    if (typeof avatarUrl === 'string' && avatarUrl && !AVATAR_URL_RE.test(avatarUrl)) {
+      return reply
+        .status(400)
+        .send({ error: 'avatarUrl must be an /uploads/ path or an https URL' });
+    }
+    const updates: Record<string, unknown> = {};
+    const changed: string[] = [];
+    if (displayName !== undefined) {
+      updates.displayName = (displayName as string).trim() || null;
+      changed.push('displayName');
+    }
+    if (summary !== undefined) {
+      updates.summary = (summary as string) || null;
+      changed.push('summary');
+    }
+    if (avatarUrl !== undefined) {
+      updates.properties = {
+        ...((agent.properties as Record<string, unknown>) ?? {}),
+        avatarUrl: (avatarUrl as string) || null,
+      };
+      changed.push('avatarUrl');
+    }
+    if (!changed.length) return toAgentView(agent);
+    await db.update(actors).set(updates).where(eq(actors.id, agent.id));
+    const [updated] = await db.select().from(actors).where(eq(actors.id, agent.id)).limit(1);
+    await audit(me, updated, 'agent.profile', `Edited @${updated.preferredUsername}'s profile`, {
+      changed,
+    });
+    broadcastActorUpdate(fastify, updated).catch((err) =>
+      fastify.log.error({ err }, 'Actor update federation enqueue failed'),
+    );
+    return toAgentView(updated);
+  });
 
   // The kill switch: one call revokes every token, cancels pending
   // deliveries, and blocks posting.

@@ -4,10 +4,16 @@ import type { ActorProfile } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
 
+type ProfileFields = { displayName?: string; summary?: string; avatarUrl?: string };
+
 interface ProfilePanelProps {
   actor: ActorProfile;
   onUpdate: (updated: ActorProfile) => void;
   onClose: () => void;
+  /** Where the edit goes: your own profile by default; a sponsor editing an
+   *  agent passes its save (PUT /agents/:id/profile) and a title. */
+  save?: (fields: ProfileFields) => Promise<ActorProfile>;
+  title?: string;
 }
 
 function AvatarDisplay({ actor }: { actor: ActorProfile }) {
@@ -26,7 +32,7 @@ function AvatarDisplay({ actor }: { actor: ActorProfile }) {
   );
 }
 
-export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
+export function ProfilePanel({ actor, onUpdate, onClose, save, title }: ProfilePanelProps) {
   const t = useT();
   const [displayName, setDisplayName] = useState(actor.displayName ?? '');
   const [bio, setBio] = useState(actor.summary ?? '');
@@ -39,7 +45,7 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
     setSaving(true);
     setStatus(null);
     try {
-      const updated = await api.updateProfile({
+      const updated = await (save ?? api.updateProfile)({
         displayName: displayName || undefined,
         summary: bio || undefined,
         avatarUrl: avatarUrl || undefined,
@@ -82,7 +88,7 @@ export function ProfilePanel({ actor, onUpdate, onClose }: ProfilePanelProps) {
     <div className="settings-overlay" onClick={onClose}>
       <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
         <div className="settings-header">
-          <h2>{t('profile.title')}</h2>
+          <h2>{title ?? t('profile.title')}</h2>
           <button className="settings-close" onClick={onClose}>
             &times;
           </button>

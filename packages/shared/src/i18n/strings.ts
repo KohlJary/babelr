@@ -615,6 +615,8 @@ export const UI_STRINGS = {
   'agents.unsuspend': 'Unsuspend',
   'agents.confirmSuspend': 'Suspend @{name}? Its tokens stop working immediately.',
   'agents.loadFailed': "Couldn't load your agents.",
+  'agents.editProfile': 'Edit profile',
+  'agents.profileTitle': "@{name}'s profile",
 
   // DM consent: who can message me, requests, leave, block
   'settings.tabMessages': 'Messages',
