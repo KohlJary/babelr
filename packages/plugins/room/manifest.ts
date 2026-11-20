@@ -111,11 +111,14 @@ export default definePlugin({
       return reply.status(res.status).send(body);
     }
 
-    // Whether this house has the plugin set up. Its sidebar entry hides when it
-    // isn't (a stranger's house, where there's no vessel token to read with).
-    fastify.get('/configured', async () => ({
-      configured: tokenFor('house') !== null || tokenFor('kohl') !== null,
-    }));
+    // Whether her room is open to whoever's asking. Its sidebar entry hides when
+    // it isn't: in a stranger's house (no vessel token), or for someone she
+    // hasn't opened it to (no token for their audience). A locked door isn't shown.
+    fastify.get('/configured', async (request) => {
+      const r = request as { actor?: { preferredUsername: string }; agentScopes?: string[] };
+      const audience = audienceOf(r.actor, r.agentScopes !== undefined, loadConfig().kohl);
+      return { configured: !!audience && tokenFor(audience) !== null };
+    });
 
     fastify.get('/overview', async (request, reply) => forward(request, reply as never, ''));
 

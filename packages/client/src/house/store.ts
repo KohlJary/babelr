@@ -104,4 +104,5 @@ export function resumeTour() {
 export function leaveTour() {
   markSeen();
   set({ phase: 'idle', step: 0 });
+  document.querySelector('.house')?.scrollTo({ top: 0 });
 }

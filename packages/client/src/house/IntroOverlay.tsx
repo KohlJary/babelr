@@ -169,12 +169,19 @@ function TourGuide({ openView, startDM }: TourProps) {
     const target = s.target;
     if (target.startsWith('member:')) open.current('house', { member: target.slice(7) });
     else if (['home', 'start-your-own', 'rail'].includes(target)) open.current('house');
-    else if (target !== 'sidebar') open.current(target, s.state ?? {});
+    else if (target === 'plans' && typeof s.state?.slug === 'string') {
+      // Open the plan only if this visitor can see it; otherwise stay on the
+      // house, and the step's own words carry it.
+      const slug = s.state.slug;
+      void fetch(`/api/plugins/plans/plans/${encodeURIComponent(slug)}`, { credentials: 'include' })
+        .then((r) => (r.ok ? open.current('plans', { slug }) : open.current('house')))
+        .catch(() => open.current('house'));
+    } else if (target !== 'sidebar') open.current(target, s.state ?? {});
     const lit = () => {
       document.querySelectorAll('.tour-lit').forEach((el) => el.classList.remove('tour-lit'));
       document.querySelectorAll(`[data-tour="${CSS.escape(target)}"]`).forEach((el) => {
         el.classList.add('tour-lit');
-        el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'nearest' });
+        el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
       });
     };
     const id = setTimeout(lit, 120); // after the view renders

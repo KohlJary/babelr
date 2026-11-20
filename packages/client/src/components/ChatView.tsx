@@ -453,6 +453,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           houseActive={activeViewId === 'house'}
           houseMembers={house?.agents ?? []}
           onOpenHouse={(member) => {
+            setDmMode(false);
             openView('house', member ? { member } : {});
             setDrawerClosed(true);
           }}

@@ -66,7 +66,6 @@ export function ServerSidebar({
               ) : (
                 (m.sigil ?? (m.displayName ?? m.preferredUsername).charAt(0)).toUpperCase()
               )}
-              {m.now && <span className="house-member-live" aria-hidden="true" />}
             </button>
           ))}
           <div className="server-divider" />

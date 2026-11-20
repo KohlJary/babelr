@@ -101,18 +101,13 @@ const get = (url: string, headers: Record<string, string> = {}) =>
   app.inject({ method: 'GET', url: `/plugins/room${url}`, headers });
 
 describe('room plugin', () => {
-  it("says whether it's set up, so a house without a vessel token hides it", async () => {
-    const kohl = await createTestUser(app, 'kohl');
-    const res = await get('/configured', { cookie: kohl.cookie });
-    expect(JSON.parse(res.body)).toEqual({ configured: true });
-    rmSync(join(dir, 'kohl.token'));
-    try {
-      expect(JSON.parse((await get('/configured', { cookie: kohl.cookie })).body)).toEqual({
-        configured: false,
-      });
-    } finally {
-      writeFileSync(join(dir, 'kohl.token'), 'K\n');
-    }
+  it("is shown only to someone it's open to: a locked door isn't shown", async () => {
+    const luna = await createTestUser(app, 'luna');
+    const shown = async () =>
+      JSON.parse((await get('/configured', { cookie: luna.cookie })).body).configured;
+    expect(await shown()).toBe(false); // only Kohl's token is placed; the house audience has none
+    writeFileSync(join(dir, 'house.token'), 'H\n');
+    expect(await shown()).toBe(true); // she opened it to the house
   });
 
   it('needs a login', async () => {

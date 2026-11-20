@@ -129,9 +129,16 @@ export default definePlugin({
       return reply.status(res.status).send(body);
     }
 
-    // Whether this house has the plugin set up. Its sidebar entry hides when it
-    // isn't (a stranger's house, where there's no vessel token to read with).
-    fastify.get('/configured', async () => ({ configured: token() !== null }));
+    // Whether her record is open to whoever's asking: set up here, and they're
+    // Kohl or an agent Kohl named. Its sidebar entry hides otherwise.
+    fastify.get('/configured', async (request) => {
+      const r = request as { actor?: { preferredUsername: string }; agentScopes?: string[] };
+      const cfg = loadConfig();
+      return {
+        configured:
+          token() !== null && mayRead(r.actor, r.agentScopes !== undefined, cfg.kohl, cfg.agents),
+      };
+    });
 
     fastify.get<{ Querystring: { days?: string } }>('/record', async (request, reply) =>
       forward(request, reply as never, false),

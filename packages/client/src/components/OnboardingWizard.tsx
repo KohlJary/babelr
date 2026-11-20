@@ -21,7 +21,17 @@ function detectBrowserLanguage(): string {
 export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
   const t = useT();
   const [step, setStep] = useState<Step>('profile');
-  const [displayName, setDisplayName] = useState(actor.displayName ?? '');
+  // Start from the username: an empty field with the username as grey
+  // placeholder looked filled in, and Next looked broken.
+  const [displayName, setDisplayName] = useState(actor.displayName ?? actor.preferredUsername);
+  // In a house with daemons, setup is just name and language (see the server step).
+  const [inHouse, setInHouse] = useState(false);
+  useEffect(() => {
+    api
+      .getHouse()
+      .then((h) => setInHouse(h.agents.length > 0))
+      .catch(() => {});
+  }, []);
   const [language, setLanguage] = useState(actor.preferredLanguage || detectBrowserLanguage());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +130,9 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
     onComplete(currentActor);
   };
 
-  const steps: Step[] = ['profile', 'language', 'server', 'embeds', 'done'];
+  const steps: Step[] = inHouse
+    ? ['profile', 'language']
+    : ['profile', 'language', 'server', 'embeds', 'done'];
   const stepIndex = steps.indexOf(step);
 
   return (

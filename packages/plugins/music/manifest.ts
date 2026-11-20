@@ -132,9 +132,14 @@ export default definePlugin({
       return { body: got.body };
     }
 
-    // Whether this house has the plugin set up. Its sidebar entry hides when it
-    // isn't (a stranger's house, where there's no vessel token to read with).
-    fastify.get('/configured', async () => ({ configured: token() !== null }));
+    // Whether her music is shared with whoever's asking (her own audience
+    // setting, read from her vessel). Its sidebar entry hides otherwise.
+    fastify.get('/configured', async (request, reply) => {
+      if (token() === null) return { configured: false };
+      const g = await gate(request as Req, reply as never);
+      if ('denied' in g) return reply.status(200).send({ configured: false });
+      return { configured: true };
+    });
 
     fastify.get('/music', async (request, reply) => {
       const g = await gate(request as Req, reply as never);

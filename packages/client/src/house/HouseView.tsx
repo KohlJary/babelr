@@ -234,7 +234,7 @@ export function HouseView({ host, viewState }: ViewProps) {
               {t('house.watchIntro')}
             </button>
           )}
-          <a className="house-btn" href="#start-your-own">
+          <a className="house-btn" href={DEFAULT_HREF} target="_blank" rel="noreferrer">
             {t('house.startYourOwn')}
           </a>
         </div>
