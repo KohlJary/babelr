@@ -14,7 +14,8 @@ import './house.css';
  * viewState.member opens one member's card.
  */
 
-const DEFAULT_HREF = 'https://github.com/KohlJary/babelr';
+// Until The House has its own public repo (Kohl's call), how to run one is Babelr's "Run it".
+const DEFAULT_HREF = 'https://github.com/KohlJary/babelr#run-it';
 
 function nameOf(m: HouseMember) {
   return m.displayName ?? m.preferredUsername;
