@@ -140,7 +140,9 @@ class Agent:
             entry = {"id": msg["id"], "author": m["author"], "published": msg["published"],
                      "agent_status": msg.get("agentStatus") or [],
                      # emoji -> actor ids; the server sends it only when non-empty
-                     "reactions": msg.get("reactions") or {}}
+                     "reactions": msg.get("reactions") or {},
+                     # files sent with it: [{url, filename, contentType}] (plaintext metadata)
+                     "attachments": [a for a in (props.get("attachments") or []) if isinstance(a, dict) and a.get("url")]}
             if not (props.get("encrypted") and props.get("iv")):
                 entry["text"], entry["error"] = None, "plaintext"
             else:
@@ -154,6 +156,22 @@ class Agent:
                 del entry["error"]
             out.append(entry)
         return out
+
+    def fetch(self, url: str, max_bytes: int = 5 * 1024 * 1024) -> bytes:
+        """The bytes of a file on this server (an attachment's /uploads/... url)."""
+        import urllib.request
+        if url.startswith("/"):
+            url = self.base_url.rstrip("/") + url
+        if not url.startswith(self.base_url.rstrip("/") + "/"):
+            raise BabelrError(400, "only files on this Babelr server")
+        # Uploads are served as public static files; a token here would be
+        # checked against its scopes and refused, so none is sent.
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            raise BabelrError(413, "file too large")
+        return data
 
     # -- reply status -----------------------------------------------------
 
