@@ -39,3 +39,7 @@ uploads/
 # Rust/Tauri build
 packages/desktop/src-tauri/target/
 test-results/
+
+# Python package builds
+packages/agent-client-py/build/
+packages/agent-client-py/*.egg-info/
