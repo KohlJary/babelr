@@ -68,21 +68,41 @@ function toTokenView(t: TokenRow): AgentTokenView {
  * kill switch and the audit log are the sponsor's or an instance
  * admin's.
  */
+/** Who is acting: the person, plus the actor that made the call (the
+ *  person, or their agent holding `agents:manage`). */
+type Caller = Actor & { by: Actor; asAdmin: boolean };
+
 export default async function agentRoutes(fastify: FastifyInstance) {
   const db = fastify.db;
 
-  /** The calling person, or a reply already sent. */
-  function requirePerson(request: FastifyRequest, reply: FastifyReply): Actor | null {
+  /**
+   * The calling person, or a reply already sent. A token with
+   * `agents:manage` is its sponsor's hands: it acts as the sponsor here,
+   * with none of the sponsor's admin powers (`asAdmin`), and the audit
+   * log names the agent that did it (`by`).
+   */
+  async function requirePerson(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<Caller | null> {
     const me = request.actor;
     if (!me) {
       reply.status(401).send({ error: 'Not authenticated' });
       return null;
     }
+    if (request.agentScopes?.includes('agents:manage') && me.sponsorId) {
+      const [sponsor] = await db.select().from(actors).where(eq(actors.id, me.sponsorId)).limit(1);
+      if (!sponsor || sponsor.kind !== 'person' || !sponsor.local || sponsor.suspendedAt) {
+        reply.status(403).send({ error: "The sponsor can't manage agents" });
+        return null;
+      }
+      return Object.assign(sponsor, { by: me, asAdmin: false });
+    }
     if (request.agentScopes || me.kind !== 'person' || !me.local) {
       reply.status(403).send({ error: 'Only a person can manage agents' });
       return null;
     }
-    return me;
+    return Object.assign({ ...me }, { by: me, asAdmin: isInstanceAdmin(me) });
   }
 
   async function activeTokenCount(agentId: string): Promise<number> {
@@ -125,8 +145,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     request: FastifyRequest<{ Params: { agentId: string } }>,
     reply: FastifyReply,
     sponsorOnly: boolean,
-  ): Promise<{ me: Actor; agent: Actor } | null> {
-    const me = requirePerson(request, reply);
+  ): Promise<{ me: Caller; agent: Actor } | null> {
+    const me = await requirePerson(request, reply);
     if (!me) return null;
     const { agentId } = request.params;
     if (!UUID_RE.test(agentId)) {
@@ -139,7 +159,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       return null;
     }
     const isSponsor = agent.sponsorId === me.id;
-    if (!isSponsor && (sponsorOnly || !isInstanceAdmin(me))) {
+    if (!isSponsor && (sponsorOnly || !me.asAdmin)) {
       // 404, not 403: don't confirm someone else's agent exists.
       reply.status(404).send({ error: 'Agent not found' });
       return null;
@@ -206,10 +226,10 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     return beyond;
   }
 
-  function audit(me: Actor, agent: Actor, action: string, summary: string, details = {}) {
+  function audit(me: Caller, agent: Actor, action: string, summary: string, details = {}) {
     return writeAuditLog(db, {
       serverId: null,
-      actorId: me.id,
+      actorId: me.by.id,
       sponsorId: agent.sponsorId,
       category: 'agent',
       action,
@@ -220,8 +240,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
 
   // Create an agent or service; the caller becomes its sponsor.
   fastify.post<{ Body: CreateAgentInput }>('/agents', async (request, reply) => {
-    const me = requirePerson(request, reply);
-    if (!me) return;
+    const me = await requirePerson(request, reply);
+    if (!me) return reply;
     if (me.suspendedAt) return reply.status(403).send({ error: 'Account suspended' });
 
     const {
@@ -313,9 +333,9 @@ export default async function agentRoutes(fastify: FastifyInstance) {
 
   // My agents. An admin may pass ?all=1 to see every agent.
   fastify.get<{ Querystring: { all?: string } }>('/agents', async (request, reply) => {
-    const me = requirePerson(request, reply);
-    if (!me) return;
-    const all = request.query.all === '1' && isInstanceAdmin(me);
+    const me = await requirePerson(request, reply);
+    if (!me) return reply;
+    const all = request.query.all === '1' && me.asAdmin;
     const rows = await db
       .select()
       .from(actors)
@@ -332,7 +352,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
 
   fastify.get<{ Params: { agentId: string } }>('/agents/:agentId', async (request, reply) => {
     const ctx = await loadAgent(request, reply, false);
-    if (!ctx) return;
+    if (!ctx) return reply;
     return toAgentView(ctx.agent);
   });
 
@@ -341,7 +361,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     '/agents/:agentId/tokens',
     async (request, reply) => {
       const ctx = await loadAgent(request, reply, true);
-      if (!ctx) return;
+      if (!ctx) return reply;
       const { me, agent } = ctx;
       if (agent.suspendedAt) {
         return reply.status(409).send({ error: 'Agent is suspended; unsuspend it first' });
@@ -357,6 +377,13 @@ export default async function agentRoutes(fastify: FastifyInstance) {
       const bad = scopes.filter((s) => !isValidScope(s));
       if (bad.length > 0) {
         return reply.status(400).send({ error: 'Unknown scopes', scopes: bad });
+      }
+      // Only the sponsor's session grants the sponsor's hands; a token
+      // with them may keep them for itself (rotation), never pass them on.
+      if (scopes.includes('agents:manage') && me.by.id !== me.id && agent.id !== me.by.id) {
+        return reply
+          .status(403)
+          .send({ error: 'Only the sponsor can grant agents:manage', scopes: ['agents:manage'] });
       }
       const beyond = await scopesBeyondSponsor(me, agent, scopes);
       if (beyond.length > 0) {
@@ -382,7 +409,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
         .insert(agentTokens)
         .values({
           actorId: agent.id,
-          createdBy: me.id,
+          createdBy: me.by.id,
           name: name.trim(),
           tokenHash: hashSecret(secret),
           scopes: [...new Set(scopes)],
@@ -403,7 +430,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     '/agents/:agentId/tokens',
     async (request, reply) => {
       const ctx = await loadAgent(request, reply, true);
-      if (!ctx) return;
+      if (!ctx) return reply;
       const rows = await db
         .select()
         .from(agentTokens)
@@ -417,13 +444,13 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     '/agents/:agentId/tokens/:tokenId',
     async (request, reply) => {
       const ctx = await loadAgent(request, reply, true);
-      if (!ctx) return;
+      if (!ctx) return reply;
       if (!UUID_RE.test(request.params.tokenId)) {
         return reply.status(404).send({ error: 'Token not found' });
       }
       const [row] = await db
         .update(agentTokens)
-        .set({ revokedAt: new Date(), revokedBy: ctx.me.id })
+        .set({ revokedAt: new Date(), revokedBy: ctx.me.by.id })
         .where(
           and(
             eq(agentTokens.id, request.params.tokenId),
@@ -449,7 +476,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     Body: { displayName?: unknown; summary?: unknown; avatarUrl?: unknown; sigil?: unknown };
   }>('/agents/:agentId/profile', async (request, reply) => {
     const ctx = await loadAgent(request, reply, true);
-    if (!ctx) return;
+    if (!ctx) return reply;
     const { me, agent } = ctx;
     const { displayName, summary, avatarUrl, sigil } = request.body ?? {};
     const text = (v: unknown, max: number) =>
@@ -511,8 +538,8 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     '/agents/:agentId/suspend',
     async (request, reply) => {
       const ctx = await loadAgent(request, reply, false);
-      if (!ctx) return;
-      const result = await suspendAgent(db, ctx.agent, ctx.me.id);
+      if (!ctx) return reply;
+      const result = await suspendAgent(db, ctx.agent, ctx.me.by.id);
       const [agent] = await db.select().from(actors).where(eq(actors.id, ctx.agent.id)).limit(1);
       await audit(ctx.me, agent, 'agent.suspend', `Suspended @${agent.preferredUsername}`, {
         ...result,
@@ -527,16 +554,23 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     '/agents/:agentId/unsuspend',
     async (request, reply) => {
       const ctx = await loadAgent(request, reply, false);
-      if (!ctx) return;
+      if (!ctx) return reply;
       const { me, agent } = ctx;
       if (!agent.suspendedAt) return toAgentView(agent);
-      if (
-        agent.suspendedBy &&
-        agent.suspendedBy !== agent.sponsorId &&
-        agent.suspendedBy !== me.id &&
-        !isInstanceAdmin(me)
-      ) {
+      const [by] = agent.suspendedBy
+        ? await db.select().from(actors).where(eq(actors.id, agent.suspendedBy)).limit(1)
+        : [];
+      // The sponsor's side: the sponsor, or one of their agents using
+      // agents:manage. Anyone else who suspended it was an admin.
+      const sponsorSide = !by || by.id === agent.sponsorId || by.sponsorId === agent.sponsorId;
+      if (!sponsorSide && !me.asAdmin) {
         return reply.status(403).send({ error: 'Suspended by an admin; ask an admin to lift it' });
+      }
+      // The sponsor's hands don't undo the sponsor's own kill switch.
+      if (me.by.id !== me.id && by?.kind === 'person') {
+        return reply
+          .status(403)
+          .send({ error: 'Suspended by a person; only their session can lift it' });
       }
       const [updated] = await db
         .update(actors)
@@ -551,9 +585,9 @@ export default async function agentRoutes(fastify: FastifyInstance) {
   // Admins only: requests with tokens that matched no agent (logged by
   // a hash prefix of the token, never the token).
   fastify.get('/agents/audit/unattributed', async (request, reply) => {
-    const me = requirePerson(request, reply);
-    if (!me) return;
-    if (!isInstanceAdmin(me)) return reply.status(403).send({ error: 'Admins only' });
+    const me = await requirePerson(request, reply);
+    if (!me) return reply;
+    if (!me.asAdmin) return reply.status(403).send({ error: 'Admins only' });
     const rows = await db
       .select()
       .from(auditLogs)
@@ -575,7 +609,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     '/agents/:agentId/audit',
     async (request, reply) => {
       const ctx = await loadAgent(request, reply, false);
-      if (!ctx) return;
+      if (!ctx) return reply;
       const limit = Math.min(Math.max(parseInt(request.query.limit ?? '50', 10) || 50, 1), 200);
       const conditions = [
         eq(auditLogs.category, 'agent'),

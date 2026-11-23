@@ -1475,3 +1475,145 @@ describe("The sponsor edits an agent's profile", () => {
     expect(cleared.avatarUrl).toBeNull();
   });
 });
+
+describe("agents:manage: the sponsor's hands", () => {
+  async function hands() {
+    const kohl = await createTestUser(app, 'kohl'); // first user: instance admin
+    const daedalus = await createAgent(kohl.cookie, 'daedalus');
+    const tok = await mint(kohl.cookie, daedalus.id, ['agents:manage']);
+    return { kohl, daedalus, tok, as: bearer(tok.token) };
+  }
+
+  it("creates the sponsor's agents and mints, lists and revokes their tokens; the log names the hands", async () => {
+    const { kohl, daedalus, as } = await hands();
+    const made = await app.inject({
+      method: 'POST',
+      url: '/agents',
+      headers: as,
+      payload: { username: 'chatgpt', kind: 'agent' },
+    });
+    expect(made.statusCode).toBe(201);
+    const chatgpt = JSON.parse(made.body);
+    expect(chatgpt.sponsorId).toBe(kohl.body.id);
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: `/agents/${chatgpt.id}/tokens`,
+      headers: as,
+      payload: { name: 'house', scopes: ['dms:read', 'channels:read'] },
+    });
+    expect(minted.statusCode).toBe(201);
+    const t = JSON.parse(minted.body);
+    const me = await app.inject({ method: 'GET', url: '/auth/me', headers: bearer(t.token) });
+    expect(JSON.parse(me.body).preferredUsername).toBe('chatgpt');
+
+    const list = await app.inject({ method: 'GET', url: '/agents', headers: as });
+    expect(JSON.parse(list.body).map((a: { preferredUsername: string }) => a.preferredUsername)).toEqual([
+      'chatgpt',
+      'daedalus',
+    ]);
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: `/agents/${chatgpt.id}/tokens/${t.id}`,
+      headers: as,
+    });
+    expect(revoked.statusCode).toBe(200);
+
+    const [row] = await db.select().from(agentTokens).where(eq(agentTokens.id, t.id));
+    expect(row.createdBy).toBe(daedalus.id);
+    expect(row.revokedBy).toBe(daedalus.id);
+    const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, 'agent.token.create'));
+    const byHands = logs.find((l) => (l.details as { tokenId?: string })?.tokenId === t.id);
+    expect(byHands?.actorId).toBe(daedalus.id);
+    expect(byHands?.sponsorId).toBe(kohl.body.id);
+  });
+
+  it('keeps agents:manage for itself, never passes it on', async () => {
+    const { daedalus, as } = await hands();
+    const other = JSON.parse(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/agents',
+          headers: as,
+          payload: { username: 'helper', kind: 'agent' },
+        })
+      ).body,
+    );
+    const pass = await app.inject({
+      method: 'POST',
+      url: `/agents/${other.id}/tokens`,
+      headers: as,
+      payload: { name: 'x', scopes: ['agents:manage'] },
+    });
+    expect(pass.statusCode).toBe(403);
+    const keep = await app.inject({
+      method: 'POST',
+      url: `/agents/${daedalus.id}/tokens`,
+      headers: as,
+      payload: { name: 'rotated', scopes: ['agents:manage', 'dms:read'] },
+    });
+    expect(keep.statusCode).toBe(201);
+  });
+
+  it("has none of the sponsor's admin powers and can't touch anyone else's agents", async () => {
+    const { as } = await hands();
+    const bob = await createTestUser(app, 'bob');
+    const bobbot = await createAgent(bob.cookie, 'bobbot');
+
+    const all = await app.inject({ method: 'GET', url: '/agents?all=1', headers: as });
+    expect(JSON.parse(all.body).some((a: { id: string }) => a.id === bobbot.id)).toBe(false);
+    for (const [method, url] of [
+      ['POST', `/agents/${bobbot.id}/suspend`],
+      ['GET', `/agents/${bobbot.id}/audit`],
+      ['POST', `/agents/${bobbot.id}/tokens`],
+    ] as const) {
+      const r = await app.inject({ method, url, headers: as, payload: { name: 'x', scopes: [] } });
+      expect(r.statusCode).toBe(404);
+    }
+    const unattributed = await app.inject({
+      method: 'GET',
+      url: '/agents/audit/unattributed',
+      headers: as,
+    });
+    expect(unattributed.statusCode).toBe(403);
+  });
+
+  it("doesn't undo the sponsor's kill switch; the sponsor lifts what the hands suspended", async () => {
+    const { kohl, as } = await hands();
+    const a = await createAgent(kohl.cookie, 'cass');
+    const b = await createAgent(kohl.cookie, 'eris');
+
+    await app.inject({ method: 'POST', url: `/agents/${a.id}/suspend`, headers: { cookie: kohl.cookie } });
+    const lift = await app.inject({ method: 'POST', url: `/agents/${a.id}/unsuspend`, headers: as });
+    expect(lift.statusCode).toBe(403);
+
+    const s = await app.inject({ method: 'POST', url: `/agents/${b.id}/suspend`, headers: as });
+    expect(s.statusCode).toBe(200);
+    const liftB = await app.inject({
+      method: 'POST',
+      url: `/agents/${b.id}/unsuspend`,
+      headers: { cookie: kohl.cookie },
+    });
+    expect(liftB.statusCode).toBe(200);
+  });
+
+  it('ends when the hands are suspended or the sponsor is', async () => {
+    const { kohl, daedalus, as } = await hands();
+    await db
+      .update(actors)
+      .set({ suspendedAt: new Date() })
+      .where(eq(actors.id, kohl.body.id));
+    const r = await app.inject({ method: 'GET', url: '/agents', headers: as });
+    expect([401, 403]).toContain(r.statusCode);
+    await db.update(actors).set({ suspendedAt: null }).where(eq(actors.id, kohl.body.id));
+
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${daedalus.id}/suspend`,
+      headers: { cookie: kohl.cookie },
+    });
+    const after = await app.inject({ method: 'GET', url: '/agents', headers: as });
+    expect(after.statusCode).toBe(401);
+  });
+});

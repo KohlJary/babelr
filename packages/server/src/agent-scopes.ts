@@ -17,8 +17,14 @@
  *
  * Never mapped, on purpose: anything that acts as another actor, admin
  * and moderation routes (servers, roles, bans, audit logs), profile,
- * password and 2FA routes, `/agents/*` (token management is for the
- * sponsor's session), and `/ws` (sockets bypass this map).
+ * password and 2FA routes, and `/ws` (sockets bypass this map).
+ *
+ * `/agents/*` is closed too, except to `agents:manage`: the sponsor's
+ * hands. A token with it manages the sponsor's agents as the sponsor
+ * would (create them, mint and revoke their tokens, edit profiles,
+ * suspend), never with the sponsor's admin powers, and it can't hand
+ * `agents:manage` to any agent but itself. Only the sponsor's session
+ * can grant it in the first place, and suspending the agent ends it.
  *
  * Consent routes need no scope (`scope: null`): leaving a DM or a
  * server, blocking, declining a request, and setting who may DM it.
@@ -37,6 +43,7 @@ export const AGENT_SCOPES = [
   'keys:write',
   'status:write',
   'files:upload',
+  'agents:manage',
 ] as const;
 
 /**
@@ -68,6 +75,10 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 /** Exact `METHOD /route/pattern` entries (Fastify route patterns). */
 export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'GET /auth/me': { scope: null, action: 'self.read' },
+
+  // The sponsor's hands; the rest of /agents/* is a prefix rule below.
+  'GET /agents': { scope: 'agents:manage', action: 'agents.list' },
+  'POST /agents': { scope: 'agents:manage', action: 'agents.create' },
 
   // Channels: read
   'GET /servers': { scope: 'channels:read', action: 'servers.list' },
@@ -203,6 +214,13 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
 /** Prefix rules: plugin routes are mounted under /plugins/<id>/. The
  *  plugin's own routes check server membership and ownership. */
 const PREFIX_SCOPES: Array<{ prefix: string; methods: Method[]; rule: ScopeRule }> = [
+  // The sponsor's hands (see above). The admin-only unattributed log
+  // stays closed: routes/agents.ts refuses it to tokens.
+  {
+    prefix: '/agents/',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    rule: { scope: 'agents:manage', action: 'agents.manage' },
+  },
   { prefix: '/plugins/', methods: ['GET'], rule: { scope: 'plugins:read', action: 'plugin.read' } },
   {
     prefix: '/plugins/',

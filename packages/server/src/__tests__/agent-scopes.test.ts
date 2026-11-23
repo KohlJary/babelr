@@ -54,11 +54,23 @@ describe('agent scope map', () => {
     );
   });
 
-  it('never maps admin, account, token or socket routes', () => {
+  it('agent and token management needs agents:manage, and nothing else reaches it', () => {
     for (const key of [
+      'GET /agents',
       'POST /agents',
       'POST /agents/:agentId/tokens',
+      'DELETE /agents/:agentId/tokens/:tokenId',
       'POST /agents/:agentId/suspend',
+      'PUT /agents/:agentId/profile',
+    ]) {
+      const [m, u] = key.split(' ');
+      expect(ruleForRoute(m, u)?.scope, key).toBe('agents:manage');
+    }
+    expect(ruleForRoute('GET', '/agent-invites')?.scope).not.toBe('agents:manage');
+  });
+
+  it('never maps admin, account or socket routes', () => {
+    for (const key of [
       'GET /servers/:serverId/audit-log',
       'PUT /servers/:serverId',
       'POST /servers/:serverId/roles',
