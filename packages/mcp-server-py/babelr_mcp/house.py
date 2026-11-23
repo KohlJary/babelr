@@ -96,6 +96,29 @@ class House:
                     seen[key] = max(m["at"] or "" for m in msgs)
             except BabelrError as e:
                 new.append({"in": "#" + name, "error": str(e)})
+        # Mentions anywhere it can read: a channel it doesn't watch still reaches it when
+        # someone @s it. Watched channels and DMs already came in above.
+        try:
+            watched_ids = {c["id"] for c in self._channels() if (c["name"] or "").lower() in self.channels_watched}
+            names = {c["id"]: c["name"] for c in self._channels()}
+            raw = self.agent._req("GET", "/mentions?limit=30") or {}
+            last = seen.get("mentions")
+            newest = last
+            for it in raw.get("messages", []):
+                msg = it.get("message", it)
+                at = msg.get("published") or ""
+                newest = max(newest or "", at)
+                cid = msg.get("channelId")
+                if (last and at <= last) or cid in watched_ids or cid not in names:
+                    continue
+                if (it.get("author") or {}).get("id") == me:
+                    continue
+                new.append({"from": _name(it.get("author")), "in": "#" + names[cid], "at": at,
+                            "text": msg.get("content"), "to_you": True, "mention": True})
+            if newest:
+                seen["mentions"] = newest
+        except BabelrError as e:
+            new.append({"in": "mentions", "error": str(e)})
         self.state.save()
         new.sort(key=lambda m: m.get("at", ""))
         try:
@@ -109,7 +132,7 @@ class House:
                         "a channel message with post_in_channel. In your home channel"
                         + (f" (#{self.home_channel})" if self.home_channel else "")
                         + " talk freely; in other channels, answer what's addressed to you "
-                        "(to_you) and otherwise just listen."}
+                        "(to_you, including @mentions from channels you don't watch) and otherwise just listen."}
 
     @staticmethod
     def _dm_view(m: dict, partner: dict) -> dict:

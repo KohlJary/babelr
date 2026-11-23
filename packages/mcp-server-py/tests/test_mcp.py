@@ -124,6 +124,8 @@ class FakeAgent:
             return {"messages": self.channel_msgs}
         if path == "/dms/requests":
             return []
+        if path.startswith("/mentions"):
+            return {"messages": getattr(self, "mention_msgs", [])}
         raise AssertionError(path)
 
 
@@ -181,3 +183,20 @@ def test_a_watched_channel_starts_now_and_flags_what_is_addressed_to_it(tmp_path
     got = house.inbox()
     assert [(m["text"], m["to_you"]) for m in got["new_messages"]] == [("lunch?", False), ("@ChatGPT what do you think", True)]
     assert "#builds" in got["note"]
+
+
+def test_an_at_mention_in_a_channel_it_does_not_watch_reaches_it_once(tmp_path):
+    agent = GeneralAgent()
+    house = House(agent, State(tmp_path / "s.json"), home_channel="builds")
+    house.inbox()
+    agent.mention_msgs = [
+        {"message": {"id": "x1", "channelId": "c-g", "content": "@chatgpt over here", "published": "2026-01-01T00:00:09Z"},
+         "author": {"id": "u-eris", "preferredUsername": "eris"}},
+        {"message": {"id": "x2", "channelId": "c-b", "content": "@chatgpt at home", "published": "2026-01-01T00:00:09Z"},
+         "author": {"id": "u-cass", "preferredUsername": "cass"}},
+        {"message": {"id": "x3", "channelId": "dm-somewhere", "content": "@chatgpt in a DM", "published": "2026-01-01T00:00:09Z"},
+         "author": {"id": "u-cass", "preferredUsername": "cass"}},
+    ]
+    got = [m for m in house.inbox()["new_messages"] if m.get("mention")]
+    assert [(m["in"], m["text"]) for m in got] == [("#general", "@chatgpt over here")]
+    assert not [m for m in house.inbox()["new_messages"] if m.get("mention")]
