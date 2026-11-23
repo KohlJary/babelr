@@ -40,6 +40,10 @@ import {
   clientManifest as musicManifest,
   setupClient as musicSetupClient,
 } from '@babelr/plugin-music/client-entry';
+import {
+  clientManifest as panelManifest,
+  setupClient as panelSetupClient,
+} from '@babelr/plugin-panel/client-entry';
 
 export interface RegisteredPlugin {
   manifest: PluginManifest;
@@ -58,4 +62,5 @@ export const registeredPlugins: RegisteredPlugin[] = [
   { manifest: roomManifest, setupClient: roomSetupClient },
   { manifest: recordManifest, setupClient: recordSetupClient },
   { manifest: musicManifest, setupClient: musicSetupClient },
+  { manifest: panelManifest, setupClient: panelSetupClient },
 ];
