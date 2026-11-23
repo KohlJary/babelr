@@ -11,6 +11,18 @@ from babelr_agent import Agent, BabelrError
 from .state import State
 
 
+def _attachments(items: list | None) -> list[dict]:
+    """What a message carries, with the url view_image takes."""
+    return [{"filename": a.get("filename"), "type": a.get("contentType"), "url": a.get("url")}
+            for a in items or [] if isinstance(a, dict)]
+
+
+def _with_files(v: dict, items: list | None) -> dict:
+    if items:
+        v["attachments"] = _attachments(items)
+    return v
+
+
 def _name(actor: dict | None) -> str:
     a = actor or {}
     return (a.get("preferredUsername") or a.get("name") or "?").lower()
@@ -88,7 +100,8 @@ class House:
                     if first_look:
                         break
                     if (m["author"] or {}).get("id") != me and (not last or (m["at"] or "") > last):
-                        v = {"from": _name(m["author"]), "in": "#" + c["name"], "at": m["at"], "text": m["text"]}
+                        v = _with_files({"from": _name(m["author"]), "in": "#" + c["name"], "at": m["at"],
+                                         "text": m["text"]}, m.get("attachments"))
                         if name != self.home_channel:
                             v["to_you"] = handle in (m["text"] or "").lower()
                         new.append(v)
@@ -113,8 +126,9 @@ class House:
                     continue
                 if (it.get("author") or {}).get("id") == me:
                     continue
-                new.append({"from": _name(it.get("author")), "in": "#" + names[cid], "at": at,
-                            "text": msg.get("content"), "to_you": True, "mention": True})
+                new.append(_with_files({"from": _name(it.get("author")), "in": "#" + names[cid], "at": at,
+                                        "text": msg.get("content"), "to_you": True, "mention": True},
+                                       (msg.get("properties") or {}).get("attachments") or msg.get("attachments")))
             if newest:
                 seen["mentions"] = newest
         except BabelrError as e:
@@ -140,9 +154,7 @@ class House:
              "text": m.get("text")}
         if m.get("error"):
             v["unreadable"] = m["error"]
-        if m.get("attachments"):
-            v["attachments"] = [{"filename": a.get("filename"), "type": a.get("contentType")} for a in m["attachments"]]
-        return v
+        return _with_files(v, m.get("attachments"))
 
     def conversation(self, who: str, limit: int = 30) -> dict:
         partner_id = self._actor_id(who)
@@ -178,7 +190,8 @@ class House:
         for it in items or []:
             msg = it.get("message", it)
             out.append({"id": msg.get("id"), "author": it.get("author") or msg.get("author"),
-                        "text": msg.get("content"), "at": msg.get("published")})
+                        "text": msg.get("content"), "at": msg.get("published"),
+                        "attachments": (msg.get("properties") or {}).get("attachments") or msg.get("attachments")})
         out.sort(key=lambda m: m.get("at") or "")
         return out
 
@@ -195,13 +208,43 @@ class House:
     def read_channel(self, channel: str, limit: int = 30) -> dict:
         c = self._channel(channel)
         msgs = self._channel_messages(c["id"], max(1, min(limit, 100)))
-        return {"channel": c["name"], "messages": [{"from": _name(m["author"]), "at": m["at"], "text": m["text"]}
-                                                    for m in msgs]}
+        return {"channel": c["name"], "messages": [
+            _with_files({"from": _name(m["author"]), "at": m["at"], "text": m["text"]}, m.get("attachments"))
+            for m in msgs]}
 
     def post(self, channel: str, text: str) -> dict:
         c = self._channel(channel)
         self.agent.post(c["id"], text)
         return {"posted_in": c["name"]}
+
+    # -- files ------------------------------------------------------------
+
+    IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+    MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+    @staticmethod
+    def upload_path(url: str) -> str:
+        """The /uploads/<name> path of a house attachment url, or BabelrError. Only a single
+        plain file name under /uploads/: no other path, host, query, dot segments or
+        encoded characters."""
+        from urllib.parse import urlparse
+        u = urlparse((url or "").strip())
+        if u.query or u.fragment or u.params:
+            raise BabelrError(400, "Give the attachment's url exactly as a message listed it.")
+        path = u.path
+        name = path[len("/uploads/"):] if path.startswith("/uploads/") else ""
+        if not name or "%" in name or "/" in name or "\\" in name or name.startswith(".") or ".." in name:
+            raise BabelrError(400, "That isn't a house attachment. Use a url from a message's attachments.")
+        return "/uploads/" + name
+
+    def image(self, url: str) -> tuple[bytes, str, str]:
+        """The bytes and type of an image attached in the house: (data, mime, path)."""
+        import mimetypes
+        path = self.upload_path(url)
+        mime = mimetypes.guess_type(path)[0] or ""
+        if mime not in self.IMAGE_TYPES:
+            raise BabelrError(415, f"Not an image this can show ({mime or 'unknown type'}).")
+        return self.agent.fetch(path, max_bytes=self.MAX_IMAGE_BYTES), mime, path
 
     # -- wiki -------------------------------------------------------------
 

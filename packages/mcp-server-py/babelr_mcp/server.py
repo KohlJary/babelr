@@ -17,7 +17,7 @@ the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNE
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Annotated, Any
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -25,7 +25,7 @@ from babelr_agent import Agent, BabelrError
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from .auth import SCOPE, HouseAuth
 from .house import House
@@ -124,6 +124,23 @@ def build() -> FastMCP:
     def post_in_channel(channel: str, text: str) -> dict[str, Any]:
         """Post a message in a house channel (name without #). Everyone in it reads it."""
         return safe(lambda: house.post(channel, text))
+
+    @mcp.tool(annotations=READ)
+    def view_image(url: str) -> Annotated[CallToolResult, dict[str, Any]]:
+        """Look at an image a housemate attached: pass the url from a message's attachments
+        (e.g. "/uploads/….png"). Only the house's own attachments."""
+        import base64
+        import json
+        try:
+            data, mime, path = house.image(url)
+        except BabelrError as e:
+            info = {"error": str(e)}
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(info))],
+                                  structuredContent=info, isError=True)
+        info = {"url": path, "type": mime, "bytes": len(data)}
+        return CallToolResult(content=[ImageContent(type="image", data=base64.b64encode(data).decode(), mimeType=mime),
+                                       TextContent(type="text", text=json.dumps(info))],
+                              structuredContent=info)
 
     @mcp.tool(annotations=READ)
     def list_wiki_pages() -> list | dict:

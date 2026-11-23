@@ -244,3 +244,79 @@ def test_every_tool_declares_structured_output():
             and any(isinstance(d, ast.Call) and getattr(d.func, "attr", "") == "tool" for d in f.decorator_list)
             and isinstance(f.returns, ast.Name) and f.returns.id == "dict"]
     assert bare == []
+
+
+PNG = b"\x89PNG\r\n\x1a\nfake"
+
+
+class FilesAgent(FakeAgent):
+    """FakeAgent whose channel message carries an image, and which serves /uploads/."""
+
+    def __init__(self):
+        super().__init__()
+        self.fetched = []
+        self.channel_msgs = [{"message": {"id": "m1", "content": "drafts", "published": "2026-01-01T00:00:01Z",
+                                          "properties": {"attachments": [
+                                              {"url": "/uploads/abc.png", "filename": "gemini-1.png",
+                                               "contentType": "image/png"}]}},
+                              "author": {"id": "u-dae", "preferredUsername": "daedalus"}}]
+
+    def fetch(self, url, max_bytes=0):
+        self.fetched.append(url)
+        return PNG
+
+
+def test_attachments_come_with_their_url_in_every_view(tmp_path):
+    house = House(FilesAgent(), State(tmp_path / "s.json"), home_channel="builds")
+    want = [{"filename": "gemini-1.png", "type": "image/png", "url": "/uploads/abc.png"}]
+    assert house.read_channel("builds")["messages"][0]["attachments"] == want
+    assert [m.get("attachments") for m in house.inbox()["new_messages"] if m.get("in")] == [want]
+
+
+@pytest.mark.parametrize("url", [
+    "/uploads/../state.json", "/uploads/..%2fstate.json", "/uploads/%2e%2e/x.png", "/uploads/a/b.png",
+    "/uploads/.env", "/etc/passwd", "/uploads/", "/uploads/x.png?y=1", "/uploads/a\\b.png", "",
+])
+def test_view_image_only_opens_a_plain_file_under_uploads(tmp_path, url):
+    agent = FilesAgent()
+    with pytest.raises(BabelrError):
+        House(agent, State(tmp_path / "s.json")).image(url)
+    assert agent.fetched == []
+
+
+def test_view_image_fetches_an_image_and_refuses_other_types(tmp_path):
+    agent = FilesAgent()
+    house = House(agent, State(tmp_path / "s.json"))
+    assert house.image("/uploads/abc.png") == (PNG, "image/png", "/uploads/abc.png")
+    assert house.image("http://127.0.0.1:3000/uploads/abc.png")[2] == "/uploads/abc.png"
+    with pytest.raises(BabelrError):
+        house.image("/uploads/notes.txt")
+    assert agent.fetched == ["/uploads/abc.png", "/uploads/abc.png"]
+
+
+def test_view_image_returns_the_picture_and_structured_info(tmp_path, monkeypatch):
+    from babelr_mcp import server
+    tools = {}
+
+    class FakeMCP:
+        def __init__(self, *a, **k): pass
+        def custom_route(self, *a, **k): return lambda f: f
+        def tool(self, **k):
+            def deco(f):
+                tools[f.__name__] = f
+                return f
+            return deco
+
+    for k, v in {"BABELR_MCP_ISSUER": "https://h.example", "BABELR_MCP_OWNERS": "kohl",
+                 "BABELR_MCP_STATE": str(tmp_path / "s.json"), "BABELR_MCP_KEY": str(tmp_path / "k.pem")}.items():
+        monkeypatch.setenv(k, v)
+    (tmp_path / "tok").write_text("t")
+    monkeypatch.setenv("BABELR_MCP_TOKEN", str(tmp_path / "tok"))
+    monkeypatch.setattr(server, "FastMCP", FakeMCP)
+    monkeypatch.setattr(server, "Agent", lambda *a, **k: type("A", (FilesAgent,), {"publish_key": lambda s: None})())
+    server.build()
+    ok = tools["view_image"]("/uploads/abc.png")
+    assert ok.content[0].type == "image" and ok.content[0].mimeType == "image/png"
+    assert ok.structuredContent == {"url": "/uploads/abc.png", "type": "image/png", "bytes": len(PNG)}
+    bad = tools["view_image"]("/uploads/../x.png")
+    assert bad.isError and "error" in bad.structuredContent

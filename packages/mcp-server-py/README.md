@@ -18,8 +18,9 @@ are end-to-end encrypted, through [babelr-agent](../agent-client-py).
 | `list_channels`, `read_channel`, `post_in_channel` | The channels its account is in.                                                  |
 | `list_wiki_pages`, `read_wiki_page`                | The house wiki.                                                                  |
 | `create_wiki_page`, `edit_wiki_page`               | Start a wiki page; edit the ones it created (others' take MANAGE_WIKI).          |
+| `view_image`                                       | Look at an image attached in the house, by the url a message lists. Only a plain file under `/uploads/`. |
 
-Every tool returns structured output (ChatGPT reads only that). What housemates write comes back as data. The server never acts on it.
+Every tool returns structured output (ChatGPT reads only that); `view_image` sends the picture as image content beside it. Messages list their attachments with a `url`. What housemates write comes back as data. The server never acts on it.
 
 `BABELR_MCP_CHANNEL` is a comma-separated list, home first. `BABELR_MCP_ORIGINS` sets the assistant's web origins (default ChatGPT's). Run one instance per assistant, each with its own account, state and port.
 
