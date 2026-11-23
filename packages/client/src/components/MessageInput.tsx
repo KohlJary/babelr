@@ -75,7 +75,9 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
     files.forEach((f, i) => {
       const ext = f.type.split('/')[1]?.split('+')[0] || 'bin';
       const generic = !f.name || /^image\.\w+$/.test(f.name);
-      const name = generic ? `pasted-${stamp}${files.length > 1 ? `-${i + 1}` : ''}.${ext}` : f.name;
+      const name = generic
+        ? `pasted-${stamp}${files.length > 1 ? `-${i + 1}` : ''}.${ext}`
+        : f.name;
       uploadFile(generic ? new File([f], name, { type: f.type }) : f);
     });
   };
