@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-import { createElement } from 'react';
 import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
 
 /** Client-only entry for Cass's room (kept apart from manifest.ts so the
