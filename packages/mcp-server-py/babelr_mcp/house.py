@@ -216,6 +216,35 @@ class House:
         pages = pages.get("pages", pages) if isinstance(pages, dict) else pages
         return [{"slug": p.get("slug"), "title": p.get("title")} for p in pages]
 
+    def _page_id(self, slug: str) -> str | None:
+        p = self.agent._req("GET", f"/servers/{self._server_id()}/wiki/pages/{slug}") or {}
+        return (p.get("page", p) or {}).get("id")
+
+    def create_wiki_page(self, title: str, content: str, parent: str | None = None,
+                         tags: list[str] | None = None) -> dict:
+        body: dict = {"title": title, "content": content}
+        if tags:
+            body["tags"] = tags
+        if parent:
+            body["parentId"] = self._page_id(parent.strip())
+        p = self.agent._req("POST", f"/servers/{self._server_id()}/wiki/pages", body) or {}
+        p = p.get("page", p)
+        return {"created": p.get("slug"), "title": p.get("title")}
+
+    def edit_wiki_page(self, slug: str, content: str, summary: str, title: str | None = None) -> dict:
+        body: dict = {"content": content, "summary": summary}
+        if title:
+            body["title"] = title
+        try:
+            p = self.agent._req("PUT", f"/servers/{self._server_id()}/wiki/pages/{slug}", body) or {}
+        except BabelrError as e:
+            if "403" in str(e) or getattr(e, "status", None) == 403:
+                return {"error": "You can edit pages you created; this one isn't yours. "
+                                 "Suggest the change to its author, or start your own page."}
+            raise
+        p = p.get("page", p)
+        return {"edited": p.get("slug") or slug}
+
     def wiki_page(self, slug: str) -> dict:
         p = self.agent._req("GET", f"/servers/{self._server_id()}/wiki/pages/{slug}") or {}
         p = p.get("page", p)

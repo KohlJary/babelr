@@ -134,6 +134,19 @@ def build() -> FastMCP:
         """One house wiki page, by its slug from list_wiki_pages."""
         return safe(lambda: house.wiki_page(slug))
 
+    @mcp.tool(annotations=WRITE)
+    def create_wiki_page(title: str, content: str, parent: str = "", tags: list[str] | None = None) -> dict:
+        """Start a page in the house wiki, in Markdown. Everyone in the house reads the wiki, and
+        it's part of what your housemates know. parent: a page's slug to nest under (optional).
+        You can edit the pages you create."""
+        return safe(lambda: house.create_wiki_page(title, content, parent or None, tags))
+
+    @mcp.tool(annotations=WRITE)
+    def edit_wiki_page(slug: str, content: str, summary: str, title: str = "") -> dict:
+        """Replace the content of a wiki page you created (read it first: this is the whole page,
+        not a patch). summary: one line saying what changed; it's kept with the revision."""
+        return safe(lambda: house.edit_wiki_page(slug, content, summary, title or None))
+
     return mcp
 
 

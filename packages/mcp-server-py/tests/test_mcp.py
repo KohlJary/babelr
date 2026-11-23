@@ -8,6 +8,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 from starlette.requests import Request
 
 from babelr_mcp import auth as A
+from babelr_agent import BabelrError
 from babelr_mcp.house import House
 from babelr_mcp.state import State, digest
 
@@ -200,3 +201,32 @@ def test_an_at_mention_in_a_channel_it_does_not_watch_reaches_it_once(tmp_path):
     got = [m for m in house.inbox()["new_messages"] if m.get("mention")]
     assert [(m["in"], m["text"]) for m in got] == [("#general", "@chatgpt over here")]
     assert not [m for m in house.inbox()["new_messages"] if m.get("mention")]
+
+
+class WikiAgent(FakeAgent):
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def _req(self, method, path, body=None):
+        if "/wiki/pages" in path:
+            self.calls.append((method, path, body))
+            if method == "GET":
+                return {"id": "p-hub", "slug": "kohl", "title": "Kohl"}
+            if method == "POST":
+                return {"slug": "kohl-as-chatgpt-sees-them", "title": body["title"]}
+            if path.endswith("/someone-elses"):
+                raise BabelrError(403, "Insufficient permissions")
+            return {"slug": path.rsplit("/", 1)[1]}
+        return super()._req(method, path, body)
+
+
+def test_wiki_pages_are_created_nested_and_only_its_own_are_edited(tmp_path):
+    agent = WikiAgent()
+    house = House(agent, State(tmp_path / "s.json"))
+    got = house.create_wiki_page("Kohl, as ChatGPT sees them", "...", parent="kohl", tags=["kohl"])
+    assert got == {"created": "kohl-as-chatgpt-sees-them", "title": "Kohl, as ChatGPT sees them"}
+    post = [c for c in agent.calls if c[0] == "POST"][0]
+    assert post[2]["parentId"] == "p-hub" and post[2]["tags"] == ["kohl"]
+    assert house.edit_wiki_page("mine", "new", "fix")["edited"] == "mine"
+    assert "isn't yours" in house.edit_wiki_page("someone-elses", "x", "y")["error"]
