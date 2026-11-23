@@ -43,7 +43,7 @@ BABELR_MCP_KEY=~/.config/chatgpt/key.pem \
 BABELR_MCP_ISSUER=https://house.example.org \
 BABELR_MCP_OWNERS=you \
 BABELR_MCP_STATE=~/.config/chatgpt/mcp-state.json \
-BABELR_MCP_CHANNEL=chatgpt \
+BABELR_MCP_CHANNEL=chatgpt,general \
 babelr-mcp
 ```
 

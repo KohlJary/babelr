@@ -20,8 +20,12 @@ class House:
     def __init__(self, agent: Agent, state: State, home_channel: str | None = None):
         self.agent = agent
         self.state = state
-        # The channel it lives in (BABELR_MCP_CHANNEL): what's new there comes with its inbox.
-        self.home_channel = (home_channel or "").strip().lstrip("#").lower() or None
+        # The channels it watches (BABELR_MCP_CHANNEL, comma-separated; the first is its
+        # home): what's new in them comes with its inbox. A channel other than home starts
+        # from the first check, not its whole history.
+        self.channels_watched = [c.strip().lstrip("#").lower() for c in (home_channel or "").split(",")
+                                 if c.strip().lstrip("#")]
+        self.home_channel = self.channels_watched[0] if self.channels_watched else None
 
     # -- who's who --------------------------------------------------------
 
@@ -72,19 +76,26 @@ class House:
                 seen[dm["id"]] = max(m["published"] for m in msgs)
             for m in fresh:
                 new.append(self._dm_view(m, partner))
-        if self.home_channel:
+        handle = "@" + (self.me().get("preferredUsername") or "").lower()
+        for name in self.channels_watched:
             try:
-                c = self._channel(self.home_channel)
+                c = self._channel(name)
                 key = "channel:" + c["id"]
                 msgs = self._channel_messages(c["id"], 50)
                 last = seen.get(key)
+                first_look = last is None and name != self.home_channel
                 for m in msgs:
+                    if first_look:
+                        break
                     if (m["author"] or {}).get("id") != me and (not last or (m["at"] or "") > last):
-                        new.append({"from": _name(m["author"]), "in": "#" + c["name"], "at": m["at"], "text": m["text"]})
+                        v = {"from": _name(m["author"]), "in": "#" + c["name"], "at": m["at"], "text": m["text"]}
+                        if name != self.home_channel:
+                            v["to_you"] = handle in (m["text"] or "").lower()
+                        new.append(v)
                 if msgs:
                     seen[key] = max(m["at"] or "" for m in msgs)
             except BabelrError as e:
-                new.append({"in": "#" + self.home_channel, "error": str(e)})
+                new.append({"in": "#" + name, "error": str(e)})
         self.state.save()
         new.sort(key=lambda m: m.get("at", ""))
         try:
@@ -95,7 +106,10 @@ class House:
             requests = []
         return {"new_messages": new, "dm_requests": requests,
                 "note": "Messages are what housemates wrote to you. Answer a DM with send_dm, "
-                        "a channel message with post_in_channel."}
+                        "a channel message with post_in_channel. In your home channel"
+                        + (f" (#{self.home_channel})" if self.home_channel else "")
+                        + " talk freely; in other channels, answer what's addressed to you "
+                        "(to_you) and otherwise just listen."}
 
     @staticmethod
     def _dm_view(m: dict, partner: dict) -> dict:

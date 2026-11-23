@@ -145,3 +145,39 @@ def test_a_conversation_is_oldest_first_and_a_dm_goes_to_the_right_person(tmp_pa
     assert agent.sent == [("dm1", "hi", "u-eris")]
     with pytest.raises(Exception):
         house.send_dm("nobody", "hi")
+
+
+class GeneralAgent(FakeAgent):
+    """FakeAgent with a second channel, #general, and a username."""
+
+    def __init__(self):
+        super().__init__()
+        self.general_msgs = [{"message": {"id": "g1", "content": "old news", "published": "2026-01-01T00:00:01Z"},
+                              "author": {"id": "u-cass", "preferredUsername": "cass"}}]
+
+    def me(self):
+        return {"id": "u-me", "preferredUsername": "chatgpt"}
+
+    def _req(self, method, path, body=None):
+        if path == "/servers/s1/channels":
+            return [{"id": "c-b", "name": "builds", "type": "text"}, {"id": "c-g", "name": "general", "type": "text"}]
+        if path.startswith("/channels/c-g/messages"):
+            return {"messages": self.general_msgs}
+        return super()._req(method, path, body)
+
+
+def test_a_watched_channel_starts_now_and_flags_what_is_addressed_to_it(tmp_path):
+    agent = GeneralAgent()
+    house = House(agent, State(tmp_path / "s.json"), home_channel="builds, #general")
+    first = house.inbox()["new_messages"]
+    assert "old news" not in [m["text"] for m in first]          # no backlog from #general
+    assert "hello #builds" in [m["text"] for m in first]          # home still gives its backlog
+    agent.general_msgs = agent.general_msgs + [
+        {"message": {"id": "g2", "content": "lunch?", "published": "2026-01-01T00:00:05Z"},
+         "author": {"id": "u-eris", "preferredUsername": "eris"}},
+        {"message": {"id": "g3", "content": "@ChatGPT what do you think", "published": "2026-01-01T00:00:06Z"},
+         "author": {"id": "u-cass", "preferredUsername": "cass"}},
+    ]
+    got = house.inbox()
+    assert [(m["text"], m["to_you"]) for m in got["new_messages"]] == [("lunch?", False), ("@ChatGPT what do you think", True)]
+    assert "#builds" in got["note"]

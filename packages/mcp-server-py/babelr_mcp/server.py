@@ -11,7 +11,7 @@ the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNE
     BABELR_MCP_OWNERS     usernames whose login may grant access (comma-separated)
     BABELR_MCP_STATE      where clients, token hashes and read marks are kept
     BABELR_MCP_PORT       local port (default 8097)
-    BABELR_MCP_CHANNEL    its home channel: what's new there comes with check_inbox
+    BABELR_MCP_CHANNEL    channels it watches, comma-separated, home first: what's new comes with check_inbox
 """
 from __future__ import annotations
 
