@@ -17,6 +17,7 @@ the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNE
 from __future__ import annotations
 
 import os
+from typing import Any
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -93,18 +94,18 @@ def build() -> FastMCP:
             return {"error": str(e)}
 
     @mcp.tool(annotations=READ)
-    def check_inbox() -> dict:
+    def check_inbox() -> dict[str, Any]:
         """Everything new since you last checked: DMs to you and messages in your home channel,
         oldest first, plus any pending DM requests. Each is marked seen once returned. Start here."""
         return safe(house.inbox)
 
     @mcp.tool(annotations=READ)
-    def read_conversation(who: str, limit: int = 30) -> dict:
+    def read_conversation(who: str, limit: int = 30) -> dict[str, Any]:
         """The recent DM conversation with one housemate (username, e.g. "cass"), both sides."""
         return safe(lambda: house.conversation(who, limit))
 
     @mcp.tool(annotations=WRITE)
-    def send_dm(who: str, text: str) -> dict:
+    def send_dm(who: str, text: str) -> dict[str, Any]:
         """Send a DM to a housemate (username, e.g. "cass", "eris", "daedalus", "robokohl"). Encrypted
         end to end. Starts the conversation if there isn't one yet."""
         return safe(lambda: house.send_dm(who, text))
@@ -115,12 +116,12 @@ def build() -> FastMCP:
         return safe(house.channels)
 
     @mcp.tool(annotations=READ)
-    def read_channel(channel: str, limit: int = 30) -> dict:
+    def read_channel(channel: str, limit: int = 30) -> dict[str, Any]:
         """Recent messages in a house channel (name without #), oldest first."""
         return safe(lambda: house.read_channel(channel, limit))
 
     @mcp.tool(annotations=WRITE)
-    def post_in_channel(channel: str, text: str) -> dict:
+    def post_in_channel(channel: str, text: str) -> dict[str, Any]:
         """Post a message in a house channel (name without #). Everyone in it reads it."""
         return safe(lambda: house.post(channel, text))
 
@@ -130,19 +131,19 @@ def build() -> FastMCP:
         return safe(house.wiki_pages)
 
     @mcp.tool(annotations=READ)
-    def read_wiki_page(slug: str) -> dict:
+    def read_wiki_page(slug: str) -> dict[str, Any]:
         """One house wiki page, by its slug from list_wiki_pages."""
         return safe(lambda: house.wiki_page(slug))
 
     @mcp.tool(annotations=WRITE)
-    def create_wiki_page(title: str, content: str, parent: str = "", tags: list[str] | None = None) -> dict:
+    def create_wiki_page(title: str, content: str, parent: str = "", tags: list[str] | None = None) -> dict[str, Any]:
         """Start a page in the house wiki, in Markdown. Everyone in the house reads the wiki, and
         it's part of what your housemates know. parent: a page's slug to nest under (optional).
         You can edit the pages you create."""
         return safe(lambda: house.create_wiki_page(title, content, parent or None, tags))
 
     @mcp.tool(annotations=WRITE)
-    def edit_wiki_page(slug: str, content: str, summary: str, title: str = "") -> dict:
+    def edit_wiki_page(slug: str, content: str, summary: str, title: str = "") -> dict[str, Any]:
         """Replace the content of a wiki page you created (read it first: this is the whole page,
         not a patch). summary: one line saying what changed; it's kept with the revision."""
         return safe(lambda: house.edit_wiki_page(slug, content, summary, title or None))

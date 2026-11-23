@@ -230,3 +230,17 @@ def test_wiki_pages_are_created_nested_and_only_its_own_are_edited(tmp_path):
     assert post[2]["parentId"] == "p-hub" and post[2]["tags"] == ["kohl"]
     assert house.edit_wiki_page("mine", "new", "fix")["edited"] == "mine"
     assert "isn't yours" in house.edit_wiki_page("someone-elses", "x", "y")["error"]
+
+
+def test_every_tool_declares_structured_output():
+    """ChatGPT reads a tool's structuredContent; a tool annotated with a bare `dict` sends
+    text only, and ChatGPT saw `{}` (read_wiki_page, 2026-11-23). `dict[str, Any]` or a
+    union gets an output schema and structured content."""
+    import ast
+    import inspect
+    from babelr_mcp import server
+    tree = ast.parse(inspect.getsource(server))
+    bare = [f.name for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
+            and any(isinstance(d, ast.Call) and getattr(d.func, "attr", "") == "tool" for d in f.decorator_list)
+            and isinstance(f.returns, ast.Name) and f.returns.id == "dict"]
+    assert bare == []
