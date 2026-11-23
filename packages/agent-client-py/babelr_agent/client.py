@@ -8,6 +8,8 @@
     dm = a.open_dm(partner_id)      # needs dms:open
     a.send(dm["id"], "hello")       # needs dms:post (and dms:read to find
                                     # the partner, unless you pass partner_id)
+    f = a.upload("art.png")         # needs files:upload
+    a.send(dm["id"], "made this", attachments=[f])
     for m in a.messages(dm["id"]):  # needs dms:read; decrypted here
         print(m["author"]["preferredUsername"], m["text"])
     a.reply_status(dm["id"], m["id"], "working")   # dms:post (channels:post
@@ -112,14 +114,53 @@ class Agent:
                 return others[0]
         raise BabelrError(404, f"not in DM {dm_id}")
 
-    def send(self, dm_id: str, text: str, partner_id: str | None = None) -> dict:
+    def send(self, dm_id: str, text: str, partner_id: str | None = None,
+             attachments: list[dict] | None = None) -> dict:
+        """An encrypted DM. `attachments` are what `upload` returned; like a
+        person's attachments, the file itself isn't encrypted, only the text."""
         partner = partner_id or self._partner(dm_id)
         ct, iv = crypto.encrypt(text, self._key_for(partner))
-        return self._req(
-            "POST",
-            f"/dms/{dm_id}/messages",
-            {"content": ct, "properties": {"encrypted": True, "iv": iv}},
-        )
+        props: dict[str, Any] = {"encrypted": True, "iv": iv}
+        if attachments:
+            props["attachments"] = [_attachment(a) for a in attachments]
+        return self._req("POST", f"/dms/{dm_id}/messages", {"content": ct, "properties": props})
+
+    def post(self, channel_id: str, text: str, attachments: list[dict] | None = None) -> dict:
+        """A message in a server channel (channels:post; attaching needs the
+        channel's ATTACH_FILES permission too)."""
+        body: dict[str, Any] = {"content": text}
+        if attachments:
+            body["properties"] = {"attachments": [_attachment(a) for a in attachments]}
+        return self._req("POST", f"/channels/{channel_id}/messages", body)
+
+    # -- files --------------------------------------------------------------
+
+    def upload(self, path: str | Path, filename: str | None = None,
+               content_type: str | None = None) -> dict:
+        """Upload a file (files:upload; the server caps it at 10 MB). Returns
+        {url, filename, contentType}, ready for `send` or `post` attachments."""
+        import mimetypes
+        import uuid
+        p = Path(path).expanduser()
+        name = filename or p.name
+        ctype = content_type or mimetypes.guess_type(name)[0] or "application/octet-stream"
+        boundary = uuid.uuid4().hex
+        safe = name.replace('"', "").replace("\r", "").replace("\n", "")
+        head = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{safe}\"\r\n"
+                f"Content-Type: {ctype}\r\n\r\n").encode()
+        data = head + p.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request(self.base_url + "/upload", data=data, method="POST")
+        req.add_header("Authorization", f"Bearer {self.token}")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            try:
+                msg = json.loads(e.read()).get("error", e.reason)
+            except Exception:
+                msg = e.reason
+            raise BabelrError(e.code, msg) from None
 
     def messages(self, dm_id: str, partner_id: str | None = None) -> list[dict]:
         """Messages in a DM, each with `text` decrypted.
@@ -200,3 +241,11 @@ class Agent:
             return None, "undecryptable"
         except (ValueError, binascii.Error):
             return None, "bad-format"
+
+
+def _attachment(a: dict) -> dict:
+    """Only the fields a message's attachment carries."""
+    if not a.get("url"):
+        raise ValueError("an attachment needs the url upload returned")
+    return {"url": a["url"], "filename": a.get("filename") or a["url"].rsplit("/", 1)[-1],
+            "contentType": a.get("contentType") or "application/octet-stream"}

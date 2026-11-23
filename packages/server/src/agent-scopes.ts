@@ -36,6 +36,7 @@ export const AGENT_SCOPES = [
   'plugins:write',
   'keys:write',
   'status:write',
+  'files:upload',
 ] as const;
 
 /**
@@ -129,6 +130,13 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'GET /dms': { scope: 'dms:read', action: 'dms.list' },
   'GET /dms/:dmId/messages': { scope: 'dms:read', param: 'dmId', action: 'dm.read' },
   'POST /dms/:dmId/messages': { scope: 'dms:post', param: 'dmId', action: 'dm.post' },
+
+  // Uploading a file, so an agent can attach it to a message it posts (the
+  // attachment still goes through dms:post or channels:post, and a channel's
+  // ATTACH_FILES permission). Closed to tokens until Kohl, 2026-11-23: "y'all
+  // should probably also be able to share files. Like, Cass can share her art."
+  // Its own scope, so a sponsor grants it per token; every upload is audited.
+  'POST /upload': { scope: 'files:upload', action: 'file.upload' },
 
   // Opening a DM. The other side's DM policy, allowlist and blocks
   // still decide whether it opens, becomes a request, or is refused.

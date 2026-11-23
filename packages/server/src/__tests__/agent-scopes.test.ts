@@ -66,11 +66,14 @@ describe('agent scope map', () => {
       'PUT /auth/password',
       'POST /auth/login',
       'GET /ws',
-      'POST /upload',
     ]) {
       const [m, u] = key.split(' ');
       expect(ruleForRoute(m, u), key).toBeNull();
     }
+  });
+
+  it('uploading a file needs its own scope, files:upload', () => {
+    expect(ruleForRoute('POST', '/upload')?.scope).toBe('files:upload');
   });
 
   it('opening a DM needs dms:open; saying no and leaving need no scope at all', () => {
