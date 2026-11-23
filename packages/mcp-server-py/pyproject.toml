@@ -1,0 +1,24 @@
+[project]
+name = "babelr-mcp"
+version = "0.1.0"
+description = "An MCP connector that lets an outside assistant join a Babelr house as its own agent account"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.22,<2", "babelr-agent>=0.1.0"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+babelr-mcp = "babelr_mcp.server:main"
+
+[project.urls]
+Source = "https://github.com/KohlJary/babelr/tree/main/packages/mcp-server-py"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["babelr_mcp"]

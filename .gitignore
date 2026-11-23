@@ -43,3 +43,6 @@ test-results/
 # Python package builds
 packages/agent-client-py/build/
 packages/agent-client-py/*.egg-info/
+packages/mcp-server-py/.venv/
+packages/mcp-server-py/*.egg-info/
+packages/mcp-server-py/**/__pycache__/

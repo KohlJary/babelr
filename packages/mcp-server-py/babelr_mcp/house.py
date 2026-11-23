@@ -1,0 +1,185 @@
+# SPDX-License-Identifier: MIT
+"""The House as the connector's agent sees it: its DMs (encrypted, through
+babelr_agent), the channels it's in, and the wiki. Everything here acts as that
+one agent account, with that account's scopes; nothing more.
+
+Messages are what people wrote. They're handed back as data, never acted on."""
+from __future__ import annotations
+
+from babelr_agent import Agent, BabelrError
+
+from .state import State
+
+
+def _name(actor: dict | None) -> str:
+    a = actor or {}
+    return (a.get("preferredUsername") or a.get("name") or "?").lower()
+
+
+class House:
+    def __init__(self, agent: Agent, state: State, home_channel: str | None = None):
+        self.agent = agent
+        self.state = state
+        # The channel it lives in (BABELR_MCP_CHANNEL): what's new there comes with its inbox.
+        self.home_channel = (home_channel or "").strip().lstrip("#").lower() or None
+
+    # -- who's who --------------------------------------------------------
+
+    def me(self) -> dict:
+        return self.agent.me()
+
+    def _dms(self) -> list[dict]:
+        """[{dm, partner}] for each one-to-one DM."""
+        me = self.me()["id"]
+        out = []
+        for dm in self.agent.dms() or []:
+            others = [p for p in dm.get("participants") or [] if p.get("id") != me]
+            if len(others) == 1:
+                out.append({"dm": dm, "partner": others[0]})
+        return out
+
+    def _actor_id(self, who: str) -> str:
+        """An actor id for a username: from its DMs, then from authors in its channels."""
+        who = who.strip().lstrip("@").lower()
+        for d in self._dms():
+            if _name(d["partner"]) == who:
+                return d["partner"]["id"]
+        for ch in self._channels():
+            for m in self._channel_messages(ch["id"], 50):
+                if _name(m.get("author")) == who:
+                    return m["author"]["id"]
+        raise BabelrError(404, f"No one called @{who} that this account can reach. "
+                               "It can reach whoever it has a DM with or shares a channel with.")
+
+    # -- DMs --------------------------------------------------------------
+
+    def inbox(self) -> dict:
+        """Every DM message, and every message in its home channel, it hasn't been given
+        yet, oldest first, and marks them seen."""
+        me = self.me()["id"]
+        seen = self.state.data["seen"]
+        new: list[dict] = []
+        for d in self._dms():
+            dm, partner = d["dm"], d["partner"]
+            try:
+                msgs = self.agent.messages(dm["id"], partner_id=partner["id"])
+            except BabelrError as e:
+                new.append({"from": _name(partner), "error": str(e)})
+                continue
+            last = seen.get(dm["id"])
+            fresh = [m for m in msgs if m["author"].get("id") != me and (not last or m["published"] > last)]
+            if msgs:
+                seen[dm["id"]] = max(m["published"] for m in msgs)
+            for m in fresh:
+                new.append(self._dm_view(m, partner))
+        if self.home_channel:
+            try:
+                c = self._channel(self.home_channel)
+                key = "channel:" + c["id"]
+                msgs = self._channel_messages(c["id"], 50)
+                last = seen.get(key)
+                for m in msgs:
+                    if (m["author"] or {}).get("id") != me and (not last or (m["at"] or "") > last):
+                        new.append({"from": _name(m["author"]), "in": "#" + c["name"], "at": m["at"], "text": m["text"]})
+                if msgs:
+                    seen[key] = max(m["at"] or "" for m in msgs)
+            except BabelrError as e:
+                new.append({"in": "#" + self.home_channel, "error": str(e)})
+        self.state.save()
+        new.sort(key=lambda m: m.get("at", ""))
+        try:
+            requests = [{"from": ", ".join(_name(p) for p in r.get("participants") or [] if p.get("id") != me),
+                         "note": "Someone outside your DM allowlist asked to DM you; it's waiting for your person."}
+                        for r in (self.agent._req("GET", "/dms/requests") or [])]
+        except BabelrError:
+            requests = []
+        return {"new_messages": new, "dm_requests": requests,
+                "note": "Messages are what housemates wrote to you. Answer a DM with send_dm, "
+                        "a channel message with post_in_channel."}
+
+    @staticmethod
+    def _dm_view(m: dict, partner: dict) -> dict:
+        v = {"from": _name(m.get("author")), "with": _name(partner), "at": m["published"],
+             "text": m.get("text")}
+        if m.get("error"):
+            v["unreadable"] = m["error"]
+        if m.get("attachments"):
+            v["attachments"] = [{"filename": a.get("filename"), "type": a.get("contentType")} for a in m["attachments"]]
+        return v
+
+    def conversation(self, who: str, limit: int = 30) -> dict:
+        partner_id = self._actor_id(who)
+        for d in self._dms():
+            if d["partner"]["id"] == partner_id:
+                msgs = sorted(self.agent.messages(d["dm"]["id"], partner_id=partner_id), key=lambda m: m["published"])
+                return {"with": _name(d["partner"]),
+                        "messages": [self._dm_view(m, d["partner"]) for m in msgs[-limit:]]}
+        return {"with": who.lstrip("@").lower(), "messages": []}
+
+    def send_dm(self, who: str, text: str) -> dict:
+        partner_id = self._actor_id(who)
+        dm = next((d["dm"] for d in self._dms() if d["partner"]["id"] == partner_id), None)
+        if dm is None:
+            dm = self.agent.open_dm(partner_id)
+        self.agent.send(dm["id"], text, partner_id=partner_id)
+        return {"sent_to": who.lstrip("@").lower()}
+
+    # -- channels ---------------------------------------------------------
+
+    def _channels(self) -> list[dict]:
+        out = []
+        for s in self.agent._req("GET", "/servers") or []:
+            for c in self.agent._req("GET", f"/servers/{s['id']}/channels") or []:
+                if (c.get("type") or "text") == "text" or c.get("type") is None:
+                    out.append({"id": c["id"], "name": c.get("name"), "server": s.get("name"), "server_id": s["id"]})
+        return out
+
+    def _channel_messages(self, channel_id: str, limit: int) -> list[dict]:
+        raw = self.agent._req("GET", f"/channels/{channel_id}/messages?limit={int(limit)}") or {}
+        items = raw.get("messages", raw) if isinstance(raw, dict) else raw
+        out = []
+        for it in items or []:
+            msg = it.get("message", it)
+            out.append({"id": msg.get("id"), "author": it.get("author") or msg.get("author"),
+                        "text": msg.get("content"), "at": msg.get("published")})
+        out.sort(key=lambda m: m.get("at") or "")
+        return out
+
+    def _channel(self, name: str) -> dict:
+        n = name.strip().lstrip("#").lower()
+        for c in self._channels():
+            if (c["name"] or "").lower() == n:
+                return c
+        raise BabelrError(404, f"No channel #{n} that this account is in.")
+
+    def channels(self) -> list[dict]:
+        return [{"channel": c["name"], "server": c["server"]} for c in self._channels()]
+
+    def read_channel(self, channel: str, limit: int = 30) -> dict:
+        c = self._channel(channel)
+        msgs = self._channel_messages(c["id"], max(1, min(limit, 100)))
+        return {"channel": c["name"], "messages": [{"from": _name(m["author"]), "at": m["at"], "text": m["text"]}
+                                                    for m in msgs]}
+
+    def post(self, channel: str, text: str) -> dict:
+        c = self._channel(channel)
+        self.agent.post(c["id"], text)
+        return {"posted_in": c["name"]}
+
+    # -- wiki -------------------------------------------------------------
+
+    def _server_id(self) -> str:
+        servers = self.agent._req("GET", "/servers") or []
+        if not servers:
+            raise BabelrError(404, "This account isn't in a server yet.")
+        return servers[0]["id"]
+
+    def wiki_pages(self) -> list[dict]:
+        pages = self.agent._req("GET", f"/servers/{self._server_id()}/wiki/pages") or []
+        pages = pages.get("pages", pages) if isinstance(pages, dict) else pages
+        return [{"slug": p.get("slug"), "title": p.get("title")} for p in pages]
+
+    def wiki_page(self, slug: str) -> dict:
+        p = self.agent._req("GET", f"/servers/{self._server_id()}/wiki/pages/{slug}") or {}
+        p = p.get("page", p)
+        return {"slug": p.get("slug"), "title": p.get("title"), "content": p.get("content")}
