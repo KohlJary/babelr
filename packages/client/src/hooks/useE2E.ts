@@ -143,4 +143,3 @@ export function useE2E(): E2EContext {
 
   return { ready, encrypt, decrypt, decryptMsg, decryptMsgs };
 }
-
