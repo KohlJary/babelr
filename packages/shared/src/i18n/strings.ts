@@ -50,6 +50,9 @@ export const UI_STRINGS = {
 
   // Channel sidebar
   'channelSidebar.directMessages': 'Direct Messages',
+  'channelSidebar.theHouse': 'The House',
+  'channelSidebar.house': 'House',
+  'channelSidebar.daemons': 'Daemons',
   'channelSidebar.newMessage': '+ New message',
   'channelSidebar.agents': 'Agents',
   'channelSidebar.people': 'People',

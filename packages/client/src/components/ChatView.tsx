@@ -39,7 +39,7 @@ import { subscribeToPush } from '../push';
 import type { EmbedNavCtx } from '../embeds/registry';
 import { parseWikiRefs, type WikiRefKind } from '@babelr/shared';
 import { getEmbed } from '../embeds/registry';
-import { DaemonRoom, useRoomOpen } from './DaemonRoom';
+import { DaemonRoom, MemberHeader, useRoomOpen } from './DaemonRoom';
 import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
@@ -486,11 +486,18 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             selectServer(id);
           }}
           onSelectDMs={() => setDmMode(true)}
-          houseActive={activeViewId === 'house'}
+          houseActive={dmMode}
           houseMembers={house?.agents ?? []}
           onOpenHouse={(member) => {
-            setDmMode(false);
-            openView('house', member ? { member } : {});
+            // The House is the DM home: a member's face opens your conversation
+            // with her; the house itself opens on its overview until you pick one.
+            setDmMode(true);
+            const m = member ? house?.agents.find((a) => a.preferredUsername === member) : null;
+            if (m) {
+              openDMWith(m.id);
+              return;
+            }
+            openView('house', {});
             setDrawerClosed(true);
           }}
           onCreateServer={() => setShowCreateServer(true)}
@@ -503,6 +510,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           channels={channels}
           selectedChannelId={selectedChannel?.id ?? null}
           conversations={conversations}
+          houseAgents={house?.agents ?? []}
+          onTalkTo={openDMWith}
           dmPreviews={dmPreviews}
           selectedDMId={selectedDM?.id ?? null}
           actor={actor}
@@ -648,6 +657,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                       onBlock={block}
                     />
                   )}
+                  {roomMember && <MemberHeader m={roomMember} />}
                   <MessageList
                     messages={messages}
                     loading={loading}

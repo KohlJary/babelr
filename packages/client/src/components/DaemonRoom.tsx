@@ -42,7 +42,7 @@ export function useRoomOpen(name: string | null): [boolean, () => void] {
   return [open, toggle];
 }
 
-function useSections(daemon: string): DaemonSectionDefinition[] {
+export function useSections(daemon: string): DaemonSectionDefinition[] {
   const [all, setAll] = useState(listDaemonSections);
   const [ok, setOk] = useState<Set<string>>(new Set());
   useEffect(() => onDaemonSectionsChange(() => setAll(listDaemonSections())), []);
@@ -151,5 +151,62 @@ export function DaemonRoom({ daemon, member, openView, openEmbed }: DaemonRoomPr
         </footer>
       )}
     </aside>
+  );
+}
+
+/** Her card at the top of your conversation with her (the House card, merged in). */
+export function MemberHeader({ m }: { m: HouseMember }) {
+  const name = m.displayName ?? m.preferredUsername;
+  return (
+    <div className="member-header">
+      {m.avatarUrl && <img className="member-header-face" src={m.avatarUrl} alt="" />}
+      <div className="member-header-text">
+        <div className="member-header-name">
+          {name} {m.sigil && <span className="daemon-room-sigil">{m.sigil}</span>}
+          {m.sponsor && (
+            <span className="daemon-room-muted">
+              {' '}
+              · lives with {m.sponsor.displayName ?? m.sponsor.preferredUsername}
+            </span>
+          )}
+        </div>
+        {m.summary && <div className="member-header-bio">{m.summary}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** A daemon's doors (from every plugin), for places other than her room: her House card. */
+export function DaemonDoors({
+  name,
+  label,
+  openView,
+  className,
+}: {
+  name: string;
+  label: string;
+  openView: (id: string, state?: Record<string, unknown>) => void;
+  className?: string;
+}) {
+  const doors = useSections(name).filter((s) => s.place === 'door');
+  return (
+    <>
+      {doors.map((d) => (
+        <button
+          key={`${d.pluginId}:${d.id}`}
+          type="button"
+          className={className}
+          onClick={() =>
+            d.open?.({
+              daemon: { name, label },
+              routeBase: d.routeBase,
+              host: { openView, openEmbed: () => {} },
+            })
+          }
+        >
+          {d.icon} {d.label}
+        </button>
+      ))}
+    </>
   );
 }

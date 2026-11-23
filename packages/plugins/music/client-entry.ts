@@ -11,7 +11,7 @@ export const clientManifest: PluginManifest = {
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { MusicSidebarSlot, MusicView } = await import('./client.js');
+  const { MusicView } = await import('./client.js');
   const routeBase = api.routeBase;
   api.registerView({
     id: 'music',
@@ -37,11 +37,5 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
       return !!r?.ok && !!((await r.json()) as { configured?: boolean }).configured;
     },
     open: (props) => (props as { host: { openView: (id: string) => void } }).host.openView('music'),
-  });
-  api.registerSidebarSlot({
-    id: 'music-nav',
-    Component: (props: { host: unknown }) =>
-      createElement(MusicSidebarSlot as never, { ...props, routeBase: api.routeBase }),
-    isAvailable: () => true,
   });
 }
