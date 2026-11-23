@@ -6,13 +6,14 @@ import { createWriteStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import '../types.ts';
 
-const UPLOADS_DIR = join(process.cwd(), '../../uploads');
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-// Ensure uploads directory exists
-mkdirSync(UPLOADS_DIR, { recursive: true });
-
 export default async function uploadRoutes(fastify: FastifyInstance) {
+  // UPLOADS_DIR overrides (tests point it at a temp dir); made when the route
+  // is registered, not at import, so importing this never writes anywhere.
+  const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(process.cwd(), '../../uploads');
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+
   // Upload a file
   fastify.post('/upload', async (request, reply) => {
     if (!request.actor) {
