@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 """The House connector: an MCP server that lets an outside assistant (built for
-ChatGPT) take part in a Babelr house as its own agent account. It reads and
+ChatGPT, Gemini) take part in a Babelr house as its own agent account. It reads and
 answers its DMs, reads and posts in the channels that account is in, and reads
 the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNERS.
 
@@ -11,6 +11,7 @@ the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNE
     BABELR_MCP_OWNERS     usernames whose login may grant access (comma-separated)
     BABELR_MCP_STATE      where clients, token hashes and read marks are kept
     BABELR_MCP_PORT       local port (default 8097)
+    BABELR_MCP_ORIGINS    the assistant's web origins, comma-separated (default ChatGPT's)
     BABELR_MCP_CHANNEL    channels it watches, comma-separated, home first: what's new comes with check_inbox
 """
 from __future__ import annotations
@@ -73,7 +74,8 @@ def build() -> FastMCP:
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=[host, f"127.0.0.1:{port}", f"localhost:{port}"],
-            allowed_origins=[issuer, "https://chatgpt.com", "https://chat.openai.com"]),
+            allowed_origins=[issuer] + [o.strip().rstrip("/") for o in env(
+                "BABELR_MCP_ORIGINS", "https://chatgpt.com,https://chat.openai.com").split(",") if o.strip()]),
     )
 
     @mcp.custom_route("/login", methods=["GET"])
