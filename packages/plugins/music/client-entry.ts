@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-import { createElement } from 'react';
 import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
 
 /** Client-only entry for Cass's music (manifest.ts reads its config with node:fs). */
