@@ -3419,7 +3419,8 @@ textarea.modal-input {
 
 /* Embed sidebar (clicked-embed previews in ChatView) -------------------- */
 .embed-sidebar {
-  width: 360px;
+  width: var(--right-width, 360px);
+  position: relative;
   flex-shrink: 0;
   border-left: 1px solid #1f2937;
   background: #0a0e13;
@@ -8954,4 +8955,24 @@ textarea.modal-input {
 .dm-policy-option input {
   width: 20px;
   height: 20px;
+}
+
+/* Drag the right column's left edge (useResizableWidth): up to half the window. */
+.side-resize-handle {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.side-resize-handle:hover,
+.side-resize-handle:active {
+  background: rgba(99, 102, 241, 0.35);
+}
+@media (max-width: 768px) {
+  .side-resize-handle {
+    display: none;
+  }
 }

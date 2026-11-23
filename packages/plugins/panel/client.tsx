@@ -247,3 +247,116 @@ export function PanelView(props: { routeBase: string; onClose: () => void }) {
     </section>
   );
 }
+
+// --- [[work:<daemon>/<project>/<file>]]: a daemon shows you a piece of her work ---
+//
+// The ref names a file in a project she marked shown; it resolves through the
+// same gate as her panel (/panel/<daemon>), so a ref can't open anything her
+// panel doesn't already show you. [[work:<daemon>/<project>]] opens the project.
+
+const panels = new Map<string, { at: number; got: Promise<Panel | { error: string }> }>();
+
+function loadPanel(routeBase: string, daemon: string): Promise<Panel | { error: string }> {
+  const hit = panels.get(daemon);
+  if (hit && Date.now() - hit.at < 15_000) return hit.got;
+  const got = fetch(`${routeBase}/panel/${encodeURIComponent(daemon)}`, { credentials: 'include' })
+    .then(async (r) => {
+      const body = (await r.json().catch(() => ({}))) as Panel & { error?: string };
+      return r.ok ? body : { error: body.error ?? `Error ${r.status}` };
+    })
+    .catch(() => ({ error: 'Couldn’t reach that panel.' }));
+  panels.set(daemon, { at: Date.now(), got });
+  return got;
+}
+
+export function parseWorkSlug(
+  slug: string,
+): { daemon: string; project: string; path: string | null } | null {
+  const [daemon, project, ...rest] = slug.split('/').map((s) => s.trim());
+  if (!daemon || !project) return null;
+  return { daemon, project, path: rest.length ? rest.join('/') : null };
+}
+
+/** The project and file a work ref names, or why it can't be shown. */
+function useWork(routeBase: string, slug: string) {
+  const [state, setState] = useState<
+    { label: string; project: Project; doc: Doc | null } | { error: string } | null
+  >(null);
+  useEffect(() => {
+    let live = true;
+    const ref = parseWorkSlug(slug);
+    if (!ref) {
+      setState({ error: 'Not a work ref: work:<daemon>/<project>/<file>' });
+      return;
+    }
+    void loadPanel(routeBase, ref.daemon).then((p) => {
+      if (!live) return;
+      if ('error' in p) return setState({ error: p.error });
+      const project = (p.sections.work ?? []).find((w) => w.project.toLowerCase() === ref.project);
+      if (!project)
+        return setState({ error: `${p.label ?? ref.daemon} isn’t showing that project.` });
+      const doc = ref.path
+        ? (project.docs.find((d) => d.path.toLowerCase() === ref.path) ?? null)
+        : (project.docs.find((d) => d.path !== 'PROJECT.md') ?? project.docs[0] ?? null);
+      if (ref.path && !doc) return setState({ error: `No ${ref.path} in ${project.name}.` });
+      setState({ label: p.label ?? ref.daemon, project, doc });
+    });
+    return () => {
+      live = false;
+    };
+  }, [routeBase, slug]);
+  return state;
+}
+
+function firstLine(text: string): string {
+  const line = text.split('\n').find((l) => l.trim()) ?? '';
+  return line.replace(/^#+\s*/, '').slice(0, 120);
+}
+
+export function WorkInline(props: { slug: string; onClick: () => void; routeBase: string }) {
+  const w = useWork(props.routeBase, props.slug);
+  return (
+    <span
+      className="message-embed ok"
+      role="button"
+      tabIndex={0}
+      onClick={props.onClick}
+      onKeyDown={(e) => e.key === 'Enter' && props.onClick()}
+      style={{ cursor: 'pointer' }}
+    >
+      <span className="message-embed-icon">📄</span>
+      <span className="message-embed-body">
+        {!w && <span className="message-embed-meta">Loading…</span>}
+        {w && 'error' in w && <span className="message-embed-meta">{w.error}</span>}
+        {w && !('error' in w) && (
+          <>
+            <span className="message-embed-meta">
+              <strong>{w.doc?.path ?? w.project.name}</strong> · {w.project.name} · {w.label}
+            </span>
+            {w.doc && <span className="message-embed-snippet">{firstLine(w.doc.content)}</span>}
+          </>
+        )}
+      </span>
+    </span>
+  );
+}
+
+export function WorkPreview(props: { slug: string; routeBase: string }) {
+  const w = useWork(props.routeBase, props.slug);
+  if (!w) return <p style={muted}>Loading…</p>;
+  if ('error' in w) return <p>{w.error}</p>;
+  return (
+    <div style={{ padding: '0.25rem 0.75rem' }}>
+      <p style={muted}>
+        {w.label} · {w.project.name}
+        {w.doc ? ` · ${w.doc.path} (${w.doc.updated.replace('T', ' ')})` : ''}
+      </p>
+      {w.doc ? (
+        <Markdown text={w.doc.content} />
+      ) : (
+        <p style={muted}>No text in this project yet.</p>
+      )}
+      {w.doc?.cut && <p style={muted}>(cut here; the rest is in her workshop)</p>}
+    </div>
+  );
+}
