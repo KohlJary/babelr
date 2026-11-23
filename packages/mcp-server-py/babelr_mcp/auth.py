@@ -28,6 +28,9 @@ REFRESH_SECONDS = 90 * 24 * 60 * 60
 CODE_SECONDS = 5 * 60
 PENDING_SECONDS = 10 * 60
 MAX_TRIES = 5
+# Across every sign-in request: anyone can start one, and every check reaches the
+# Tower from this host, so its per-address limit can't tell guessers apart.
+MAX_FAILURES_PER_HOUR = 10
 SCOPE = "house"
 
 
@@ -67,6 +70,12 @@ class HouseAuth:
         self.owners = {o.lower() for o in owners}
         self.pending: dict[str, dict[str, Any]] = {}   # sign-in requests, in memory
         self.codes: dict[str, AuthorizationCode] = {}
+        self.failures: list[float] = []
+
+    def _locked(self) -> bool:
+        cutoff = time.time() - 3600
+        self.failures = [t for t in self.failures if t > cutoff]
+        return len(self.failures) >= MAX_FAILURES_PER_HOUR
 
     # -- clients ----------------------------------------------------------
 
@@ -123,7 +132,11 @@ button{{width:100%;padding:10px;border:0;border-radius:6px;background:#4a7dff;co
         if p["tries"] > MAX_TRIES:
             self.pending.pop(rid, None)
             return HTMLResponse("Too many tries. Start again from the app.", status_code=429)
+        if self._locked():
+            return HTMLResponse("Too many failed sign-ins. Try again in an hour.", status_code=429)
         user = babelr_login(self.babelr_url, str(form.get("email") or ""), str(form.get("password") or ""))
+        if not user or user not in self.owners:
+            self.failures.append(time.time())
         if not user:
             return self._page(rid, name, "That email and password didn't sign in (accounts with two-factor can't be used here yet).")
         if user not in self.owners:

@@ -61,6 +61,15 @@ def test_too_many_tries_ends_the_request(setup):
     assert run(h.login_submit(form_request({"request": rid, "email": "k@x", "password": "right"}))).status_code == 400
 
 
+def test_failures_across_requests_lock_sign_in_for_an_hour(setup):
+    h, st, client, rid = setup
+    h.failures = [time.time()] * A.MAX_FAILURES_PER_HOUR
+    r = run(h.login_submit(form_request({"request": rid, "email": "k@x", "password": "right"})))
+    assert r.status_code == 429 and h.codes == {}
+    h.failures = [time.time() - 4000] * A.MAX_FAILURES_PER_HOUR
+    assert run(h.login_submit(form_request({"request": rid, "email": "k@x", "password": "right"}))).status_code == 302
+
+
 def test_tokens_are_stored_as_hashes_and_codes_work_once(setup):
     h, st, client, rid = setup
     run(h.login_submit(form_request({"request": rid, "email": "k@x", "password": "right"})))

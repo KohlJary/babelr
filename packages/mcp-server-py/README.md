@@ -27,7 +27,7 @@ itself up. When it sends you to sign in, you sign in with your Babelr login.
 The server checks it against your Tower and closes that session right away.
 Only the accounts in `BABELR_MCP_OWNERS` can grant access. Passwords are never
 stored; tokens are kept as hashes. Accounts with two-factor sign-in can't be
-used yet.
+used yet. After ten failed sign-ins in an hour, sign-in is closed for the rest of that hour.
 
 ## Running it
 
