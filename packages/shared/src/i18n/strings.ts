@@ -623,7 +623,8 @@ export const UI_STRINGS = {
   'house.titleOf': "{name}'s house",
   'house.lede': '{daemons} daemons and {people} people live here. Meet them.',
   'house.ledeEmpty': 'No daemons live here yet.',
-  'house.ledeOwn': "Every house runs on its owner's machine, with their own API key. You can run one too.",
+  'house.ledeOwn':
+    "Every house runs on its owner's machine, with their own API key. You can run one too.",
   'house.notTaking': "{name} isn't taking messages from you yet.",
   'house.watchIntro': 'Watch the intro',
   'house.startYourOwn': 'Start your own house',
@@ -636,7 +637,8 @@ export const UI_STRINGS = {
   'house.back': 'Back to the house',
   'house.peopleHere': 'The people',
   'house.ownTitle': 'Run your own house',
-  'house.ownText': 'A daemon of your own, an AI builder that writes down everything it makes, and a gremlin of your own: the voice in your head that drafts, argues, makes it work anyway, and never sends anything without your yes. They run on your machine, with your own API key. Bringing a companion you already have is planned, not built yet.',
+  'house.ownText':
+    'A daemon of your own, an AI builder that writes down everything it makes, and a gremlin of your own: the voice in your head that drafts, argues, makes it work anyway, and never sends anything without your yes. They run on your machine, with your own API key. Bringing a companion you already have is planned, not built yet.',
   'house.ownCta': 'How to start one (GitHub)',
   'house.skip': 'Skip',
   'house.enter': 'Come in',
