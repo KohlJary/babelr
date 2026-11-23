@@ -62,6 +62,24 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
     }
   };
 
+  // A pasted image (a screenshot, a copied picture) uploads like a dropped file,
+  // so it never has to be saved first. Text pastes are left alone.
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.kind === 'file')
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => f !== null);
+    if (files.length === 0) return;
+    e.preventDefault();
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    files.forEach((f, i) => {
+      const ext = f.type.split('/')[1]?.split('+')[0] || 'bin';
+      const generic = !f.name || /^image\.\w+$/.test(f.name);
+      const name = generic ? `pasted-${stamp}${files.length > 1 ? `-${i + 1}` : ''}.${ext}` : f.name;
+      uploadFile(generic ? new File([f], name, { type: f.type }) : f);
+    });
+  };
+
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
@@ -150,6 +168,7 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
             if (e.target.value.length > 0) onTyping?.();
           }}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={dragOver ? t('messages.dropFiles') : t('messages.placeholder')}
           disabled={disabled || sending}
           rows={1}
