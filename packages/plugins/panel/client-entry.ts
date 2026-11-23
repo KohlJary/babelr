@@ -11,8 +11,34 @@ export const clientManifest: PluginManifest = {
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { PanelSidebarSlot, PanelView } = await import('./client.js');
+  const { PanelSidebarSlot, PanelView, WorkInline, WorkPreview, RoomWork, sharedDaemons } =
+    await import('./client.js');
   const routeBase = api.routeBase;
+  // Her work, in her room (the column beside her DM), if she shares her panel with you.
+  api.registerDaemonSection?.({
+    id: 'work',
+    label: 'Work',
+    icon: '📄',
+    order: 10,
+    place: 'section',
+    isAvailable: async (daemon) => (await sharedDaemons(routeBase)).includes(daemon.name),
+    render: (props: unknown) =>
+      createElement(RoomWork as never, { ...(props as Record<string, unknown>), routeBase }),
+  });
+  // [[work:<daemon>/<project>/<file>]]: a daemon shows you her work; in her DM
+  // it opens in the sidebar by itself (ChatView).
+  api.registerEmbed({
+    kind: 'work',
+    label: 'Daemon work',
+    navigateLabel: 'Open panels',
+    renderInline: (props: unknown) =>
+      createElement(WorkInline as never, { ...(props as Record<string, unknown>), routeBase }),
+    renderPreview: (props: unknown) =>
+      createElement(WorkPreview as never, { ...(props as Record<string, unknown>), routeBase }),
+    navigate: (_args, ctx) => {
+      (ctx as { openView: (id: string) => void }).openView('panel');
+    },
+  });
   api.registerView({
     id: 'panel',
     label: 'Daemon panels',

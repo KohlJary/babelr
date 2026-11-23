@@ -25,6 +25,23 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
     },
   });
 
+  // A door in Cass's room (the column beside her DM), for whoever she shares it with.
+  api.registerDaemonSection?.({
+    id: 'record',
+    label: 'Record',
+    icon: '📼',
+    order: 20,
+    place: 'door',
+    isAvailable: async (daemon) => {
+      if (daemon.name !== 'cass') return false;
+      const r = await fetch(`${routeBase}/configured`, { credentials: 'include' }).catch(
+        () => null,
+      );
+      return !!r?.ok && !!((await r.json()) as { configured?: boolean }).configured;
+    },
+    open: (props) =>
+      (props as { host: { openView: (id: string) => void } }).host.openView('record'),
+  });
   api.registerSidebarSlot({
     id: 'record-nav',
     Component: (props: { host: unknown }) =>

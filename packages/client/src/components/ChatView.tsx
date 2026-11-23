@@ -37,7 +37,9 @@ import { useT } from '../i18n/I18nProvider';
 import { VerificationBanner } from './VerificationBanner';
 import { subscribeToPush } from '../push';
 import type { EmbedNavCtx } from '../embeds/registry';
-import type { WikiRefKind } from '@babelr/shared';
+import { parseWikiRefs, type WikiRefKind } from '@babelr/shared';
+import { getEmbed } from '../embeds/registry';
+import { DaemonRoom, useRoomOpen } from './DaemonRoom';
 import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
@@ -265,6 +267,40 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
       serverName: dmMode ? undefined : selectedServer?.name,
     },
   );
+
+  // A daemon shows you something (Kohl, 2026-11-23: "if I ask Eris about the
+  // intro post project, she can just trigger the associated plugin to load into
+  // the sidebar, it expands"): a new message from an agent, in the DM that's
+  // open, carrying an embed this client knows opens it in the sidebar, grown to
+  // half the window. Only messages that arrive after the DM was opened; history
+  // never opens anything, and nor do people's messages.
+  const openedAt = useRef<{ chan: string | null; at: number; seen: string | null }>({
+    chan: null,
+    at: 0,
+    seen: null,
+  });
+  useEffect(() => {
+    const o = openedAt.current;
+    if (o.chan !== activeChannelId) {
+      openedAt.current = { chan: activeChannelId, at: Date.now(), seen: null };
+      return;
+    }
+    const newest = messages[messages.length - 1];
+    if (!newest || newest.message.id === o.seen) return;
+    o.seen = newest.message.id;
+    if (!dmMode || newest.author.id === actor.id || !newest.author.kind) return;
+    if (new Date(newest.message.published).getTime() < o.at) return;
+    const ref = parseWikiRefs(newest.message.content ?? '').find((r) => getEmbed(r.kind));
+    if (ref) setEmbedSidebar({ kind: ref.kind, slug: ref.slug, expand: true });
+  }, [messages, activeChannelId, dmMode, actor.id]);
+
+  // The daemon whose DM is open, if it's a daemon's: her room sits beside it.
+  const roomPeer =
+    dmMode && selectedDM
+      ? (selectedDM.participants.find((p) => p.id !== actor.id && p.kind) ?? null)
+      : null;
+  const roomMember = roomPeer ? (house?.agents.find((a) => a.id === roomPeer.id) ?? null) : null;
+  const [roomOpen, toggleRoom] = useRoomOpen(roomPeer?.preferredUsername ?? null);
 
   const {
     messageReactions,
@@ -757,6 +793,38 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               })}
             </div>
           </SidePanel>
+        ) : roomPeer && !activeViewId ? (
+          roomOpen ? (
+            <div className="daemon-room-wrap">
+              <button
+                type="button"
+                className="daemon-room-collapse"
+                onClick={toggleRoom}
+                title="Close her room"
+              >
+                ⟩
+              </button>
+              <DaemonRoom
+                daemon={{
+                  name: roomPeer.preferredUsername,
+                  label: roomPeer.displayName ?? roomPeer.preferredUsername,
+                  avatarUrl: roomPeer.avatarUrl,
+                }}
+                member={roomMember}
+                openView={openView}
+                openEmbed={(kind, slug) => setEmbedSidebar({ kind, slug, expand: true })}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="daemon-room-rail"
+              onClick={toggleRoom}
+              title={`Open ${roomPeer.displayName ?? roomPeer.preferredUsername}'s room`}
+            >
+              🪶
+            </button>
+          )
         ) : selectedServer && !dmMode && !activeViewId ? (
           <SidePanel title={t('members.title')} onClose={() => {}}>
             <MemberList

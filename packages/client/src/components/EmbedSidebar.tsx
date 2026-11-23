@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-import { createElement } from 'react';
+import { createElement, useEffect, type CSSProperties } from 'react';
+import { useResizableWidth } from '../hooks/useResizableWidth';
 import type { ActorProfile, WikiRefKind } from '@babelr/shared';
 import { getEmbed } from '../embeds/registry';
 import type { EmbedNavCtx } from '../embeds/registry';
@@ -9,6 +10,8 @@ export interface EmbedSidebarTarget {
   kind: WikiRefKind;
   slug: string;
   serverSlug?: string;
+  /** Opened by a daemon's message: grow to half the window. */
+  expand?: boolean;
 }
 
 interface EmbedSidebarProps {
@@ -29,9 +32,18 @@ interface EmbedSidebarProps {
 export function EmbedSidebar({ target, actor, serverId, navCtx, onClose }: EmbedSidebarProps) {
   const t = useT();
   const def = getEmbed(target.kind);
+  const { width, expand, onHandleDown } = useResizableWidth('embed', 360);
+  useEffect(() => {
+    if (target.expand) expand();
+  }, [target.kind, target.slug, target.expand, expand]);
+  const sized = { '--right-width': `${width}px` } as CSSProperties;
+  const handle = (
+    <div className="side-resize-handle" onPointerDown={onHandleDown} title="Drag to resize" />
+  );
   if (!def) {
     return (
-      <aside className="embed-sidebar">
+      <aside className="embed-sidebar" style={sized}>
+        {handle}
         <header className="embed-sidebar-header">
           <span className="embed-sidebar-title">Unknown embed</span>
           <button className="embed-sidebar-close" onClick={onClose}>
@@ -45,7 +57,8 @@ export function EmbedSidebar({ target, actor, serverId, navCtx, onClose }: Embed
     );
   }
   return (
-    <aside className="embed-sidebar">
+    <aside className="embed-sidebar" style={sized}>
+      {handle}
       <header className="embed-sidebar-header">
         <span className="embed-sidebar-title">{def.label}</span>
         <div className="embed-sidebar-actions">
