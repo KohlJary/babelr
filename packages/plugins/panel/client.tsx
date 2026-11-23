@@ -360,3 +360,74 @@ export function WorkPreview(props: { slug: string; routeBase: string }) {
     </div>
   );
 }
+
+// --- Her room (the column beside her DM): the panel's sections for one daemon ---
+
+const lists = new Map<string, { at: number; got: Promise<string[]> }>();
+
+/** The daemons whose panel this viewer may see (cached briefly; the room asks per daemon). */
+export function sharedDaemons(routeBase: string): Promise<string[]> {
+  const hit = lists.get(routeBase);
+  if (hit && Date.now() - hit.at < 30_000) return hit.got;
+  const got = fetch(`${routeBase}/daemons`, { credentials: 'include' })
+    .then((r) => (r.ok ? r.json() : { daemons: [] }))
+    .then((b: { daemons?: Daemon[] }) => (b.daemons ?? []).map((d) => d.name))
+    .catch(() => [] as string[]);
+  lists.set(routeBase, { at: Date.now(), got });
+  return got;
+}
+
+export function RoomWork(props: {
+  daemon: { name: string; label: string };
+  routeBase: string;
+  host: { openEmbed: (kind: string, slug: string) => void };
+}) {
+  const { daemon, routeBase, host } = props;
+  const [p, setP] = useState<Panel | { error: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void loadPanel(routeBase, daemon.name).then((got) => live && setP(got));
+    return () => {
+      live = false;
+    };
+  }, [routeBase, daemon.name]);
+  if (!p) return <p style={muted}>Loading…</p>;
+  if ('error' in p) return <p style={muted}>{p.error}</p>;
+  const work = p.sections.work;
+  if (!work) return <p style={muted}>{daemon.label} hasn’t said yes to showing her work.</p>;
+  if (work.length === 0) return <p style={muted}>Nothing shown yet. She picks what goes here.</p>;
+  return (
+    <div>
+      {work.map((w) => (
+        <div key={w.project} style={{ margin: '0.4rem 0 0.9rem' }}>
+          <div style={{ fontWeight: 600 }}>{w.name}</div>
+          {w.last_commit && (
+            <div style={muted}>
+              saved {w.last_commit}
+              {w.last_message ? `: ${w.last_message}` : ''}
+            </div>
+          )}
+          {w.docs.map((d) => (
+            <button
+              key={d.path}
+              type="button"
+              onClick={() => host.openEmbed('work', `${daemon.name}/${w.project}/${d.path}`)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                padding: '0.25rem 0',
+              }}
+            >
+              📄 {d.path} <span style={muted}>· {firstLine(d.content)}</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}

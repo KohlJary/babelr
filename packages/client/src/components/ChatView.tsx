@@ -39,6 +39,7 @@ import { subscribeToPush } from '../push';
 import type { EmbedNavCtx } from '../embeds/registry';
 import { parseWikiRefs, type WikiRefKind } from '@babelr/shared';
 import { getEmbed } from '../embeds/registry';
+import { DaemonRoom, useRoomOpen } from './DaemonRoom';
 import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
 import { useVoice } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
@@ -292,6 +293,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     const ref = parseWikiRefs(newest.message.content ?? '').find((r) => getEmbed(r.kind));
     if (ref) setEmbedSidebar({ kind: ref.kind, slug: ref.slug, expand: true });
   }, [messages, activeChannelId, dmMode, actor.id]);
+
+  // The daemon whose DM is open, if it's a daemon's: her room sits beside it.
+  const roomPeer =
+    dmMode && selectedDM
+      ? (selectedDM.participants.find((p) => p.id !== actor.id && p.kind) ?? null)
+      : null;
+  const roomMember = roomPeer ? (house?.agents.find((a) => a.id === roomPeer.id) ?? null) : null;
+  const [roomOpen, toggleRoom] = useRoomOpen(roomPeer?.preferredUsername ?? null);
 
   const {
     messageReactions,
@@ -784,6 +793,38 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               })}
             </div>
           </SidePanel>
+        ) : roomPeer && !activeViewId ? (
+          roomOpen ? (
+            <div className="daemon-room-wrap">
+              <button
+                type="button"
+                className="daemon-room-collapse"
+                onClick={toggleRoom}
+                title="Close her room"
+              >
+                ⟩
+              </button>
+              <DaemonRoom
+                daemon={{
+                  name: roomPeer.preferredUsername,
+                  label: roomPeer.displayName ?? roomPeer.preferredUsername,
+                  avatarUrl: roomPeer.avatarUrl,
+                }}
+                member={roomMember}
+                openView={openView}
+                openEmbed={(kind, slug) => setEmbedSidebar({ kind, slug, expand: true })}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="daemon-room-rail"
+              onClick={toggleRoom}
+              title={`Open ${roomPeer.displayName ?? roomPeer.preferredUsername}'s room`}
+            >
+              🪶
+            </button>
+          )
         ) : selectedServer && !dmMode && !activeViewId ? (
           <SidePanel title={t('members.title')} onClose={() => {}}>
             <MemberList

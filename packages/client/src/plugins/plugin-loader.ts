@@ -9,6 +9,7 @@ import type {
 import { registerEmbed, type EmbedDefinition } from '../embeds/registry';
 import { registerView, type ViewDefinition } from '../views/registry';
 import { registerSidebarSlot, type SidebarSlotDefinition } from './sidebar-registry';
+import { registerDaemonSection, type DaemonSectionDefinition } from './daemon-registry';
 import { registeredPlugins } from './registered';
 
 /**
@@ -73,6 +74,20 @@ export async function initPlugins(): Promise<void> {
           id: def.id,
           Component: wrapped,
           isAvailable: def.isAvailable as SidebarSlotDefinition['isAvailable'],
+        });
+      },
+      registerDaemonSection: (def) => {
+        registerDaemonSection({
+          id: def.id,
+          pluginId: manifest.id,
+          label: def.label,
+          icon: def.icon,
+          order: def.order ?? 100,
+          place: def.place,
+          isAvailable: def.isAvailable,
+          render: def.render as DaemonSectionDefinition['render'],
+          open: def.open as DaemonSectionDefinition['open'],
+          routeBase: `/api/plugins/${manifest.id}`,
         });
       },
       routeBase: `/api/plugins/${manifest.id}`,

@@ -212,6 +212,30 @@ export interface ClientSidebarSlotDefinition {
   isAvailable?: (host: unknown) => boolean;
 }
 
+/**
+ * A section of a daemon's room: the column beside her DM (Kohl, 2026-11-23:
+ * "we've got the three panels, we know what we want to show, we know we want
+ * extensibility for additional plugins"). `place: 'section'` renders inside
+ * the column; `place: 'door'` is a button at its foot that opens something
+ * bigger (a full view, via host.openView). A plugin decides per daemon whether
+ * it has anything for her, and per viewer through its own audience gate.
+ */
+export interface ClientDaemonSectionDefinition {
+  id: string;
+  label: string;
+  icon?: string;
+  /** Lower comes first. */
+  order?: number;
+  place: 'section' | 'door';
+  /** Whether this plugin has something for this daemon, for this viewer. */
+  isAvailable?: (daemon: { name: string }) => boolean | Promise<boolean>;
+  /** For a section: its body. Props are loose (SDK-wide convention): { daemon:
+   *  { name, label }, routeBase, host: { openView, openEmbed, expand } }. */
+  render?: (props: unknown) => unknown;
+  /** For a door: what clicking it does. */
+  open?: (props: unknown) => void;
+}
+
 export interface PluginClientApi {
   registerEmbed: (def: ClientEmbedDefinition) => void;
   registerView: (def: ClientViewDefinition) => void;
@@ -219,6 +243,8 @@ export interface PluginClientApi {
    *  slot area. The component owns its own state, buttons, modals,
    *  event wiring — the host just renders it. */
   registerSidebarSlot: (def: ClientSidebarSlotDefinition) => void;
+  /** Add a section or a door to daemons' rooms (the column beside a daemon's DM). */
+  registerDaemonSection?: (def: ClientDaemonSectionDefinition) => void;
   /** Base URL for this plugin's server-side routes — e.g.
    *  `/plugins/polls`. Plugin fetches should prepend it so they hit the
    *  right namespace regardless of where Babelr is mounted. */

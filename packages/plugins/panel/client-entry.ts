@@ -11,8 +11,20 @@ export const clientManifest: PluginManifest = {
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { PanelSidebarSlot, PanelView, WorkInline, WorkPreview } = await import('./client.js');
+  const { PanelSidebarSlot, PanelView, WorkInline, WorkPreview, RoomWork, sharedDaemons } =
+    await import('./client.js');
   const routeBase = api.routeBase;
+  // Her work, in her room (the column beside her DM), if she shares her panel with you.
+  api.registerDaemonSection?.({
+    id: 'work',
+    label: 'Work',
+    icon: '📄',
+    order: 10,
+    place: 'section',
+    isAvailable: async (daemon) => (await sharedDaemons(routeBase)).includes(daemon.name),
+    render: (props: unknown) =>
+      createElement(RoomWork as never, { ...(props as Record<string, unknown>), routeBase }),
+  });
   // [[work:<daemon>/<project>/<file>]]: a daemon shows you her work; in her DM
   // it opens in the sidebar by itself (ChatView).
   api.registerEmbed({
