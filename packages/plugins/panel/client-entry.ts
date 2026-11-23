@@ -11,7 +11,7 @@ export const clientManifest: PluginManifest = {
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { PanelSidebarSlot, PanelView, WorkInline, WorkPreview, RoomWork, sharedDaemons } =
+  const { PanelView, WorkInline, WorkPreview, RoomWork, sharedDaemons } =
     await import('./client.js');
   const routeBase = api.routeBase;
   // Her work, in her room (the column beside her DM), if she shares her panel with you.
@@ -47,11 +47,5 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
       const h = (props as { host: unknown }).host as { closeView: () => void };
       return createElement(PanelView as never, { routeBase, onClose: h.closeView });
     },
-  });
-  api.registerSidebarSlot({
-    id: 'panel-nav',
-    Component: (props: { host: unknown }) =>
-      createElement(PanelSidebarSlot as never, { ...props, routeBase: api.routeBase }),
-    isAvailable: () => true,
   });
 }

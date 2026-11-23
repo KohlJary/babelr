@@ -71,14 +71,19 @@ export function ServerSidebar({
           <div className="server-divider" />
         </>
       )}
-      <button
-        className={`server-icon dm-icon ${dmMode ? 'active' : ''}`}
-        onClick={onSelectDMs}
-        title={t('serverSidebar.directMessages')}
-      >
-        DM
-      </button>
-      <div className="server-divider" />
+      {/* With a house, the House is where DMs live (Kohl, 2026-11-23: merge the views). */}
+      {!onOpenHouse && (
+        <>
+          <button
+            className={`server-icon dm-icon ${dmMode ? 'active' : ''}`}
+            onClick={onSelectDMs}
+            title={t('serverSidebar.directMessages')}
+          >
+            DM
+          </button>
+          <div className="server-divider" />
+        </>
+      )}
       {servers.map((server) => (
         <button
           key={server.id}

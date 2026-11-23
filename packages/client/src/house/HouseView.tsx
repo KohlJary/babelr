@@ -5,6 +5,7 @@ import type { ViewProps } from '../views/registry';
 import { useT } from '../i18n/I18nProvider';
 import { loadHouse, startIntro, useHouseStore } from './store';
 import { doorsFor } from './doors';
+import { DaemonDoors } from '../components/DaemonRoom';
 import './house.css';
 
 /**
@@ -159,6 +160,13 @@ function MemberPage({
               {d.label}
             </button>
           ))}
+          {/* The same doors as her room (plugins register them once). */}
+          <DaemonDoors
+            name={m.preferredUsername}
+            label={nameOf(m)}
+            openView={host.navCtx.openView}
+            className="house-btn"
+          />
         </div>
       </div>
     </section>

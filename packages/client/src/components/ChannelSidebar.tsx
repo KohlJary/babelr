@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { useState } from 'react';
-import type { ChannelView, DMConversation, ActorProfile } from '@babelr/shared';
+import type { ChannelView, DMConversation, ActorProfile, HouseMember } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 
 interface ChannelSidebarProps {
@@ -12,6 +12,10 @@ interface ChannelSidebarProps {
   channels: ChannelView[];
   selectedChannelId: string | null;
   conversations: DMConversation[];
+  /** The house's daemons (GET /house), listed whether or not there's a DM yet. */
+  houseAgents?: HouseMember[];
+  /** Open (or start) the DM with a member. */
+  onTalkTo?: (actorId: string) => void;
   selectedDMId: string | null;
   actor: ActorProfile;
   unreadCounts?: Map<string, number>;
@@ -54,6 +58,8 @@ export function ChannelSidebar({
   channels,
   selectedChannelId,
   conversations,
+  houseAgents,
+  onTalkTo,
   dmPreviews,
   selectedDMId,
   actor,
@@ -87,6 +93,39 @@ export function ChannelSidebar({
     const isAgentDM = (dm: DMConversation) => others(dm).some((p) => p.kind);
     const agentDMs = conversations.filter(isAgentDM);
     const peopleDMs = conversations.filter((dm) => !isAgentDM(dm));
+    // The House (Kohl, 2026-11-23: "merge the views"): every daemon who lives
+    // here, with what she's doing now, whether or not you've talked yet; then
+    // agents you have DMs with that aren't in the house; then people.
+    const dmWith = (id: string) =>
+      agentDMs.find((dm) => others(dm).length === 1 && others(dm)[0].id === id);
+    const houseIds = new Set((houseAgents ?? []).map((m) => m.id));
+    const otherAgentDMs = agentDMs.filter((dm) => !others(dm).some((p) => houseIds.has(p.id)));
+    const renderMember = (m: HouseMember) => {
+      const dm = dmWith(m.id);
+      const name = m.displayName ?? m.preferredUsername;
+      const line = m.now?.text ?? (dm ? preview(dm) : null) ?? m.summary;
+      return (
+        <button
+          key={m.id}
+          className={`sidebar-item sidebar-dm ${dm && selectedDMId === dm.id ? 'active' : ''}`}
+          onClick={() => (dm ? onSelectDM(dm.id) : onTalkTo?.(m.id))}
+        >
+          <span className="sidebar-item-name">
+            {name}
+            {m.sigil && <span className="sidebar-sigil"> {m.sigil}</span>}
+            {dm?.request?.state === 'pending' && dm.request.incoming && (
+              <span className="dm-request-badge">{t('dm.requestBadge')}</span>
+            )}
+          </span>
+          {line && (
+            <span className="sidebar-item-preview">
+              {m.now ? '⊙ ' : ''}
+              {line.slice(0, 60)}
+            </span>
+          )}
+        </button>
+      );
+    };
     const preview = (dm: DMConversation): string | null => {
       if (!dm.lastMessage) return null;
       if (dm.lastMessage.properties?.encrypted) {
@@ -116,7 +155,7 @@ export function ChannelSidebar({
     };
     return (
       <div className="channel-sidebar">
-        <div className="sidebar-header">{t('channelSidebar.directMessages')}</div>
+        <div className="sidebar-header">{t('channelSidebar.theHouse')}</div>
         <div className="sidebar-list">
           <button className="sidebar-item add-channel" onClick={onNewDM}>
             {t('channelSidebar.newMessage')}
@@ -125,6 +164,9 @@ export function ChannelSidebar({
             <button className="sidebar-item add-channel" onClick={onShowFriends}>
               {t('channelSidebar.friends')}
             </button>
+          )}
+          {(viewEntries ?? []).some((v) => v.everywhere) && (
+            <div className="sidebar-section-label">{t('channelSidebar.house')}</div>
           )}
           {viewEntries
             ?.filter((v) => v.everywhere)
@@ -138,14 +180,15 @@ export function ChannelSidebar({
                 {v.label}
               </button>
             ))}
-          {conversations.length === 0 && (
+          {conversations.length === 0 && !houseAgents?.length && (
             <div className="sidebar-empty">{t('channelSidebar.noConversations')}</div>
           )}
-          {agentDMs.length > 0 && (
-            <div className="sidebar-section-label">{t('channelSidebar.agents')}</div>
+          {(houseAgents?.length ?? 0) + otherAgentDMs.length > 0 && (
+            <div className="sidebar-section-label">{t('channelSidebar.daemons')}</div>
           )}
-          {agentDMs.map(renderDM)}
-          {agentDMs.length > 0 && peopleDMs.length > 0 && (
+          {(houseAgents ?? []).map(renderMember)}
+          {otherAgentDMs.map(renderDM)}
+          {peopleDMs.length > 0 && (
             <div className="sidebar-section-label">{t('channelSidebar.people')}</div>
           )}
           {peopleDMs.map(renderDM)}

@@ -23,6 +23,7 @@
     "@babelr/plugin-record": "^0.1.0",
     "@babelr/plugin-music": "^0.1.0",
     "@babelr/plugin-panel": "^0.1.0",
+    "@babelr/plugin-daybook": "^0.1.0",
     "@babelr/plugin-room": "^0.1.0",
     "@babelr/plugin-project-management": "^0.1.0",
     "@babelr/plugin-sdk": "^0.1.0",

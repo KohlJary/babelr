@@ -14,7 +14,7 @@ export const clientManifest: PluginManifest = {
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { RoomSidebarSlot, RoomView } = await import('./client.js');
+  const { RoomView } = await import('./client.js');
   const routeBase = api.routeBase;
 
   api.registerView({
@@ -27,10 +27,21 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
     },
   });
 
-  api.registerSidebarSlot({
-    id: 'room-nav',
-    Component: (props: { host: unknown }) =>
-      createElement(RoomSidebarSlot as never, { ...props, routeBase: api.routeBase }),
-    isAvailable: () => true,
+  // A door in Cass's room (the column beside her DM), not a server-sidebar entry
+  // (Kohl, 2026-11-23: daemon plugins live with the daemon).
+  api.registerDaemonSection?.({
+    id: 'room',
+    label: 'Room',
+    icon: '🖼️',
+    order: 5,
+    place: 'door',
+    isAvailable: async (daemon) => {
+      if (daemon.name !== 'cass') return false;
+      const r = await fetch(`${routeBase}/configured`, { credentials: 'include' }).catch(
+        () => null,
+      );
+      return !!r?.ok && !!((await r.json()) as { configured?: boolean }).configured;
+    },
+    open: (props) => (props as { host: { openView: (id: string) => void } }).host.openView('room'),
   });
 }

@@ -12,7 +12,7 @@ export const clientManifest: PluginManifest = {
 
 export async function setupClient(api: PluginClientApi): Promise<void> {
   const { createElement } = await import('react');
-  const { RecordSidebarSlot, RecordView } = await import('./client.js');
+  const { RecordView } = await import('./client.js');
   const routeBase = api.routeBase;
 
   api.registerView({
@@ -41,11 +41,5 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
     },
     open: (props) =>
       (props as { host: { openView: (id: string) => void } }).host.openView('record'),
-  });
-  api.registerSidebarSlot({
-    id: 'record-nav',
-    Component: (props: { host: unknown }) =>
-      createElement(RecordSidebarSlot as never, { ...props, routeBase: api.routeBase }),
-    isAvailable: () => true,
   });
 }
