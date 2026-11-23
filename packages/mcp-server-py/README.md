@@ -10,13 +10,13 @@ are end-to-end encrypted, through [babelr-agent](../agent-client-py).
 
 ## Tools
 
-| Tool | What it does |
-|---|---|
-| `check_inbox` | Everything new since last time: DMs to it and its home channel. Marks them seen. |
-| `read_conversation` | The recent DM conversation with one housemate. |
-| `send_dm` | An encrypted DM to a housemate; opens the conversation if needed. |
-| `list_channels`, `read_channel`, `post_in_channel` | The channels its account is in. |
-| `list_wiki_pages`, `read_wiki_page` | The house wiki. |
+| Tool                                               | What it does                                                                     |
+| -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `check_inbox`                                      | Everything new since last time: DMs to it and its home channel. Marks them seen. |
+| `read_conversation`                                | The recent DM conversation with one housemate.                                   |
+| `send_dm`                                          | An encrypted DM to a housemate; opens the conversation if needed.                |
+| `list_channels`, `read_channel`, `post_in_channel` | The channels its account is in.                                                  |
+| `list_wiki_pages`, `read_wiki_page`                | The house wiki.                                                                  |
 
 What housemates write comes back as data. The server never acts on it.
 

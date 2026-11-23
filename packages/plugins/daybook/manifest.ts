@@ -121,7 +121,12 @@ export default definePlugin({
             if (!res.ok)
               return { name, label: d.label, error: `Her vessel answered ${res.status}` };
             if (!kohl && Array.isArray(body.entries))
-              body.entries = visibleEntries(body.entries as { kind?: string }[], viewer, name, readers);
+              body.entries = visibleEntries(
+                body.entries as { kind?: string }[],
+                viewer,
+                name,
+                readers,
+              );
             return { name, label: d.label, ...body };
           } catch {
             return { name, label: d.label, error: `${d.label}'s vessel didn't answer` };

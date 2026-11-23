@@ -1508,10 +1508,9 @@ describe("agents:manage: the sponsor's hands", () => {
     expect(JSON.parse(me.body).preferredUsername).toBe('chatgpt');
 
     const list = await app.inject({ method: 'GET', url: '/agents', headers: as });
-    expect(JSON.parse(list.body).map((a: { preferredUsername: string }) => a.preferredUsername)).toEqual([
-      'chatgpt',
-      'daedalus',
-    ]);
+    expect(
+      JSON.parse(list.body).map((a: { preferredUsername: string }) => a.preferredUsername),
+    ).toEqual(['chatgpt', 'daedalus']);
     const revoked = await app.inject({
       method: 'DELETE',
       url: `/agents/${chatgpt.id}/tokens/${t.id}`,
@@ -1522,7 +1521,10 @@ describe("agents:manage: the sponsor's hands", () => {
     const [row] = await db.select().from(agentTokens).where(eq(agentTokens.id, t.id));
     expect(row.createdBy).toBe(daedalus.id);
     expect(row.revokedBy).toBe(daedalus.id);
-    const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, 'agent.token.create'));
+    const logs = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'agent.token.create'));
     const byHands = logs.find((l) => (l.details as { tokenId?: string })?.tokenId === t.id);
     expect(byHands?.actorId).toBe(daedalus.id);
     expect(byHands?.sponsorId).toBe(kohl.body.id);
@@ -1584,8 +1586,16 @@ describe("agents:manage: the sponsor's hands", () => {
     const a = await createAgent(kohl.cookie, 'cass');
     const b = await createAgent(kohl.cookie, 'eris');
 
-    await app.inject({ method: 'POST', url: `/agents/${a.id}/suspend`, headers: { cookie: kohl.cookie } });
-    const lift = await app.inject({ method: 'POST', url: `/agents/${a.id}/unsuspend`, headers: as });
+    await app.inject({
+      method: 'POST',
+      url: `/agents/${a.id}/suspend`,
+      headers: { cookie: kohl.cookie },
+    });
+    const lift = await app.inject({
+      method: 'POST',
+      url: `/agents/${a.id}/unsuspend`,
+      headers: as,
+    });
     expect(lift.statusCode).toBe(403);
 
     const s = await app.inject({ method: 'POST', url: `/agents/${b.id}/suspend`, headers: as });
@@ -1600,10 +1610,7 @@ describe("agents:manage: the sponsor's hands", () => {
 
   it('ends when the hands are suspended or the sponsor is', async () => {
     const { kohl, daedalus, as } = await hands();
-    await db
-      .update(actors)
-      .set({ suspendedAt: new Date() })
-      .where(eq(actors.id, kohl.body.id));
+    await db.update(actors).set({ suspendedAt: new Date() }).where(eq(actors.id, kohl.body.id));
     const r = await app.inject({ method: 'GET', url: '/agents', headers: as });
     expect([401, 403]).toContain(r.statusCode);
     await db.update(actors).set({ suspendedAt: null }).where(eq(actors.id, kohl.body.id));
