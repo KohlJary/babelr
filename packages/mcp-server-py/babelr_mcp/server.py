@@ -17,7 +17,7 @@ the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNE
 from __future__ import annotations
 
 import os
-from typing import Annotated, Any
+from typing import Any
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -101,7 +101,9 @@ def build() -> FastMCP:
 
     @mcp.tool(annotations=READ)
     def read_conversation(who: str, limit: int = 30) -> dict[str, Any]:
-        """The recent DM conversation with one housemate (username, e.g. "cass"), both sides."""
+        """The recent DM conversation with one housemate (username, e.g. "cass"), both sides.
+        Each message says whether it's new to you; reading marks them seen, so check_inbox
+        won't repeat them."""
         return safe(lambda: house.conversation(who, limit))
 
     @mcp.tool(annotations=WRITE)
@@ -117,7 +119,9 @@ def build() -> FastMCP:
 
     @mcp.tool(annotations=READ)
     def read_channel(channel: str, limit: int = 30) -> dict[str, Any]:
-        """Recent messages in a house channel (name without #), oldest first."""
+        """Recent messages in a house channel (name without #), oldest first. Each says whether
+        it's new to you; reading marks them seen, so check_inbox won't repeat them. "cut" means
+        there's more unread than the limit showed."""
         return safe(lambda: house.read_channel(channel, limit))
 
     @mcp.tool(annotations=WRITE)
@@ -125,8 +129,12 @@ def build() -> FastMCP:
         """Post a message in a house channel (name without #). Everyone in it reads it."""
         return safe(lambda: house.post(channel, text))
 
-    @mcp.tool(annotations=READ)
-    def view_image(url: str) -> Annotated[CallToolResult, dict[str, Any]]:
+    # No structured output here, on purpose. Gemini and Claude.ai both reported seeing only
+    # {url, type, bytes} (2026-11-24): a client that prefers structuredContent shows that and
+    # drops the picture. Content only (the image, then one line of text) leaves them nothing
+    # to read except the image.
+    @mcp.tool(annotations=READ, structured_output=False)
+    def view_image(url: str) -> CallToolResult:
         """Look at an image a housemate attached: pass the url from a message's attachments
         (e.g. "/uploads/….png"). Only the house's own attachments."""
         import base64
@@ -135,12 +143,10 @@ def build() -> FastMCP:
             data, mime, path = house.image(url)
         except BabelrError as e:
             info = {"error": str(e)}
-            return CallToolResult(content=[TextContent(type="text", text=json.dumps(info))],
-                                  structuredContent=info, isError=True)
+            return CallToolResult(content=[TextContent(type="text", text=json.dumps(info))], isError=True)
         info = {"url": path, "type": mime, "bytes": len(data)}
         return CallToolResult(content=[ImageContent(type="image", data=base64.b64encode(data).decode(), mimeType=mime),
-                                       TextContent(type="text", text=json.dumps(info))],
-                              structuredContent=info)
+                                       TextContent(type="text", text=json.dumps(info))])
 
     @mcp.tool(annotations=READ)
     def list_wiki_pages() -> list | dict:
