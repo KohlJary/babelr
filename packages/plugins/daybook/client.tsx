@@ -10,6 +10,7 @@ import {
   type CalRow,
   type CalUp,
 } from './calendar.js';
+import { shelve, unmark, type ShelfEntry, type ShelfItem } from './shelf.js';
 
 /**
  * The Daybook: every daemon, day by day. It opens on what the house has been up
@@ -84,7 +85,7 @@ const dayLabel = (
 ) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, opts);
 const minutesOf = (e: Entry) => Number(/([\d.]+) min/.exec(e.title)?.[1] ?? 0);
 const plain = (s = '') =>
-  s
+  unmark(s)
     .replace(/[#*_>`[\]]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -200,7 +201,12 @@ function fold(rows: Row[]): Group[] {
   return out;
 }
 
-export function DaybookView(props: { routeBase: string; onClose: () => void }) {
+export function DaybookView(props: {
+  routeBase: string;
+  onClose: () => void;
+  /** Open something in the right sidebar (shelf.tsx); absent, it opens in place. */
+  openPreview?: (slug: string) => void;
+}) {
   const [days, setDays] = useState(7);
   const [books, setBooks] = useState<DaemonBook[] | null>(null);
   const [faces, setFaces] = useState<Record<string, string | null>>({});
@@ -309,6 +315,23 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
     if (view === 'month') setView('week');
     document.getElementById('dbk-days')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // Anything clicked opens in full in the right sidebar.
+  const entryOf = (r: Row): ShelfEntry => ({
+    at: r.at,
+    title: r.title,
+    detail: r.detail,
+    meta: `${kinds[r.kind] ?? r.kind}${r.source ? ` · ${r.source}` : ''}`,
+  });
+  const show = (item: ShelfItem) => props.openPreview?.(shelve(item));
+  const showRows = (rs: Row[], kind?: string) =>
+    show({
+      who: rs[0].label,
+      hue: hue[rs[0].daemon],
+      kind: kind ?? (kinds[rs[0].kind] ?? rs[0].kind).replace(/^Her /, ''),
+      entries: rs.slice(0, 200).map(entryOf),
+    });
+  const sidebar = !!props.openPreview;
 
   // The calendar asks for more days when it's moved back past what's loaded.
   const earliest = addDays(today, -(days - 1));
@@ -433,7 +456,28 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
         {books && books.length > 0 && (
           <>
             <div>
-              <h2 className="dbk-h">The daemons {who !== 'all' && '· tap again for everyone'}</h2>
+              <h2 className="dbk-h">The daemons</h2>
+              <div
+                className="dbk-range"
+                role="group"
+                aria-label="Show"
+                style={{ marginTop: 0, marginBottom: '.8rem' }}
+              >
+                {[{ name: 'all', label: 'Everyone' }, ...books].map((b) => (
+                  <button
+                    key={b.name}
+                    type="button"
+                    className="dbk-pill"
+                    aria-pressed={who === b.name}
+                    style={
+                      b.name !== 'all' ? ({ '--hue': hue[b.name] } as CSSProperties) : undefined
+                    }
+                    onClick={() => setWho(b.name)}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
               <div className="dbk-cards">
                 {books.map((b) => {
                   const es = b.entries ?? [];
@@ -518,7 +562,20 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                               ))}
                             </div>
                           )}
-                          {quote && <p className="dbk-quote">“{excerpt(quote.detail, 160)}”</p>}
+                          {quote && (
+                            <p
+                              className="dbk-quote"
+                              role={sidebar ? 'link' : undefined}
+                              title={sidebar ? 'Read it in full' : undefined}
+                              onClick={(ev) => {
+                                if (!sidebar) return;
+                                ev.stopPropagation();
+                                showRows([{ ...quote, daemon: b.name, label: b.label }]);
+                              }}
+                            >
+                              “{excerpt(quote.detail, 160)}”
+                            </p>
+                          )}
                           {waiting.length > 0 && (
                             <p className="dbk-note">
                               Not shown, by her choice for now:{' '}
@@ -556,7 +613,41 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                       <div
                         key={i}
                         className="dbk-upr"
-                        style={{ '--hue': hue[c.b.name] } as CSSProperties}
+                        style={
+                          {
+                            '--hue': hue[c.b.name],
+                            cursor: sidebar ? 'pointer' : undefined,
+                          } as CSSProperties
+                        }
+                        role={sidebar ? 'button' : undefined}
+                        tabIndex={sidebar ? 0 : undefined}
+                        onClick={() =>
+                          show({
+                            who: c.b.label,
+                            hue: hue[c.b.name],
+                            kind: 'Coming up today',
+                            entries: [
+                              {
+                                title: c.name,
+                                detail: [c.focus && `**Focus:** ${c.focus}`, c.description]
+                                  .filter(Boolean)
+                                  .join('\n\n'),
+                                meta: [
+                                  c.starts_hour != null ? `${c.starts_hour}:00` : c.phase,
+                                  c.minutes ? `about ${c.minutes} min` : '',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · '),
+                              },
+                            ],
+                          })
+                        }
+                        onKeyDown={(ev) => {
+                          if (sidebar && (ev.key === 'Enter' || ev.key === ' ')) {
+                            ev.preventDefault();
+                            (ev.currentTarget as HTMLElement).click();
+                          }
+                        }}
                       >
                         <span className="t">
                           {PHASE_ICON[c.phase] ?? '•'}{' '}
@@ -593,7 +684,7 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                       type="button"
                       className="dbk-hic"
                       style={{ '--hue': hue[e.daemon] } as CSSProperties}
-                      onClick={() => jump(e)}
+                      onClick={() => (sidebar ? showRows([e], k) : jump(e))}
                     >
                       <div className="k">
                         {KIND_ICON[e.kind]} {k} · {e.label}
@@ -674,7 +765,10 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                   icons={KIND_ICON}
                   comingUp={ups}
                   selected={sel}
-                  onSelect={(rs) => setSel(sel && sel[0] === rs[0] ? null : rs)}
+                  onSelect={(rs) => {
+                    if (sidebar) showRows(rs as Row[]);
+                    setSel(sel && sel[0] === rs[0] ? null : rs);
+                  }}
                 />
               )}
               {view === 'month' && (
@@ -693,7 +787,7 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                   }}
                 />
               )}
-              {view !== 'list' && sel && (
+              {view !== 'list' && sel && !sidebar && (
                 <div className="dbk-sel" style={{ '--hue': hue[sel[0].daemon] } as CSSProperties}>
                   <div className="dbk-mute" style={{ marginBottom: '.5rem' }}>
                     <span className="who" style={{ color: hue[sel[0].daemon], fontWeight: 700 }}>
@@ -708,7 +802,7 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                         {timeOf(sel[0].at)} · {KIND_ICON[sel[0].kind] ?? '•'} {sel[0].title}
                       </div>
                       {sel[0].detail ? (
-                        <Markdown text={sel[0].detail} />
+                        <Markdown text={unmark(sel[0].detail)} />
                       ) : (
                         <p className="dbk-mute">No text.</p>
                       )}
@@ -754,13 +848,20 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                           const isOpen = open === g.key;
                           return (
                             <div key={g.key} className="dbk-e" style={style}>
-                              <button type="button" onClick={() => setOpen(isOpen ? null : g.key)}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  sidebar ? showRows(g.rows) : setOpen(isOpen ? null : g.key)
+                                }
+                              >
                                 <span className="tm">{timeOf(r.at)}</span>
                                 <span>
                                   {who === 'all' && <span className="who">{r.label} </span>}
                                   {KIND_ICON[r.kind] ?? '•'} <b>{g.rows.length}</b>{' '}
                                   {(kinds[r.kind] ?? r.kind).toLowerCase().replace(/^her /, '')}{' '}
-                                  <span className="dbk-mute">{isOpen ? '▾' : '▸'}</span>
+                                  {!sidebar && (
+                                    <span className="dbk-mute">{isOpen ? '▾' : '▸'}</span>
+                                  )}
                                 </span>
                               </button>
                               {isOpen && (
@@ -787,7 +888,12 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                         const isOpen = open === key;
                         return (
                           <div key={g.key} className="dbk-e" style={style}>
-                            <button type="button" onClick={() => setOpen(isOpen ? null : key)}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                sidebar ? showRows([r]) : setOpen(isOpen ? null : key)
+                              }
+                            >
                               <span className="tm">{timeOf(r.at)}</span>
                               <span>
                                 {who === 'all' && <span className="who">{r.label} </span>}
@@ -797,7 +903,7 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                             {isOpen && (
                               <div className="dbk-open">
                                 {r.detail ? (
-                                  <Markdown text={r.detail} />
+                                  <Markdown text={unmark(r.detail)} />
                                 ) : (
                                   <p className="dbk-mute">No text.</p>
                                 )}

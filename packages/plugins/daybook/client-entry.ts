@@ -14,6 +14,18 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   const { DaybookView } = await import('./client.js');
   const routeBase = api.routeBase;
   // A house plugin: listed under HOUSE in the House, and in every server.
+  // Whatever you click in the Daybook opens here, in the right sidebar (shelf.tsx).
+  const { DaybookPreview } = await import('./shelf.js');
+  api.registerEmbed({
+    kind: 'daybook',
+    label: 'Daybook',
+    navigateLabel: 'Open the Daybook',
+    renderInline: () => null,
+    renderPreview: (props: unknown) =>
+      createElement(DaybookPreview as never, { slug: (props as { slug: string }).slug }),
+    navigate: (_target, ctx) => (ctx as { openView: (id: string) => void }).openView('daybook'),
+  });
+
   api.registerView({
     id: 'daybook',
     label: 'Daybook',
@@ -21,8 +33,17 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
     everywhere: true,
     isAvailable: () => true,
     render: (props: unknown) => {
-      const h = (props as { host: unknown }).host as { closeView: () => void };
-      return createElement(DaybookView as never, { routeBase, onClose: h.closeView });
+      const h = (props as { host: unknown }).host as {
+        closeView: () => void;
+        openEmbedPreview?: (kind: string, slug: string) => void;
+      };
+      return createElement(DaybookView as never, {
+        routeBase,
+        onClose: h.closeView,
+        openPreview: h.openEmbedPreview
+          ? (slug: string) => h.openEmbedPreview!('daybook', slug)
+          : undefined,
+      });
     },
   });
 }
