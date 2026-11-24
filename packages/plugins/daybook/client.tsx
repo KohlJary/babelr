@@ -40,6 +40,8 @@ interface DaemonBook {
   label: string;
   error?: string;
   answers?: Record<string, string>;
+  /** Kinds she shows Kohl but not this viewer (her terms for who reads what). */
+  withheld_for_you?: string[];
   kinds?: Record<string, string>;
   entries?: Entry[];
   coming_up?: ComingUp[];
@@ -521,6 +523,15 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
                             <p className="dbk-note">
                               Not shown, by her choice for now:{' '}
                               {waiting
+                                .map((k) => (kinds[k] ?? k).toLowerCase().replace(/^her /, ''))
+                                .join(', ')}
+                              .
+                            </p>
+                          )}
+                          {(b.withheld_for_you ?? []).length > 0 && (
+                            <p className="dbk-note">
+                              She shares these with Kohl, not with you:{' '}
+                              {(b.withheld_for_you ?? [])
                                 .map((k) => (kinds[k] ?? k).toLowerCase().replace(/^her /, ''))
                                 .join(', ')}
                               .

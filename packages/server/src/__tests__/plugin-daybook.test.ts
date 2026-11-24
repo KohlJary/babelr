@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect } from 'vitest';
-import { readable, visibleEntries, type Readers } from '@babelr/plugin-daybook';
+import { readable, visibleEntries, withheldFor, type Readers } from '@babelr/plugin-daybook';
 
 /** The Daybook: Kohl reads every daemon's; a daemon reads only her own; nobody else any. */
 describe('daybook readable', () => {
@@ -59,5 +59,20 @@ describe('daybook readers', () => {
     expect(kinds('eris')).toEqual(entries.map((e) => e.kind));
     expect(kinds('cass', 'cass')).toEqual(entries.map((e) => e.kind));
     expect(kinds('cass', 'robokohl')).toEqual([]);
+  });
+});
+
+describe('daybook withheld for you', () => {
+  const readers = { cass: { daedalus: ['sessions'] }, eris: { daedalus: 'all' as const } };
+  const answers = { sessions: 'yes', journals: 'yes', dreams: 'no', self_model: 'yes' };
+
+  it('names what she shows Kohl but not this reader', () => {
+    expect(withheldFor('daedalus', 'cass', readers, answers)).toEqual(['journals', 'self_model']);
+  });
+
+  it('is empty for an all-reader, for herself, and for kinds she shows nobody', () => {
+    expect(withheldFor('daedalus', 'eris', readers, answers)).toEqual([]);
+    expect(withheldFor('cass', 'cass', readers, answers)).toEqual([]);
+    expect(withheldFor('daedalus', 'cass', readers, answers)).not.toContain('dreams');
   });
 });

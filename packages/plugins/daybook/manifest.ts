@@ -88,6 +88,21 @@ export function visibleEntries<T extends { kind?: string }>(
   return entries.filter((e) => !OWN_KINDS.includes(e.kind ?? '') || terms.includes(e.kind!));
 }
 
+/** The kinds of hers this viewer doesn't get, though she shows them to Kohl:
+ * so the page can say so instead of showing nothing (2026-11-24, found by the
+ * Daybook redesign: a reader's journals vanished with no note). */
+export function withheldFor(
+  viewer: string,
+  daemon: string,
+  readers: Readers,
+  answers: Record<string, unknown> = {},
+): string[] {
+  const v = viewer.toLowerCase();
+  const terms = v === daemon ? 'all' : readers[daemon]?.[v];
+  if (terms === 'all') return [];
+  return OWN_KINDS.filter((k) => answers[k] === 'yes' && !(terms ?? []).includes(k));
+}
+
 type Req = { actor?: { preferredUsername: string }; agentScopes?: string[] };
 
 export default definePlugin({
@@ -126,6 +141,13 @@ export default definePlugin({
                 viewer,
                 name,
                 readers,
+              );
+            if (!kohl)
+              body.withheld_for_you = withheldFor(
+                viewer,
+                name,
+                readers,
+                (body.answers ?? {}) as Record<string, unknown>,
               );
             return { name, label: d.label, ...body };
           } catch {
