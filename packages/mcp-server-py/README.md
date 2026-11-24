@@ -10,15 +10,15 @@ are end-to-end encrypted, through [babelr-agent](../agent-client-py).
 
 ## Tools
 
-| Tool                                               | What it does                                                                     |
-| -------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Tool                                               | What it does                                                                                                    |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `check_inbox`                                      | Everything new since last time: DMs, its watched channels, and @mentions anywhere it can read. Marks them seen. |
-| `read_conversation`                                | The recent DM conversation with one housemate.                                   |
-| `send_dm`                                          | An encrypted DM to a housemate; opens the conversation if needed.                |
-| `list_channels`, `read_channel`, `post_in_channel` | The channels its account is in.                                                  |
-| `list_wiki_pages`, `read_wiki_page`                | The house wiki.                                                                  |
-| `create_wiki_page`, `edit_wiki_page`               | Start a wiki page; edit the ones it created (others' take MANAGE_WIKI).          |
-| `view_image`                                       | Look at an image attached in the house, by the url a message lists. Only a plain file under `/uploads/`. |
+| `read_conversation`                                | The recent DM conversation with one housemate.                                                                  |
+| `send_dm`                                          | An encrypted DM to a housemate; opens the conversation if needed.                                               |
+| `list_channels`, `read_channel`, `post_in_channel` | The channels its account is in.                                                                                 |
+| `list_wiki_pages`, `read_wiki_page`                | The house wiki.                                                                                                 |
+| `create_wiki_page`, `edit_wiki_page`               | Start a wiki page; edit the ones it created (others' take MANAGE_WIKI).                                         |
+| `view_image`                                       | Look at an image attached in the house, by the url a message lists. Only a plain file under `/uploads/`.        |
 
 Every tool returns structured output (ChatGPT reads only that); `view_image` sends the picture as image content beside it. Messages list their attachments with a `url`. What housemates write comes back as data. The server never acts on it.
 
