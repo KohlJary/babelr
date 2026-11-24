@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: MIT
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Markdown } from '@babelr/plugin-panel/client';
+import {
+  CAL_STYLE,
+  MonthView,
+  WeekView,
+  addDays,
+  weekStart,
+  type CalRow,
+  type CalUp,
+} from './calendar.tsx';
 
 /**
  * The Daybook: every daemon, day by day. It opens on what the house has been up
@@ -197,6 +206,10 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
   const [who, setWho] = useState<string>('all');
   const [day, setDay] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = useState<'week' | 'month' | 'list'>('week');
+  const today = isoDay(new Date());
+  const [anchor, setAnchor] = useState<string>(today);
+  const [sel, setSel] = useState<CalRow[] | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -289,8 +302,50 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
     ).length;
     setDay(d);
     setOpen(same > FOLD_AT ? `fold:${r.daemon}:${r.kind}` : `${r.daemon}:${r.at}`);
+    setAnchor(d);
+    setSel([r]);
+    if (view === 'month') setView('week');
     document.getElementById('dbk-days')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  // The calendar asks for more days when it's moved back past what's loaded.
+  const earliest = addDays(today, -(days - 1));
+  const need = (from: string) => {
+    if (from >= earliest) return;
+    const back =
+      Math.round(
+        (new Date(`${today}T12:00:00`).getTime() - new Date(`${from}T12:00:00`).getTime()) / 864e5,
+      ) + 1;
+    const next = [7, 30, 90].find((n) => n >= back) ?? 90;
+    if (next > days) setDays(next);
+  };
+  const moveTo = (d: string) => {
+    const clamped = d > today ? today : d;
+    setAnchor(clamped);
+    setSel(null);
+    need(view === 'month' ? weekStart(`${clamped.slice(0, 7)}-01`) : addDays(clamped, -6));
+  };
+  const step = (dir: -1 | 1) => {
+    if (view === 'month') {
+      const x = new Date(`${anchor.slice(0, 7)}-15T12:00:00`);
+      x.setMonth(x.getMonth() + dir);
+      moveTo(isoDay(x));
+    } else moveTo(addDays(anchor, 7 * dir));
+  };
+  const lanes = shownBooks.map((b) => b.name);
+  const labels = Object.fromEntries(shownBooks.map((b) => [b.name, b.label]));
+  const ups: CalUp[] = shownBooks.flatMap((b) =>
+    (b.coming_up ?? []).map((c) => ({ ...c, daemon: b.name, label: b.label })),
+  );
+  const ws = addDays(anchor, -6); // the week view: seven days ending on anchor
+  const calTitle =
+    view === 'month'
+      ? dayLabel(`${anchor.slice(0, 7)}-15`, { month: 'long', year: 'numeric' })
+      : view === 'week'
+        ? `${dayLabel(ws, { month: 'short', day: 'numeric' })} – ${dayLabel(addDays(ws, 6), { month: 'short', day: 'numeric' })}`
+        : shown
+          ? dayLabel(shown, { weekday: 'long', month: 'long', day: 'numeric' })
+          : 'The days';
 
   const names = shownBooks.map((b) => b.label);
   const heroHues = (books ?? []).map((b) => hue[b.name]);
@@ -306,7 +361,7 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
         } as CSSProperties
       }
     >
-      <style>{STYLE}</style>
+      <style>{STYLE + CAL_STYLE}</style>
       <header className="dbk-hero">
         <div className="dbk-kicker">📅 The Daybook</div>
         <h1 className="dbk-title">
@@ -540,132 +595,213 @@ export function DaybookView(props: { routeBase: string; onClose: () => void }) {
               </div>
             )}
 
-            {days > 1 && (
-              <div className="dbk-heat">
-                <h2 className="dbk-h">Day by day</h2>
-                <table>
-                  <tbody>
-                    {shownBooks.map((b) => {
-                      const per = window_
-                        .slice()
-                        .reverse()
-                        .map(
-                          (d) =>
-                            [d, (b.entries ?? []).filter((e) => dayOf(e.at) === d).length] as const,
-                        );
-                      const peak = Math.max(1, ...per.map(([, n]) => n));
-                      return (
-                        <tr key={b.name}>
-                          <th>{b.label}</th>
-                          {per.map(([d, n]) => (
-                            <td
-                              key={d}
-                              title={`${dayLabel(d)} · ${n} ${n === 1 ? 'entry' : 'entries'}`}
-                              aria-selected={d === shown}
-                              onClick={() => n && setDay(d)}
-                              style={{
-                                background: n
-                                  ? `color-mix(in srgb, ${hue[b.name]} ${Math.round(20 + 80 * (Math.log1p(n) / Math.log1p(peak)))}%, transparent)`
-                                  : undefined,
-                              }}
-                            />
-                          ))}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
             <div id="dbk-days">
-              <h2 className="dbk-h">
-                {shown
-                  ? dayLabel(shown, { weekday: 'long', month: 'long', day: 'numeric' })
-                  : 'The days'}
-              </h2>
-              <div className="dbk-days">
-                <nav className="dbk-daynav">
-                  {dayList.length === 0 && <p className="dbk-mute">Nothing in these days.</p>}
-                  {dayList.map((d) => (
+              <h2 className="dbk-h">Calendar</h2>
+              <div className="dbk-cal-bar">
+                <span className="ttl">{calTitle}</span>
+                {view !== 'list' && (
+                  <>
                     <button
-                      key={d}
                       type="button"
-                      aria-current={d === shown}
-                      onClick={() => setDay(d)}
+                      className="dbk-nav"
+                      aria-label="Back"
+                      onClick={() => step(-1)}
                     >
-                      <span>{dayLabel(d)}</span>
-                      <span>{byDay.get(d)!.length}</span>
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      className="dbk-nav"
+                      onClick={() => moveTo(today)}
+                      disabled={
+                        view === 'month'
+                          ? anchor.slice(0, 7) === today.slice(0, 7)
+                          : anchor === today
+                      }
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      className="dbk-nav"
+                      aria-label="Forward"
+                      onClick={() => step(1)}
+                      disabled={
+                        view === 'month' ? anchor.slice(0, 7) >= today.slice(0, 7) : anchor >= today
+                      }
+                    >
+                      ›
+                    </button>
+                  </>
+                )}
+                <div className="dbk-range" role="group" aria-label="View" style={{ marginTop: 0 }}>
+                  {(['week', 'month', 'list'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className="dbk-pill"
+                      aria-pressed={view === v}
+                      onClick={() => {
+                        setView(v);
+                        setSel(null);
+                        if (v === 'month') need(weekStart(`${anchor.slice(0, 7)}-01`));
+                      }}
+                    >
+                      {v[0].toUpperCase() + v.slice(1)}
                     </button>
                   ))}
-                </nav>
-                <div className="dbk-entries">
-                  {shown &&
-                    fold(byDay.get(shown)!).map((g) => {
-                      const r = g.rows[0];
-                      const style = { '--hue': hue[r.daemon] } as CSSProperties;
-                      if (g.rows.length > 1) {
-                        const isOpen = open === g.key;
+                </div>
+              </div>
+              {view === 'week' && (
+                <WeekView
+                  start={ws}
+                  today={today}
+                  earliest={earliest}
+                  byDay={byDay}
+                  lanes={lanes}
+                  hue={hue}
+                  icons={KIND_ICON}
+                  comingUp={ups}
+                  selected={sel}
+                  onSelect={(rs) => setSel(sel && sel[0] === rs[0] ? null : rs)}
+                />
+              )}
+              {view === 'month' && (
+                <MonthView
+                  anchor={anchor}
+                  today={today}
+                  earliest={earliest}
+                  byDay={byDay}
+                  lanes={lanes}
+                  labels={labels}
+                  hue={hue}
+                  icons={KIND_ICON}
+                  onPick={(d) => {
+                    setView('week');
+                    moveTo(d);
+                  }}
+                />
+              )}
+              {view !== 'list' && sel && (
+                <div className="dbk-sel" style={{ '--hue': hue[sel[0].daemon] } as CSSProperties}>
+                  <div className="dbk-mute" style={{ marginBottom: '.5rem' }}>
+                    <span className="who" style={{ color: hue[sel[0].daemon], fontWeight: 700 }}>
+                      {sel[0].label}
+                    </span>{' '}
+                    ·{' '}
+                    {dayLabel(dayOf(sel[0].at), { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </div>
+                  {sel.length === 1 ? (
+                    <>
+                      <div style={{ fontWeight: 700, marginBottom: '.4rem' }}>
+                        {timeOf(sel[0].at)} · {KIND_ICON[sel[0].kind] ?? '•'} {sel[0].title}
+                      </div>
+                      {sel[0].detail ? (
+                        <Markdown text={sel[0].detail} />
+                      ) : (
+                        <p className="dbk-mute">No text.</p>
+                      )}
+                      <p className="dbk-mute">
+                        {kinds[sel[0].kind] ?? sel[0].kind}
+                        {sel[0].source ? ` · ${sel[0].source}` : ''}
+                      </p>
+                    </>
+                  ) : (
+                    sel.slice(0, 200).map((x, i) => (
+                      <div key={i} style={{ marginBottom: '.6rem' }}>
+                        <div className="dbk-mute">
+                          {timeOf(x.at)} · {KIND_ICON[x.kind] ?? '•'} {x.title}
+                        </div>
+                        {x.detail && <div>{excerpt(x.detail, 600)}</div>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+              {view === 'list' && (
+                <div className="dbk-days">
+                  <nav className="dbk-daynav">
+                    {dayList.length === 0 && <p className="dbk-mute">Nothing in these days.</p>}
+                    {dayList.map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-current={d === shown}
+                        onClick={() => setDay(d)}
+                      >
+                        <span>{dayLabel(d)}</span>
+                        <span>{byDay.get(d)!.length}</span>
+                      </button>
+                    ))}
+                  </nav>
+                  <div className="dbk-entries">
+                    {shown &&
+                      fold(byDay.get(shown)!).map((g) => {
+                        const r = g.rows[0];
+                        const style = { '--hue': hue[r.daemon] } as CSSProperties;
+                        if (g.rows.length > 1) {
+                          const isOpen = open === g.key;
+                          return (
+                            <div key={g.key} className="dbk-e" style={style}>
+                              <button type="button" onClick={() => setOpen(isOpen ? null : g.key)}>
+                                <span className="tm">{timeOf(r.at)}</span>
+                                <span>
+                                  {who === 'all' && <span className="who">{r.label} </span>}
+                                  {KIND_ICON[r.kind] ?? '•'} <b>{g.rows.length}</b>{' '}
+                                  {(kinds[r.kind] ?? r.kind).toLowerCase().replace(/^her /, '')}{' '}
+                                  <span className="dbk-mute">{isOpen ? '▾' : '▸'}</span>
+                                </span>
+                              </button>
+                              {isOpen && (
+                                <div className="dbk-open">
+                                  {g.rows.slice(0, 200).map((x, i) => (
+                                    <div key={i} style={{ marginBottom: '.6rem' }}>
+                                      <div className="dbk-mute">
+                                        {timeOf(x.at)} · {x.title}
+                                      </div>
+                                      {x.detail && <div>{excerpt(x.detail, 600)}</div>}
+                                    </div>
+                                  ))}
+                                  {g.rows.length > 200 && (
+                                    <p className="dbk-mute">
+                                      …and {g.rows.length - 200} more that day.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        const key = `${r.daemon}:${r.at}`;
+                        const isOpen = open === key;
                         return (
                           <div key={g.key} className="dbk-e" style={style}>
-                            <button type="button" onClick={() => setOpen(isOpen ? null : g.key)}>
+                            <button type="button" onClick={() => setOpen(isOpen ? null : key)}>
                               <span className="tm">{timeOf(r.at)}</span>
                               <span>
                                 {who === 'all' && <span className="who">{r.label} </span>}
-                                {KIND_ICON[r.kind] ?? '•'} <b>{g.rows.length}</b>{' '}
-                                {(kinds[r.kind] ?? r.kind).toLowerCase().replace(/^her /, '')}{' '}
-                                <span className="dbk-mute">{isOpen ? '▾' : '▸'}</span>
+                                {KIND_ICON[r.kind] ?? '•'} {r.title}
                               </span>
                             </button>
                             {isOpen && (
                               <div className="dbk-open">
-                                {g.rows.slice(0, 200).map((x, i) => (
-                                  <div key={i} style={{ marginBottom: '.6rem' }}>
-                                    <div className="dbk-mute">
-                                      {timeOf(x.at)} · {x.title}
-                                    </div>
-                                    {x.detail && <div>{excerpt(x.detail, 600)}</div>}
-                                  </div>
-                                ))}
-                                {g.rows.length > 200 && (
-                                  <p className="dbk-mute">
-                                    …and {g.rows.length - 200} more that day.
-                                  </p>
+                                {r.detail ? (
+                                  <Markdown text={r.detail} />
+                                ) : (
+                                  <p className="dbk-mute">No text.</p>
                                 )}
+                                <p className="dbk-mute">
+                                  {kinds[r.kind] ?? r.kind}
+                                  {r.source ? ` · ${r.source}` : ''}
+                                </p>
                               </div>
                             )}
                           </div>
                         );
-                      }
-                      const key = `${r.daemon}:${r.at}`;
-                      const isOpen = open === key;
-                      return (
-                        <div key={g.key} className="dbk-e" style={style}>
-                          <button type="button" onClick={() => setOpen(isOpen ? null : key)}>
-                            <span className="tm">{timeOf(r.at)}</span>
-                            <span>
-                              {who === 'all' && <span className="who">{r.label} </span>}
-                              {KIND_ICON[r.kind] ?? '•'} {r.title}
-                            </span>
-                          </button>
-                          {isOpen && (
-                            <div className="dbk-open">
-                              {r.detail ? (
-                                <Markdown text={r.detail} />
-                              ) : (
-                                <p className="dbk-mute">No text.</p>
-                              )}
-                              <p className="dbk-mute">
-                                {kinds[r.kind] ?? r.kind}
-                                {r.source ? ` · ${r.source}` : ''}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                      })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </>
         )}
