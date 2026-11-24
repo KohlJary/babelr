@@ -269,8 +269,9 @@ class FilesAgent(FakeAgent):
 def test_attachments_come_with_their_url_in_every_view(tmp_path):
     house = House(FilesAgent(), State(tmp_path / "s.json"), home_channel="builds")
     want = [{"filename": "gemini-1.png", "type": "image/png", "url": "/uploads/abc.png"}]
-    assert house.read_channel("builds")["messages"][0]["attachments"] == want
+    # Inbox first: once read_channel has shown a message, the inbox doesn't repeat it.
     assert [m.get("attachments") for m in house.inbox()["new_messages"] if m.get("in")] == [want]
+    assert house.read_channel("builds")["messages"][0]["attachments"] == want
 
 
 @pytest.mark.parametrize("url", [
@@ -294,7 +295,7 @@ def test_view_image_fetches_an_image_and_refuses_other_types(tmp_path):
     assert agent.fetched == ["/uploads/abc.png", "/uploads/abc.png"]
 
 
-def test_view_image_returns_the_picture_and_structured_info(tmp_path, monkeypatch):
+def test_view_image_returns_the_picture_and_no_structured_copy(tmp_path, monkeypatch):
     from babelr_mcp import server
     tools = {}
 
@@ -317,6 +318,52 @@ def test_view_image_returns_the_picture_and_structured_info(tmp_path, monkeypatc
     server.build()
     ok = tools["view_image"]("/uploads/abc.png")
     assert ok.content[0].type == "image" and ok.content[0].mimeType == "image/png"
-    assert ok.structuredContent == {"url": "/uploads/abc.png", "type": "image/png", "bytes": len(PNG)}
+    assert ok.structuredContent is None      # a client that prefers it would drop the picture
+    assert '"bytes"' in ok.content[1].text
     bad = tools["view_image"]("/uploads/../x.png")
-    assert bad.isError and "error" in bad.structuredContent
+    assert bad.isError and "error" in bad.content[0].text
+
+
+def test_reading_a_channel_marks_it_seen_so_the_inbox_does_not_repeat_it(tmp_path):
+    """Claude.ai, 2026-11-24: read #general, then check_inbox handed back the same ~40."""
+    agent = GeneralAgent()
+    house = House(agent, State(tmp_path / "s.json"), home_channel="builds, general")
+    house.inbox()
+    agent.general_msgs = agent.general_msgs + [
+        {"message": {"id": "g2", "content": "@chatgpt read me", "published": "2026-01-01T00:00:05Z"},
+         "author": {"id": "u-eris", "preferredUsername": "eris"}}]
+    got = house.read_channel("general")["messages"]
+    assert [(m["text"], m["new"]) for m in got] == [("old news", False), ("@chatgpt read me", True)]
+    assert house.inbox()["new_messages"] == []
+    assert not any(m["new"] for m in house.read_channel("general")["messages"])
+    # The mark survives a restart, and it's this agent's alone (its own state file).
+    again = House(GeneralAgent(), State(tmp_path / "s.json"), home_channel="builds, general")
+    assert again.state.data["seen"]["channel:c-g"] == "2026-01-01T00:00:05Z"
+
+
+def test_a_mention_already_read_in_its_channel_does_not_come_back(tmp_path):
+    agent = GeneralAgent()
+    house = House(agent, State(tmp_path / "s.json"), home_channel="builds")
+    house.inbox()
+    msg = {"message": {"id": "x1", "channelId": "c-g", "content": "@chatgpt over here",
+                       "published": "2026-01-01T00:00:09Z"}, "author": {"id": "u-eris", "preferredUsername": "eris"}}
+    agent.general_msgs = agent.general_msgs + [msg]
+    agent.mention_msgs = [msg]
+    house.read_channel("general")
+    assert not [m for m in house.inbox()["new_messages"] if m.get("mention")]
+
+
+def test_reading_a_dm_marks_it_seen(tmp_path):
+    house = House(FakeAgent(), State(tmp_path / "s.json"))
+    assert [m["new"] for m in house.conversation("eris")["messages"]] == [True, True, True]
+    assert not [m for m in House(FakeAgent(), State(tmp_path / "s.json")).inbox()["new_messages"] if m.get("with")]
+
+
+def test_a_read_too_short_for_what_is_unread_says_so(tmp_path):
+    agent = GeneralAgent()
+    house = House(agent, State(tmp_path / "s.json"), home_channel="builds")
+    house.read_channel("general")
+    agent.general_msgs = [{"message": {"id": f"n{i}", "content": f"n{i}", "published": f"2026-01-02T00:00:{i:02d}Z"},
+                           "author": {"id": "u-cass", "preferredUsername": "cass"}} for i in range(3)]
+    got = house.read_channel("general", limit=3)
+    assert "cut" in got

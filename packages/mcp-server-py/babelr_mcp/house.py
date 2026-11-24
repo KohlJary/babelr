@@ -96,6 +96,9 @@ class House:
                 msgs = self._channel_messages(c["id"], 50)
                 last = seen.get(key)
                 first_look = last is None and name != self.home_channel
+                if not first_look and last and len(msgs) == 50 and (msgs[0]["at"] or "") > last:
+                    new.append({"in": "#" + c["name"], "at": msgs[0]["at"],
+                                "cut": "More came in here than fit; read_channel with a larger limit for the rest."})
                 for m in msgs:
                     if first_look:
                         break
@@ -124,6 +127,8 @@ class House:
                 cid = msg.get("channelId")
                 if (last and at <= last) or cid in watched_ids or cid not in names:
                     continue
+                if at <= (seen.get("channel:" + cid) or ""):
+                    continue  # already read with read_channel
                 if (it.get("author") or {}).get("id") == me:
                     continue
                 new.append(_with_files({"from": _name(it.get("author")), "in": "#" + names[cid], "at": at,
@@ -161,8 +166,17 @@ class House:
         for d in self._dms():
             if d["partner"]["id"] == partner_id:
                 msgs = sorted(self.agent.messages(d["dm"]["id"], partner_id=partner_id), key=lambda m: m["published"])
-                return {"with": _name(d["partner"]),
-                        "messages": [self._dm_view(m, d["partner"]) for m in msgs[-limit:]]}
+                shown, last = msgs[-limit:], self.state.data["seen"].get(d["dm"]["id"])
+                views = []
+                for m in shown:
+                    v = self._dm_view(m, d["partner"])
+                    v["new"] = not last or m["published"] > last
+                    views.append(v)
+                out = {"with": _name(d["partner"]), "messages": views}
+                if shown and len(msgs) > len(shown) and last and shown[0]["published"] > last:
+                    out["cut"] = "There are older messages you haven't seen; ask with a larger limit."
+                self._mark(d["dm"]["id"], [m["published"] for m in msgs])
+                return out
         return {"with": who.lstrip("@").lower(), "messages": []}
 
     def send_dm(self, who: str, text: str) -> dict:
@@ -207,10 +221,27 @@ class House:
 
     def read_channel(self, channel: str, limit: int = 30) -> dict:
         c = self._channel(channel)
-        msgs = self._channel_messages(c["id"], max(1, min(limit, 100)))
-        return {"channel": c["name"], "messages": [
-            _with_files({"from": _name(m["author"]), "at": m["at"], "text": m["text"]}, m.get("attachments"))
+        limit = max(1, min(limit, 100))
+        msgs = self._channel_messages(c["id"], limit)
+        key = "channel:" + c["id"]
+        last = self.state.data["seen"].get(key)
+        out = {"channel": c["name"], "messages": [
+            _with_files({"from": _name(m["author"]), "at": m["at"], "text": m["text"],
+                         "new": not last or (m["at"] or "") > last}, m.get("attachments"))
             for m in msgs]}
+        if len(msgs) == limit and last and (msgs[0]["at"] or "") > last:
+            out["cut"] = "There are older messages here you haven't seen; ask with a larger limit."
+        # Reading a channel counts as seeing it: check_inbox won't hand these back.
+        self._mark(key, [m["at"] for m in msgs])
+        return out
+
+    def _mark(self, key: str, stamps: list) -> None:
+        """Move one read mark forward (never back) to the newest of stamps, and save."""
+        newest = max((t for t in stamps if t), default=None)
+        seen = self.state.data["seen"]
+        if newest and newest > (seen.get(key) or ""):
+            seen[key] = newest
+            self.state.save()
 
     def post(self, channel: str, text: str) -> dict:
         c = self._channel(channel)
