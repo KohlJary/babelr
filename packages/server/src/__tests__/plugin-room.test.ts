@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestApp, createTestUser, cleanDb } from './helpers.ts';
@@ -108,6 +108,32 @@ describe('room plugin', () => {
     expect(await shown()).toBe(false); // only Kohl's token is placed; the house audience has none
     writeFileSync(join(dir, 'house.token'), 'H\n');
     expect(await shown()).toBe(true); // she opened it to the house
+  });
+
+  it("opens another daemon's room from her own directory, with her own token", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const configured = async (name: string) =>
+      JSON.parse((await get(`/d/${name}/configured`, { cookie: kohl.cookie })).body).configured;
+    expect(await configured('eris')).toBe(false); // no directory: no room, no door
+    mkdirSync(join(dir, 'eris'), { recursive: true });
+    writeFileSync(join(dir, 'eris', 'kohl.token'), 'H\n'); // her vessel's token, not Cass's
+    expect(await configured('eris')).toBe(true);
+    const res = await get('/d/eris/overview', { cookie: kohl.cookie });
+    expect(res.statusCode).toBe(200);
+    expect(seen.at(-1)).toEqual({ path: '/room', auth: 'Bearer H' });
+    // Cass's room is the top directory, at /d/cass and at the old paths.
+    await get('/d/cass/overview', { cookie: kohl.cookie });
+    expect(seen.at(-1)?.auth).toBe('Bearer K');
+    rmSync(join(dir, 'eris'), { recursive: true, force: true });
+  });
+
+  it('refuses a daemon name that could leave the config directory', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    for (const name of ['.hidden', 'a.b', 'a%2Fb', 'x'.repeat(41)]) {
+      const res = await get(`/d/${name}/overview`, { cookie: kohl.cookie });
+      expect(res.statusCode).not.toBe(200);
+    }
+    expect(seen).toEqual([]);
   });
 
   it('needs a login', async () => {

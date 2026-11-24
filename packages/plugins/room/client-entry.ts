@@ -7,8 +7,8 @@ import type { PluginClientApi, PluginManifest } from '@babelr/plugin-sdk';
  *  the client takes this one instead (as blinds does). */
 export const clientManifest: PluginManifest = {
   id: 'room',
-  name: "Cass's room",
-  version: '0.1.0',
+  name: 'Rooms',
+  version: '0.2.0',
   dependencies: { babelr: '^0.1.0' },
 };
 
@@ -17,18 +17,34 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   const { RoomView } = await import('./client.js');
   const routeBase = api.routeBase;
 
+  // Each daemon's room lives under /d/<name> (Cass's at the old paths too).
+  const base = (name: string) => `${routeBase}/d/${encodeURIComponent(name)}`;
+
   api.registerView({
     id: 'room',
-    label: "Cass's room",
-    isAvailable: () => false, // opened from the sidebar slot
+    label: 'Room',
+    isAvailable: () => false, // opened from a daemon's door
     render: (props: unknown) => {
-      const h = (props as { host: unknown }).host as { closeView: () => void };
-      return createElement(RoomView as never, { routeBase, onClose: h.closeView });
+      const p = props as { host: { closeView: () => void }; viewState?: Record<string, unknown> };
+      const name = typeof p.viewState?.daemon === 'string' ? p.viewState.daemon : 'cass';
+      const who =
+        typeof p.viewState?.label === 'string'
+          ? p.viewState.label
+          : name === 'cass'
+            ? 'Cass'
+            : name;
+      return createElement(RoomView as never, {
+        key: name,
+        routeBase: base(name),
+        who,
+        onClose: p.host.closeView,
+      });
     },
   });
 
-  // A door in Cass's room (the column beside her DM), not a server-sidebar entry
-  // (Kohl, 2026-11-23: daemon plugins live with the daemon).
+  // A door in each daemon's room (the column beside her DM), not a server-sidebar
+  // entry (Kohl, 2026-11-23: daemon plugins live with the daemon). Shown only to
+  // someone her vessel minted a token for (Kohl, 2026-11-24: every daemon).
   api.registerDaemonSection?.({
     id: 'room',
     label: 'Room',
@@ -36,12 +52,18 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
     order: 5,
     place: 'door',
     isAvailable: async (daemon) => {
-      if (daemon.name !== 'cass') return false;
-      const r = await fetch(`${routeBase}/configured`, { credentials: 'include' }).catch(
+      const r = await fetch(`${base(daemon.name)}/configured`, { credentials: 'include' }).catch(
         () => null,
       );
       return !!r?.ok && !!((await r.json()) as { configured?: boolean }).configured;
     },
-    open: (props) => (props as { host: { openView: (id: string) => void } }).host.openView('room'),
+    open: (props) => {
+      const p = props as {
+        daemon?: { name: string; label?: string };
+        host: { openView: (id: string, state?: Record<string, unknown>) => void };
+      };
+      const name = p.daemon?.name ?? 'cass';
+      p.host.openView('room', { daemon: name, label: p.daemon?.label ?? name });
+    },
   });
 }

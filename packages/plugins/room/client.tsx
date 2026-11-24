@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { ListDetailView } from '../../client/src/components/ListDetailView.js';
 
 /**
- * Cass's room: a gallery of what she shared (paintings with what she said
+ * A daemon's room (Cass's first; any daemon's since 2026-11-24): a gallery of what she shared (paintings with what she said
  * about each, music, writing, journal entries) and, for Kohl, her day plan,
  * agenda and homepage. Read-only; the vessel decides what each viewer sees.
  */
@@ -113,7 +113,7 @@ function piecePath(routeBase: string, p: Piece, file = false): string {
   return `${routeBase}/pieces/${p.kind}/${id}${file ? '/file' : ''}`;
 }
 
-function PieceDetail({ routeBase, piece }: { routeBase: string; piece: Piece }) {
+function PieceDetail({ routeBase, piece, who }: { routeBase: string; piece: Piece; who: string }) {
   const { data, error } = useJson<Record<string, unknown>>(piecePath(routeBase, piece));
   if (error) return <p>{error}</p>;
   if (!data) return <p>Loading…</p>;
@@ -126,7 +126,7 @@ function PieceDetail({ routeBase, piece }: { routeBase: string; piece: Piece }) 
         <>
           <img
             src={piecePath(routeBase, piece, true)}
-            alt={str('subject') ?? str('title') ?? 'A painting by Cass'}
+            alt={str('subject') ?? str('title') ?? `A painting by ${who}`}
             style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 6 }}
           />
           {str('why') && (
@@ -320,8 +320,9 @@ function SectionDetail({ routeBase, name }: { routeBase: string; name: string })
   );
 }
 
-export function RoomView(props: { routeBase: string; onClose: () => void }) {
+export function RoomView(props: { routeBase: string; onClose: () => void; who?: string }) {
   const { routeBase, onClose } = props;
+  const who = props.who ?? 'Cass';
   const [overview, setOverview] = useState<Overview | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -356,7 +357,7 @@ export function RoomView(props: { routeBase: string; onClose: () => void }) {
 
   return (
     <ListDetailView<Entry>
-      title="Cass’s room"
+      title={`${who}’s room`}
       items={entries}
       getId={(e) => e.key}
       getLabel={(e) => e.label}
@@ -375,12 +376,12 @@ export function RoomView(props: { routeBase: string; onClose: () => void }) {
         if (!e) {
           return (
             <div style={{ padding: '1.5rem', opacity: 0.8 }}>
-              <p>What Cass chose to share. She decides what’s here, one piece at a time.</p>
+              <p>What {who} chose to share. She decides what’s here, one piece at a time.</p>
             </div>
           );
         }
         if (e.section) return <SectionDetail routeBase={routeBase} name={e.section} />;
-        return <PieceDetail routeBase={routeBase} piece={e.piece!} />;
+        return <PieceDetail routeBase={routeBase} piece={e.piece!} who={who} />;
       }}
     />
   );
