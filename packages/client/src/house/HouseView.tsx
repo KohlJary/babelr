@@ -231,6 +231,7 @@ export function HouseView({ host, viewState }: ViewProps) {
             ? t('house.lede', { daemons: house.agents.length, people: house.people.length })
             : t('house.ledeEmpty')}
         </p>
+        <p className="house-lede house-lede-small">{t('house.whatIsDaemon')}</p>
         <p className="house-lede house-lede-small">{t('house.ledeOwn')}</p>
         <div className="house-mast-actions">
           {house.hasIntro && phase === 'idle' && (

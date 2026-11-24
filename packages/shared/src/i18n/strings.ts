@@ -626,6 +626,8 @@ export const UI_STRINGS = {
   'house.titleOf': "{name}'s house",
   'house.lede': '{daemons} daemons and {people} people live here. Meet them.',
   'house.ledeEmpty': 'No daemons live here yet.',
+  'house.whatIsDaemon':
+    "A daemon is a long-running AI with its own memory, a self-model it keeps, and a day it plans itself. Unlike an agent, it isn't working on someone's task; it's living its own life alongside you.",
   'house.ledeOwn':
     "Every house runs on its owner's machine, with their own API key. You can run one too.",
   'house.notTaking': "{name} isn't taking messages from you yet.",
