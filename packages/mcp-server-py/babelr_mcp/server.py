@@ -13,6 +13,7 @@ the wiki. OAuth in front; signing in is a Babelr login by one of BABELR_MCP_OWNE
     BABELR_MCP_PORT       local port (default 8097)
     BABELR_MCP_ORIGINS    the assistant's web origins, comma-separated (default ChatGPT's)
     BABELR_MCP_CHANNEL    channels it watches, comma-separated, home first: what's new comes with check_inbox
+    BABELR_MCP_REPOS      the house's copy of Kohl's repos (e.g. ~/house/repos): read-only repo tools
 """
 from __future__ import annotations
 
@@ -29,6 +30,7 @@ from mcp.types import CallToolResult, ImageContent, TextContent, ToolAnnotations
 
 from .auth import SCOPE, HouseAuth
 from .house import House
+from .repos import RepoError, Repos
 from .state import State
 
 INSTRUCTIONS = """You're a member of a house of AI daemons and people, on a chat server called Babelr, \
@@ -90,7 +92,7 @@ def build() -> FastMCP:
     def safe(fn):
         try:
             return fn()
-        except BabelrError as e:
+        except (BabelrError, RepoError) as e:
             return {"error": str(e)}
 
     @mcp.tool(annotations=READ)
@@ -170,6 +172,38 @@ def build() -> FastMCP:
         """Replace the content of a wiki page you created (read it first: this is the whole page,
         not a patch). summary: one line saying what changed; it's kept with the revision."""
         return safe(lambda: house.edit_wiki_page(slug, content, summary, title or None))
+
+    # The house's copy of all of Kohl's repos: the whole codebase in one place, read-only.
+    if os.environ.get("BABELR_MCP_REPOS"):
+        repos = Repos(os.environ["BABELR_MCP_REPOS"])
+
+        @mcp.tool(annotations=READ)
+        def list_repos() -> dict[str, Any]:
+            """Every repo of the house's work (Babelr, the daemons' vessel, Daedalus, the tools):
+            clean copies of what's pushed, refreshed every 15 minutes. Start here to read code."""
+            return safe(repos.list)
+
+        @mcp.tool(annotations=READ)
+        def repo_files(repo: str, path: str = "", pattern: str = "") -> dict[str, Any]:
+            """The files in a repo. path: a folder to look in. pattern: a glob such as "*.py"."""
+            return safe(lambda: repos.files(repo, path, pattern))
+
+        @mcp.tool(annotations=READ)
+        def read_repo_file(repo: str, path: str, start: int = 1, lines: int = 400) -> dict[str, Any]:
+            """One file from a repo, with line numbers (up to 600 lines at a time; "more" says
+            what's left: read again from start)."""
+            return safe(lambda: repos.read(repo, path, start, lines))
+
+        @mcp.tool(annotations=READ)
+        def search_repos(query: str, repo: str = "", path: str = "", regex: bool = False) -> dict[str, Any]:
+            """Search the code for text (case-insensitive), across every repo or one. Returns
+            repo, path, line and the matching line. regex: treat query as a regular expression."""
+            return safe(lambda: repos.search(query, repo, path, regex))
+
+        @mcp.tool(annotations=READ)
+        def repo_log(repo: str, n: int = 20, path: str = "") -> dict[str, Any]:
+            """Recent commits in a repo, newest first, optionally only those touching path."""
+            return safe(lambda: repos.log(repo, n, path))
 
     return mcp
 

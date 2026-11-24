@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 import asyncio
 import time
+import subprocess
 
 import pytest
 from mcp.server.auth.provider import AuthorizationParams
@@ -367,3 +368,40 @@ def test_a_read_too_short_for_what_is_unread_says_so(tmp_path):
                            "author": {"id": "u-cass", "preferredUsername": "cass"}} for i in range(3)]
     got = house.read_channel("general", limit=3)
     assert "cut" in got
+
+
+def _house_repos(tmp_path):
+    import json as _j
+    root = tmp_path / "repos"
+    src = root / "babelr"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(src)], check=True)
+    (src / "src").mkdir()
+    (src / "src" / "app.py").write_text("\n".join(f"line {i}" for i in range(1, 1001)) + "\nWonderland here\n")
+    (src / "service_secret.txt").write_text("hunter2 Wonderland")
+    (src / "untracked.py").write_text("x")
+    subprocess.run(["git", "-C", str(src), "add", "src", "service_secret.txt"], check=True)
+    subprocess.run(["git", "-C", str(src), "-c", "user.name=Kohl", "-c", "user.email=k@k", "commit", "-qm", "first"], check=True)
+    (root / ".index.json").write_text(_j.dumps({"synced": "now", "repos": [{"name": "babelr", "branch": "main"}]}))
+    from babelr_mcp.repos import Repos
+    return Repos(root)
+
+
+def test_repos_list_files_and_read_only_tracked_files_in_pages(tmp_path):
+    from babelr_mcp.repos import RepoError
+    r = _house_repos(tmp_path)
+    assert [x["name"] for x in r.list()["repos"]] == ["babelr"]
+    assert r.files("Babelr")["files"] == ["src/app.py"]            # secret-looking and untracked left out
+    got = r.read("babelr", "src/app.py", start=1, lines=5000)
+    assert got["total_lines"] == 1001 and got["text"].startswith("1\tline 1") and "more" in got
+    for bad in ("untracked.py", "service_secret.txt", "../../etc/passwd", "src"):
+        with pytest.raises(RepoError):
+            r.read("babelr", bad)
+    with pytest.raises(RepoError):
+        r.files("nope")
+
+
+def test_repos_search_and_log(tmp_path):
+    r = _house_repos(tmp_path)
+    hits = r.search("wonderland")["hits"]
+    assert [(h["path"], h["line"]) for h in hits] == [("src/app.py", 1001)]   # not the secret file
+    assert r.log("babelr")["commits"][0]["subject"] == "first"
