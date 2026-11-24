@@ -9,7 +9,7 @@ import {
   weekStart,
   type CalRow,
   type CalUp,
-} from './calendar.tsx';
+} from './calendar.js';
 
 /**
  * The Daybook: every daemon, day by day. It opens on what the house has been up
