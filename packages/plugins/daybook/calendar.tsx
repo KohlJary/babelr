@@ -32,8 +32,9 @@ export interface CalUp {
   label: string;
 }
 
-export const HOUR_PX = 34;
-const MIN_BLOCK_PX = 18;
+// Room to read (Kohl, 2026-11-24: "use more vertical space on the cal items").
+export const HOUR_PX = 64;
+const MIN_BLOCK_PX = 30;
 
 export const isoDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -106,7 +107,7 @@ export const CAL_STYLE = `
 .dbk-wk-head div{padding:.45rem .5rem;font-size:.8rem;color:var(--dbk-mute);white-space:nowrap}
 .dbk-wk-head div[data-today=true]{color:var(--text-primary,#fff);font-weight:700}
 .dbk-wk-head b{font-size:1.05rem;margin-left:.25rem;color:var(--text-primary,#fff)}
-.dbk-wk-scroll{max-height:34rem;overflow:auto}
+.dbk-wk-scroll{max-height:min(48rem,75vh);overflow:auto}
 .dbk-wk-grid{min-width:max-content;display:grid;grid-template-columns:3rem repeat(7,minmax(6.5rem,1fr));position:relative}
 .dbk-wk-hours{position:sticky;left:0;z-index:5;background:var(--dbk-bg)}
 .dbk-wk-head>div:first-child{position:sticky;left:0;z-index:7;background:var(--dbk-card)}
@@ -115,13 +116,15 @@ export const CAL_STYLE = `
   background:repeating-linear-gradient(to bottom,transparent 0,transparent ${HOUR_PX - 1}px,var(--dbk-line) ${HOUR_PX - 1}px,var(--dbk-line) ${HOUR_PX}px)}
 .dbk-wk-col[data-today=true]{background-color:color-mix(in srgb,var(--h0,#f472b6) 6%,transparent)}
 .dbk-wk-col[data-out=true]{opacity:.4}
-.dbk-blk{position:absolute;border-radius:6px;padding:.15rem .3rem;font-size:.72rem;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;text-align:left;font-family:inherit;
+.dbk-blk{position:absolute;border-radius:6px;padding:.2rem .4rem;font-size:.78rem;line-height:1.25;overflow:hidden;white-space:normal;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;text-align:left;font-family:inherit;
   color:#111;background:color-mix(in srgb,var(--hue) 85%,transparent);border:1px solid var(--hue);box-shadow:0 2px 8px -4px var(--hue)}
 .dbk-blk:hover,.dbk-chip:hover{filter:brightness(1.12);z-index:3}
 .dbk-blk[aria-pressed=true],.dbk-chip[aria-pressed=true]{outline:2px solid var(--text-primary,#fff);z-index:4}
-.dbk-chip{position:absolute;height:18px;border-radius:999px;padding:0 .4rem;font-size:.7rem;white-space:nowrap;cursor:pointer;font-family:inherit;z-index:2;
+.dbk-chip{position:absolute;height:26px;border-radius:999px;padding:0 .55rem;font-size:.78rem;text-align:left;white-space:nowrap;cursor:pointer;font-family:inherit;z-index:2;
   color:var(--text-primary,#fff);background:var(--dbk-card);border:1px solid var(--hue);overflow:hidden;text-overflow:ellipsis}
-.dbk-up-blk{position:absolute;border-radius:6px;padding:.15rem .3rem;font-size:.72rem;border:1px dashed var(--hue);color:var(--hue);background:transparent;overflow:hidden}
+.dbk-blk .bt{font-size:.68rem;opacity:.75}
+.dbk-blk .bn{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.dbk-up-blk{position:absolute;border-radius:6px;padding:.2rem .4rem;font-size:.78rem;line-height:1.25;border:1px dashed var(--hue);color:var(--hue);background:transparent;overflow:hidden}
 .dbk-now{position:absolute;left:0;right:0;height:2px;background:#ef4444;z-index:5}
 .dbk-now::before{content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:#ef4444}
 .dbk-mo{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
@@ -216,7 +219,8 @@ export function WeekView(props: {
                     title={`${r.label} · ${r.at.slice(11, 16)} · ${r.title}`}
                     onClick={() => props.onSelect(p.rows)}
                   >
-                    {r.title.replace(/\s*·\s*[\d.]+ min.*$/, '')}
+                    <span className="bt">{r.at.slice(11, 16)}</span>
+                    <span className="bn">{r.title.replace(/\s*·\s*[\d.]+ min.*$/, '')}</span>
                   </button>
                 ) : (
                   <button
@@ -229,29 +233,39 @@ export function WeekView(props: {
                     onClick={() => props.onSelect(p.rows)}
                   >
                     {chipLabel(p.rows, props.icons)}
+                    {p.rows.length === 1 ? ` ${r.title}` : ''}
                   </button>
                 );
               })}
               {d === props.today &&
                 props.comingUp
                   .filter((c) => c.starts_hour != null && c.starts_hour * 60 > now.getHours() * 60)
-                  .map((c, i) => (
-                    <div
-                      key={`up${i}`}
-                      className="dbk-up-blk"
-                      title={`Coming up · ${c.label} · ${c.name}`}
-                      style={
-                        {
-                          '--hue': props.hue[c.daemon],
-                          top: (c.starts_hour as number) * HOUR_PX,
-                          height: Math.max(MIN_BLOCK_PX, ((c.minutes ?? 30) / 60) * HOUR_PX),
-                          ...laneStyle(Math.max(0, props.lanes.indexOf(c.daemon))),
-                        } as CSSProperties
-                      }
-                    >
-                      {c.name}
-                    </div>
-                  ))}
+                  .map((c, i, all) => {
+                    // Several starting in the same hour, one daemon: side by side, not on top.
+                    const same = all.filter(
+                      (o) => o.daemon === c.daemon && o.starts_hour === c.starts_hour,
+                    );
+                    const k = same.indexOf(c);
+                    const lane = Math.max(0, props.lanes.indexOf(c.daemon));
+                    return (
+                      <div
+                        key={`up${i}`}
+                        className="dbk-up-blk"
+                        title={`Coming up · ${c.label} · ${c.name}`}
+                        style={
+                          {
+                            '--hue': props.hue[c.daemon],
+                            top: (c.starts_hour as number) * HOUR_PX,
+                            height: Math.max(MIN_BLOCK_PX, ((c.minutes ?? 30) / 60) * HOUR_PX),
+                            left: `calc(${((lane + k / same.length) / n) * 100}% + 2px)`,
+                            width: `calc(${100 / n / same.length}% - 4px)`,
+                          } as CSSProperties
+                        }
+                      >
+                        {c.name}
+                      </div>
+                    );
+                  })}
               {d === props.today && <div className="dbk-now" style={{ top: nowTop }} />}
             </div>
           ))}
