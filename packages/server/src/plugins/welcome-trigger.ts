@@ -4,7 +4,7 @@ import fp from 'fastify-plugin';
 import { eq } from 'drizzle-orm';
 import '../types.ts';
 import { invites } from '../db/schema/invites.ts';
-import { welcomeAfterJoin } from '../welcome.ts';
+import { recordArrival, welcomeAfterJoin } from '../welcome.ts';
 
 /**
  * The welcome trigger: after a request that made someone a member of a
@@ -45,6 +45,9 @@ async function welcomeTrigger(fastify: FastifyInstance) {
     if (typeof code !== 'string' || !CODE_RE.test(code)) return;
     const [invite] = await fastify.db.select().from(invites).where(eq(invites.code, code)).limit(1);
     if (!invite) return;
+    // Who invited them, and as whom (a guest card), before the welcome
+    // that carries it.
+    await recordArrival(fastify.db, invite, newcomerId);
     await welcomeAfterJoin(fastify, invite.serverId, newcomerId, {
       via,
       invitedById: invite.createdBy,

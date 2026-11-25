@@ -9144,3 +9144,24 @@ textarea.modal-input {
 .sidebar-sigil {
   opacity: 0.7;
 }
+
+/* First-landing consent to what an inviter told the house (ArrivalConsent). */
+.arrival-consent-panel {
+  padding: 1rem;
+  gap: 0.75rem;
+  max-width: 28rem;
+  height: auto;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.arrival-seeds {
+  margin: 0;
+  padding: 0.75rem;
+  border-left: 3px solid var(--accent, #5865f2);
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.04));
+  white-space: pre-wrap;
+}
+.arrival-no {
+  background: transparent;
+  border: 1px solid var(--border, #444);
+}

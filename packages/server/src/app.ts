@@ -30,6 +30,7 @@ import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
 import dmConsentRoutes from './routes/dm-consent.ts';
 import welcomeRoutes from './routes/welcome.ts';
+import guestCardRoutes from './routes/guest-cards.ts';
 import welcomeTrigger from './plugins/welcome-trigger.ts';
 import friendsRoutes from './routes/friends.ts';
 import i18nRoutes from './routes/i18n.ts';
@@ -199,6 +200,7 @@ export async function buildApp() {
   await app.register(dmRoutes);
   await app.register(dmConsentRoutes);
   await app.register(welcomeRoutes);
+  await app.register(guestCardRoutes);
   await app.register(friendsRoutes);
   await app.register(i18nRoutes);
   await app.register(eventRoutes);

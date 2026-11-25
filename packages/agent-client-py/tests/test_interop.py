@@ -122,13 +122,17 @@ def test_welcome_calls_hit_the_welcome_routes():
 
     a = Agent.__new__(Agent)
     calls = []
-    a._req = lambda method, path, body=None: calls.append((method, path, body)) or []
+    a._req = lambda method, path, body=None: calls.append((method, path, body)) or (
+        [{"invitedAs": "Mom"}] if path.startswith("/welcomes?") else []
+    )
     a.welcome_settings()
     a.set_welcoming("srv")
     a.set_welcoming("srv", False)
     a.welcomes()
     a.welcomes("all")
     a.welcome_done("w1")
+    assert a.welcomes()[0]["invited_as"] == "Mom"
+    a.guest_cards("srv")
     assert calls == [
         ("GET", "/welcome/settings", None),
         ("PUT", "/servers/srv/welcome", {"welcoming": True}),
@@ -136,4 +140,6 @@ def test_welcome_calls_hit_the_welcome_routes():
         ("GET", "/welcomes?state=pending", None),
         ("GET", "/welcomes?state=all", None),
         ("POST", "/welcomes/w1/done", None),
+        ("GET", "/welcomes?state=pending", None),
+        ("GET", "/servers/srv/guest-cards", None),
     ]

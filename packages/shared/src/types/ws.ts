@@ -67,6 +67,7 @@ export type WsServerMessage =
   | { type: 'conversation:new'; payload: { conversation: DMConversation } }
   | { type: 'dm:request'; payload: { conversation: DMConversation } }
   | { type: 'welcome:new'; payload: { welcome: WelcomeView } }
+  | { type: 'welcome:updated'; payload: { welcome: WelcomeView } }
   | { type: 'dm:left'; payload: { dmId: string; actor: AuthorView } }
   | { type: 'dm:removed'; payload: { dmId: string } }
   | { type: 'dm:read'; payload: { dmId: string; actorUri: string; lastReadAt: string } }

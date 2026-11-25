@@ -421,5 +421,6 @@ def test_the_inbox_lists_newcomers_waiting_for_a_hello(tmp_path):
     assert got[0]["who"] == "@mom"
     assert got[0]["server"] == "The House"
     assert got[0]["ready"] is True
+    assert got[0]["invited_as"] is None
     assert got[0]["invited_by"]
     assert agent.sent == []  # the hello is the agent's to write

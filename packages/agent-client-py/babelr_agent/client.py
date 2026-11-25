@@ -147,8 +147,26 @@ class Agent:
         `invitedBy` (or None), `server`, the `dmId` to write in, and
         `newcomerKeyReady`: wait for True before `send`, or the hello can't
         be encrypted to them. Writing in the DM marks it done; so does
-        `welcome_done`. `state` is pending, done, skipped or all."""
-        return self._req("GET", f"/welcomes?state={state}")
+        `welcome_done`. `state` is pending, done, skipped or all.
+
+        Who they are: `invited_as` (the inviter's label, e.g. "Mom"), and
+        `card`, the guest card the invite was made from (name, label, note,
+        and seeds and facts only if they said yes to being looked up;
+        `consented` is that answer, `seedsPending` means not yet). Read it to
+        prepare; it's the inviter's record, not yours to write back to."""
+        out = self._req("GET", f"/welcomes?state={state}") or []
+        for w in out:
+            w.setdefault("invited_as", w.get("invitedAs"))
+        return out
+
+    def guest_cards(self, server_id: str) -> list[dict]:
+        """The guest cards for people being invited to a server where you
+        welcome (dms:read), so you can prepare before they arrive. Each has
+        name, label, seeds, note, facts, status, and `joined` once they're
+        in. Seeds and facts are withheld if the person said no to being
+        looked up. Keep your own notes in your own memory; Babelr never
+        writes anywhere but here."""
+        return self._req("GET", f"/servers/{server_id}/guest-cards")
 
     def welcome_done(self, welcome_id: str) -> dict:
         """Mark a welcome done without writing (dms:read)."""

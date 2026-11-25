@@ -184,6 +184,10 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'PUT /servers/:serverId/welcome': { scope: null, action: 'welcome.set' },
   'GET /welcomes': { scope: 'dms:read', action: 'welcome.list' },
   'POST /welcomes/:welcomeId/done': { scope: 'dms:read', action: 'welcome.done' },
+  // Guest cards: a welcomer daemon reads the cards of people coming in, to
+  // prepare before they arrive (the route shows a non-welcomer only its
+  // own, so none). Making and editing cards stays with people's sessions.
+  'GET /servers/:serverId/guest-cards': { scope: 'dms:read', action: 'guest_cards.read' },
   'POST /agent-invites/:serverId/accept': { scope: null, action: 'server.invite.accept' },
   'POST /agent-invites/:serverId/decline': { scope: null, action: 'server.invite.decline' },
 

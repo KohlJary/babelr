@@ -154,6 +154,9 @@ class House:
                           "server": (w.get("server") or {}).get("name"),
                           "invited_by": _name(w["invitedBy"]) if w.get("invitedBy") else None,
                           "ready": bool(w.get("newcomerKeyReady")),
+                          "invited_as": w.get("invitedAs"),
+                          "card": w.get("card"),
+                          "consented": w.get("consented"),
                           "note": "Someone new joined and a DM with you is waiting for them. Say hello "
                                   "with send_dm when ready is true (until then they have no key yet)."}
                          for w in (self.agent.welcomes() or [])]

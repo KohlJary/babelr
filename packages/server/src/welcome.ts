@@ -7,8 +7,10 @@ import { actors } from './db/schema/actors.ts';
 import { objects } from './db/schema/objects.ts';
 import { collectionItems } from './db/schema/collections.ts';
 import { dmRequests } from './db/schema/dm-consent.ts';
-import { welcomes } from './db/schema/welcome.ts';
-import type { WelcomeState, WelcomeView } from '@babelr/shared';
+import { inviteArrivals, welcomes } from './db/schema/welcome.ts';
+import { guestCardFacts, guestCards } from './db/schema/guest-cards.ts';
+import { invites } from './db/schema/invites.ts';
+import type { GuestCardFact, WelcomeState, WelcomeView } from '@babelr/shared';
 import { toAuthorView } from './serializers.ts';
 import { writeAuditLog } from './audit.ts';
 import {
@@ -104,6 +106,14 @@ export async function welcomeNewcomer(
       )
       .limit(1);
     if (!membership) return made;
+    if (opts.invitedById === undefined) {
+      const [arrival] = await db
+        .select({ invitedById: inviteArrivals.invitedById })
+        .from(inviteArrivals)
+        .where(and(eq(inviteArrivals.serverId, server.id), eq(inviteArrivals.actorId, newcomer.id)))
+        .limit(1);
+      if (arrival) opts = { ...opts, invitedById: arrival.invitedById };
+    }
 
     // Opted in before the join, still a member, still able to act, and
     // not already handled for this newcomer.
@@ -348,12 +358,31 @@ export async function welcomeViews(db: Db, rows: WelcomeRow[]): Promise<WelcomeV
   ];
   const people = await db.select().from(actors).where(inArray(actors.id, ids));
   const byId = new Map(people.map((p) => [p.id, p]));
+  const arrivals = await db
+    .select({ arrival: inviteArrivals, card: guestCards })
+    .from(inviteArrivals)
+    .leftJoin(guestCards, eq(guestCards.id, inviteArrivals.guestCardId))
+    .where(
+      inArray(
+        inviteArrivals.actorId,
+        rows.map((r) => r.newcomerId),
+      ),
+    );
+  const facts = await factsFor(
+    db,
+    arrivals.map((a) => a.card?.id).filter((x): x is string => !!x),
+  );
+  const arrivalOf = (serverId: string, actorId: string) =>
+    arrivals.find((a) => a.arrival.serverId === serverId && a.arrival.actorId === actorId);
   const out: WelcomeView[] = [];
   for (const r of rows) {
     const server = byId.get(r.serverId);
     const newcomer = byId.get(r.newcomerId);
     if (!server || !newcomer) continue;
     const inviter = r.invitedById ? byId.get(r.invitedById) : undefined;
+    const arrived = arrivalOf(r.serverId, r.newcomerId);
+    const card = arrived?.card ?? null;
+    const consent = arrived?.arrival.lookupConsent ?? null;
     out.push({
       id: r.id,
       server: { id: server.id, name: serverName(server) },
@@ -363,6 +392,20 @@ export async function welcomeViews(db: Db, rows: WelcomeRow[]): Promise<WelcomeV
       state: r.state as WelcomeState,
       reason: r.reason,
       newcomerKeyReady: hasPublicKey(newcomer),
+      invitedAs: card?.label ?? null,
+      card: card
+        ? {
+            id: card.id,
+            name: card.name,
+            label: card.label,
+            note: card.note,
+            // Only with the person's yes: "No thanks" (or no answer yet) carries none.
+            seeds: consent === true ? withAddedLink(card.seeds, arrived!.arrival.addedLink) : null,
+            facts: consent === true ? (facts.get(card.id) ?? []) : [],
+          }
+        : null,
+      consented: card && needsConsent(card, facts) ? consent : null,
+      seedsPending: !!card && needsConsent(card, facts) && consent === null,
       createdAt: r.createdAt.toISOString(),
       doneAt: r.doneAt?.toISOString() ?? null,
     });
@@ -445,4 +488,70 @@ export async function settleSaidHello(db: Db, welcomerId: string): Promise<void>
         SELECT 1 FROM objects o
         WHERE o.context = w.dm_id AND o.type = 'Note' AND o.attributed_to = ${welcomerId}
       )`);
+}
+
+function withAddedLink(seeds: string | null, link: string | null): string | null {
+  if (!link) return seeds;
+  return seeds ? `${seeds}\n${link}` : link;
+}
+
+/**
+ * Record how `newcomerId` came into the invite's server: who invited
+ * them, and the guest card the invite was made from. Only for a
+ * membership that started after the invite existed (a long-time member
+ * opening a link isn't "invited as" anyone). First arrival wins.
+ */
+export async function recordArrival(
+  db: Db,
+  invite: typeof invites.$inferSelect,
+  newcomerId: string,
+): Promise<void> {
+  const rows = await db.execute<{ added_at: string }>(sql`
+    SELECT m.added_at FROM collection_items m
+    JOIN actors g ON g.followers_uri = m.collection_uri AND g.id = ${invite.serverId}
+    WHERE m.item_id = ${newcomerId} AND m.added_at >= ${invite.createdAt.toISOString()}
+    LIMIT 1`);
+  if (rows.length === 0) return;
+  await db
+    .insert(inviteArrivals)
+    .values({
+      serverId: invite.serverId,
+      actorId: newcomerId,
+      inviteId: invite.id,
+      invitedById: invite.createdBy,
+      guestCardId: invite.guestCardId,
+    })
+    .onConflictDoNothing();
+}
+
+/** Facts per card id, oldest first. */
+export async function factsFor(db: Db, cardIds: string[]): Promise<Map<string, GuestCardFact[]>> {
+  const out = new Map<string, GuestCardFact[]>();
+  if (cardIds.length === 0) return out;
+  const rows = await db
+    .select()
+    .from(guestCardFacts)
+    .where(inArray(guestCardFacts.cardId, [...new Set(cardIds)]))
+    .orderBy(guestCardFacts.createdAt);
+  for (const f of rows) {
+    const list = out.get(f.cardId) ?? [];
+    list.push({
+      id: f.id,
+      key: f.key,
+      value: f.value,
+      source: f.source,
+      addedBy: f.addedBy,
+      createdAt: f.createdAt.toISOString(),
+    });
+    out.set(f.cardId, list);
+  }
+  return out;
+}
+
+/** The person is asked before the house uses a card that says anything about them. */
+export function needsConsent(
+  card: { id: string; seeds: string | null },
+  facts: Map<string, GuestCardFact[]>,
+): boolean {
+  return !!card.seeds || (facts.get(card.id)?.length ?? 0) > 0;
 }

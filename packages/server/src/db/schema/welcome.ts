@@ -1,5 +1,15 @@
 // SPDX-License-Identifier: MIT
-import { pgTable, uuid, varchar, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  boolean,
+  timestamp,
+  uniqueIndex,
+  index,
+} from 'drizzle-orm/pg-core';
+import { invites } from './invites.ts';
+import { guestCards } from './guest-cards.ts';
 import { actors } from './actors.ts';
 import { objects } from './objects.ts';
 
@@ -55,5 +65,38 @@ export const welcomes = pgTable(
   (table) => [
     uniqueIndex('welcomes_triple_idx').on(table.serverId, table.newcomerId, table.welcomerId),
     index('welcomes_welcomer_state_idx').on(table.welcomerId, table.state),
+  ],
+);
+
+/**
+ * How a person arrived in a server through an invite: who invited them
+ * and, for an invite made from a guest card, which card. One row per
+ * (server, person), written when the invite brings them in.
+ *   lookup_consent: null until the person answers (asked only when the
+ *   card has seeds); true lets welcomers see and use the seeds; false
+ *   withholds them. The person can change it later.
+ */
+export const inviteArrivals = pgTable(
+  'invite_arrivals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => actors.id, { onDelete: 'cascade' }),
+    inviteId: uuid('invite_id').references(() => invites.id, { onDelete: 'set null' }),
+    invitedById: uuid('invited_by_id').references(() => actors.id, { onDelete: 'set null' }),
+    guestCardId: uuid('guest_card_id').references(() => guestCards.id, { onDelete: 'set null' }),
+    /** A link the person added themselves on the consent screen. */
+    addedLink: varchar('added_link', { length: 500 }),
+    lookupConsent: boolean('lookup_consent'),
+    consentAt: timestamp('consent_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('invite_arrivals_pair_idx').on(table.serverId, table.actorId),
+    index('invite_arrivals_actor_idx').on(table.actorId),
   ],
 );

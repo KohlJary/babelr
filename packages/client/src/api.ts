@@ -19,6 +19,9 @@ import type {
   ServerAgentsResponse,
   DmSettings,
   WelcomeSetting,
+  GuestCardView,
+  GuestCardInput,
+  ArrivalConsentView,
   DmPolicy,
   BlockView,
 } from '@babelr/shared';
@@ -414,6 +417,43 @@ export async function setDMPolicy(dmPolicy: DmPolicy): Promise<DmSettings> {
 
 export async function removeFromDMAllowlist(actorId: string): Promise<DmSettings> {
   return apiFetch(`/auth/dm-allowlist/${actorId}`, { method: 'DELETE' });
+}
+
+export async function listGuestCards(serverId: string): Promise<GuestCardView[]> {
+  return apiFetch(`/servers/${serverId}/guest-cards`);
+}
+
+export async function createGuestCard(
+  serverId: string,
+  card: GuestCardInput,
+): Promise<GuestCardView> {
+  return apiFetch(`/servers/${serverId}/guest-cards`, {
+    method: 'POST',
+    body: JSON.stringify(card),
+  });
+}
+
+export async function deleteGuestCard(cardId: string): Promise<{ ok: true }> {
+  return apiFetch(`/guest-cards/${cardId}`, { method: 'DELETE' });
+}
+
+export async function makeGuestInvite(cardId: string): Promise<{ code: string; url: string }> {
+  return apiFetch(`/guest-cards/${cardId}/invite`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export async function getArrivals(pending = false): Promise<ArrivalConsentView[]> {
+  return apiFetch(`/me/arrivals${pending ? '?pending=true' : ''}`);
+}
+
+export async function answerArrival(
+  arrivalId: string,
+  consent: boolean,
+  link?: string,
+): Promise<ArrivalConsentView> {
+  return apiFetch(`/me/arrivals/${arrivalId}/consent`, {
+    method: 'PUT',
+    body: JSON.stringify({ consent, ...(link ? { link } : {}) }),
+  });
 }
 
 export async function getWelcomeSettings(): Promise<WelcomeSetting[]> {
