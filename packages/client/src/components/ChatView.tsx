@@ -482,8 +482,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           selectedServerId={selectedServer?.id ?? null}
           dmMode={dmMode}
           onSelectServer={(id) => {
+            // Show the server's highlighted channel, not whatever view
+            // (the House overview, say) was open before.
             setDmMode(false);
             selectServer(id);
+            closeView();
+            setDrawerClosed(true);
           }}
           onSelectDMs={() => setDmMode(true)}
           houseActive={dmMode}
@@ -880,7 +884,11 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         {showNewDM && (
           <NewDMModal
             onStartDM={async (participantId) => {
+              // Open the new DM in the main pane, like picking it in the sidebar.
               await startDM(participantId);
+              setDmMode(true);
+              closeView();
+              setDrawerClosed(true);
             }}
             onClose={() => setShowNewDM(false)}
           />

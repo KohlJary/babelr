@@ -44,6 +44,17 @@ export function useChat(
 
   const handleWsMessage = useCallback(
     (msg: WsServerMessage) => {
+      // The tab shares one socket, subscribed to every channel any
+      // component follows, so drop channel events meant for another one.
+      const msgChannel =
+        msg.type === 'message:new'
+          ? msg.payload.message?.channelId
+          : msg.type === 'message:updated' ||
+              msg.type === 'message:deleted' ||
+              msg.type === 'typing:start'
+            ? msg.payload.channelId
+            : undefined;
+      if (msgChannel && msgChannel !== channelId) return;
       if (msg.type === 'message:updated') {
         const applyUpdate = (content: string) =>
           setMessages((prev) =>
@@ -145,7 +156,7 @@ export function useChat(
       // Forward to extra handler (reactions, etc.)
       extraWsHandler?.(msg);
     },
-    [isDM, extraWsHandler],
+    [isDM, extraWsHandler, channelId],
   );
 
   const { connected, send } = useWebSocket(!!actor, handleWsMessage);

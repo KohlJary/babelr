@@ -86,6 +86,9 @@ export function ChannelSidebar({
   onLeaveServer,
 }: ChannelSidebarProps) {
   const t = useT();
+  // Hooks stay above the DM-mode early return: switching from DMs to a
+  // server must not change the number of hooks this component calls.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   if (mode === 'dms') {
     // Agents (daemons, builders) first: talking with them is half of what Babelr is for.
     // `kind` is stamped by the server from the actor row, so it can't be claimed.
@@ -209,8 +212,6 @@ export function ChannelSidebar({
       uncategorized.push(ch);
     }
   }
-
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
   const toggleCategory = (cat: string) => {
     setCollapsed((prev) => {
