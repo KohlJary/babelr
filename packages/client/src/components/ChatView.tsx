@@ -81,6 +81,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // Set while an /invite/ link is being handled, so the house home doesn't
   // take over the landing from the server that was just joined.
   const inviteLanding = useRef(/^\/invite\/\w+$/.test(window.location.pathname));
+  // A /deck/<slug> link: the deck is where they meant to land.
+  const deckLink = useRef(
+    window.location.pathname.match(/^\/deck\/([a-z0-9][a-z0-9-]{0,63})(?:\/(\d{1,3}))?\/?$/),
+  );
   const [showSearch, setShowSearch] = useState(false);
   // A plugin's isAvailable answer changed (e.g. Review has something
   // waiting): redraw the view list now, not on some later render.
@@ -121,7 +125,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   useEffect(() => {
     // Someone who lives in or visits a house with daemons lands on the house.
     void loadHouse().then(() => {
-      if (currentHouse()?.agents.length && !inviteLanding.current && !landedOnMessages.current) {
+      if (
+        currentHouse()?.agents.length &&
+        !inviteLanding.current &&
+        !deckLink.current &&
+        !landedOnMessages.current
+      ) {
         setActiveViewId((v) => v ?? 'house');
         setDrawerClosed(true);
       }
@@ -193,6 +202,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   useEffect(() => {
     if (landingChecked.current || !arrivalsSettled || dmsLoading) return;
     landingChecked.current = true;
+    if (deckLink.current) return;
     const fresh = conversations.filter((c) => c.welcome && (c.unread || !c.lastMessage));
     if (fresh.length === 0) return;
     landedOnMessages.current = true;
@@ -472,6 +482,33 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         });
     }
     // Runs once on mount: the invite is in the URL the app was opened with.
+  }, []);
+
+  // A plugin opening one of its views from outside the view (an embed
+  // card: [[deck:slug#3]] opens the deck at slide 3).
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const d = (e as CustomEvent<{ id?: unknown; state?: unknown }>).detail;
+      if (typeof d?.id !== 'string' || !getView(d.id)) return;
+      const state = d.state && typeof d.state === 'object' ? (d.state as ViewState) : {};
+      setActiveViewId(d.id);
+      setViewState(state);
+      setDrawerClosed(true);
+    };
+    window.addEventListener('babelr:open-view', onOpen);
+    return () => window.removeEventListener('babelr:open-view', onOpen);
+  }, []);
+
+  // Deck links (/deck/:slug, /deck/:slug/:n) open the deck at that slide.
+  // The deck plugin checks who may see it; the link itself grants nothing.
+  useEffect(() => {
+    const m = deckLink.current;
+    if (!m) return;
+    window.history.replaceState(null, '', '/');
+    setActiveViewId('deck');
+    setViewState({ slug: m[1], n: m[2] ? Number(m[2]) : 1 });
+    setDrawerClosed(true);
+    // Runs once on mount: the link is the URL the app was opened with.
   }, []);
 
   // Initialize preferredLanguage from actor profile

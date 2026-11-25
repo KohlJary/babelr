@@ -22,6 +22,8 @@ import {
   clientManifest as blindsManifest,
   setupClient as blindsSetupClient,
 } from '@babelr/plugin-blinds/client-entry';
+import deckManifest from '@babelr/plugin-deck';
+import { setupClient as deckSetupClient } from '@babelr/plugin-deck/client-entry';
 import { setupClient as pollsSetupClient } from '@babelr/plugin-polls/client-entry';
 import { setupClient as plansSetupClient } from '@babelr/plugin-plans/client-entry';
 import { setupClient as pmSetupClient } from '@babelr/plugin-project-management/client-entry';
@@ -62,6 +64,7 @@ export interface RegisteredPlugin {
 
 export const registeredPlugins: RegisteredPlugin[] = [
   { manifest: blindsManifest, setupClient: blindsSetupClient },
+  { manifest: deckManifest, setupClient: deckSetupClient },
   { manifest: helloManifest },
   { manifest: plansManifest, setupClient: plansSetupClient },
   { manifest: pollsManifest, setupClient: pollsSetupClient },

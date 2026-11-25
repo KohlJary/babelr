@@ -9866,3 +9866,553 @@ textarea.modal-input {
   background: transparent;
   border: 1px solid var(--border, #444);
 }
+
+/* Decks (plugins/deck): one slide at a time, phone first. Colours are
+   tokens on .deck-root so the deck follows whatever theme the client has. */
+.deck-root {
+  --deck-bg: #0a0e13;
+  --deck-surface: #111827;
+  --deck-raised: #1e293b;
+  --deck-line: #334155;
+  --deck-ink: #e2e8f0;
+  --deck-ink-strong: #f8fafc;
+  --deck-muted: #94a3b8;
+  --deck-accent: #2563eb;
+  --deck-accent-deep: #1e40af;
+  --deck-accent-ink: #dbeafe;
+  --deck-quote: #60a5fa;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--deck-bg);
+  color: var(--deck-ink);
+  width: 100%;
+  box-sizing: border-box;
+}
+.deck-list-view,
+.deck-editor {
+  overflow-y: auto;
+  padding: 0 1rem 1rem;
+}
+.deck-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 52px;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--deck-raised);
+}
+.deck-viewer .deck-bar {
+  padding: 0.25rem 0.75rem;
+}
+.deck-bar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--deck-ink-strong);
+}
+.deck-bar-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.deck-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-counter {
+  font-variant-numeric: tabular-nums;
+  color: var(--deck-muted);
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.deck-back,
+.deck-icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  color: var(--deck-ink);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+.deck-list-view .deck-back,
+.deck-editor .deck-back {
+  margin-left: -0.6rem;
+}
+.deck-primary,
+.deck-secondary,
+.deck-danger {
+  min-height: 44px;
+  padding: 0 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.deck-small {
+  min-height: 36px;
+  padding: 0 0.7rem;
+  font-size: 0.85rem;
+}
+.deck-primary {
+  background: var(--deck-accent-deep);
+  border: 1px solid var(--deck-accent);
+  color: var(--deck-accent-ink);
+}
+.deck-primary:hover:not(:disabled) {
+  background: var(--deck-accent);
+}
+.deck-secondary {
+  background: var(--deck-raised);
+  border: 1px solid var(--deck-line);
+  color: var(--deck-ink);
+}
+.deck-secondary:hover:not(:disabled) {
+  border-color: #4b6cb7;
+}
+.deck-danger {
+  background: transparent;
+  border: 1px solid #b91c1c;
+  color: #fecaca;
+  margin-right: auto;
+}
+.deck-primary:disabled,
+.deck-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.deck-muted {
+  color: var(--deck-muted);
+  font-size: 0.9rem;
+}
+.deck-root > .deck-muted,
+.deck-root > .deck-error {
+  padding: 1rem;
+}
+.deck-error {
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+.deck-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+}
+.deck-list-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  background: var(--deck-surface);
+  border: 1px solid var(--deck-raised);
+  border-radius: 10px;
+  color: var(--deck-ink);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.deck-list-item:hover {
+  border-color: var(--deck-line);
+}
+.deck-list-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--deck-ink-strong);
+}
+.deck-list-meta {
+  color: var(--deck-muted);
+  font-size: 0.85rem;
+}
+
+/* The viewer */
+.deck-viewer {
+  overflow: hidden;
+}
+.deck-stage {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  justify-content: center;
+  touch-action: pan-y;
+  padding: 1.5rem 1.25rem 1rem;
+}
+.deck-slide {
+  width: 100%;
+  max-width: 46rem;
+  margin: auto 0;
+  transition: transform 0.18s ease-out;
+}
+.deck-dragging {
+  transition: none;
+}
+.deck-slide-next {
+  animation: deck-in-right 0.22s ease-out;
+}
+.deck-slide-prev {
+  animation: deck-in-left 0.22s ease-out;
+}
+@keyframes deck-in-right {
+  from {
+    opacity: 0.3;
+    transform: translateX(28px);
+  }
+}
+@keyframes deck-in-left {
+  from {
+    opacity: 0.3;
+    transform: translateX(-28px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .deck-slide,
+  .deck-slide-next,
+  .deck-slide-prev {
+    animation: none;
+    transition: none;
+  }
+}
+.deck-slide-title {
+  font-size: clamp(1.75rem, 6.5vw, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  color: var(--deck-ink-strong);
+  margin-bottom: 1rem;
+  text-wrap: balance;
+}
+.deck-slide-body {
+  font-size: clamp(1.15rem, 4.2vw, 1.4rem);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.deck-slide-body > * + * {
+  margin-top: 0.8em;
+}
+.deck-slide-body ul,
+.deck-slide-body ol {
+  padding-left: 1.3em;
+}
+.deck-slide-body li + li {
+  margin-top: 0.35em;
+}
+.deck-slide-body blockquote {
+  border-left: 4px solid var(--deck-quote);
+  padding: 0.2em 0 0.2em 0.9em;
+  color: var(--deck-ink-strong);
+  font-style: italic;
+}
+.deck-slide-body img {
+  display: block;
+  max-width: 100%;
+  max-height: 55vh;
+  border-radius: 10px;
+  margin: 0 auto;
+}
+.deck-slide-body a {
+  color: var(--deck-quote);
+}
+.deck-slide-body code {
+  background: var(--deck-raised);
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+.deck-slide-body pre {
+  background: var(--deck-surface);
+  padding: 0.75em;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.8em;
+}
+.deck-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem calc(0.6rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--deck-raised);
+  background: var(--deck-bg);
+}
+.deck-ask {
+  width: 100%;
+  max-width: 46rem;
+  align-self: center;
+  min-height: 50px;
+  border-radius: 25px;
+  border: 1px solid var(--deck-accent);
+  background: var(--deck-accent-deep);
+  color: var(--deck-accent-ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.deck-ask:hover {
+  background: var(--deck-accent);
+}
+.deck-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 46rem;
+  align-self: center;
+}
+.deck-nav-btn {
+  min-width: 56px;
+  min-height: 48px;
+  border-radius: 10px;
+  border: 1px solid var(--deck-line);
+  background: var(--deck-raised);
+  color: var(--deck-ink);
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.deck-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.deck-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.deck-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--deck-line);
+}
+.deck-dot-on {
+  background: var(--deck-ink-strong);
+}
+.deck-refused {
+  margin: auto;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 1.15rem;
+}
+.deck-refused .deck-card-icon {
+  font-size: 2.5rem;
+}
+
+/* The card: [[deck:slug#n]] in a message, and in the composer */
+.deck-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 100%;
+  padding: 0.55rem 0.8rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-left: 3px solid #60a5fa;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.deck-card:hover {
+  border-color: #4b6cb7;
+  border-left-color: #60a5fa;
+}
+.deck-card-static {
+  cursor: default;
+  display: flex;
+}
+.deck-card-muted {
+  cursor: default;
+  color: #94a3b8;
+  border-left-color: #475569;
+  font-style: italic;
+}
+.deck-card-icon {
+  font-size: 1.3rem;
+  color: #60a5fa;
+  font-style: normal;
+}
+.deck-card-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.deck-card-title {
+  font-weight: 600;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-card-meta {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.deck-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: #e2e8f0;
+}
+.deck-preview-list {
+  padding-left: 1.4rem;
+  color: #cbd5e1;
+  line-height: 1.6;
+}
+.deck-preview-list .deck-current {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+/* Ask about this slide: a bottom sheet on phones, a dialog on desktop */
+.deck-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.deck-sheet {
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: var(--deck-surface);
+  border: 1px solid var(--deck-line);
+  border-radius: 16px 16px 0 0;
+  color: var(--deck-ink);
+}
+@media (min-width: 701px) {
+  .deck-sheet-scrim {
+    align-items: center;
+  }
+  .deck-sheet {
+    border-radius: 16px;
+  }
+}
+.deck-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.deck-sheet-head h2 {
+  font-size: 1.15rem;
+  color: var(--deck-ink-strong);
+}
+.deck-sheet-note {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.deck-sheet-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.deck-sheet .deck-sheet-actions .deck-primary {
+  flex: 1;
+}
+.deck-picker {
+  border: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.deck-picker legend {
+  float: left;
+  margin-right: 0.25rem;
+  color: var(--deck-muted);
+  font-size: 0.9rem;
+}
+.deck-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 0.9rem;
+  border-radius: 20px;
+  border: 1px solid var(--deck-line);
+  background: var(--deck-raised);
+  cursor: pointer;
+}
+.deck-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.deck-chip-on {
+  border-color: var(--deck-accent);
+  background: var(--deck-accent-deep);
+  color: var(--deck-accent-ink);
+}
+.deck-chip:focus-within {
+  outline: 2px solid var(--deck-quote);
+  outline-offset: 2px;
+}
+.deck-field-label {
+  font-size: 0.9rem;
+  color: var(--deck-ink);
+}
+.deck-input,
+.deck-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--deck-bg);
+  border: 1px solid var(--deck-line);
+  border-radius: 8px;
+  color: var(--deck-ink);
+  font-family: inherit;
+  font-size: 16px; /* 16px keeps iOS from zooming in on focus */
+  padding: 0.6rem 0.7rem;
+}
+.deck-input {
+  min-height: 44px;
+}
+.deck-textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+.deck-md {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+}
+.deck-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.75rem;
+  max-width: 46rem;
+}
+.deck-form .deck-field-label {
+  margin-top: 0.5rem;
+}
+.deck-form .deck-sheet-actions {
+  margin-top: 0.75rem;
+}
