@@ -11,18 +11,33 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   const { ReviewView, fetchInbox } = await import('./client.js');
   const routeBase = api.routeBase;
   let waiting = false;
+  const setWaiting = (next: boolean) => {
+    if (next === waiting) return;
+    waiting = next;
+    api.availabilityChanged?.();
+  };
   // Listed while something's waiting on you. Re-checked each minute so
-  // a new draft shows the entry without a reload (it appears on the
-  // sidebar's next render).
+  // a new draft shows the entry without a reload. Only while signed in:
+  // this runs at page load, and fetching before the session is known
+  // got a 401 and hid the entry until the next check.
   const check = () =>
     fetchInbox(routeBase).then(
-      (items) => {
-        waiting = items.length > 0;
-      },
+      (items) => setWaiting(items.length > 0),
       () => {},
     );
-  void check();
-  setInterval(() => void check(), 60_000);
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const onSession = (signedIn: boolean) => {
+    clearInterval(timer);
+    timer = undefined;
+    if (!signedIn) {
+      setWaiting(false);
+      return;
+    }
+    void check();
+    timer = setInterval(() => void check(), 60_000);
+  };
+  if (api.session) api.session.onChange(onSession);
+  else onSession(true);
 
   api.registerView({
     id: 'review',

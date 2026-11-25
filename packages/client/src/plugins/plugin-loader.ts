@@ -11,6 +11,7 @@ import { registerView, type ViewDefinition } from '../views/registry';
 import { registerSidebarSlot, type SidebarSlotDefinition } from './sidebar-registry';
 import { registerDaemonSection, type DaemonSectionDefinition } from './daemon-registry';
 import { registeredPlugins } from './registered';
+import { isSignedIn, onSessionChange, notifyViewsChanged } from '../session';
 
 /**
  * Client-side plugin boot. Runs once at app startup after the built-in
@@ -92,6 +93,8 @@ export async function initPlugins(): Promise<void> {
       },
       routeBase: `/api/plugins/${manifest.id}`,
       dm: pluginDM,
+      session: { isSignedIn, onChange: onSessionChange },
+      availabilityChanged: notifyViewsChanged,
     };
     try {
       await setup(api);

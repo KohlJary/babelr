@@ -31,15 +31,31 @@ export async function setupClient(api: PluginClientApi): Promise<void> {
   const { BlindInline, BlindPreview, BlindsView, fetchRounds } = await import('./client.js');
   const routeBase = api.routeBase;
   let grades = false;
+  const setGrades = (next: boolean) => {
+    if (next === grades) return;
+    grades = next;
+    api.availabilityChanged?.();
+  };
   const check = () =>
     fetchRounds(routeBase).then(
-      (rounds) => {
-        grades = rounds.length > 0;
-      },
+      (rounds) => setGrades(rounds.length > 0),
       () => {},
     );
-  void check();
-  setInterval(() => void check(), 60_000);
+  // Only while signed in (see review's client-entry): a check at page
+  // load, before the session is known, got a 401.
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const onSession = (signedIn: boolean) => {
+    clearInterval(timer);
+    timer = undefined;
+    if (!signedIn) {
+      setGrades(false);
+      return;
+    }
+    void check();
+    timer = setInterval(() => void check(), 60_000);
+  };
+  if (api.session) api.session.onChange(onSession);
+  else onSession(true);
 
   const InlineBound = (props: unknown) =>
     createElement(BlindInline as never, { ...(props as Record<string, unknown>), routeBase });

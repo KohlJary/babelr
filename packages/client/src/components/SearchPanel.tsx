@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { MessageListResponse } from '@babelr/shared';
 import * as api from '../api';
 import { MessageItem } from './MessageItem';
@@ -26,6 +26,14 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
   const [filters, setFilters] = useState<SearchFilters | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,13 +68,19 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
 
   return (
     <div className="search-panel-overlay" onClick={onClose}>
-      <div className="search-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="search-panel"
+        role="dialog"
+        aria-label={t('search.open')}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="search-header">
           <form onSubmit={(e) => void handleSearch(e)} className="search-form">
             <input
               type="text"
               className="search-input"
               placeholder={t('search.placeholder')}
+              aria-label={t('search.open')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               autoFocus
@@ -75,7 +89,13 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
               {t('search.button')}
             </button>
           </form>
-          <button className="search-close" onClick={onClose}>
+          <button
+            type="button"
+            className="search-close"
+            onClick={onClose}
+            aria-label={t('search.close')}
+            title={t('search.close')}
+          >
             &times;
           </button>
         </div>
@@ -115,7 +135,10 @@ export function SearchPanel({ channelId, onClose }: SearchPanelProps) {
           </div>
         )}
 
-        <div className="search-hint">{t('search.hint')}</div>
+        <div className="search-hint">
+          <p className="search-scope">{t('search.scope')}</p>
+          <p>{t('search.hint')}</p>
+        </div>
 
         <div className="search-content">
           {loading && <div className="search-loading">{t('common.loading')}</div>}

@@ -200,7 +200,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   MANAGE_ROLES: 'Manage roles',
   MANAGE_INVITES: 'Manage invites',
   KICK_MEMBERS: 'Kick members',
-  VIEW_AUDIT_LOG: 'View audit log (reserved)',
+  VIEW_AUDIT_LOG: 'View audit log',
   VIEW_CHANNELS: 'View channels',
   MANAGE_CHANNELS: 'Manage channels',
   SEND_MESSAGES: 'Send messages',

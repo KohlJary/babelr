@@ -25,6 +25,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import auditRoutes from '../routes/audit.ts';
+import searchRoutes from '../routes/search.ts';
 import agentRoutes from '../routes/agents.ts';
 import houseRoutes from '../routes/house.ts';
 import serverAgentRoutes from '../routes/server-agents.ts';
@@ -140,6 +141,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   process.env.UPLOADS_DIR ??= mkdtempSync(join(tmpdir(), 'babelr-uploads-'));
   await app.register(uploadRoutes);
   await app.register(auditRoutes);
+  await app.register(searchRoutes);
   await app.register(houseRoutes);
   await app.register(agentRoutes);
   await app.register(serverAgentRoutes);

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useT } from '../i18n/I18nProvider';
+import {
+  MentionAutocomplete,
+  matchMentionCandidates,
+  mentionQueryAt,
+  type MentionCandidate,
+} from './MentionAutocomplete';
 
 interface Attachment {
   url: string;
@@ -12,9 +18,11 @@ interface MessageInputProps {
   onSend: (content: string, attachments?: Attachment[]) => Promise<void>;
   disabled: boolean;
   onTyping?: () => void;
+  /** People who can be @mentioned here (server members, DM participants). */
+  mentionCandidates?: MentionCandidate[];
 }
 
-export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) {
+export function MessageInput({ onSend, disabled, onTyping, mentionCandidates }: MessageInputProps) {
   const t = useT();
   const [value, setValue] = useState('');
   const [sending, setSending] = useState(false);
@@ -24,6 +32,44 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // @mention autocomplete: the @token at the caret, the highlighted
+  // suggestion, and the token start the user dismissed with Escape.
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  const suggestions = useMemo(
+    () =>
+      mention && mentionCandidates && mention.start !== dismissedAt
+        ? matchMentionCandidates(mentionCandidates, mention.query)
+        : [],
+    [mention, mentionCandidates, dismissedAt],
+  );
+
+  const trackMention = (text: string, caret: number) => {
+    const next = mentionQueryAt(text, caret);
+    if (next?.start !== mention?.start || next?.query !== mention?.query) {
+      setMention(next);
+      setMentionIndex(0);
+    }
+    if (!next) setDismissedAt(null);
+  };
+
+  const insertMention = (username: string) => {
+    if (!mention) return;
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? value.length;
+    const before = value.slice(0, mention.start);
+    const after = value.slice(caret);
+    const inserted = `@${username}${after.startsWith(' ') ? '' : ' '}`;
+    const next = before + inserted + after;
+    setValue(next);
+    setMention(null);
+    const pos = before.length + inserted.length;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  };
 
   const uploadFile = async (file: File) => {
     setUploading(true);
@@ -107,6 +153,26 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (suggestions.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const step = e.key === 'ArrowDown' ? 1 : -1;
+        setMentionIndex((i) => (i + step + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(
+          suggestions[Math.min(mentionIndex, suggestions.length - 1)].preferredUsername,
+        );
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setDismissedAt(mention?.start ?? null);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -141,6 +207,13 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
           ))}
         </div>
       )}
+      <MentionAutocomplete
+        users={suggestions}
+        activeIndex={mentionIndex}
+        onSelect={insertMention}
+        onHover={setMentionIndex}
+        listId="composer-mention-list"
+      />
       {sendError && (
         <div className="message-input-error" role="alert">
           {sendError}
@@ -167,9 +240,20 @@ export function MessageInput({ onSend, disabled, onTyping }: MessageInputProps) 
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
+            trackMention(e.target.value, e.target.selectionStart ?? e.target.value.length);
             if (e.target.value.length > 0) onTyping?.();
           }}
+          onSelect={(e) => {
+            const el = e.currentTarget;
+            trackMention(el.value, el.selectionStart ?? el.value.length);
+          }}
+          onBlur={() => setMention(null)}
           onKeyDown={handleKeyDown}
+          aria-autocomplete="list"
+          aria-controls={suggestions.length > 0 ? 'composer-mention-list' : undefined}
+          aria-activedescendant={
+            suggestions.length > 0 ? `composer-mention-list-${mentionIndex}` : undefined
+          }
           onPaste={handlePaste}
           placeholder={dragOver ? t('messages.dropFiles') : t('messages.placeholder')}
           disabled={disabled || sending}

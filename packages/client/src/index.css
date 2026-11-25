@@ -1382,6 +1382,7 @@ body {
 
 /* Message input wrapper */
 .message-input-wrapper {
+  position: relative;
   flex-shrink: 0;
   border-top: 1px solid #222;
 }
@@ -2028,7 +2029,7 @@ body {
   z-index: 999;
 }
 
-.mention-item {
+.mention-ac-item {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -2042,11 +2043,12 @@ body {
   transition: background 0.1s;
 }
 
-.mention-item:last-child {
+.mention-ac-item:last-child {
   border-bottom: none;
 }
 
-.mention-item:hover {
+.mention-ac-item:hover,
+.mention-ac-item.active {
   background: #222;
 }
 
@@ -8277,6 +8279,13 @@ textarea.modal-input {
   font-size: 0.72rem;
   color: #64748b;
 }
+.search-hint p {
+  margin: 0.25rem 0;
+}
+.search-hint .search-scope {
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
 
 /* Jump to present button --------------------------------------------- */
 .message-list {
@@ -9125,4 +9134,54 @@ textarea.modal-input {
 }
 .sidebar-sigil {
   opacity: 0.7;
+}
+
+/* Rate-limit notice (FINDINGS #73) ----------------------------------- */
+.rate-limit-banner {
+  position: fixed;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(640px, calc(100vw - 2rem));
+  padding: 0.6rem 0.9rem;
+  border: 1px solid #a16207;
+  border-radius: 8px;
+  background: #2a1f05;
+  color: #fde68a;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Voice join bar: a voice channel you're not in (FINDINGS #68) -------- */
+.voice-join-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #222;
+  background: #141414;
+  color: #cbd5e1;
+  font-size: 0.88rem;
+}
+.voice-join-bar.error {
+  background: #2a1212;
+  border-bottom-color: #7f1d1d;
+  color: #fecaca;
+}
+.voice-join-bar-btn {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  background: #1d4ed8;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.voice-join-bar-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }

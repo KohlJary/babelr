@@ -3,19 +3,36 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ActorProfile, RegisterInput, LoginInput } from '@babelr/shared';
 import * as api from '../api';
 
-export function useAuth() {
+/**
+ * `rateLimitRecoveries` (from useRateLimit) re-asks who is signed in
+ * after a rate-limited window passes: a 429 on /auth/me says nothing
+ * about the session, so it keeps the loading state instead of showing
+ * the login form (FINDINGS #73).
+ */
+export function useAuth(rateLimitRecoveries = 0) {
   const [actor, setActor] = useState<ActorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [twoFactorChallenge, setTwoFactorChallenge] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     api
       .getMe()
-      .then(setActor)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .then((me) => {
+        if (cancelled) return;
+        setActor(me);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof api.ApiError && err.status === 429) return; // retried on recovery
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rateLimitRecoveries]);
 
   const handleLogin = useCallback(async (input: LoginInput) => {
     setError(null);
