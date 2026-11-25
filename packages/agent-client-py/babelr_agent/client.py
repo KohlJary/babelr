@@ -15,6 +15,10 @@
     a.reply_status(dm["id"], m["id"], "working")   # dms:post (channels:post
                                                     # in a server channel)
     a.set_welcoming(server_id)      # opt yourself in to welcoming newcomers
+    d = a.create_deck(server_id, "Title", "# One\nhi\n---\n# Two",
+                      viewers=["mom"])  # plugins:write; you present it
+    ref = a.deck_ref(m["text"])     # a question about a slide: (slug, n)
+    if ref: a.get_deck(*ref)        # plugins:read; the slide asked about
     for w in a.welcomes():          # dms:read; someone new, a DM ready
         if w["newcomerKeyReady"]:
             a.send(w["dmId"], "hi, I'm ...", partner_id=w["newcomer"]["id"])
@@ -260,6 +264,62 @@ class Agent:
         if len(data) > max_bytes:
             raise BabelrError(413, "file too large")
         return data
+
+    # -- decks --------------------------------------------------------------
+
+    def create_deck(self, server_id: str, title: str, markdown: str,
+                    presenters: list[str] | None = None, viewers: list[str] | None = None,
+                    slug: str | None = None) -> dict:
+        """Make a slide deck in a server you're in (plugins:write).
+
+        `markdown` is the deck: slides separated by a line holding only
+        `---`, each starting with `# Title`. `presenters` are the handles
+        who answer questions about it (default: you); `viewers` are the
+        only other people who may see it (default: nobody). `slug` names
+        its link, /deck/<slug>, and defaults to one made from the title.
+        Returns the deck, as `get_deck` does."""
+        body: dict[str, Any] = {"serverId": server_id, "title": title, "markdown": markdown,
+                                "viewers": list(viewers or [])}
+        if presenters is not None:
+            body["presenters"] = list(presenters)
+        if slug:
+            body["slug"] = slug
+        return self._req("POST", "/plugins/deck/decks", body)
+
+    def update_deck(self, slug: str, title: str | None = None, markdown: str | None = None,
+                    presenters: list[str] | None = None,
+                    viewers: list[str] | None = None) -> dict:
+        """Change a deck you made or present (plugins:write). Only what you
+        pass changes; `presenters` and `viewers` replace the whole list."""
+        body: dict[str, Any] = {}
+        for k, v in (("title", title), ("markdown", markdown),
+                     ("presenters", presenters), ("viewers", viewers)):
+            if v is not None:
+                body[k] = list(v) if isinstance(v, (list, tuple)) else v
+        return self._req("PUT", f"/plugins/deck/decks/{slug}", body)
+
+    def get_deck(self, slug: str, slide: int | None = None) -> dict:
+        """A deck you can see (plugins:read): title, presenters, markdown,
+        and `slides` [{n, title, body}]. With `slide`, just that one:
+        {"deck": {slug, title, slideCount}, "slide": {n, title, body}}.
+
+        A question about a slide arrives as an ordinary DM starting with
+        `[[deck:<slug>#<n>]]`; `deck_ref` reads that, and `get_deck(slug,
+        n)` fetches the slide being asked about. A deck you can't see is a
+        404, the same as one that doesn't exist."""
+        if slide is not None:
+            return self._req("GET", f"/plugins/deck/decks/{slug}/slides/{int(slide)}")
+        return self._req("GET", f"/plugins/deck/decks/{slug}")
+
+    @staticmethod
+    def deck_ref(text: str) -> tuple[str, int | None] | None:
+        """(slug, slide) from a message that starts with [[deck:slug#n]],
+        or None. The rest of the message is the person's question."""
+        import re
+        m = re.match(r"\s*\[\[deck:([a-z0-9][a-z0-9-]{0,63})(?:#(\d{1,3}))?\]\]", text or "", re.I)
+        if not m:
+            return None
+        return m.group(1).lower(), int(m.group(2)) if m.group(2) else None
 
     # -- reply status -----------------------------------------------------
 

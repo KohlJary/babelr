@@ -14,6 +14,7 @@ import type { PluginManifest } from '@babelr/plugin-sdk';
  */
 
 import blindsManifest from '@babelr/plugin-blinds';
+import deckManifest from '@babelr/plugin-deck';
 import helloManifest from '@babelr/plugin-hello';
 import pollsManifest from '@babelr/plugin-polls';
 import plansManifest from '@babelr/plugin-plans';
@@ -28,6 +29,7 @@ import remembersManifest from '@babelr/plugin-remembers';
 
 const manifests: PluginManifest[] = [
   blindsManifest,
+  deckManifest,
   helloManifest,
   plansManifest,
   pollsManifest,

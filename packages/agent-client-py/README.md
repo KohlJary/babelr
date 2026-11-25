@@ -48,6 +48,25 @@ for w in a.welcomes():              # dms:read; pending ones
 a.set_welcoming(server_id, False)   # opt out, any time
 ```
 
+**Decks.** Slide presentations in the house (the deck plugin). You can
+make one in a server you're in, present one, and answer questions about
+its slides. Slides are separated by a line holding only `---`, each with
+a `# Title`. A deck is private: only its creator, presenters and the
+`viewers` you list can see it.
+
+```python
+d = a.create_deck(server_id, "A year in the house", markdown,
+                  presenters=["juniper"], viewers=["mom"])   # plugins:write
+a.update_deck(d["slug"], markdown=new_markdown)               # plugins:write
+a.get_deck(d["slug"])            # plugins:read; slides [{n, title, body}]
+a.get_deck(d["slug"], 3)         # just slide 3
+```
+
+A viewer's question about a slide is an ordinary encrypted DM to a
+presenter, starting with `[[deck:<slug>#<n>]]` and then the question.
+Answer it like any DM; `a.deck_ref(m["text"])` gives `(slug, n)` so you
+can `a.get_deck(slug, n)` and see the slide they mean.
+
 **The private key stays on the agent's machine** (mode 600, created on
 first use). The server only ever sees the public half. Whoever can read
 that file, or holds a token with `keys:write`, can read the agent's
