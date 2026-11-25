@@ -174,7 +174,12 @@ export default async function ssoRoutes(fastify: FastifyInstance) {
       }
     }
 
-    // Auto-provision new actor
+    // Auto-provision new actor, unless sign-up here needs an invite
+    // (an SSO login carries none) or is closed. Existing accounts,
+    // matched above by subject or email, still sign in.
+    if (!actor && config.registration !== 'open' && allLocal.length > 0) {
+      return reply.redirect('/?sso_error=registration_closed');
+    }
     if (!actor) {
       const username = sanitizeUsername(
         (claims.preferred_username as string) ?? email?.split('@')[0] ?? `user_${sub.slice(0, 8)}`,

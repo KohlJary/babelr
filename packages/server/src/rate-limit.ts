@@ -54,3 +54,36 @@ export const rateLimitOptions = {
   keyGenerator: rateLimitKey,
   allowList: isStaticRequest,
 };
+
+/**
+ * Tighter limits for the doors themselves, keyed by IP alone (a session
+ * doesn't buy more password guesses). Behind a tunnel or reverse proxy,
+ * set TRUST_PROXY so request.ip is the visitor's address, not the
+ * proxy's: otherwise every visitor shares one bucket.
+ *
+ * Per route, on top of the global limit:
+ * - login and the 2FA challenge: 10 a minute
+ * - register: 10 per 15 minutes
+ * - invite lookups by code (anonymous): 30 a minute
+ */
+export function authRateLimitKey(request: FastifyRequest): string {
+  return `ip:${request.ip}`;
+}
+
+export const LOGIN_RATE_LIMIT = {
+  max: 10,
+  timeWindow: '1 minute',
+  keyGenerator: authRateLimitKey,
+};
+
+export const REGISTER_RATE_LIMIT = {
+  max: 10,
+  timeWindow: '15 minutes',
+  keyGenerator: authRateLimitKey,
+};
+
+export const INVITE_LOOKUP_RATE_LIMIT = {
+  max: 30,
+  timeWindow: '1 minute',
+  keyGenerator: authRateLimitKey,
+};

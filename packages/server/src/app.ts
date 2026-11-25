@@ -62,9 +62,19 @@ export async function buildApp() {
     logger: {
       level: isProduction ? 'info' : 'debug',
     },
-    trustProxy: isProduction,
+    trustProxy: config.trustProxy,
     rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });
+
+  app.log.info(
+    { registration: config.registration, publicUrl: config.publicUrl ?? null },
+    'Registration mode',
+  );
+  if (config.registration === 'open' && config.publicUrl) {
+    app.log.warn(
+      'REGISTRATION is open and PUBLIC_URL is set: anyone who finds that URL can make an account. Set REGISTRATION=invite to require an invite link.',
+    );
+  }
 
   // Production error handler — no stack traces leaked
   app.setErrorHandler((error, _request, reply) => {

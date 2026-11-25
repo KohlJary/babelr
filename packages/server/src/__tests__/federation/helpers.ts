@@ -52,6 +52,8 @@ export const testConfig: Config = {
   domain: 'test.babelr.local',
   sessionSecret: 'test-secret-not-for-production',
   secureCookies: false,
+  registration: 'open',
+  trustProxy: false,
   federationMode: 'open',
   federationDomains: [],
   mediasoupListenIp: '127.0.0.1',

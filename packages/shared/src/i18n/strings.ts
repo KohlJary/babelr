@@ -42,6 +42,14 @@ export const UI_STRINGS = {
   'auth.createAccount': 'Create account',
   'auth.or': 'or',
   'auth.ssoLogin': 'Sign in with SSO',
+  'auth.invitedTo': "You've been invited to {name}.",
+  'auth.invitedHint': 'Create an account to join, or log in if you already have one.',
+  'auth.inviteInvalid': 'This invite link is invalid, used up or expired.',
+  'auth.inviteInvalidHint': 'Ask whoever sent it for a new one.',
+  'auth.inviteRequired': 'Sign-up here needs an invite link.',
+  'auth.inviteRequiredHint':
+    'Ask someone in this house to send you one, then open it on this device.',
+  'auth.registrationClosed': 'Sign-up is closed on this server.',
 
   // Server sidebar
   'serverSidebar.directMessages': 'Direct Messages',

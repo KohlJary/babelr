@@ -32,11 +32,12 @@ export function isEmailEnabled(): boolean {
 export async function sendVerificationEmail(
   to: string,
   token: string,
-  config: { domain: string; secureCookies: boolean },
+  config: { domain: string; secureCookies: boolean; publicUrl?: string },
 ): Promise<void> {
   if (!transporter) return;
-  const protocol = config.secureCookies ? 'https' : 'http';
-  const verifyUrl = `${protocol}://${config.domain}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  const origin =
+    config.publicUrl ?? `${config.secureCookies ? 'https' : 'http'}://${config.domain}`;
+  const verifyUrl = `${origin}/api/auth/verify?token=${encodeURIComponent(token)}`;
   const from = process.env.SMTP_FROM || `noreply@${config.domain}`;
 
   await transporter.sendMail({

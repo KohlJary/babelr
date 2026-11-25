@@ -32,6 +32,8 @@ import actorRoutes from '../federation/actor.ts';
 import embedRoutes from '../routes/embeds.ts';
 import pluginLoader from '../plugins/plugin-loader.ts';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
+import { rateLimitOptions } from '../rate-limit.ts';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
 
@@ -45,6 +47,8 @@ const testConfig: Config = {
   domain: 'test.babelr.local',
   sessionSecret: 'test-secret-not-for-production',
   secureCookies: false,
+  registration: 'open',
+  trustProxy: false,
   federationMode: 'open',
   federationDomains: [],
   mediasoupListenIp: '127.0.0.1',
@@ -63,10 +67,22 @@ export const wsSent: Array<{ to: string; message: unknown }> = [];
  * proxy, for tests of plugin routes and their access checks.
  * `actorProfiles: true` mounts the federation actor document route.
  */
-export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: boolean } = {}) {
+export async function createTestApp(
+  opts: {
+    plugins?: boolean;
+    actorProfiles?: boolean;
+    /** Fastify trustProxy, for tests of requests through a tunnel. */
+    trustProxy?: boolean | number | string;
+    /** Mount the real rate limiter (app.ts's global options). */
+    rateLimit?: boolean;
+    /** Overrides on a copy of the shared test config. */
+    config?: Partial<Config>;
+  } = {},
+) {
   const db = createDb(testConfig.databaseUrl);
+  const config: Config = opts.config ? { ...testConfig, ...opts.config } : testConfig;
 
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, trustProxy: opts.trustProxy ?? false });
   // Every route the app mounts, for tests that walk the whole table
   // (e.g. the agent scope map's deny-by-default check).
   const routes: Array<{ method: string; url: string }> = [];
@@ -80,7 +96,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
     fp(
       async (fastify) => {
         fastify.decorate('db', db);
-        fastify.decorate('config', testConfig);
+        fastify.decorate('config', config);
       },
       { name: 'db' },
     ),
@@ -120,6 +136,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(cookie);
   await app.register(cors, { origin: true, credentials: true });
   await app.register(authPlugin);
+  if (opts.rateLimit) await app.register(rateLimit, rateLimitOptions);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);

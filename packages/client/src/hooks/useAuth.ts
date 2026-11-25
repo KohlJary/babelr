@@ -54,6 +54,11 @@ export function useAuth() {
     setError(null);
     try {
       const profile = await api.register(input);
+      // Registering through an invite link already joined the server:
+      // leave /invite/:code so the app doesn't treat it as a fresh join.
+      if (input.inviteCode && window.location.pathname.startsWith('/invite/')) {
+        window.history.replaceState(null, '', '/');
+      }
       setActor(profile);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
