@@ -14,6 +14,12 @@ import { sendVerificationEmail, isEmailEnabled } from '../email.ts';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
 import { actorLikeType } from '../actor-kind.ts';
+import { checkInvite, consumeInvite, isEmptyInstance, registrationInfo } from '../registration.ts';
+import { INVITE_LOOKUP_RATE_LIMIT, LOGIN_RATE_LIMIT, REGISTER_RATE_LIMIT } from '../rate-limit.ts';
+
+/** Thrown inside the register transaction when the invite's last use
+ *  went to someone else between the check and the insert. */
+class InviteSpentError extends Error {}
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,32}$/;
 const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === 'true';
@@ -50,174 +56,266 @@ export default async function authRoutes(fastify: FastifyInstance) {
   const db = fastify.db;
   const domain = fastify.config.domain;
 
-  fastify.post<{ Body: RegisterInput }>('/auth/register', async (request, reply) => {
-    const { username, email, password, preferredLanguage } = request.body;
+  // What the sign-up form needs to know before anyone is signed in.
+  fastify.get('/auth/registration', async () => {
+    const mode = fastify.config.registration;
+    return registrationInfo(mode, mode !== 'open' && (await isEmptyInstance(db)));
+  });
 
-    if (!USERNAME_RE.test(username)) {
-      return reply.status(400).send({
-        error: 'Username must be 3-32 characters, alphanumeric and underscores only',
-      });
-    }
+  // Preview an invite link for someone not signed in yet: where it
+  // leads and whether it still works. Says nothing about a code that
+  // doesn't exist beyond "invalid", and is rate limited by IP.
+  fastify.get<{ Params: { code: string } }>(
+    '/invites/:code',
+    { config: { rateLimit: INVITE_LOOKUP_RATE_LIMIT } },
+    async (request, reply) => {
+      const check = await checkInvite(db, request.params.code);
+      if (!check.ok) return reply.status(check.status).send({ valid: false, error: check.error });
+      return {
+        valid: true,
+        server: {
+          id: check.server.id,
+          name: check.server.displayName ?? check.server.preferredUsername,
+        },
+      };
+    },
+  );
 
-    if (!email || !email.includes('@')) {
-      return reply.status(400).send({ error: 'Valid email is required' });
-    }
+  fastify.post<{ Body: RegisterInput }>(
+    '/auth/register',
+    { config: { rateLimit: REGISTER_RATE_LIMIT } },
+    async (request, reply) => {
+      const { username, email, password, preferredLanguage, inviteCode } = request.body ?? {};
+      const mode = fastify.config.registration;
 
-    if (!password || password.length < 12) {
-      return reply.status(400).send({ error: 'Password must be at least 12 characters' });
-    }
-
-    // Check username uniqueness among local actors
-    const [existing] = await db
-      .select({ id: actors.id })
-      .from(actors)
-      .where(and(eq(actors.preferredUsername, username), eq(actors.local, true)))
-      .limit(1);
-
-    if (existing) {
-      return reply.status(409).send({ error: 'Username already taken' });
-    }
-
-    // Check email uniqueness
-    const [existingEmail] = await db
-      .select({ id: actors.id })
-      .from(actors)
-      .where(eq(actors.email, email))
-      .limit(1);
-
-    if (existingEmail) {
-      return reply.status(409).send({ error: 'Email already registered' });
-    }
-
-    const passwordHash = await argon2.hash(password);
-    const protocol = fastify.config.secureCookies ? 'https' : 'http';
-    const baseUri = `${protocol}://${domain}/users/${username}`;
-
-    const skipVerification = SKIP_EMAIL_VERIFICATION || !isEmailEnabled();
-    const token = skipVerification ? null : randomUUID();
-    const tokenExpires = token ? new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS) : null;
-
-    const [actor] = await db
-      .insert(actors)
-      .values({
-        type: 'Person',
-        preferredUsername: username,
-        email,
-        passwordHash,
-        preferredLanguage: preferredLanguage ?? 'en',
-        emailVerified: skipVerification,
-        verificationToken: token,
-        verificationTokenExpires: tokenExpires,
-        uri: baseUri,
-        inboxUri: `${baseUri}/inbox`,
-        outboxUri: `${baseUri}/outbox`,
-        followersUri: `${baseUri}/followers`,
-        followingUri: `${baseUri}/following`,
-        local: true,
-      })
-      .returning();
-
-    if (token) {
-      void sendVerificationEmail(email, token, fastify.config).catch((err) =>
-        fastify.log.error({ err }, 'Failed to send verification email'),
-      );
-    }
-
-    // First user becomes instance admin
-    const [userCount] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(actors)
-      .where(and(eq(actors.type, 'Person'), eq(actors.kind, 'person'), eq(actors.local, true)));
-
-    if (userCount.count === 1) {
-      const currentProps = (actor.properties as Record<string, unknown>) ?? {};
-      await db
-        .update(actors)
-        .set({ properties: { ...currentProps, instanceAdmin: true } })
-        .where(eq(actors.id, actor.id));
-
-      // Auto-join default server as owner
-      const [defaultServer] = await db
-        .select()
-        .from(actors)
-        .where(and(eq(actors.type, 'Group'), eq(actors.local, true)))
-        .limit(1);
-
-      if (defaultServer?.followersUri) {
-        await db
-          .insert(collectionItems)
-          .values({
-            collectionUri: defaultServer.followersUri,
-            itemUri: actor.uri,
-            itemId: actor.id,
-            properties: { role: 'owner' },
-          })
-          .onConflictDoNothing();
-        // ...and holds its Admin role, as a server's creator does.
-        const [adminRole] = await db
-          .select({ id: serverRoles.id })
-          .from(serverRoles)
-          .where(and(eq(serverRoles.serverId, defaultServer.id), eq(serverRoles.name, 'Admin')))
-          .limit(1);
-        if (adminRole) {
-          await db
-            .insert(serverRoleAssignments)
-            .values({ serverId: defaultServer.id, actorId: actor.id, roleId: adminRole.id })
-            .onConflictDoNothing();
-        }
+      // The first person on an empty instance may always register:
+      // someone has to be able to make the first invite.
+      const firstPerson = mode !== 'open' && (await isEmptyInstance(db));
+      if (mode === 'closed' && !firstPerson) {
+        return reply.status(403).send({ error: 'Registration is closed on this server' });
+      }
+      if (mode === 'invite' && !firstPerson && !inviteCode) {
+        return reply.status(403).send({
+          error: 'Registration on this server needs an invite link',
+          inviteRequired: true,
+        });
       }
 
-      fastify.log.info(
-        { username: actor.preferredUsername },
-        'First user registered as instance admin',
-      );
-    }
+      // An invite, when given, has to work in every mode: it's what joins
+      // the new account to the server it came from. Checked before the
+      // username and email, so a made-up code can't probe which emails
+      // have accounts here.
+      let invited: Extract<Awaited<ReturnType<typeof checkInvite>>, { ok: true }> | null = null;
+      if (inviteCode) {
+        const check = await checkInvite(db, inviteCode);
+        if (!check.ok) {
+          return reply.status(check.status).send({ error: check.error });
+        }
+        invited = check;
+      }
 
-    await fastify.createSession(actor.id, reply);
+      if (!USERNAME_RE.test(username)) {
+        return reply.status(400).send({
+          error: 'Username must be 3-32 characters, alphanumeric and underscores only',
+        });
+      }
 
-    return reply.status(201).send(toProfile(actor));
-  });
+      if (!email || !email.includes('@')) {
+        return reply.status(400).send({ error: 'Valid email is required' });
+      }
 
-  fastify.post<{ Body: LoginInput }>('/auth/login', async (request, reply) => {
-    const { email, password } = request.body;
+      if (!password || password.length < 12) {
+        return reply.status(400).send({ error: 'Password must be at least 12 characters' });
+      }
 
-    if (!email || !password) {
-      return reply.status(400).send({ error: 'Email and password are required' });
-    }
+      // Check username uniqueness among local actors
+      const [existing] = await db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(and(eq(actors.preferredUsername, username), eq(actors.local, true)))
+        .limit(1);
 
-    const [actor] = await db
-      .select()
-      .from(actors)
-      .where(and(eq(actors.email, email), eq(actors.local, true)))
-      .limit(1);
+      if (existing) {
+        return reply.status(409).send({ error: 'Username already taken' });
+      }
 
-    if (!actor || !actor.passwordHash) {
-      return reply.status(401).send({ error: 'Invalid credentials' });
-    }
+      // Check email uniqueness
+      const [existingEmail] = await db
+        .select({ id: actors.id })
+        .from(actors)
+        .where(eq(actors.email, email))
+        .limit(1);
 
-    const valid = await argon2.verify(actor.passwordHash, password);
-    if (!valid) {
-      return reply.status(401).send({ error: 'Invalid credentials' });
-    }
+      if (existingEmail) {
+        return reply.status(409).send({ error: 'Email already registered' });
+      }
 
-    // If 2FA is enabled, don't create a session yet — return a
-    // challenge token so the client can prompt for the TOTP code.
-    if (actor.totpEnabled) {
-      const challengeToken = randomUUID();
-      const expires = new Date(Date.now() + 5 * 60 * 1000);
-      pending2faChallenges.set(challengeToken, {
-        actorId: actor.id,
-        expires,
-      });
-      return { twoFactorRequired: true, challengeToken };
-    }
+      const passwordHash = await argon2.hash(password);
+      const protocol = fastify.config.secureCookies ? 'https' : 'http';
+      const baseUri = `${protocol}://${domain}/users/${username}`;
 
-    // Destroy any existing session before creating a new one (rotation)
-    await fastify.destroySession(request, reply);
-    await fastify.createSession(actor.id, reply);
+      const skipVerification = SKIP_EMAIL_VERIFICATION || !isEmailEnabled();
+      const token = skipVerification ? null : randomUUID();
+      const tokenExpires = token ? new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS) : null;
 
-    return toProfile(actor);
-  });
+      // The account, the invite's use and the membership land together
+      // or not at all.
+      let actor: typeof actors.$inferSelect;
+      try {
+        actor = await db.transaction(async (tx) => {
+          const [created] = await tx
+            .insert(actors)
+            .values({
+              type: 'Person',
+              preferredUsername: username,
+              email,
+              passwordHash,
+              preferredLanguage: preferredLanguage ?? 'en',
+              emailVerified: skipVerification,
+              verificationToken: token,
+              verificationTokenExpires: tokenExpires,
+              uri: baseUri,
+              inboxUri: `${baseUri}/inbox`,
+              outboxUri: `${baseUri}/outbox`,
+              followersUri: `${baseUri}/followers`,
+              followingUri: `${baseUri}/following`,
+              local: true,
+            })
+            .returning();
+
+          if (invited) {
+            if (!(await consumeInvite(tx, invited.invite.id))) throw new InviteSpentError();
+            await tx
+              .insert(collectionItems)
+              .values({
+                collectionUri: invited.server.followersUri!,
+                itemUri: created.uri,
+                itemId: created.id,
+              })
+              .onConflictDoNothing();
+          }
+          return created;
+        });
+      } catch (err) {
+        if (err instanceof InviteSpentError) {
+          return reply.status(410).send({ error: 'Invite has been used up' });
+        }
+        throw err;
+      }
+
+      if (invited) {
+        fastify.log.info(
+          { username: actor.preferredUsername, serverId: invited.server.id },
+          'Registered through an invite',
+        );
+      }
+
+      if (token) {
+        void sendVerificationEmail(email, token, fastify.config).catch((err) =>
+          fastify.log.error({ err }, 'Failed to send verification email'),
+        );
+      }
+
+      // First user becomes instance admin
+      const [userCount] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(actors)
+        .where(and(eq(actors.type, 'Person'), eq(actors.kind, 'person'), eq(actors.local, true)));
+
+      if (userCount.count === 1) {
+        const currentProps = (actor.properties as Record<string, unknown>) ?? {};
+        await db
+          .update(actors)
+          .set({ properties: { ...currentProps, instanceAdmin: true } })
+          .where(eq(actors.id, actor.id));
+
+        // Auto-join default server as owner
+        const [defaultServer] = await db
+          .select()
+          .from(actors)
+          .where(and(eq(actors.type, 'Group'), eq(actors.local, true)))
+          .limit(1);
+
+        if (defaultServer?.followersUri) {
+          await db
+            .insert(collectionItems)
+            .values({
+              collectionUri: defaultServer.followersUri,
+              itemUri: actor.uri,
+              itemId: actor.id,
+              properties: { role: 'owner' },
+            })
+            .onConflictDoNothing();
+          // ...and holds its Admin role, as a server's creator does.
+          const [adminRole] = await db
+            .select({ id: serverRoles.id })
+            .from(serverRoles)
+            .where(and(eq(serverRoles.serverId, defaultServer.id), eq(serverRoles.name, 'Admin')))
+            .limit(1);
+          if (adminRole) {
+            await db
+              .insert(serverRoleAssignments)
+              .values({ serverId: defaultServer.id, actorId: actor.id, roleId: adminRole.id })
+              .onConflictDoNothing();
+          }
+        }
+
+        fastify.log.info(
+          { username: actor.preferredUsername },
+          'First user registered as instance admin',
+        );
+      }
+
+      await fastify.createSession(actor.id, reply);
+
+      return reply.status(201).send(toProfile(actor));
+    },
+  );
+
+  fastify.post<{ Body: LoginInput }>(
+    '/auth/login',
+    { config: { rateLimit: LOGIN_RATE_LIMIT } },
+    async (request, reply) => {
+      const { email, password } = request.body ?? {};
+
+      if (!email || !password) {
+        return reply.status(400).send({ error: 'Email and password are required' });
+      }
+
+      const [actor] = await db
+        .select()
+        .from(actors)
+        .where(and(eq(actors.email, email), eq(actors.local, true)))
+        .limit(1);
+
+      if (!actor || !actor.passwordHash) {
+        return reply.status(401).send({ error: 'Invalid credentials' });
+      }
+
+      const valid = await argon2.verify(actor.passwordHash, password);
+      if (!valid) {
+        return reply.status(401).send({ error: 'Invalid credentials' });
+      }
+
+      // If 2FA is enabled, don't create a session yet — return a
+      // challenge token so the client can prompt for the TOTP code.
+      if (actor.totpEnabled) {
+        const challengeToken = randomUUID();
+        const expires = new Date(Date.now() + 5 * 60 * 1000);
+        pending2faChallenges.set(challengeToken, {
+          actorId: actor.id,
+          expires,
+        });
+        return { twoFactorRequired: true, challengeToken };
+      }
+
+      // Destroy any existing session before creating a new one (rotation)
+      await fastify.destroySession(request, reply);
+      await fastify.createSession(actor.id, reply);
+
+      return toProfile(actor);
+    },
+  );
 
   // Change password
   fastify.put<{ Body: { currentPassword: string; newPassword: string } }>(
@@ -656,8 +754,9 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     // Redirect to the app — the client will see emailVerified: true
     // on the next getMe() call.
-    const protocol = fastify.config.secureCookies ? 'https' : 'http';
-    return reply.redirect(`${protocol}://${domain}/?verified=1`);
+    // Relative, so it lands on whichever origin the link was opened
+    // from (BABELR_DOMAIN, a tunnel, a reverse proxy).
+    return reply.redirect('/?verified=1');
   });
 
   fastify.post('/auth/resend-verification', async (request, reply) => {
@@ -767,6 +866,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
   fastify.post<{ Body: { challengeToken: string; code: string } }>(
     '/auth/2fa/challenge',
+    { config: { rateLimit: LOGIN_RATE_LIMIT } },
     async (request, reply) => {
       const { challengeToken, code } = request.body ?? {};
       if (!challengeToken || !code) {

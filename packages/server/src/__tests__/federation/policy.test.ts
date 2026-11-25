@@ -11,6 +11,8 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     domain: 'tower-a.example.com',
     sessionSecret: 'test',
     secureCookies: false,
+    registration: 'open',
+    trustProxy: false,
     federationMode: 'open',
     federationDomains: [],
     mediasoupListenIp: '127.0.0.1',
