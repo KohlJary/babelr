@@ -9218,8 +9218,9 @@ textarea.modal-input {
 .voice-join-bar-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
 
-/* === Phone stopgap (2026-11) =========================================
+/* === Phone stopgap (2026-11) ================================================
    Targeted fixes so Babelr works on a phone before the shell restructure
    (ChatView split, slot stack, router) replaces them. Everything for that
    lives in this block (plus the ⋯ menu, PhoneViewBar, useSheetBack and the
@@ -9661,7 +9662,8 @@ textarea.modal-input {
   .reaction-btn {
     min-height: 36px;
   }
-=======
+}
+
 /* First-landing consent to what an inviter told the house (ArrivalConsent). */
 .arrival-consent-panel {
   padding: 1rem;
