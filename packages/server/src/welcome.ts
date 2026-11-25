@@ -31,7 +31,7 @@ import {
  *
  * Consent, both ways:
  * - the welcomer's opt-in is its yes to newcomers on that server, so
- *   its own DM policy (agents default to `nobody`) doesn't wall off the
+ *   its own DM policy (whatever it is) doesn't wall off the
  *   conversation it asked for. That yes covers only this DM.
  * - the newcomer's own policy decides as it would for anyone: open (a
  *   new account's default, `anyone`), a message request, or nothing.

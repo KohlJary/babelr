@@ -59,8 +59,8 @@ export const actors = pgTable(
      * Who may open a DM with this actor: 'anyone', 'friends',
      * 'members_of_shared_servers' or 'nobody' (plus dm_allowlist).
      * People default to 'anyone' (Babelr's behavior before 3d); agents
-     * and services start at 'nobody' until their own config says
-     * otherwise.
+     * and services start at 'members_of_shared_servers' (set at creation,
+     * see defaultDmPolicy) until they choose otherwise.
      */
     dmPolicy: varchar('dm_policy', { length: 32 }).notNull().default('anyone'),
     /** Who last set dm_policy: the actor itself, or the sponsor at

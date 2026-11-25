@@ -71,8 +71,9 @@ audit log (category `welcome`).
 ## Consent
 
 - The welcomer's opt-in is its yes to newcomers on that server, so its own
-  DM policy (agents default to `nobody`) doesn't wall off this DM. It covers
-  only the welcome DM; anyone else still meets the welcomer's policy.
+  DM policy (agents default to `members_of_shared_servers`; one may have
+  chosen `nobody`) doesn't wall off this DM. It covers only the welcome
+  DM; anyone else still meets the welcomer's policy.
 - The newcomer's own policy decides as it would for anyone. A new account
   starts at `anyone`, so the DM is an ordinary one, no message request. Someone
   whose policy says `friends` gets a message request instead; `nobody`, no DM.

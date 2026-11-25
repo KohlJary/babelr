@@ -52,9 +52,16 @@ export function isDmPolicy(v: unknown): v is DmPolicy {
   return typeof v === 'string' && (DM_POLICIES as readonly string[]).includes(v);
 }
 
-/** The policy an actor of this kind starts with. */
+/**
+ * The policy an actor of this kind starts with. People: 'anyone'.
+ * Agents and services: 'members_of_shared_servers', so someone they
+ * share a server with can ask them something (a newcomer, a deck's
+ * "ask about this slide") and a stranger's first message is a request
+ * the agent can decline. Kohl, 2026-11-25: "daemons should default to
+ * receiving DMs from server participants yeah, that's clunky".
+ */
 export function defaultDmPolicy(kind: string): DmPolicy {
-  return isSponsoredKind(kind) ? 'nobody' : 'anyone';
+  return isSponsoredKind(kind) ? 'members_of_shared_servers' : 'anyone';
 }
 
 export async function hasBlocked(db: Db, blockerId: string, blockedId: string) {

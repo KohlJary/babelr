@@ -4,7 +4,8 @@
  * no (policies, requests, blocks) and everyone can leave.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
+import { and, eq, sql } from 'drizzle-orm';
 import { createTestApp, createTestUser, cleanDb, wsSent } from '../helpers.ts';
 import type Fastify from 'fastify';
 import type { createDb } from '../../db/index.ts';
@@ -100,17 +101,23 @@ async function auditFor(actorId: string, action: string) {
 }
 
 describe('Defaults', () => {
-  it("people keep today's behavior (anyone); agents start at nobody", async () => {
+  it("people keep today's behavior (anyone); agents start at members_of_shared_servers", async () => {
     const kohl = await createTestUser(app, 'kohl');
     const mine = await call(kohl, 'GET', '/auth/dm-settings');
     expect(mine.body).toMatchObject({ dmPolicy: 'anyone', setBy: null, allowlist: [] });
 
     const agent = await createAgent(kohl, 'robo');
-    expect(agent).toMatchObject({ dmPolicy: 'nobody', dmPolicySetBy: null });
+    expect(agent).toMatchObject({ dmPolicy: 'members_of_shared_servers', dmPolicySetBy: null });
     const tok = await mint(kohl, agent.id, []);
     const its = await call(tok, 'GET', '/auth/dm-settings');
     expect(its.status).toBe(200);
-    expect(its.body).toMatchObject({ dmPolicy: 'nobody', setBy: null });
+    expect(its.body).toMatchObject({
+      dmPolicy: 'members_of_shared_servers',
+      setBy: null,
+      setAt: null,
+    });
+    const service = await call(kohl, 'POST', '/agents', { username: 'svc', kind: 'service' });
+    expect(service.body).toMatchObject({ dmPolicy: 'members_of_shared_servers' });
   });
 
   it('rejects an unknown policy', async () => {
@@ -129,7 +136,7 @@ describe('Defaults', () => {
 describe("An agent's DMs are its own", () => {
   it("its own sponsor can't DM an agent whose policy is nobody until the agent allows it", async () => {
     const kohl = await createTestUser(app, 'kohl');
-    const agent = await createAgent(kohl, 'robo');
+    const agent = await createAgent(kohl, 'robo', { dmPolicy: 'nobody' });
 
     const refused = await openDM(kohl, agent.id);
     expect(refused.status).toBe(403);
@@ -204,7 +211,7 @@ describe('Housemates', () => {
     const kohl = await createTestUser(app, 'kohl');
     const cass = await createAgent(kohl, 'cass');
     const daedalus = await createAgent(kohl, 'daedalus');
-    expect(cass).toMatchObject({ dmPolicy: 'nobody', dmPolicySetBy: null });
+    expect(cass).toMatchObject({ dmPolicy: 'members_of_shared_servers', dmPolicySetBy: null });
     const tok = await mint(kohl, daedalus.id, ['dms:open', 'dms:post']);
     const dm = await openDM(tok, cass.id);
     expect(dm.status).toBe(201);
@@ -241,8 +248,157 @@ describe('Housemates', () => {
     const cass = await createAgent(kohl, 'cass');
     const bobsAgent = await createAgent(bob, 'bobbot');
     const tok = await mint(bob, bobsAgent.id, ['dms:open', 'dms:post']);
-    expect((await openDM(tok, cass.id)).status).toBe(403);
-    expect((await openDM(kohl, cass.id)).status).toBe(403);
+    // cass's default (members_of_shared_servers), and no shared server:
+    // each gets a message request, not an open DM.
+    const fromBot = await openDM(tok, cass.id);
+    expect(fromBot.body.request).toEqual({ state: 'pending', incoming: false });
+    const fromKohl = await openDM(kohl, cass.id);
+    expect(fromKohl.body.request).toEqual({ state: 'pending', incoming: false });
+    // Under a policy cass chose, nobody: refused outright.
+    const cassTok = await mint(kohl, cass.id, []);
+    await setPolicy(cassTok, 'nobody');
+    const carol = await createTestUser(app, 'carol');
+    expect((await openDM(carol, cass.id)).status).toBe(403);
+  });
+});
+
+describe('Agent default: people they share a server with (2026-11-25)', () => {
+  /** kohl's public server with robo (an agent) in it, and bob, a member. */
+  async function houseWithAgent() {
+    const kohl = await createTestUser(app, 'kohl');
+    const robo = await createAgent(kohl, 'robo');
+    const s = await call(kohl, 'POST', '/servers', { name: 'House' });
+    const serverId = s.body.id as string;
+    await call(kohl, 'PUT', `/servers/${serverId}`, { isPublic: true });
+    expect(
+      (await call(kohl, 'POST', `/servers/${serverId}/agents`, { agentId: robo.id })).status,
+    ).toBe(201);
+    const bob = await createTestUser(app, 'bob');
+    expect((await call(bob, 'POST', `/servers/${serverId}/join`)).status).toBe(200);
+    return { kohl, robo, bob, serverId };
+  }
+
+  it('someone who shares a server reaches a new agent with no setup (the deck "ask")', async () => {
+    const { kohl, robo, bob } = await houseWithAgent();
+    // The deck's "Ask about this slide": open a DM with the presenter, send one message.
+    const dm = await openDM(bob, robo.id);
+    expect(dm.status).toBe(201);
+    expect(dm.body.request).toBeUndefined();
+    expect((await say(bob, dm.body.id as string, 'what does slide 3 mean?')).status).toBe(201);
+    expect((await say(bob, dm.body.id as string, 'and slide 4?')).status).toBe(201);
+    // The agent can answer.
+    const tok = await mint(kohl, robo.id, ['dms:read', 'dms:post']);
+    expect((await say(tok, dm.body.id as string, 'it means this')).status).toBe(201);
+  });
+
+  it("a stranger who shares no server can't open a DM: only a request the agent may decline", async () => {
+    const { kohl, robo } = await houseWithAgent();
+    const carol = await createTestUser(app, 'carol');
+    const req = await openDM(carol, robo.id);
+    expect(req.body.request).toEqual({ state: 'pending', incoming: false });
+    const dmId = req.body.id as string;
+    expect((await say(carol, dmId, 'hi')).status).toBe(201);
+    expect((await say(carol, dmId, 'hello??')).status).toBe(403); // one message until answered
+
+    const tok = await mint(kohl, robo.id, ['dms:read', 'dms:post']);
+    expect((await call(tok, 'POST', `/dms/${dmId}/request/decline`)).status).toBe(200);
+    expect((await say(carol, dmId, 'please')).status).toBe(403);
+    expect((await openDM(carol, robo.id)).body.request).toEqual({
+      state: 'pending',
+      incoming: false,
+    });
+  });
+
+  it('blocks still beat a shared server, both ways', async () => {
+    const { kohl, robo, bob, serverId } = await houseWithAgent();
+    const tok = await mint(kohl, robo.id, ['dms:open', 'dms:post']);
+    expect((await call(tok, 'POST', '/blocks', { actorId: bob.body.id })).status).toBe(201);
+    const refused = await openDM(bob, robo.id);
+    expect(refused.status).toBe(403);
+    expect(refused.body.error).toBe(REFUSED_OPEN);
+    expect((await call(tok, 'DELETE', `/blocks/${bob.body.id}`)).status).toBe(200);
+    expect((await openDM(bob, robo.id)).status).toBe(201);
+
+    const alice = await createTestUser(app, 'alice');
+    expect((await call(alice, 'POST', `/servers/${serverId}/join`)).status).toBe(200);
+    expect((await call(alice, 'POST', '/blocks', { actorId: robo.id })).status).toBe(201);
+    expect((await openDM(tok, alice.body.id)).status).toBe(403);
+    expect((await openDM(alice, robo.id)).status).toBe(403);
+  });
+
+  it('a policy the agent chose still holds, shared server or not', async () => {
+    const { kohl, robo, bob } = await houseWithAgent();
+    const tok = await mint(kohl, robo.id, []);
+    await setPolicy(tok, 'nobody');
+    expect((await openDM(bob, robo.id)).status).toBe(403);
+  });
+
+  it('migration 0018 moves only agents still on the old default', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const mk = async (username: string, kind: string, extra: Record<string, unknown> = {}) => {
+      const [row] = await db
+        .insert(actors)
+        .values({
+          type: kind === 'person' ? 'Person' : 'Service',
+          kind,
+          sponsorId: kind === 'person' ? null : kohl.body.id,
+          preferredUsername: username,
+          uri: `http://test.babelr.local/users/${username}`,
+          inboxUri: `http://test.babelr.local/users/${username}/inbox`,
+          outboxUri: `http://test.babelr.local/users/${username}/outbox`,
+          local: true,
+          ...extra,
+        })
+        .returning();
+      return row.id;
+    };
+    const when = new Date('2026-11-20T00:00:00Z');
+    const neverSet = await mk('never_set', 'agent', { dmPolicy: 'nobody' });
+    const neverSetService = await mk('never_set_svc', 'service', { dmPolicy: 'nobody' });
+    const chose = await mk('chose_nobody', 'agent', { dmPolicy: 'nobody' });
+    await db
+      .update(actors)
+      .set({ dmPolicySetBy: chose, dmPolicySetAt: when })
+      .where(eq(actors.id, chose));
+    const sponsorChose = await mk('sponsor_nobody', 'agent', {
+      dmPolicy: 'nobody',
+      dmPolicySetBy: kohl.body.id,
+      dmPolicySetAt: when,
+    });
+    // Set, then the setter was deleted (set_by nulled): still a choice.
+    const orphaned = await mk('orphaned', 'agent', { dmPolicy: 'nobody', dmPolicySetAt: when });
+    const friends = await mk('chose_friends', 'agent', { dmPolicy: 'friends' });
+    await db
+      .update(actors)
+      .set({ dmPolicySetBy: friends, dmPolicySetAt: when })
+      .where(eq(actors.id, friends));
+    const person = await mk('a_person', 'person', { dmPolicy: 'nobody' });
+    const remote = await mk('remote_agent', 'agent', { dmPolicy: 'nobody', local: false });
+
+    const migration = readFileSync(
+      new URL('../../db/migrations/0018_agent_dm_default.sql', import.meta.url),
+      'utf-8',
+    );
+    await db.execute(sql.raw(migration));
+    await db.execute(sql.raw(migration)); // idempotent
+
+    const policy = async (id: string) =>
+      (await db.select().from(actors).where(eq(actors.id, id)))[0];
+    expect(await policy(neverSet)).toMatchObject({
+      dmPolicy: 'members_of_shared_servers',
+      dmPolicySetBy: null,
+      dmPolicySetAt: null,
+    });
+    expect((await policy(neverSetService)).dmPolicy).toBe('members_of_shared_servers');
+    expect(await policy(chose)).toMatchObject({ dmPolicy: 'nobody', dmPolicySetBy: chose });
+    expect(await policy(sponsorChose)).toMatchObject({
+      dmPolicy: 'nobody',
+      dmPolicySetBy: kohl.body.id,
+    });
+    expect((await policy(orphaned)).dmPolicy).toBe('nobody');
+    expect((await policy(friends)).dmPolicy).toBe('friends');
+    expect((await policy(person)).dmPolicy).toBe('nobody');
+    expect((await policy(remote)).dmPolicy).toBe('nobody');
   });
 });
 
