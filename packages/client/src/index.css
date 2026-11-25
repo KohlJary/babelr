@@ -105,6 +105,108 @@ body {
   border-radius: 4px;
 }
 
+/* A field with its rule written under it (sign-up username, new password) */
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.auth-field input {
+  width: 100%;
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #9ca3af;
+}
+
+/* New password: show/hide, the rule, a count, "Suggest one" */
+.new-password {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.new-password-row {
+  position: relative;
+  display: flex;
+}
+
+.new-password-row input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  padding-right: 4.25rem;
+}
+
+.new-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.new-password-toggle:focus-visible,
+.new-password-suggest:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 1px;
+}
+
+.new-password-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.new-password-count {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-variant-numeric: tabular-nums;
+}
+
+.new-password-count.done {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.new-password-suggest {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  margin-left: -0.25rem;
+  background: transparent;
+  border: none;
+  color: #93c5fd;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.new-password-note {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #fde68a;
+  background: rgba(234, 179, 8, 0.1);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: 6px;
+}
+
 /* Invite and sign-up notices on the login page */
 .auth-notice {
   color: #cbd5e1;

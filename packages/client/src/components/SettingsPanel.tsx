@@ -7,6 +7,7 @@ import { useT } from '../i18n/I18nProvider';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';
 import { useOllamaModels } from '../hooks/useOllamaModels';
 import { TwoFactorSettings } from './TwoFactorSettings';
+import { NewPasswordField } from './NewPasswordField';
 import { TabbedView } from './TabbedView';
 import { AgentsTab } from './AgentsTab';
 import { DMSettingsTab } from './DMSettingsTab';
@@ -422,12 +423,11 @@ function AccountTab({
           onChange={(e) => setCurrentPw(e.target.value)}
           className="modal-input"
         />
-        <input
-          type="password"
-          placeholder={t('settings.newPassword')}
+        <NewPasswordField
           value={newPw}
-          onChange={(e) => setNewPw(e.target.value)}
-          className="modal-input"
+          onChange={setNewPw}
+          placeholder={t('settings.newPassword')}
+          inputClassName="modal-input"
         />
         {pwStatus && (
           <p className={`settings-hint ${pwStatus.includes('success') ? 'success' : 'error'}`}>

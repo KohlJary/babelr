@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import type { RegisterInput, LoginInput, RegistrationInfo, InvitePreview } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
+import { NewPasswordField } from './NewPasswordField';
 
 interface AuthFormProps {
   onLogin: (input: LoginInput) => Promise<void>;
@@ -136,17 +137,32 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
         )}
 
         {showSignupFields && (
-          <input
-            type="text"
-            placeholder={t('auth.username')}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            minLength={3}
-            maxLength={32}
-            pattern="[a-zA-Z0-9_]+"
-            autoComplete="username"
-          />
+          <div className="auth-field">
+            <input
+              type="text"
+              placeholder={t('auth.username')}
+              value={username}
+              onChange={(e) => {
+                e.target.setCustomValidity('');
+                setUsername(e.target.value);
+              }}
+              // The browser's own message is "Please match the requested
+              // format"; say the actual rule instead.
+              onInvalid={(e) => e.currentTarget.setCustomValidity(t('auth.usernameRules'))}
+              required
+              minLength={3}
+              maxLength={32}
+              pattern="[a-zA-Z0-9_]+"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-describedby="auth-username-hint"
+            />
+            <span id="auth-username-hint" className="field-hint">
+              {t('auth.usernameRules')}
+            </span>
+          </div>
         )}
         {showFields && (
           <>
@@ -158,15 +174,23 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
               required
               autoComplete="email"
             />
-            <input
-              type="password"
-              placeholder={t('auth.password')}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={12}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            />
+            {mode === 'register' ? (
+              <NewPasswordField
+                value={password}
+                onChange={setPassword}
+                placeholder={t('auth.password')}
+                required
+              />
+            ) : (
+              <input
+                type="password"
+                placeholder={t('auth.password')}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            )}
           </>
         )}
 
