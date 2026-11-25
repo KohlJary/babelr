@@ -80,6 +80,12 @@ export const UI_STRINGS = {
   'channelHeader.settings': 'Settings',
   'channelHeader.editProfile': 'Edit profile',
   'channelHeader.encrypted': 'End-to-end encrypted',
+  // Phone stopgap: header ⋯ menu, a daemon's room button, nav bar over views
+  'channelHeader.more': 'More',
+  'channelHeader.room': 'Room',
+  'channelHeader.roomOf': "{name}'s room",
+  'channelHeader.backToConversation': 'Back to conversation',
+  'channelHeader.closeDrawer': 'Close the conversation list',
 
   // Messages
   'messages.placeholder': 'Send a message...',

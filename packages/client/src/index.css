@@ -8607,11 +8607,7 @@ textarea.modal-input {
 /* === Responsive breakpoints ======================================== */
 
 /* Tablet: hide side panel, shrink channel sidebar */
-@media (max-width: 1024px) {
-  .side-panel {
-    display: none;
-  }
-}
+/* At 1024px and below the side panel is a sheet: see "Phone stopgap" at the end. */
 
 /* Mobile: single-column layout */
 @media (max-width: 768px) {
@@ -8683,38 +8679,14 @@ textarea.modal-input {
     cursor: pointer;
   }
 
-  /* When a view is active the channel sidebar is hidden to give
-     the view full width. The chat-panel fills the remaining space. */
-  .channel-sidebar:has(~ .chat-panel .tabbed-view),
-  .channel-sidebar:has(~ .chat-panel .scroll-list-view),
-  .channel-sidebar:has(~ .chat-panel .friends-view) {
-    display: none;
-  }
+  /* Opening a view closes the drawer (ChatView openView); the view's ☰ bar
+     opens it again over the view. */
 
   .chat-panel {
     flex: 1;
   }
 
-  /* Side panel fills full width as an overlay on mobile */
-  .side-panel {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    z-index: 50;
-    width: 100%;
-    max-width: 100%;
-    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.5);
-  }
-  .side-panel-wide {
-    width: 100%;
-  }
-
-  /* Embed sidebar also fills width on mobile */
-  .embed-sidebar {
-    width: 100% !important;
-    max-width: 100%;
-  }
+  /* Side panels and the embed sidebar: see "Phone stopgap" at the end. */
 
   /* Channel header compact */
   .channel-header {
@@ -9228,4 +9200,447 @@ textarea.modal-input {
 .voice-join-bar-btn:disabled {
   opacity: 0.6;
   cursor: default;
+
+/* === Phone stopgap (2026-11) ================================================
+   Targeted fixes so Babelr works on a phone before the shell restructure
+   (ChatView split, slot stack, router) replaces them. Everything for that
+   lives in this block (plus the ⋯ menu, PhoneViewBar, useSheetBack and the
+   tap-to-select in MessageItem) so it can be lifted out in one piece. */
+
+/* The viewport is viewport-fit=cover: keep clear of the notch and home bar. */
+.app-layout {
+  padding-top: env(safe-area-inset-top);
+}
+.message-input-wrapper {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Things that only exist on phones */
+.drawer-scrim,
+.phone-view-bar,
+.list-detail-back,
+.header-more,
+.header-room-btn,
+.daemon-room-collapse-label {
+  display: none;
+}
+
+/* Threads, members, pins, glossary and embeds: a sheet over the chat at
+   1024px and below (tablets get a right-hand sheet, phones full screen).
+   Back gesture closes it (useSheetBack). */
+@media (max-width: 1024px) {
+  .side-panel,
+  .embed-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(420px, 100%) !important;
+    max-width: 100%;
+    height: auto;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.6);
+  }
+  .side-panel-wide {
+    width: min(520px, 100%) !important;
+  }
+  /* The members list beside a channel is ambient: only when asked for. */
+  .side-panel.side-panel-narrow-hidden {
+    display: none;
+  }
+  .side-panel-close,
+  .embed-sidebar-close {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.6rem;
+  }
+  .side-resize-handle {
+    display: none;
+  }
+  /* Header: ☰ (phones), the name, a daemon's room, and ⋯ for the rest. */
+  .channel-header {
+    gap: 0.25rem;
+  }
+  .channel-header .user-info {
+    display: none;
+  }
+  .channel-header .channel-info {
+    min-width: 0;
+  }
+  .channel-header .channel-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .header-room-btn {
+    display: inline-block;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 45vw;
+    min-height: 36px;
+    margin-right: 0.25rem;
+    padding: 0 0.75rem;
+    border: 1px solid #4f46e5;
+    border-radius: 999px;
+    background: #1e1b4b;
+    color: #e0e7ff;
+    font-size: 0.8rem;
+    line-height: 34px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .header-more {
+    display: block;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .header-more-btn {
+    min-width: 40px;
+    min-height: 40px;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: transparent;
+    color: #e5e7eb;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .header-more-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+  }
+  .header-more-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 71;
+    display: flex;
+    flex-direction: column;
+    min-width: 210px;
+    padding: 0.25rem;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #161616;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+  .header-more-menu button {
+    min-height: 44px;
+    padding: 0 0.75rem;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #e5e7eb;
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .header-more-menu button:active,
+  .header-more-menu button:hover {
+    background: #232323;
+  }
+  .header-more-status {
+    margin-top: 0.25rem;
+    padding: 0.5rem 0.75rem 0.25rem;
+    border-top: 1px solid #2a2a2a;
+    color: #888;
+    font-size: 0.8rem;
+  }
+  .header-more-menu .header-more-logout {
+    color: #f87171;
+  }
+
+  /* A daemon's room: closed by default at 1024px and below (useRoomOpen),
+     opened from the header as a sheet, with a labeled way back. */
+  .daemon-room-wrap {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    z-index: 60;
+    width: min(420px, 100%);
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+    background: #0a0e13;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.6);
+  }
+  .daemon-room-rail {
+    display: none;
+  }
+  .daemon-room-collapse {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 0 1rem;
+    border-bottom: 1px solid #1f2937;
+    color: #e5e7eb;
+    font-size: 0.95rem;
+    text-align: left;
+  }
+  .daemon-room-collapse-icon {
+    display: none;
+  }
+  .daemon-room-collapse-label {
+    display: inline;
+  }
+  .daemon-room-collapse-label::before {
+    content: '‹ ';
+  }
+  .daemon-room {
+    flex: 1;
+    width: 100% !important;
+    min-height: 0;
+    border-left: none;
+  }
+  .daemon-room-header {
+    padding-right: 0.9rem;
+  }
+
+  /* Wiki: discussion/history go under the article instead of a third column. */
+  .wiki-body {
+    flex-wrap: wrap;
+    overflow-y: auto;
+  }
+  .wiki-content {
+    flex: 1 1 0;
+    overflow: visible;
+  }
+  .wiki-right-sidebar {
+    flex-basis: 100%;
+    border-left: none;
+    border-top: 1px solid #2a2a2a;
+  }
+  .wiki-content-header,
+  .wiki-content-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-layout {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .side-panel,
+  .side-panel-wide,
+  .embed-sidebar {
+    left: 0;
+    width: 100% !important;
+    border-left: none;
+  }
+
+  .daemon-room-wrap {
+    left: 0;
+    width: 100%;
+  }
+
+  /* The rail belongs to the drawer: closed, the conversation gets the width. */
+  .app-layout.drawer-closed .server-sidebar {
+    display: none;
+  }
+  .server-sidebar {
+    position: relative;
+    z-index: 41;
+  }
+  /* Tap outside the drawer to close it. */
+  .drawer-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 35;
+    padding: 0;
+    border: none;
+    background: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+  }
+
+  /* ☰ over full views (Calendar, Wiki, Mentions, plugin views...) */
+  .phone-view-bar {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 0.2rem 0.4rem;
+    border-bottom: 1px solid #222;
+    background: #0a0a0a;
+  }
+  .phone-view-bar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0 0.6rem;
+    border: none;
+    background: transparent;
+    color: #e5e7eb;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+
+  /* Messages: no 64px indent for grouped messages, images fit, composer
+     gets the width and a 16px font (iOS zooms into anything smaller). */
+  .message-list {
+    padding: 0.5rem;
+  }
+  .message.compact {
+    padding-left: 0.5rem;
+  }
+  .message.compact .message-time-hover {
+    display: none;
+  }
+  .message-attachments > * {
+    max-width: 100%;
+  }
+  .message-attachment-img,
+  .message-content img {
+    max-width: 100%;
+    height: auto;
+  }
+  .message-actions {
+    flex-wrap: wrap;
+  }
+  .message-action-btn {
+    white-space: nowrap;
+  }
+  .message-input {
+    gap: 0.4rem;
+    padding: 0.5rem;
+  }
+  .message-input textarea {
+    min-width: 0;
+    font-size: 16px;
+  }
+  .message-input button {
+    padding: 0.65rem 0.9rem;
+  }
+
+  /* Wiki: one column, actions wrap (was a 640px page on a 390px screen). */
+  .wiki-panel {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 0;
+  }
+  .wiki-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .wiki-sidebar {
+    width: auto;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .wiki-content {
+    flex: none;
+    overflow: visible;
+    padding: 1rem;
+  }
+  .wiki-right-sidebar {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid #2a2a2a;
+  }
+  .wiki-content-header,
+  .wiki-content-actions {
+    flex-wrap: wrap;
+  }
+  .wiki-content-actions {
+    flex-shrink: 1;
+  }
+  .wiki-slug-display,
+  .wiki-content-body {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .wiki-content-body img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* List/detail views (Polls, Boards, a daemon's room lists): one column;
+     with something picked, the detail alone, and ‹ back to the list. */
+  .list-detail-view {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .list-detail-rail {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid #1f2937;
+  }
+  .list-detail-main {
+    flex: none;
+    overflow: visible;
+    padding: 1rem;
+  }
+  .list-detail-view.has-selection .list-detail-rail {
+    display: none;
+  }
+  .list-detail-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    margin: -0.5rem 0 0.5rem -0.25rem;
+    padding: 0 0.5rem;
+    border: none;
+    background: transparent;
+    color: #93c5fd;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+
+  /* Polls: the empty state fit inside the screen. */
+  .poll-view-empty {
+    padding: 2rem 1rem;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Touch screens have no hover: tap a message to show its actions (Reply,
+   Edit, Pin...). A Reply that already has replies always shows its count.
+   React is the + under each message, sized for a finger. */
+@media (hover: none) {
+  .message-actions {
+    display: none;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.35rem;
+    opacity: 1;
+  }
+  .message.message-touch-selected {
+    background: #1a1a1a;
+  }
+  /* The lone + (no reactions yet) shows with the actions, not on every message. */
+  .message:not(.message-touch-selected) .message-reactions:not(:has(.reaction-btn)) {
+    display: none;
+  }
+  .message.message-touch-selected .message-actions,
+  .message .message-actions:has(.has-replies) {
+    display: flex;
+  }
+  .message:not(.message-touch-selected) .message-action-btn:not(.has-replies) {
+    display: none;
+  }
+  .message-action-btn {
+    min-height: 36px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  .reaction-add-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .reaction-btn {
+    min-height: 36px;
+  }
 }

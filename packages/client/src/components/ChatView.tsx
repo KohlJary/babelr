@@ -36,6 +36,7 @@ import { VoiceJoinBar } from './VoiceJoinBar';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
 import { EmbedHostProvider } from './E';
 import { SidePanel } from './SidePanel';
+import { PhoneViewBar } from './PhoneViewBar';
 import { useT } from '../i18n/I18nProvider';
 import { VerificationBanner } from './VerificationBanner';
 import { subscribeToPush } from '../push';
@@ -103,6 +104,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const openView = (id: string, state: ViewState = {}) => {
     setActiveViewId(id);
     setViewState(state);
+    // Phones: a view opened from the drawer takes the screen.
+    setDrawerClosed(true);
   };
   const closeView = () => {
     setActiveViewId(null);
@@ -166,6 +169,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const e2e = useE2E();
   // Phones: the conversation list is a drawer; picking a conversation closes it.
   const [drawerClosed, setDrawerClosed] = useState(false);
+  // At 1024px and below the members list is a sheet, shown only when asked for.
+  const [membersSheet, setMembersSheet] = useState(false);
   // DM list previews, decrypted here (the sidebar never shows ciphertext).
   const [dmPreviews, setDmPreviews] = useState<Record<string, string>>({});
   const {
@@ -625,6 +630,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             setShowPins(false);
             closeView();
             setShowMembers(true);
+            // On a narrow screen the members list opens as a sheet.
+            setMembersSheet(true);
           }}
           onShowGlossary={() => setShowGlossary(true)}
           onShowServerSettings={
@@ -679,7 +686,18 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             return <PluginSidebarSlots host={sidebarHost} />;
           })()}
         />
+        {!drawerClosed && (
+          <button
+            type="button"
+            className="drawer-scrim"
+            aria-label={t('channelHeader.closeDrawer')}
+            onClick={() => setDrawerClosed(true)}
+          />
+        )}
         <div className="chat-panel">
+          {activeViewId && activeViewId !== 'house' && (
+            <PhoneViewBar onOpenDrawer={() => setDrawerClosed(false)} />
+          )}
           {(() => {
             if (!activeViewId) return null;
             const def = getView(activeViewId);
@@ -716,6 +734,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onOpenSearch={() => setShowSearch(true)}
                 onOpenPins={activeChannelId ? () => setShowPins((v) => !v) : undefined}
                 pinCount={pinnedIds.size || undefined}
+                onOpenRoom={roomPeer && !roomOpen ? toggleRoom : undefined}
+                roomLabel={
+                  roomPeer
+                    ? t('channelHeader.roomOf', {
+                        name: roomPeer.displayName ?? roomPeer.preferredUsername,
+                      })
+                    : undefined
+                }
               />
               {voice.state.channelId &&
               selectedChannel?.id === voice.state.channelId &&
@@ -915,7 +941,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onClick={toggleRoom}
                 title="Close her room"
               >
-                ⟩
+                <span className="daemon-room-collapse-icon">⟩</span>
+                <span className="daemon-room-collapse-label">
+                  {t('channelHeader.backToConversation')}
+                </span>
               </button>
               <DaemonRoom
                 daemon={{
@@ -939,7 +968,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             </button>
           )
         ) : selectedServer && !dmMode && !activeViewId && showMembers ? (
-          <SidePanel title={t('members.title')} onClose={() => setShowMembers(false)}>
+          <SidePanel
+            title={t('members.title')}
+            onClose={() => {
+              setShowMembers(false);
+              setMembersSheet(false);
+            }}
+            hiddenWhenNarrow={!membersSheet}
+          >
             <MemberList
               serverId={selectedServer.id}
               members={members}
@@ -947,7 +983,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               callerRole={callerRole}
               presenceStatus={presenceStatus}
               onKick={kick}
-              onClose={() => setShowMembers(false)}
+              onClose={() => {
+                setShowMembers(false);
+                setMembersSheet(false);
+              }}
               onRolesChanged={reloadMembers}
             />
           </SidePanel>
