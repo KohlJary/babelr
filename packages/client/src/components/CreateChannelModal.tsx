@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import { useState } from 'react';
 import { useT } from '../i18n/I18nProvider';
+import { useDialog } from '../hooks/useDialog';
 
 interface CreateChannelModalProps {
   onCreateChannel: (
@@ -14,6 +15,7 @@ interface CreateChannelModalProps {
 
 export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelModalProps) {
   const t = useT();
+  const dialogRef = useDialog(onClose);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -41,7 +43,13 @@ export function CreateChannelModal({ onCreateChannel, onClose }: CreateChannelMo
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        className="settings-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="settings-header">
           <h2>{t('createChannel.titleHeading')}</h2>
           <button className="settings-close" onClick={onClose}>

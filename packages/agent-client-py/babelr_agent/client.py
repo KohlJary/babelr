@@ -14,6 +14,10 @@
         print(m["author"]["preferredUsername"], m["text"])
     a.reply_status(dm["id"], m["id"], "working")   # dms:post (channels:post
                                                     # in a server channel)
+    a.set_welcoming(server_id)      # opt yourself in to welcoming newcomers
+    for w in a.welcomes():          # dms:read; someone new, a DM ready
+        if w["newcomerKeyReady"]:
+            a.send(w["dmId"], "hi, I'm ...", partner_id=w["newcomer"]["id"])
 
 reply_status shows the person, under their message, that you've picked
 it up ("working"), that you couldn't answer ("failed", with a short
@@ -124,6 +128,49 @@ class Agent:
         if attachments:
             props["attachments"] = [_attachment(a) for a in attachments]
         return self._req("POST", f"/dms/{dm_id}/messages", {"content": ct, "properties": props})
+
+    # -- welcoming newcomers ---------------------------------------------
+
+    def welcome_settings(self) -> list[dict]:
+        """Your servers, and whether you welcome newcomers in each (no scope)."""
+        return self._req("GET", "/welcome/settings")
+
+    def set_welcoming(self, server_id: str, on: bool = True) -> dict:
+        """Opt yourself in (or out) of welcoming newcomers to a server. Only
+        you can: there's no call that puts anyone else on the list. Opting
+        in needs a published key (`publish_key`) and a token with dms:post;
+        opting out needs nothing."""
+        return self._req("PUT", f"/servers/{server_id}/welcome", {"welcoming": bool(on)})
+
+    def welcomes(self, state: str = "pending") -> list[dict]:
+        """Newcomers to say hello to (dms:read). Each has `newcomer`,
+        `invitedBy` (or None), `server`, the `dmId` to write in, and
+        `newcomerKeyReady`: wait for True before `send`, or the hello can't
+        be encrypted to them. Writing in the DM marks it done; so does
+        `welcome_done`. `state` is pending, done, skipped or all.
+
+        Who they are: `invited_as` (the inviter's label, e.g. "Mom"), and
+        `card`, the guest card the invite was made from (name, label, note,
+        and seeds and facts only if they said yes to being looked up;
+        `consented` is that answer, `seedsPending` means not yet). Read it to
+        prepare; it's the inviter's record, not yours to write back to."""
+        out = self._req("GET", f"/welcomes?state={state}") or []
+        for w in out:
+            w.setdefault("invited_as", w.get("invitedAs"))
+        return out
+
+    def guest_cards(self, server_id: str) -> list[dict]:
+        """The guest cards for people being invited to a server where you
+        welcome (dms:read), so you can prepare before they arrive. Each has
+        name, label, seeds, note, facts, status, and `joined` once they're
+        in. Seeds and facts are withheld if the person said no to being
+        looked up. Keep your own notes in your own memory; Babelr never
+        writes anywhere but here."""
+        return self._req("GET", f"/servers/{server_id}/guest-cards")
+
+    def welcome_done(self, welcome_id: str) -> dict:
+        """Mark a welcome done without writing (dms:read)."""
+        return self._req("POST", f"/welcomes/{welcome_id}/done")
 
     def post(self, channel_id: str, text: str, attachments: list[dict] | None = None) -> dict:
         """A message in a server channel (channels:post; attaching needs the

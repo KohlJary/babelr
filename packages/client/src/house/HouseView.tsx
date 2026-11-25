@@ -209,8 +209,16 @@ export function HouseView({ host, viewState }: ViewProps) {
         .filter(Boolean),
     ),
   ];
-  const title =
-    sponsors.length === 1 ? t('house.titleOf', { name: sponsors[0]! }) : t('house.title');
+  // In exactly one server (a guest's view), the house goes by that server's
+  // name: the name their invite showed them. Otherwise it's the household of
+  // whoever runs its daemons ("Kohl's house").
+  const title = house.serverName
+    ? house.serverName
+    : sponsors.length === 1
+      ? t('house.titleOf', { name: sponsors[0]! })
+      : t('house.title');
+  // Someone who came in on an invite is a guest here: no pitch to run a house.
+  const pitch = !house.invited;
 
   return (
     <div className="house" data-tour="home">
@@ -232,21 +240,25 @@ export function HouseView({ host, viewState }: ViewProps) {
             : t('house.ledeEmpty')}
         </p>
         <p className="house-lede house-lede-small">{t('house.whatIsDaemon')}</p>
-        <p className="house-lede house-lede-small">{t('house.ledeOwn')}</p>
-        <div className="house-mast-actions">
-          {house.hasIntro && phase === 'idle' && (
-            <button
-              type="button"
-              className="house-btn house-btn-solid"
-              onClick={() => void startIntro()}
-            >
-              {t('house.watchIntro')}
-            </button>
-          )}
-          <a className="house-btn" href={DEFAULT_HREF} target="_blank" rel="noreferrer">
-            {t('house.startYourOwn')}
-          </a>
-        </div>
+        {pitch && <p className="house-lede house-lede-small">{t('house.ledeOwn')}</p>}
+        {(pitch || (house.hasIntro && phase === 'idle')) && (
+          <div className="house-mast-actions">
+            {house.hasIntro && phase === 'idle' && (
+              <button
+                type="button"
+                className="house-btn house-btn-solid"
+                onClick={() => void startIntro()}
+              >
+                {t('house.watchIntro')}
+              </button>
+            )}
+            {pitch && (
+              <a className="house-btn" href={DEFAULT_HREF} target="_blank" rel="noreferrer">
+                {t('house.startYourOwn')}
+              </a>
+            )}
+          </div>
+        )}
       </header>
 
       {house.agents.length > 0 && (
@@ -282,18 +294,20 @@ export function HouseView({ host, viewState }: ViewProps) {
         </section>
       )}
 
-      <section className="house-own" id="start-your-own" data-tour="start-your-own">
-        <h2 className="house-own-title">{t('house.ownTitle')}</h2>
-        <p className="house-own-text">{t('house.ownText')}</p>
-        <a
-          className="house-btn house-btn-solid"
-          href={DEFAULT_HREF}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {t('house.ownCta')}
-        </a>
-      </section>
+      {pitch && (
+        <section className="house-own" id="start-your-own" data-tour="start-your-own">
+          <h2 className="house-own-title">{t('house.ownTitle')}</h2>
+          <p className="house-own-text">{t('house.ownText')}</p>
+          <a
+            className="house-btn house-btn-solid"
+            href={DEFAULT_HREF}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {t('house.ownCta')}
+          </a>
+        </section>
+      )}
     </div>
   );
 }

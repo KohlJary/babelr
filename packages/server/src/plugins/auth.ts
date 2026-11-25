@@ -259,7 +259,10 @@ async function authPlugin(fastify: FastifyInstance) {
 
     reply.setCookie(COOKIE_NAME, sid, {
       httpOnly: true,
-      secure: config.secureCookies,
+      // Secure in production, and whenever the browser reached us over
+      // https: directly, or through a proxy TRUST_PROXY lets us believe
+      // (X-Forwarded-Proto). Plain http on localhost stays as it was.
+      secure: config.secureCookies || reply.request.protocol === 'https',
       sameSite: 'strict',
       maxAge: SESSION_MAX_AGE / 1000,
       path: '/',

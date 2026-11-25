@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { pgTable, uuid, varchar, timestamp, integer } from 'drizzle-orm/pg-core';
+import { guestCards } from './guest-cards.ts';
 import { actors } from './actors.ts';
 
 export const invites = pgTable('invites', {
@@ -15,4 +16,6 @@ export const invites = pgTable('invites', {
   uses: integer('uses').notNull().default(0),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** The guest card this invite was made from (welcome.ts), if any. */
+  guestCardId: uuid('guest_card_id').references(() => guestCards.id, { onDelete: 'set null' }),
 });

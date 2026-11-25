@@ -33,6 +33,9 @@ Set these in your `.env` file or as environment variables:
 | `BABELR_PORT`            | No            | `3000`                                | Host port to expose (for avoiding conflicts with local dev)                               |
 | `HOST`                   | No            | `0.0.0.0`                             | Bind address                                                                              |
 | `NODE_ENV`               | No            | `production`                          | Set to `production` for secure cookies                                                    |
+| `REGISTRATION`           | No            | `open`                                | Who can sign up: `open`, `invite` (needs a server invite link) or `closed`. See below.    |
+| `TRUST_PROXY`            | No            | `true` in prod, `false` otherwise     | Whose `X-Forwarded-*` headers to believe. `loopback` for a tunnel or proxy on this host.  |
+| `PUBLIC_URL`             | No            | --                                    | The https origin browsers use, if not `BABELR_DOMAIN` (a tunnel). Used for invite links.  |
 | `FEDERATION_MODE`        | No            | `open`                                | Federation policy: `open`, `allowlist`, or `blocklist`                                    |
 | `FEDERATION_DOMAINS`     | No            | --                                    | Comma-separated domain list for allowlist/blocklist mode                                  |
 | `OIDC_ISSUER`            | No            | --                                    | OIDC provider URL (e.g. `https://accounts.google.com`)                                    |
@@ -103,7 +106,56 @@ server {
 }
 ```
 
-Set `BABELR_DOMAIN=chat.example.com` and `NODE_ENV=production` in your `.env`.
+Set `BABELR_DOMAIN=chat.example.com` and `NODE_ENV=production` in your `.env`. Production trusts `X-Forwarded-*` from any peer. If port 3000 is reachable from anywhere but the proxy, set `TRUST_PROXY=loopback` (or the proxy's address) as well.
+
+### Who can sign up
+
+`REGISTRATION` decides who can make an account:
+
+- `open` (the default): anyone who can reach the server.
+- `invite`: only someone holding a working server invite link. The link both creates their account and joins them to that server. It spends one of the invite's uses.
+- `closed`: nobody.
+
+In every mode the first person on an empty instance can register, so someone is able to make the first invite. Agent and service accounts that a member sponsors are made the same way in every mode. Federation's nodeinfo reports `openRegistrations: true` only in `open` mode. In `invite` and `closed` mode, SSO signs in existing accounts but doesn't create new ones.
+
+An invite opens the door only while it is unexpired, has uses left, and was made by a person who isn't suspended and still has **Create invites** on that server. Invites made by an agent never create accounts. By default the `@everyone` role has **Create invites**, so in `invite` mode any member can bring someone in. Take the permission off `@everyone` if you want only admins to. Give every invite you hand out a max-uses count and an expiry: an invite with neither stays open for anyone who sees the link.
+
+Login and the 2FA step are limited to 10 tries a minute per IP, sign-up to 10 per 15 minutes, and anonymous invite lookups to 30 a minute. These limits apply on top of the global API limit.
+
+### Reaching your house from your phone
+
+Phones outside your network need an **https** URL. DMs are end-to-end encrypted with WebCrypto, which browsers only allow in a secure context (https, or `localhost` on the machine itself), so DMs won't work from a phone over plain `http://192.168...`. The service worker and push notifications need https too.
+
+A Cloudflare quick tunnel is the fastest way to get an https URL, and you don't need an account:
+
+```bash
+cloudflared tunnel --url http://localhost:3000
+```
+
+It prints a `https://<random-words>.trycloudflare.com` URL. **That URL changes every time cloudflared restarts**, and any invite links you've already sent stop working when it does. For a URL that stays the same, use a named tunnel on your own domain (or any reverse proxy with TLS, above).
+
+Before you open the tunnel, close registration to invites. Set these in `.env` and restart Babelr:
+
+```bash
+REGISTRATION=invite
+TRUST_PROXY=loopback
+# Optional: only if you want invite links made from localhost to use the tunnel URL.
+# PUBLIC_URL=https://<random-words>.trycloudflare.com
+```
+
+- `REGISTRATION=invite`: strangers who find the URL can't make accounts.
+- `TRUST_PROXY=loopback`: Babelr believes the `X-Forwarded-Proto/For/Host` headers that cloudflared, running on the same machine, adds, and nobody else's. Session cookies get the `Secure` flag when the browser used https, rate limits count each visitor's own IP (without this, everyone coming through the tunnel shares one bucket), and invite links made from the tunnel URL point at the tunnel URL. Plain `http://localhost:3000` works exactly as before.
+- `PUBLIC_URL`: invite links (and verification emails) use this origin. If you leave it unset, invite links follow the address you made them from: make the invite while browsing the tunnel URL and the link is the tunnel URL. With a quick tunnel, leaving it unset saves you editing `.env` every time the URL changes.
+- Leave `BABELR_DOMAIN` and `NODE_ENV` alone. `BABELR_DOMAIN` is baked into every ActivityPub id, so don't set it to a tunnel URL that will change.
+
+To invite someone:
+
+1. Open the house at the tunnel URL and log in.
+2. Go to **Server settings > Invites**. Set max uses to `1` and an expiry (e.g. `48` hours), then press Create.
+3. Copy the link (`https://<tunnel>/invite/<code>`) and send it to them.
+4. They open it on their phone. The page says which server they've been invited to and starts on **Register**. They pick a username, email and password (12+ characters), and they're in that server.
+
+Voice and video aren't carried by the tunnel: media goes over UDP straight to `MEDIASOUP_ANNOUNCED_IP` (see [Voice channels](#voice-channels)). Chat, DMs, files and the rest work through it. The `allowedHosts` list in the client's Vite config only affects the dev server (`npm run dev:client`). Babelr serves the built client itself, so the tunnel doesn't need it.
 
 ### Federation
 
@@ -145,7 +197,7 @@ OIDC_CLIENT_SECRET=your-client-secret
 OIDC_REDIRECT_URI=https://chat.example.com/api/auth/oidc/callback
 ```
 
-When configured, a "Sign in with SSO" button appears on the login page. Users are redirected to your identity provider, and accounts are auto-provisioned on first login. Existing accounts are linked by email address.
+When configured, a "Sign in with SSO" button appears on the login page. Users are redirected to your identity provider, and accounts are auto-provisioned on first login (only when `REGISTRATION=open`). Existing accounts are linked by email address.
 
 The first user to sign in via SSO becomes the instance admin (same as password registration).
 

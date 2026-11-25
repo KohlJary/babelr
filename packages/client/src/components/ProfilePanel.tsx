@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { ActorProfile } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { useDialog } from '../hooks/useDialog';
 
 type ProfileFields = { displayName?: string; summary?: string; avatarUrl?: string };
 
@@ -34,6 +35,7 @@ function AvatarDisplay({ actor }: { actor: ActorProfile }) {
 
 export function ProfilePanel({ actor, onUpdate, onClose, save, title }: ProfilePanelProps) {
   const t = useT();
+  const dialogRef = useDialog(onClose);
   const [displayName, setDisplayName] = useState(actor.displayName ?? '');
   const [bio, setBio] = useState(actor.summary ?? '');
   const [avatarUrl, setAvatarUrl] = useState(actor.avatarUrl ?? '');
@@ -86,7 +88,13 @@ export function ProfilePanel({ actor, onUpdate, onClose, save, title }: ProfileP
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        className="settings-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="settings-header">
           <h2>{title ?? t('profile.title')}</h2>
           <button className="settings-close" onClick={onClose}>

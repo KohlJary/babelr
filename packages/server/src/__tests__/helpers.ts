@@ -14,6 +14,9 @@ import channelSettingsRoutes from '../routes/channel-settings.ts';
 import serverRoutes from '../routes/servers.ts';
 import dmRoutes from '../routes/dms.ts';
 import dmConsentRoutes from '../routes/dm-consent.ts';
+import welcomeRoutes from '../routes/welcome.ts';
+import guestCardRoutes from '../routes/guest-cards.ts';
+import welcomeTrigger from '../plugins/welcome-trigger.ts';
 import friendsRoutes from '../routes/friends.ts';
 import eventRoutes from '../routes/events.ts';
 import wikiRoutes from '../routes/wiki.ts';
@@ -25,6 +28,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import auditRoutes from '../routes/audit.ts';
+import searchRoutes from '../routes/search.ts';
 import agentRoutes from '../routes/agents.ts';
 import houseRoutes from '../routes/house.ts';
 import serverAgentRoutes from '../routes/server-agents.ts';
@@ -32,6 +36,8 @@ import actorRoutes from '../federation/actor.ts';
 import embedRoutes from '../routes/embeds.ts';
 import pluginLoader from '../plugins/plugin-loader.ts';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
+import { rateLimitOptions } from '../rate-limit.ts';
 import type { Config } from '../config.ts';
 import { sql } from 'drizzle-orm';
 
@@ -45,6 +51,8 @@ const testConfig: Config = {
   domain: 'test.babelr.local',
   sessionSecret: 'test-secret-not-for-production',
   secureCookies: false,
+  registration: 'open',
+  trustProxy: false,
   federationMode: 'open',
   federationDomains: [],
   mediasoupListenIp: '127.0.0.1',
@@ -63,10 +71,22 @@ export const wsSent: Array<{ to: string; message: unknown }> = [];
  * proxy, for tests of plugin routes and their access checks.
  * `actorProfiles: true` mounts the federation actor document route.
  */
-export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: boolean } = {}) {
+export async function createTestApp(
+  opts: {
+    plugins?: boolean;
+    actorProfiles?: boolean;
+    /** Fastify trustProxy, for tests of requests through a tunnel. */
+    trustProxy?: boolean | number | string;
+    /** Mount the real rate limiter (app.ts's global options). */
+    rateLimit?: boolean;
+    /** Overrides on a copy of the shared test config. */
+    config?: Partial<Config>;
+  } = {},
+) {
   const db = createDb(testConfig.databaseUrl);
+  const config: Config = opts.config ? { ...testConfig, ...opts.config } : testConfig;
 
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, trustProxy: opts.trustProxy ?? false });
   // Every route the app mounts, for tests that walk the whole table
   // (e.g. the agent scope map's deny-by-default check).
   const routes: Array<{ method: string; url: string }> = [];
@@ -80,7 +100,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
     fp(
       async (fastify) => {
         fastify.decorate('db', db);
-        fastify.decorate('config', testConfig);
+        fastify.decorate('config', config);
       },
       { name: 'db' },
     ),
@@ -120,6 +140,8 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(cookie);
   await app.register(cors, { origin: true, credentials: true });
   await app.register(authPlugin);
+  if (opts.rateLimit) await app.register(rateLimit, rateLimitOptions);
+  await app.register(welcomeTrigger);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
@@ -130,6 +152,8 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   await app.register(serverRoutes);
   await app.register(dmRoutes);
   await app.register(dmConsentRoutes);
+  await app.register(welcomeRoutes);
+  await app.register(guestCardRoutes);
   await app.register(friendsRoutes);
   await app.register(eventRoutes);
   await app.register(wikiRoutes);
@@ -140,6 +164,7 @@ export async function createTestApp(opts: { plugins?: boolean; actorProfiles?: b
   process.env.UPLOADS_DIR ??= mkdtempSync(join(tmpdir(), 'babelr-uploads-'));
   await app.register(uploadRoutes);
   await app.register(auditRoutes);
+  await app.register(searchRoutes);
   await app.register(houseRoutes);
   await app.register(agentRoutes);
   await app.register(serverAgentRoutes);

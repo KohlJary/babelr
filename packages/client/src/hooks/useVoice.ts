@@ -19,6 +19,8 @@ export interface VoicePeerState {
 export interface UseVoiceState {
   status: 'idle' | 'connecting' | 'connected' | 'error';
   error: string | null;
+  /** Why the mic step of a join failed, so the UI can say what to do. */
+  errorKind?: 'mic-denied' | 'mic-missing' | 'mic-insecure' | 'mic-unavailable';
   channelId: string | null;
   peers: VoicePeerState[];
   micMuted: boolean;
@@ -157,11 +159,24 @@ export function useVoice(selfActorId: string) {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
       } catch (err) {
+        // NotAllowedError/SecurityError: the browser or the person said no.
+        // NotFoundError/OverconstrainedError: no usable microphone. On an
+        // insecure origin there is no navigator.mediaDevices at all.
+        const name = (err as Error)?.name;
+        const errorKind: UseVoiceState['errorKind'] =
+          typeof window !== 'undefined' && !window.isSecureContext
+            ? 'mic-insecure'
+            : name === 'NotAllowedError' || name === 'SecurityError'
+              ? 'mic-denied'
+              : name === 'NotFoundError' || name === 'OverconstrainedError'
+                ? 'mic-missing'
+                : 'mic-unavailable';
         setState({
           ...IDLE_STATE,
           status: 'error',
           channelId: null,
           error: (err as Error).message,
+          errorKind,
         });
         channelIdRef.current = null;
         return;

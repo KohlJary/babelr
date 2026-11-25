@@ -29,6 +29,9 @@ import translateRoutes from './routes/translate.ts';
 import serverRoutes from './routes/servers.ts';
 import dmRoutes from './routes/dms.ts';
 import dmConsentRoutes from './routes/dm-consent.ts';
+import welcomeRoutes from './routes/welcome.ts';
+import guestCardRoutes from './routes/guest-cards.ts';
+import welcomeTrigger from './plugins/welcome-trigger.ts';
 import friendsRoutes from './routes/friends.ts';
 import i18nRoutes from './routes/i18n.ts';
 import eventRoutes from './routes/events.ts';
@@ -62,9 +65,19 @@ export async function buildApp() {
     logger: {
       level: isProduction ? 'info' : 'debug',
     },
-    trustProxy: isProduction,
+    trustProxy: config.trustProxy,
     rewriteUrl: (req) => stripApiPrefix(req.url ?? '/'),
   });
+
+  app.log.info(
+    { registration: config.registration, publicUrl: config.publicUrl ?? null },
+    'Registration mode',
+  );
+  if (config.registration === 'open' && config.publicUrl) {
+    app.log.warn(
+      'REGISTRATION is open and PUBLIC_URL is set: anyone who finds that URL can make an account. Set REGISTRATION=invite to require an invite link.',
+    );
+  }
 
   // Production error handler — no stack traces leaked
   app.setErrorHandler((error, _request, reply) => {
@@ -161,6 +174,7 @@ export async function buildApp() {
   // Plugins
   await app.register(authPlugin);
   await app.register(wsPlugin);
+  await app.register(welcomeTrigger);
   await app.register(seedPlugin);
   await app.register(i18nSeedPlugin);
 
@@ -185,6 +199,8 @@ export async function buildApp() {
   await app.register(serverRoutes);
   await app.register(dmRoutes);
   await app.register(dmConsentRoutes);
+  await app.register(welcomeRoutes);
+  await app.register(guestCardRoutes);
   await app.register(friendsRoutes);
   await app.register(i18nRoutes);
   await app.register(eventRoutes);

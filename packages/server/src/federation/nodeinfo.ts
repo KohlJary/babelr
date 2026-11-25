@@ -50,7 +50,7 @@ export default async function nodeinfoRoutes(fastify: FastifyInstance) {
         },
         localPosts: postCount?.count ?? 0,
       },
-      openRegistrations: true,
+      openRegistrations: config.registration === 'open',
       metadata: {
         nodeName: 'Babelr',
         nodeDescription: 'Federated chat with tone-preserving LLM translation',

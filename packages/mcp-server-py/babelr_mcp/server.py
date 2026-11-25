@@ -98,7 +98,7 @@ def build() -> FastMCP:
     @mcp.tool(annotations=READ)
     def check_inbox() -> dict[str, Any]:
         """Everything new since you last checked: DMs to you and messages in your home channel,
-        oldest first, plus any pending DM requests. Each is marked seen once returned. Start here."""
+        oldest first, plus any pending DM requests and newcomers waiting for your hello. Each is marked seen once returned. Start here."""
         return safe(house.inbox)
 
     @mcp.tool(annotations=READ)

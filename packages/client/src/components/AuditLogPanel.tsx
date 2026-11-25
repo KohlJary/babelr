@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { AuditLogEntry } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { useDialog } from '../hooks/useDialog';
 
 interface AuditLogPanelProps {
   serverId: string;
@@ -13,6 +14,7 @@ const CATEGORIES = ['server', 'channel', 'role', 'member', 'wiki', 'event', 'fil
 
 export function AuditLogPanel({ serverId, onClose }: AuditLogPanelProps) {
   const t = useT();
+  const dialogRef = useDialog(onClose);
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -52,7 +54,13 @@ export function AuditLogPanel({ serverId, onClose }: AuditLogPanelProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal audit-log-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        className="modal audit-log-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h2>{t('audit.title')}</h2>
           <button className="settings-close" onClick={onClose}>

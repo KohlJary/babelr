@@ -144,11 +144,17 @@ export function MemberList({
                 )}
                 {canKick && !isSelf && member.role !== 'owner' && (
                   <button
+                    type="button"
                     className="kick-btn"
-                    onClick={() => onKick(member.id)}
-                    title={t('members.kick')}
+                    onClick={() => {
+                      const name = member.displayName ?? member.preferredUsername;
+                      if (window.confirm(t('members.kickConfirm', { name }))) onKick(member.id);
+                    }}
+                    title={t('members.kickTitle', {
+                      name: member.displayName ?? member.preferredUsername,
+                    })}
                   >
-                    &times;
+                    {t('members.kick')}
                   </button>
                 )}
               </div>

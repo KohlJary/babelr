@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+import { useState } from 'react';
 import type { ActorProfile } from '@babelr/shared';
 import { useT } from '../i18n/I18nProvider';
 
@@ -12,10 +13,18 @@ interface ChannelHeaderProps {
   onOpenSettings: () => void;
   onOpenProfile: () => void;
   onOpenMentions: () => void;
+  onOpenSearch?: () => void;
   onOpenPins?: () => void;
   pinCount?: number;
   /** Phones: the conversation list is a drawer; this reopens it. */
   onOpenDrawer?: () => void;
+  /** Phones: a daemon DM's room opens from this labeled button (desktop has the side rail). */
+  onOpenRoom?: () => void;
+  roomLabel?: string;
+  /** A conversation other than this one has something new: a dot on ☰. */
+  unreadElsewhere?: boolean;
+  /** Phones: this conversation's own options (a DM's Leave, Block), in the ⋯ menu. */
+  menuItems?: Array<{ label: string; onClick: () => void; danger?: boolean }>;
 }
 
 export function ChannelHeader({
@@ -29,16 +38,28 @@ export function ChannelHeader({
   onOpenSettings,
   onOpenProfile,
   onOpenMentions,
+  onOpenSearch,
   onOpenPins,
   pinCount,
+  onOpenRoom,
+  roomLabel,
+  unreadElsewhere,
+  menuItems,
 }: ChannelHeaderProps) {
   const t = useT();
+  // Phones (stopgap): the header keeps ☰, the name and a ⋯ menu; the
+  // inline buttons move into the menu. Hidden by CSS above 768px.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pick = (fn: () => void) => () => {
+    setMenuOpen(false);
+    fn();
+  };
   return (
     <header className="channel-header">
       {onOpenDrawer && (
         <button
           type="button"
-          className="drawer-toggle"
+          className={`drawer-toggle${unreadElsewhere ? ' has-unread' : ''}`}
           aria-label={t('channelHeader.openDrawer')}
           title={t('channelHeader.openDrawer')}
           onClick={onOpenDrawer}
@@ -70,6 +91,17 @@ export function ChannelHeader({
         >
           {actor.displayName ?? actor.preferredUsername}
         </button>
+        {onOpenSearch && (
+          <button
+            type="button"
+            className="settings-btn header-search-btn"
+            onClick={onOpenSearch}
+            title={t('search.open')}
+            aria-label={t('search.open')}
+          >
+            &#128269; {t('search.button')}
+          </button>
+        )}
         {onOpenPins && (
           <button className="settings-btn" onClick={onOpenPins} title="Pinned messages">
             📌{pinCount ? ` ${pinCount}` : ''}
@@ -92,6 +124,66 @@ export function ChannelHeader({
         <button className="logout-btn" onClick={onLogout}>
           {t('channelHeader.logout')}
         </button>
+      </div>
+      {onOpenRoom && (
+        <button type="button" className="header-room-btn" onClick={onOpenRoom}>
+          {roomLabel ?? t('channelHeader.room')}
+        </button>
+      )}
+      <div className="header-more">
+        <button
+          type="button"
+          className="header-more-btn"
+          aria-label={t('channelHeader.more')}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          ⋯
+        </button>
+        {menuOpen && (
+          <>
+            <div className="header-more-scrim" onClick={() => setMenuOpen(false)} />
+            <div className="header-more-menu" role="menu">
+              {onOpenPins && (
+                <button type="button" role="menuitem" onClick={pick(onOpenPins)}>
+                  📌 {t('pins.title')}
+                  {pinCount ? ` (${pinCount})` : ''}
+                </button>
+              )}
+              {menuItems?.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  className={item.danger ? 'header-more-danger' : undefined}
+                  onClick={pick(item.onClick)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              {menuItems?.length ? <div className="header-more-sep" /> : null}
+              <button type="button" role="menuitem" onClick={pick(onOpenMentions)}>
+                @ {t('channelHeader.mentions')}
+              </button>
+              <button type="button" role="menuitem" onClick={pick(onOpenSettings)}>
+                ⚙ {t('channelHeader.settings')}
+              </button>
+              <div className="header-more-status">
+                {actor.displayName ?? actor.preferredUsername} ·{' '}
+                {connected ? t('channelHeader.connected') : t('channelHeader.reconnecting')}
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                className="header-more-logout"
+                onClick={pick(onLogout)}
+              >
+                {t('channelHeader.logout')}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </header>
   );

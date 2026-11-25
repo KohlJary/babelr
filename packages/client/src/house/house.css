@@ -656,23 +656,43 @@ body:has(.tour-guide) .house {
   .house {
     padding-top: 1.5rem;
     gap: 2rem;
+    overflow-x: hidden;
   }
+  /* Phones: the daemons stack, one compact card each, all inside the
+     screen (a sideways carousel ran off the right edge and read as broken). */
   .house-cards {
     display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    gap: 1rem;
-    margin: 0 calc(-1 * clamp(1rem, 4vw, 3.5rem));
-    padding: 0 clamp(1rem, 4vw, 3.5rem) 0.5rem;
+    flex-direction: column;
+    gap: 0.9rem;
+    min-width: 0;
   }
   .house-card-sigil {
-    font-size: 5.5rem;
+    font-size: 4.5rem;
     right: 0.4rem;
   }
   .house-card {
-    flex: 0 0 78%;
-    scroll-snap-align: center;
-    min-height: 27rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 0;
+    min-width: 0;
+  }
+  .house-card-face {
+    margin: 1rem 0 0 1rem;
+  }
+  .house-face-card {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  .house-card-body {
+    padding: 1rem 1rem 0 0.9rem;
+    gap: 0.35rem;
+  }
+  .house-card-name {
+    font-size: 1.6rem;
+  }
+  .house-card-actions {
+    grid-column: 1 / -1;
+    padding: 1rem;
   }
   .house-member {
     grid-template-columns: 1fr;

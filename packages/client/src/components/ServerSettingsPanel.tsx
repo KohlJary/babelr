@@ -7,6 +7,7 @@ import { useT } from '../i18n/I18nProvider';
 import { RolesPanel } from './RolesPanel';
 import { TabbedView } from './TabbedView';
 import { LittleGuysTab } from './LittleGuysTab';
+import { GuestCardsTab } from './GuestCardsTab';
 
 interface ServerSettingsPanelProps {
   server: ServerView;
@@ -20,6 +21,7 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
   const tabs = [
     { id: 'info', label: t('serverSettings.tabInfo') },
     { id: 'invites', label: t('serverSettings.tabInvites') },
+    { id: 'guests', label: t('guests.tab') },
     { id: 'littleGuys', label: t('serverSettings.tabLittleGuys') },
     { id: 'roles', label: t('serverSettings.tabRoles') },
     { id: 'audit', label: t('serverSettings.tabAudit') },
@@ -36,6 +38,8 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
             return <InfoTab server={server} onUpdated={onUpdated} />;
           case 'invites':
             return <InvitesTab serverId={server.id} />;
+          case 'guests':
+            return <GuestCardsTab serverId={server.id} />;
           case 'littleGuys':
             return <LittleGuysTab serverId={server.id} />;
           case 'roles':
@@ -390,10 +394,14 @@ function AuditTab({ serverId }: { serverId: string }) {
   const [hasMore, setHasMore] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>();
   const [category, setCategory] = useState<string | undefined>();
+  // Why the log couldn't load, so a refusal or failure never reads as
+  // "No audit log entries".
+  const [loadError, setLoadError] = useState<'forbidden' | 'failed' | null>(null);
 
   const load = useCallback(
     async (cat?: string, cur?: string) => {
       setLoading(true);
+      setLoadError(null);
       try {
         const res = await api.getAuditLog(serverId, cat, cur);
         if (cur) {
@@ -403,8 +411,12 @@ function AuditTab({ serverId }: { serverId: string }) {
         }
         setHasMore(res.hasMore);
         setCursor(res.cursor);
-      } catch {
-        // Permission denied or server error
+      } catch (err) {
+        setLoadError(
+          err instanceof api.ApiError && (err.status === 403 || err.status === 401)
+            ? 'forbidden'
+            : 'failed',
+        );
       } finally {
         setLoading(false);
       }
@@ -443,7 +455,20 @@ function AuditTab({ serverId }: { serverId: string }) {
       </div>
 
       <div className="audit-log-list">
-        {entries.length === 0 && !loading && (
+        {loadError === 'forbidden' && !loading && (
+          <div className="sidebar-empty" role="alert">
+            {t('audit.forbidden')}
+          </div>
+        )}
+        {loadError === 'failed' && !loading && (
+          <div className="sidebar-empty" role="alert">
+            {t('audit.failed')}{' '}
+            <button type="button" className="voice-control-btn" onClick={() => void load(category)}>
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
+        {entries.length === 0 && !loading && !loadError && (
           <div className="sidebar-empty">{t('audit.noEntries')}</div>
         )}
         {entries.map((entry) => (

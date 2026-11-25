@@ -86,6 +86,9 @@ export function ChannelSidebar({
   onLeaveServer,
 }: ChannelSidebarProps) {
   const t = useT();
+  // Hooks stay above the DM-mode early return: switching from DMs to a
+  // server must not change the number of hooks this component calls.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   if (mode === 'dms') {
     // Agents (daemons, builders) first: talking with them is half of what Babelr is for.
     // `kind` is stamped by the server from the actor row, so it can't be claimed.
@@ -100,26 +103,40 @@ export function ChannelSidebar({
       agentDMs.find((dm) => others(dm).length === 1 && others(dm)[0].id === id);
     const houseIds = new Set((houseAgents ?? []).map((m) => m.id));
     const otherAgentDMs = agentDMs.filter((dm) => !others(dm).some((p) => houseIds.has(p.id)));
+    // Something new from them: the name in bold and a count.
+    const unreadOf = (dm?: DMConversation) => (dm && dm.id !== selectedDMId ? (dm.unread ?? 0) : 0);
+    const unreadBadge = (n: number) =>
+      n > 0 ? (
+        <span className="unread-badge" aria-label={t('channelSidebar.unread', { count: n })}>
+          {n}
+        </span>
+      ) : null;
     const renderMember = (m: HouseMember) => {
       const dm = dmWith(m.id);
       const name = m.displayName ?? m.preferredUsername;
-      const line = m.now?.text ?? (dm ? preview(dm) : null) ?? m.summary;
+      const unread = unreadOf(dm);
+      // A new message outranks what she's doing now.
+      const showMessage = unread > 0 || !m.now;
+      const line = (showMessage && dm ? preview(dm) : null) ?? m.now?.text ?? m.summary;
       return (
         <button
           key={m.id}
-          className={`sidebar-item sidebar-dm ${dm && selectedDMId === dm.id ? 'active' : ''}`}
+          className={`sidebar-item sidebar-dm ${dm && selectedDMId === dm.id ? 'active' : ''} ${unread ? 'has-unread' : ''}`}
           onClick={() => (dm ? onSelectDM(dm.id) : onTalkTo?.(m.id))}
         >
           <span className="sidebar-item-name">
-            {name}
-            {m.sigil && <span className="sidebar-sigil"> {m.sigil}</span>}
-            {dm?.request?.state === 'pending' && dm.request.incoming && (
-              <span className="dm-request-badge">{t('dm.requestBadge')}</span>
-            )}
+            <span className="sidebar-item-label">
+              {name}
+              {m.sigil && <span className="sidebar-sigil"> {m.sigil}</span>}
+              {dm?.request?.state === 'pending' && dm.request.incoming && (
+                <span className="dm-request-badge">{t('dm.requestBadge')}</span>
+              )}
+            </span>
+            {unreadBadge(unread)}
           </span>
           {line && (
             <span className="sidebar-item-preview">
-              {m.now ? '⊙ ' : ''}
+              {m.now && line === m.now.text ? '⊙ ' : ''}
               {line.slice(0, 60)}
             </span>
           )}
@@ -137,17 +154,21 @@ export function ChannelSidebar({
       const other = others(dm);
       const name = other.map((p) => p.displayName ?? p.preferredUsername).join(', ') || 'Unknown';
       const text = preview(dm);
+      const unread = unreadOf(dm);
       return (
         <button
           key={dm.id}
-          className={`sidebar-item sidebar-dm ${selectedDMId === dm.id ? 'active' : ''}`}
+          className={`sidebar-item sidebar-dm ${selectedDMId === dm.id ? 'active' : ''} ${unread ? 'has-unread' : ''}`}
           onClick={() => onSelectDM(dm.id)}
         >
           <span className="sidebar-item-name">
-            {name}
-            {dm.request?.state === 'pending' && dm.request.incoming && (
-              <span className="dm-request-badge">{t('dm.requestBadge')}</span>
-            )}
+            <span className="sidebar-item-label">
+              {name}
+              {dm.request?.state === 'pending' && dm.request.incoming && (
+                <span className="dm-request-badge">{t('dm.requestBadge')}</span>
+              )}
+            </span>
+            {unreadBadge(unread)}
           </span>
           {text && <span className="sidebar-item-preview">{text.slice(0, 60)}</span>}
         </button>
@@ -209,8 +230,6 @@ export function ChannelSidebar({
       uncategorized.push(ch);
     }
   }
-
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
   const toggleCategory = (cat: string) => {
     setCollapsed((prev) => {

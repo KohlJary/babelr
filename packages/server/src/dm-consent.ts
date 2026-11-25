@@ -8,6 +8,8 @@ import { objects } from './db/schema/objects.ts';
 import { collectionItems } from './db/schema/collections.ts';
 import { friendships } from './db/schema/friendships.ts';
 import { actorBlocks, dmAllowlist, dmDepartures, dmRequests } from './db/schema/dm-consent.ts';
+import { readPositions } from './db/schema/read-positions.ts';
+import { welcomes } from './db/schema/welcome.ts';
 import { DM_POLICIES, type DMConversation, type DmPolicy } from '@babelr/shared';
 import { toAuthorView, toMessageView } from './serializers.ts';
 import { writeAuditLog } from './audit.ts';
@@ -50,9 +52,16 @@ export function isDmPolicy(v: unknown): v is DmPolicy {
   return typeof v === 'string' && (DM_POLICIES as readonly string[]).includes(v);
 }
 
-/** The policy an actor of this kind starts with. */
+/**
+ * The policy an actor of this kind starts with. People: 'anyone'.
+ * Agents and services: 'members_of_shared_servers', so someone they
+ * share a server with can ask them something (a newcomer, a deck's
+ * "ask about this slide") and a stranger's first message is a request
+ * the agent can decline. Kohl, 2026-11-25: "daemons should default to
+ * receiving DMs from server participants yeah, that's clunky".
+ */
 export function defaultDmPolicy(kind: string): DmPolicy {
-  return isSponsoredKind(kind) ? 'nobody' : 'anyone';
+  return isSponsoredKind(kind) ? 'members_of_shared_servers' : 'anyone';
 }
 
 export async function hasBlocked(db: Db, blockerId: string, blockedId: string) {
@@ -373,10 +382,37 @@ export async function conversationView(db: Db, dm: DmRow, viewer: Actor): Promis
   const props = (dm.properties as Record<string, unknown> | null) ?? {};
   const readBy = props.readBy as Record<string, string> | undefined;
 
+  // What the viewer hasn't read yet: others' messages after their read
+  // position (all of them if they never opened it).
+  const [pos] = await db
+    .select({ at: readPositions.lastReadAt })
+    .from(readPositions)
+    .where(and(eq(readPositions.actorId, viewer.id), eq(readPositions.channelId, dm.id)))
+    .limit(1);
+  const [{ n: unread }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(objects)
+    .where(
+      and(
+        eq(objects.context, dm.id),
+        eq(objects.type, 'Note'),
+        sql`${objects.attributedTo} IS DISTINCT FROM ${viewer.id}`,
+        ...(pos ? [gt(objects.published, pos.at)] : []),
+      ),
+    );
+  // A house member opened this DM to welcome the viewer (welcome.ts).
+  const [welcomed] = await db
+    .select({ id: welcomes.id })
+    .from(welcomes)
+    .where(and(eq(welcomes.dmId, dm.id), eq(welcomes.newcomerId, viewer.id)))
+    .limit(1);
+
   return {
     id: dm.id,
     participants,
     ...(last ? { lastMessage: toMessageView(last) } : {}),
+    ...(unread > 0 ? { unread } : {}),
+    ...(welcomed ? { welcome: true } : {}),
     ...(readBy ? { readBy } : {}),
     ...(left.length > 0 ? { left } : {}),
     ...(request && (request.fromId === viewer.id || request.toId === viewer.id)

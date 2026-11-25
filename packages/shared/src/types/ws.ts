@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 import type { MessageView, AuthorView, AgentReplyStatusView, DMConversation } from './messages.js';
 import type { FriendshipView } from './friends.js';
+import type { WelcomeView } from './welcome.js';
 
 export type PresenceStatus = 'online' | 'away' | 'dnd' | 'offline';
 
@@ -65,6 +66,8 @@ export type WsServerMessage =
   | { type: 'agent-status:update'; payload: { messageId: string; status: AgentReplyStatusView } }
   | { type: 'conversation:new'; payload: { conversation: DMConversation } }
   | { type: 'dm:request'; payload: { conversation: DMConversation } }
+  | { type: 'welcome:new'; payload: { welcome: WelcomeView } }
+  | { type: 'welcome:updated'; payload: { welcome: WelcomeView } }
   | { type: 'dm:left'; payload: { dmId: string; actor: AuthorView } }
   | { type: 'dm:removed'; payload: { dmId: string } }
   | { type: 'dm:read'; payload: { dmId: string; actorUri: string; lastReadAt: string } }

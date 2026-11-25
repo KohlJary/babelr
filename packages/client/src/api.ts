@@ -18,6 +18,10 @@ import type {
   SuspendAgentResult,
   ServerAgentsResponse,
   DmSettings,
+  WelcomeSetting,
+  GuestCardView,
+  GuestCardInput,
+  ArrivalConsentView,
   DmPolicy,
   BlockView,
 } from '@babelr/shared';
@@ -49,6 +53,58 @@ function retryDelayMs(res: Response, attempt: number): number {
   return Math.min(ms, MAX_RETRY_WAIT_MS);
 }
 
+// When the retries above run out, the account is over its per-minute
+// budget (several tabs or fast reloads can do it). Say so once, for the
+// whole app, and say again when the window has passed so it can reload
+// what failed (FINDINGS #73). Listen with onRateLimitChange.
+const RATE_LIMIT_EVENT = 'babelr:rate-limit';
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+let rateLimitedUntil = 0;
+let rateLimitClearTimer: ReturnType<typeof setTimeout> | undefined;
+
+export interface RateLimitState {
+  /** Epoch ms when requests should work again; 0 when not limited. */
+  until: number;
+  /** Bumped each time a rate-limited window passes. */
+  recoveries: number;
+}
+let rateLimitRecoveries = 0;
+
+function emitRateLimit() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(RATE_LIMIT_EVENT));
+}
+
+function noteRateLimited(res: Response) {
+  const seconds = Number(res.headers.get('retry-after'));
+  const until =
+    Date.now() +
+    (Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : DEFAULT_RATE_LIMIT_WINDOW_MS);
+  if (until <= rateLimitedUntil) return;
+  rateLimitedUntil = until;
+  clearTimeout(rateLimitClearTimer);
+  // A little past the window, so the first request after it lands in a
+  // fresh one.
+  rateLimitClearTimer = setTimeout(
+    () => {
+      rateLimitedUntil = 0;
+      rateLimitRecoveries += 1;
+      emitRateLimit();
+    },
+    until - Date.now() + 1000,
+  );
+  emitRateLimit();
+}
+
+export function getRateLimitState(): RateLimitState {
+  return { until: rateLimitedUntil, recoveries: rateLimitRecoveries };
+}
+
+export function onRateLimitChange(listener: () => void): () => void {
+  window.addEventListener(RATE_LIMIT_EVENT, listener);
+  return () => window.removeEventListener(RATE_LIMIT_EVENT, listener);
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...((options?.headers as Record<string, string>) ?? {}),
@@ -71,6 +127,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
+    if (res.status === 429) noteRateLimited(res);
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, body.error ?? res.statusText);
   }
@@ -413,6 +470,54 @@ export async function setDMPolicy(dmPolicy: DmPolicy): Promise<DmSettings> {
 
 export async function removeFromDMAllowlist(actorId: string): Promise<DmSettings> {
   return apiFetch(`/auth/dm-allowlist/${actorId}`, { method: 'DELETE' });
+}
+
+export async function listGuestCards(serverId: string): Promise<GuestCardView[]> {
+  return apiFetch(`/servers/${serverId}/guest-cards`);
+}
+
+export async function createGuestCard(
+  serverId: string,
+  card: GuestCardInput,
+): Promise<GuestCardView> {
+  return apiFetch(`/servers/${serverId}/guest-cards`, {
+    method: 'POST',
+    body: JSON.stringify(card),
+  });
+}
+
+export async function deleteGuestCard(cardId: string): Promise<{ ok: true }> {
+  return apiFetch(`/guest-cards/${cardId}`, { method: 'DELETE' });
+}
+
+export async function makeGuestInvite(cardId: string): Promise<{ code: string; url: string }> {
+  return apiFetch(`/guest-cards/${cardId}/invite`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export async function getArrivals(pending = false): Promise<ArrivalConsentView[]> {
+  return apiFetch(`/me/arrivals${pending ? '?pending=true' : ''}`);
+}
+
+export async function answerArrival(
+  arrivalId: string,
+  consent: boolean,
+  link?: string,
+): Promise<ArrivalConsentView> {
+  return apiFetch(`/me/arrivals/${arrivalId}/consent`, {
+    method: 'PUT',
+    body: JSON.stringify({ consent, ...(link ? { link } : {}) }),
+  });
+}
+
+export async function getWelcomeSettings(): Promise<WelcomeSetting[]> {
+  return apiFetch('/welcome/settings');
+}
+
+export async function setWelcoming(serverId: string, welcoming: boolean): Promise<WelcomeSetting> {
+  return apiFetch(`/servers/${serverId}/welcome`, {
+    method: 'PUT',
+    body: JSON.stringify({ welcoming }),
+  });
 }
 
 export async function getBlocks(): Promise<BlockView[]> {

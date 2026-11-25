@@ -13,3 +13,4 @@ export * from './audit.js';
 export * from './agents.js';
 export * from './house.js';
 export * from './dm-consent.js';
+export * from './welcome.js';

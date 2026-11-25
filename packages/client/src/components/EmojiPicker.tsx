@@ -19,6 +19,21 @@ export function EmojiPicker({ onSelect, onClose, anchorRect }: EmojiPickerProps)
     }
   }, [anchorRect]);
 
+  // Escape closes the picker. Capture phase, so it wins over the side panel's
+  // and dialogs' Escape (they skip a handled event).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCloseRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
   return (
     <>
       <div className="emoji-picker-overlay" onClick={onClose} />

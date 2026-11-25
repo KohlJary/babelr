@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
-import { useState, useEffect, useCallback, useRef, createElement } from 'react';
+import { useState, useEffect, useCallback, useRef, useReducer, createElement } from 'react';
+import { VIEWS_CHANGED_EVENT } from '../session';
 import type { ActorProfile, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
 import { useServers } from '../hooks/useServers';
 import { useChannels } from '../hooks/useChannels';
 import { useDMs } from '../hooks/useDMs';
+import { ArrivalConsent } from './ArrivalConsent';
 import { IntroOverlay } from '../house/IntroOverlay';
 import { currentHouse, loadHouse, maybeAutoplay, useHouseStore } from '../house/store';
 import { useChat } from '../hooks/useChat';
@@ -17,12 +19,14 @@ import { ChannelSidebar } from './ChannelSidebar';
 import { PluginSidebarSlots } from '../plugins/PluginSidebarSlots';
 import type { SidebarSlotHostContext } from '../plugins/sidebar-registry';
 import { ChannelHeader } from './ChannelHeader';
+import { SearchPanel } from './SearchPanel';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
 import { DMConsentBar } from './DMConsentBar';
+import { TapHint } from './TapHint';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
@@ -30,9 +34,11 @@ import { ThreadPanel } from './ThreadPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
 import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
+import { VoiceJoinBar } from './VoiceJoinBar';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
 import { EmbedHostProvider } from './E';
 import { SidePanel } from './SidePanel';
+import { PhoneViewBar } from './PhoneViewBar';
 import { useT } from '../i18n/I18nProvider';
 import { VerificationBanner } from './VerificationBanner';
 import { subscribeToPush } from '../push';
@@ -41,7 +47,7 @@ import { parseWikiRefs, type WikiRefKind } from '@babelr/shared';
 import { getEmbed } from '../embeds/registry';
 import { DaemonRoom, MemberHeader, useRoomOpen } from './DaemonRoom';
 import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
-import { useVoice } from '../hooks/useVoice';
+import { useVoice, type UseVoiceState } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -66,6 +72,23 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showNewDM, setShowNewDM] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showPins, setShowPins] = useState(false);
+  // The members list is the default right panel on a server; its × hides
+  // it and the sidebar's Members button brings it back.
+  const [showMembers, setShowMembers] = useState(true);
+  // A one-line, dismissible notice (invite joined / invite failed) in place
+  // of a browser alert.
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  // Set while an /invite/ link is being handled, so the house home doesn't
+  // take over the landing from the server that was just joined.
+  const inviteLanding = useRef(/^\/invite\/\w+$/.test(window.location.pathname));
+  const [showSearch, setShowSearch] = useState(false);
+  // A plugin's isAvailable answer changed (e.g. Review has something
+  // waiting): redraw the view list now, not on some later render.
+  const [, bumpViews] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    window.addEventListener(VIEWS_CHANGED_EVENT, bumpViews);
+    return () => window.removeEventListener(VIEWS_CHANGED_EVENT, bumpViews);
+  }, []);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   // Which primary view fills the chat panel area. 'chat' is the
@@ -83,6 +106,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const openView = (id: string, state: ViewState = {}) => {
     setActiveViewId(id);
     setViewState(state);
+    // Phones: a view opened from the drawer takes the screen.
+    setDrawerClosed(true);
   };
   const closeView = () => {
     setActiveViewId(null);
@@ -90,10 +115,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   };
   // The House: members on the rail, the home view, and the intro on a first visit.
   const { house } = useHouseStore();
+  // Set once a newcomer has been landed on her welcome messages, so the
+  // house overview doesn't take the screen back from them.
+  const landedOnMessages = useRef(false);
   useEffect(() => {
     // Someone who lives in or visits a house with daemons lands on the house.
     void loadHouse().then(() => {
-      if (currentHouse()?.agents.length) {
+      if (currentHouse()?.agents.length && !inviteLanding.current && !landedOnMessages.current) {
         setActiveViewId((v) => v ?? 'house');
         setDrawerClosed(true);
       }
@@ -133,7 +161,17 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
     dmMode ? null : (selectedServer?.id ?? null),
   );
-  const { conversations, selectedDM, selectDM, startDM, accept, decline, leave, block } = useDMs();
+  const {
+    conversations,
+    loading: dmsLoading,
+    selectedDM,
+    selectDM,
+    startDM,
+    accept,
+    decline,
+    leave,
+    block,
+  } = useDMs(actor.id, dmMode && !activeViewId);
   // Talk to a house member: open (or start) the DM and show it.
   const openDMWith = (actorId: string) => {
     void (async () => {
@@ -146,6 +184,33 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const e2e = useE2E();
   // Phones: the conversation list is a drawer; picking a conversation closes it.
   const [drawerClosed, setDrawerClosed] = useState(false);
+  // A newcomer the house welcomed lands on her messages, once the consent
+  // screen (if any) is answered: the one welcome DM opened, or with several,
+  // her DM list (the drawer, on a phone). Only while a welcome is still new
+  // to her (unread, or no hello yet); after that the house overview is home.
+  const [arrivalsSettled, setArrivalsSettled] = useState(false);
+  const landingChecked = useRef(false);
+  useEffect(() => {
+    if (landingChecked.current || !arrivalsSettled || dmsLoading) return;
+    landingChecked.current = true;
+    const fresh = conversations.filter((c) => c.welcome && (c.unread || !c.lastMessage));
+    if (fresh.length === 0) return;
+    landedOnMessages.current = true;
+    setDmMode(true);
+    setViewState({});
+    if (fresh.length === 1) {
+      setActiveViewId(null);
+      selectDM(fresh[0].id);
+      setDrawerClosed(true);
+    } else {
+      // The house overview stays in the main pane (desktop shows both);
+      // on a phone the drawer opens over it on her messages.
+      setActiveViewId((v) => v ?? 'house');
+      setDrawerClosed(false);
+    }
+  }, [arrivalsSettled, dmsLoading, conversations, selectDM]);
+  // At 1024px and below the members list is a sheet, shown only when asked for.
+  const [membersSheet, setMembersSheet] = useState(false);
   // DM list previews, decrypted here (the sidebar never shows ciphertext).
   const [dmPreviews, setDmPreviews] = useState<Record<string, string>>({});
   const {
@@ -158,6 +223,46 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
   const activeChannelId = dmMode ? (selectedDM?.id ?? null) : (selectedChannel?.id ?? null);
+  // Who the composer offers for @mentions: the server's members, or the
+  // DM's other participants.
+  const mentionCandidates = (dmMode ? (selectedDM?.participants ?? []) : members).filter(
+    (m) => m.id !== actor.id,
+  );
+
+  // Voice: a join that fails (no mic, no permission, a server error) is
+  // remembered against its channel so the channel can say why and offer
+  // a retry (FINDINGS #68).
+  const [voiceJoinError, setVoiceJoinError] = useState<{
+    channelId: string;
+    message: string;
+    kind?: UseVoiceState['errorKind'];
+  } | null>(null);
+  const voiceJoinTargetRef = useRef<string | null>(null);
+  const joinVoice = (channelId: string) => {
+    if (voice.state.channelId === channelId) return;
+    if (voice.state.channelId) voice.leave();
+    const ch = channels.find((c) => c.id === channelId);
+    voiceJoinTargetRef.current = channelId;
+    setVoiceJoinError(null);
+    voice.join(channelId, ch?.uri).catch((err: unknown) => {
+      // A later step threw (socket, timeout, SFU): leave cleanly.
+      voice.leave();
+      setVoiceJoinError({
+        channelId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
+  };
+  useEffect(() => {
+    const target = voiceJoinTargetRef.current;
+    if (voice.state.status === 'error' && voice.state.error && target) {
+      setVoiceJoinError({
+        channelId: target,
+        message: voice.state.error,
+        kind: voice.state.errorKind,
+      });
+    }
+  }, [voice.state.status, voice.state.error, voice.state.errorKind]);
 
   // Pinned messages
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
@@ -337,26 +442,36 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     });
   }, []);
 
+  // A success notice fades on its own; an error stays until dismissed.
+  useEffect(() => {
+    if (notice?.kind !== 'ok') return;
+    const id = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(id);
+  }, [notice]);
+
   // Handle invite links (/invite/:code)
   useEffect(() => {
     const path = window.location.pathname;
     const match = path.match(/^\/invite\/(\w+)$/);
     if (match) {
       const code = match[1];
+      window.history.replaceState(null, '', '/');
       api
         .joinViaInvite(code)
-        .then((res) => {
-          if (res.ok) {
-            alert(`Joined server: ${res.server.name}`);
-            window.history.replaceState(null, '', '/');
-            window.location.reload();
-          }
+        .then(async (res) => {
+          if (!res.ok) throw new Error('invite failed');
+          // Land on the server that was just joined, without a reload.
+          await refreshServers(res.server.id);
+          setDmMode(false);
+          setActiveViewId(null);
+          setViewState({});
+          setNotice({ kind: 'ok', text: t('invite.joined', { name: res.server.name }) });
         })
         .catch(() => {
-          alert('Invalid or expired invite link');
-          window.history.replaceState(null, '', '/');
+          setNotice({ kind: 'error', text: t('invite.invalid') });
         });
     }
+    // Runs once on mount: the invite is in the URL the app was opened with.
   }, []);
 
   // Initialize preferredLanguage from actor profile
@@ -421,6 +536,35 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     [activeChannelId, removeMessage],
   );
 
+  // Phones: a DM's Leave and Block, in the header's ⋯ (DMConsentBar keeps
+  // its own ⋯ on wider screens, where the header has no menu).
+  const dmMenuItems = (dm: NonNullable<typeof selectedDM>) => {
+    const other = dm.participants.find((p) => p.id !== actor.id);
+    const fail = (err: unknown) =>
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+    return [
+      {
+        label: t('dm.leaveConversation'),
+        onClick: () => {
+          if (window.confirm(t('dm.confirmLeave'))) leave(dm.id).catch(fail);
+        },
+      },
+      ...(other
+        ? [
+            {
+              label: t('dm.blockName', { name: other.displayName ?? other.preferredUsername }),
+              danger: true,
+              onClick: () => {
+                if (window.confirm(t('dm.confirmBlock', { name: other.preferredUsername }))) {
+                  block(other.id).catch(fail);
+                }
+              },
+            },
+          ]
+        : []),
+    ];
+  };
+
   // Derive header display name
   const headerName = dmMode
     ? selectedDM
@@ -476,14 +620,32 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   return (
     <EmbedHostProvider host={{ actor, onPreviewEmbed: openEmbedPreview }}>
       {!actor.emailVerified && <VerificationBanner />}
+      {notice && (
+        <div className={`app-notice app-notice-${notice.kind}`} role="status">
+          <span className="app-notice-text">{notice.text}</span>
+          <button
+            type="button"
+            className="app-notice-close"
+            onClick={() => setNotice(null)}
+            aria-label={t('common.close')}
+          >
+            &times;
+          </button>
+        </div>
+      )}
+      <ArrivalConsent onSettled={() => setArrivalsSettled(true)} />
       <div className={`app-layout ${drawerClosed ? 'drawer-closed' : ''}`}>
         <ServerSidebar
           servers={servers}
           selectedServerId={selectedServer?.id ?? null}
           dmMode={dmMode}
           onSelectServer={(id) => {
+            // Show the server's highlighted channel, not whatever view
+            // (the House overview, say) was open before.
             setDmMode(false);
             selectServer(id);
+            closeView();
+            setDrawerClosed(true);
           }}
           onSelectDMs={() => setDmMode(true)}
           houseActive={dmMode}
@@ -528,7 +690,19 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           }}
           onCreateChannel={() => setShowCreateChannel(true)}
           onNewDM={() => setShowNewDM(true)}
-          onShowMembers={() => {}}
+          onShowMembers={() => {
+            // The right panel shows one thing at a time; members comes last
+            // in that order, so clear whatever sits in front of it.
+            setEmbedSidebar(null);
+            setThreadMessageId(null);
+            setThreadReplies([]);
+            setShowGlossary(false);
+            setShowPins(false);
+            closeView();
+            setShowMembers(true);
+            // On a narrow screen the members list opens as a sheet.
+            setMembersSheet(true);
+          }}
           onShowGlossary={() => setShowGlossary(true)}
           onShowServerSettings={
             ['owner', 'admin'].includes(callerRole) ? () => openView('server-settings') : undefined
@@ -568,12 +742,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             })
             .map((v) => ({ id: v.id, label: v.label, icon: v.icon, everywhere: v.everywhere }))}
           onOpenView={openView}
-          onJoinVoice={(channelId) => {
-            if (voice.state.channelId === channelId) return;
-            if (voice.state.channelId) voice.leave();
-            const ch = channels.find((c) => c.id === channelId);
-            void voice.join(channelId, ch?.uri);
-          }}
+          onJoinVoice={joinVoice}
           activeVoiceChannelId={voice.state.channelId}
           pluginSlots={(() => {
             const sidebarHost: SidebarSlotHostContext = {
@@ -587,7 +756,18 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             return <PluginSidebarSlots host={sidebarHost} />;
           })()}
         />
+        {!drawerClosed && (
+          <button
+            type="button"
+            className="drawer-scrim"
+            aria-label={t('channelHeader.closeDrawer')}
+            onClick={() => setDrawerClosed(true)}
+          />
+        )}
         <div className="chat-panel">
+          {activeViewId && activeViewId !== 'house' && (
+            <PhoneViewBar onOpenDrawer={() => setDrawerClosed(false)} />
+          )}
           {(() => {
             if (!activeViewId) return null;
             const def = getView(activeViewId);
@@ -621,8 +801,21 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onOpenProfile={() => openView('settings')}
                 onOpenDrawer={() => setDrawerClosed(false)}
                 onOpenMentions={() => openView('mentions')}
+                onOpenSearch={() => setShowSearch(true)}
                 onOpenPins={activeChannelId ? () => setShowPins((v) => !v) : undefined}
                 pinCount={pinnedIds.size || undefined}
+                unreadElsewhere={conversations.some(
+                  (c) => (c.unread ?? 0) > 0 && !(dmMode && c.id === selectedDM?.id),
+                )}
+                menuItems={dmMode && selectedDM ? dmMenuItems(selectedDM) : undefined}
+                onOpenRoom={roomPeer && !roomOpen ? toggleRoom : undefined}
+                roomLabel={
+                  roomPeer
+                    ? t('channelHeader.roomOf', {
+                        name: roomPeer.displayName ?? roomPeer.preferredUsername,
+                      })
+                    : undefined
+                }
               />
               {voice.state.channelId &&
               selectedChannel?.id === voice.state.channelId &&
@@ -658,6 +851,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                     />
                   )}
                   {roomMember && <MemberHeader m={roomMember} />}
+                  {!dmMode && selectedChannel?.channelType === 'voice' && (
+                    <VoiceJoinBar
+                      voice={voice.state}
+                      joinError={
+                        voiceJoinError?.channelId === selectedChannel.id ? voiceJoinError : null
+                      }
+                      onJoin={() => joinVoice(selectedChannel.id)}
+                    />
+                  )}
                   <MessageList
                     messages={messages}
                     loading={loading}
@@ -709,10 +911,12 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                       const name = other?.displayName ?? other?.preferredUsername ?? 'them';
                       return <div className="dm-seen-indicator">Seen by {name}</div>;
                     })()}
+                  <TapHint conversationId={activeChannelId} />
                   <MessageInput
                     onSend={sendMessage}
                     disabled={!activeChannelId || !connected}
                     onTyping={notifyTyping}
+                    mentionCandidates={mentionCandidates}
                   />
                 </>
               )}
@@ -812,7 +1016,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onClick={toggleRoom}
                 title="Close her room"
               >
-                ⟩
+                <span className="daemon-room-collapse-icon">⟩</span>
+                <span className="daemon-room-collapse-label">
+                  {t('channelHeader.backToConversation')}
+                </span>
               </button>
               <DaemonRoom
                 daemon={{
@@ -835,8 +1042,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               🪶
             </button>
           )
-        ) : selectedServer && !dmMode && !activeViewId ? (
-          <SidePanel title={t('members.title')} onClose={() => {}}>
+        ) : selectedServer && !dmMode && !activeViewId && showMembers ? (
+          <SidePanel
+            title={t('members.title')}
+            onClose={() => {
+              setShowMembers(false);
+              setMembersSheet(false);
+            }}
+            hiddenWhenNarrow={!membersSheet}
+          >
             <MemberList
               serverId={selectedServer.id}
               members={members}
@@ -844,7 +1058,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               callerRole={callerRole}
               presenceStatus={presenceStatus}
               onKick={kick}
-              onClose={() => {}}
+              onClose={() => {
+                setShowMembers(false);
+                setMembersSheet(false);
+              }}
               onRolesChanged={reloadMembers}
             />
           </SidePanel>
@@ -880,7 +1097,11 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         {showNewDM && (
           <NewDMModal
             onStartDM={async (participantId) => {
+              // Open the new DM in the main pane, like picking it in the sidebar.
               await startDM(participantId);
+              setDmMode(true);
+              closeView();
+              setDrawerClosed(true);
             }}
             onClose={() => setShowNewDM(false)}
           />
@@ -890,6 +1111,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         {/* Server settings now renders as a registered view. */}
         {/* Profile now renders as the Profile tab within the settings view. */}
         {/* Mentions now renders as a registered view. */}
+        {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
         {showChannelInvite && activeChannelId && (
           <ChannelInviteModal
             channelId={activeChannelId}

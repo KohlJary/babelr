@@ -27,18 +27,33 @@ interface DaemonRoomProps {
 
 const openKey = (name: string) => `babelr.room.${name}.open`;
 
+// Phones and tablets (stopgap): the room would cover or crush the
+// conversation, so there it starts closed and opens as a sheet from a labeled
+// header button; that choice isn't stored, so the desktop default stays.
+const isPhone = () =>
+  typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 1024px)').matches;
+
 export function useRoomOpen(name: string | null): [boolean, () => void] {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(() => !isPhone());
   useEffect(() => {
-    if (name) setOpen(localStorage.getItem(openKey(name)) !== '0');
+    if (name) setOpen(!isPhone() && localStorage.getItem(openKey(name)) !== '0');
   }, [name]);
   const toggle = () => {
     if (!name) return;
     setOpen((o) => {
-      localStorage.setItem(openKey(name), o ? '0' : '1');
+      if (!isPhone()) localStorage.setItem(openKey(name), o ? '0' : '1');
       return !o;
     });
   };
+  // On a phone the room covers the conversation: when it hands you words to
+  // send ("this is wrong"), step aside so you can see them. Not stored.
+  useEffect(() => {
+    const onCompose = () => {
+      if (window.matchMedia?.('(max-width: 768px)').matches) setOpen(false);
+    };
+    window.addEventListener('babelr:compose', onCompose);
+    return () => window.removeEventListener('babelr:compose', onCompose);
+  }, []);
   return [open, toggle];
 }
 

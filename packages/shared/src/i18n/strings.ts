@@ -32,6 +32,7 @@ export const UI_STRINGS = {
   'common.search': 'Search',
   'common.find': 'Find',
   'common.error': 'Error',
+  'common.retry': 'Try again',
 
   // Auth
   'auth.login': 'Log in',
@@ -40,8 +41,29 @@ export const UI_STRINGS = {
   'auth.email': 'Email',
   'auth.password': 'Password',
   'auth.createAccount': 'Create account',
+  'auth.creatingAccount': 'Creating your account…',
+  'auth.loggingIn': 'Logging in…',
+  'auth.usernameRules': '3 to 32 letters, numbers or _. No spaces.',
+  'auth.passwordRule': 'At least 12 characters. A phrase is easiest.',
+  'auth.passwordCount': '{count} / {min}',
+  'auth.passwordLongEnough': 'Long enough',
+  'auth.passwordShow': 'Show',
+  'auth.passwordHide': 'Hide',
+  'auth.passwordShowLabel': 'Show password',
+  'auth.passwordHideLabel': 'Hide password',
+  'auth.passwordSuggest': 'Suggest one',
+  'auth.passwordSuggestAnother': 'Suggest another',
+  'auth.passwordWriteDown': "Write this down somewhere safe. You'll need it to log in.",
   'auth.or': 'or',
   'auth.ssoLogin': 'Sign in with SSO',
+  'auth.invitedTo': "You've been invited to {name}.",
+  'auth.invitedHint': 'Create an account to join, or log in if you already have one.',
+  'auth.inviteInvalid': 'This invite link is invalid, used up or expired.',
+  'auth.inviteInvalidHint': 'Ask whoever sent it for a new one.',
+  'auth.inviteRequired': 'Sign-up here needs an invite link.',
+  'auth.inviteRequiredHint':
+    'Ask someone in this house to send you one, then open it on this device.',
+  'auth.registrationClosed': 'Sign-up is closed on this server.',
 
   // Server sidebar
   'serverSidebar.directMessages': 'Direct Messages',
@@ -57,6 +79,7 @@ export const UI_STRINGS = {
   'channelSidebar.agents': 'Agents',
   'channelSidebar.people': 'People',
   'channelSidebar.encryptedPreview': '🔒 Encrypted message',
+  'channelSidebar.unread': '{count} unread',
   'channelSidebar.friends': 'Friends',
   'channelSidebar.noConversations': 'No conversations yet',
   'channelSidebar.createChannel': '+ Create channel',
@@ -79,13 +102,22 @@ export const UI_STRINGS = {
   'channelHeader.settings': 'Settings',
   'channelHeader.editProfile': 'Edit profile',
   'channelHeader.encrypted': 'End-to-end encrypted',
+  // Phone stopgap: header ⋯ menu, a daemon's room button, nav bar over views
+  'channelHeader.more': 'More',
+  'channelHeader.room': 'Room',
+  'channelHeader.roomOf': "{name}'s room",
+  'channelHeader.backToConversation': 'Back to conversation',
+  'channelHeader.closeDrawer': 'Close the conversation list',
 
   // Messages
   'messages.placeholder': 'Send a message...',
+  'messages.tapHint': 'Tap a message for reply, react and more',
+  'messages.tapHintDismiss': 'Got it',
   'messages.empty': 'No messages yet',
   'messages.loadMore': 'Load more',
   'messages.edit': 'Edit',
   'messages.delete': 'Delete',
+  'messages.deleteConfirm': 'Delete this message? This cannot be undone.',
   'messages.reply': 'Reply',
   'messages.copyReference': 'Copy reference',
   'messages.lockedEmbed': '🔒 Referenced message (no access)',
@@ -255,6 +287,8 @@ export const UI_STRINGS = {
   // Members
   'members.title': 'Members',
   'members.kick': 'Kick',
+  'members.kickTitle': 'Remove {name} from this server',
+  'members.kickConfirm': 'Kick {name} from this server?',
   'members.role.member': 'member',
   'members.role.moderator': 'moderator',
   'members.role.admin': 'admin',
@@ -499,6 +533,14 @@ export const UI_STRINGS = {
   'voice.participants': 'Participants',
   'voice.roomFull': 'Voice channel is full (max {max}).',
   'voice.micPermissionDenied': 'Microphone permission denied. Enable it in your browser settings.',
+  'voice.joinFailed': 'Couldn’t join voice.',
+  'voice.micMissing': 'No microphone was found. Connect one, then try again.',
+  'voice.micInsecure':
+    'Voice needs a secure connection (https), so this page can’t use a microphone.',
+  'voice.micUnavailable': 'The browser couldn’t open a microphone ({error}).',
+  'voice.joinError': 'Something went wrong: {error}',
+  'voice.retry': 'Try again',
+  'voice.notJoined': 'You’re not in this voice channel.',
   'voice.connected': 'Connected',
   'voice.youAreMuted': 'You are muted',
   'voice.deafen': 'Deafen (mute all incoming audio)',
@@ -535,6 +577,9 @@ export const UI_STRINGS = {
   // Audit log
   'audit.title': 'Audit Log',
   'audit.noEntries': 'No audit log entries',
+  'audit.forbidden':
+    'You don’t have permission to see this server’s audit log. It takes Manage server or View audit log.',
+  'audit.failed': 'The audit log didn’t load.',
   'audit.loadMore': 'Load more',
   'audit.allCategories': 'All categories',
   'audit.category.server': 'Server',
@@ -575,9 +620,18 @@ export const UI_STRINGS = {
   'dnd.startHour': 'Start',
   'dnd.endHour': 'End',
 
+  // Rate limit (FINDINGS #73)
+  'rateLimit.title': 'Babelr is pausing for a moment.',
+  'rateLimit.body':
+    'Your account made too many requests in the last minute (several open tabs or quick reloads can do it). Nothing is lost; Babelr will reload on its own in {seconds}s.',
+
   // Search
   'search.placeholder': 'Search messages… (from:user in:channel before:date has:file)',
   'search.button': 'Search',
+  'search.open': 'Search messages',
+  'search.close': 'Close search',
+  'search.scope':
+    'Searches messages in the server channels you can read. Direct messages are end-to-end encrypted, so the server can’t search them.',
   'search.failed': 'Search failed',
   'search.noResults': 'No results found',
   'search.hint':
@@ -671,8 +725,40 @@ export const UI_STRINGS = {
   'dmConsent.blockedNone': "You haven't blocked anyone.",
   'dmConsent.unblock': 'Unblock',
   'dmConsent.loadFailed': "Couldn't load your message settings.",
+  'welcome.title': 'Welcoming newcomers',
+  'welcome.hint':
+    "When someone new joins, a conversation with you is waiting in their messages, and you're told so you can say hello. Nobody is added without saying yes here.",
+  'welcome.toggle': 'Welcome newcomers to {server}',
+  'auth.invitedBy': '{who} invited you to {name}.',
+  'guests.tab': "People you're inviting",
+  'guests.hint':
+    'Set someone up before you invite them. The welcomers here can read this card to say hello properly; the person sees only your name and the seeds, and decides whether the house may use them.',
+  'guests.none': 'No guest cards yet.',
+  'guests.name': 'Their name',
+  'guests.label': 'Label (e.g. Mom)',
+  'guests.seeds': 'Seeds: links, handles, who they are',
+  'guests.note': 'A longer note to the house (optional)',
+  'guests.add': 'Add card',
+  'guests.makeInvite': 'Make invite',
+  'guests.remakeInvite': 'New link',
+  'guests.status.not_sent': 'Not sent',
+  'guests.status.link_made': 'Link made',
+  'guests.status.joined': 'Joined as @{handle}',
+  'guests.status.declined_lookup': 'Joined as @{handle}, declined lookup',
+  'arrival.title': 'A hello from the house',
+  'arrival.body':
+    '{who} told the house a little about you, so the people here can say hello properly:',
+  'arrival.ask': 'Can the house look you up from this?',
+  'arrival.link': 'Add a link (optional)',
+  'arrival.yes': 'Yes',
+  'arrival.no': 'No thanks',
+  'arrival.settingsTitle': 'What the house was told about you',
+  'arrival.settingsYes': 'The house may look me up from this',
+  'welcome.noKey': 'Open messages once on this device first, so newcomers can encrypt to you.',
   'dm.leave': 'Leave',
   'dm.block': 'Block',
+  'dm.leaveConversation': 'Leave conversation',
+  'dm.blockName': 'Block {name}',
   'dm.moreOptions': 'Conversation options',
   'dm.confirmLeave': "Leave this conversation? You'll stop getting its messages.",
   'dm.confirmBlock': 'Block @{name}? They can no longer message or mention you.',
@@ -719,8 +805,12 @@ export const UI_STRINGS = {
   'twoFactor.recoveryWarning': 'Save these codes somewhere safe. Each can only be used once.',
   'twoFactor.done': 'Done',
 
+  // Invite links
+  'invite.joined': 'You joined {name}.',
+  'invite.invalid': 'That invite link is invalid or has expired.',
+
   // Email verification
-  'verification.banner': 'Please verify your email to unlock all features.',
+  'verification.banner': "Your email address isn't verified yet. Check your inbox for the link.",
   'verification.resend': 'Resend email',
   'verification.sending': 'Sending…',
   'verification.sent': 'Verification email sent!',
@@ -740,6 +830,9 @@ export const UI_STRINGS = {
   'onboarding.doneSubtitle':
     'Your workspace is ready. Start chatting, collaborating, and building.',
   'onboarding.getStarted': 'Get started',
+  'onboarding.skippedTitle': 'One more step: find a server',
+  'onboarding.skippedSubtitle':
+    "You haven't created or joined a server yet, so there's nowhere to chat. Use the + in the server rail on the left to create or join one, or open an invite link.",
 } as const;
 
 export type UIStringKey = keyof typeof UI_STRINGS;

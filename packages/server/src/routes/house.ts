@@ -6,6 +6,7 @@ import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { inviteArrivals } from '../db/schema/welcome.ts';
 import type { HouseIntro, HouseMember, HouseView, NowLine } from '@babelr/shared';
 import { isSponsoredKind } from '../actor-kind.ts';
 import { decideOpen, findSharedDM, requestFor } from '../dm-consent.ts';
@@ -57,24 +58,34 @@ export default async function houseRoutes(fastify: FastifyInstance) {
       .select({ uri: collectionItems.collectionUri })
       .from(collectionItems)
       .where(eq(collectionItems.itemUri, me.uri));
-    const groupFollowers = mine.length
-      ? (
-          await db
-            .select({ f: actors.followersUri })
-            .from(actors)
-            .where(
-              and(
-                eq(actors.type, 'Group'),
-                inArray(
-                  actors.followersUri,
-                  mine.map((m) => m.uri),
-                ),
+    const groups = mine.length
+      ? await db
+          .select({
+            f: actors.followersUri,
+            name: actors.displayName,
+            username: actors.preferredUsername,
+          })
+          .from(actors)
+          .where(
+            and(
+              eq(actors.type, 'Group'),
+              inArray(
+                actors.followersUri,
+                mine.map((m) => m.uri),
               ),
-            )
-        )
-          .map((g) => g.f)
-          .filter((f): f is string => !!f)
+            ),
+          )
       : [];
+    const groupFollowers = groups.map((g) => g.f).filter((f): f is string => !!f);
+    // Someone in exactly one server (a guest, who came in on its invite)
+    // sees the house under that server's name, the name the invite showed.
+    const serverName = groups.length === 1 ? (groups[0].name ?? groups[0].username) : null;
+    // Arrived through an invite: the house doesn't pitch them a house of their own.
+    const [arrival] = await db
+      .select({ id: inviteArrivals.id })
+      .from(inviteArrivals)
+      .where(eq(inviteArrivals.actorId, me.id))
+      .limit(1);
     const memberUris = groupFollowers.length
       ? (
           await db
@@ -150,6 +161,8 @@ export default async function houseRoutes(fastify: FastifyInstance) {
       people: peopleRows.map(view).sort(byName),
       // A house compose mounts an intro folder that's empty until the members write one.
       hasIntro: !!process.env.HOUSE_INTRO_PATH && existsSync(process.env.HOUSE_INTRO_PATH),
+      serverName,
+      invited: !!arrival,
     };
     return body;
   });

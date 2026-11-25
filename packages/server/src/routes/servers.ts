@@ -22,6 +22,7 @@ import { writeAuditLog } from '../audit.ts';
 import { serverAgentGrants, agentServerDepartures } from '../db/schema/server-agent-grants.ts';
 import { isSponsoredKind } from '../actor-kind.ts';
 import { dropAgentServerGrant } from '../agent-tokens.ts';
+import { consumeInvite, publicOrigin } from '../registration.ts';
 
 function slugify(name: string): string {
   return name
@@ -1038,9 +1039,6 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       })
       .returning();
 
-    const config = fastify.config;
-    const protocol = config.secureCookies ? 'https' : 'http';
-
     await writeAuditLog(db, {
       serverId: request.params.serverId,
       actorId: request.actor.id,
@@ -1052,7 +1050,7 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
     return reply.status(201).send({
       code: invite.code,
-      url: `${protocol}://${config.domain}/invite/${invite.code}`,
+      url: `${publicOrigin(fastify.config, request)}/invite/${invite.code}`,
       maxUses: invite.maxUses,
       expiresAt: invite.expiresAt?.toISOString() ?? null,
     });
@@ -1070,14 +1068,6 @@ export default async function serverRoutes(fastify: FastifyInstance) {
 
     if (!invite) return reply.status(404).send({ error: 'Invalid invite code' });
 
-    if (invite.expiresAt && invite.expiresAt < new Date()) {
-      return reply.status(410).send({ error: 'Invite has expired' });
-    }
-
-    if (invite.maxUses && invite.uses >= invite.maxUses) {
-      return reply.status(410).send({ error: 'Invite has been used up' });
-    }
-
     const [server] = await db.select().from(actors).where(eq(actors.id, invite.serverId)).limit(1);
 
     if (!server?.followersUri) return reply.status(404).send({ error: 'Server not found' });
@@ -1086,6 +1076,34 @@ export default async function serverRoutes(fastify: FastifyInstance) {
     // grant (POST /servers/:id/agents).
     if (isSponsoredKind(request.actor.kind)) {
       return reply.status(403).send({ error: 'Agents join through a member invite, not a code' });
+    }
+
+    const joined = {
+      ok: true,
+      server: { id: server.id, name: server.displayName ?? server.preferredUsername },
+    };
+
+    // Already in (opening the link again, or landing on it right after
+    // registering through it): nothing to do, and no use spent, even if
+    // that registration took the invite's last use.
+    const [member] = await db
+      .select({ id: collectionItems.id })
+      .from(collectionItems)
+      .where(
+        and(
+          eq(collectionItems.collectionUri, server.followersUri),
+          eq(collectionItems.itemId, request.actor.id),
+        ),
+      )
+      .limit(1);
+    if (member) return joined;
+
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+      return reply.status(410).send({ error: 'Invite has expired' });
+    }
+
+    if (invite.maxUses && invite.uses >= invite.maxUses) {
+      return reply.status(410).send({ error: 'Invite has been used up' });
     }
 
     // A ban outranks an invite (this route never checked bans before).
@@ -1098,29 +1116,24 @@ export default async function serverRoutes(fastify: FastifyInstance) {
       return reply.status(403).send({ error: 'You are banned from this server' });
     }
 
-    // Add member (idempotent)
-    await db
+    // Add member, and spend a use atomically, so two people can't both
+    // take an invite's last use.
+    const added = await db
       .insert(collectionItems)
       .values({
         collectionUri: server.followersUri,
         itemUri: request.actor.uri,
         itemId: request.actor.id,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: collectionItems.id });
 
-    // Increment use count
-    await db
-      .update(invites)
-      .set({ uses: invite.uses + 1 })
-      .where(eq(invites.id, invite.id));
+    if (added.length > 0 && !(await consumeInvite(db, invite.id))) {
+      await db.delete(collectionItems).where(eq(collectionItems.id, added[0].id));
+      return reply.status(410).send({ error: 'Invite has been used up' });
+    }
 
-    return {
-      ok: true,
-      server: {
-        id: server.id,
-        name: server.displayName ?? server.preferredUsername,
-      },
-    };
+    return joined;
   });
 
   // List invites for a server (MANAGE_INVITES — previously ungated,
@@ -1146,12 +1159,11 @@ export default async function serverRoutes(fastify: FastifyInstance) {
         .from(invites)
         .where(eq(invites.serverId, request.params.serverId));
 
-      const config = fastify.config;
-      const protocol = config.secureCookies ? 'https' : 'http';
+      const origin = publicOrigin(fastify.config, request);
 
       return serverInvites.map((inv) => ({
         code: inv.code,
-        url: `${protocol}://${config.domain}/invite/${inv.code}`,
+        url: `${origin}/invite/${inv.code}`,
         maxUses: inv.maxUses,
         uses: inv.uses,
         expiresAt: inv.expiresAt?.toISOString() ?? null,

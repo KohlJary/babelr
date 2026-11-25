@@ -4,6 +4,7 @@ import type { ActorProfile, ServerView } from '@babelr/shared';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { nameFromUsername } from '../utils/names';
 
 interface OnboardingWizardProps {
   actor: ActorProfile;
@@ -21,9 +22,12 @@ function detectBrowserLanguage(): string {
 export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
   const t = useT();
   const [step, setStep] = useState<Step>('profile');
-  // Start from the username: an empty field with the username as grey
+  // Start from the username, written like a name ("barbara" -> "Barbara",
+  // "mary_ann" -> "Mary Ann"): an empty field with the username as grey
   // placeholder looked filled in, and Next looked broken.
-  const [displayName, setDisplayName] = useState(actor.displayName ?? actor.preferredUsername);
+  const [displayName, setDisplayName] = useState(
+    actor.displayName ?? nameFromUsername(actor.preferredUsername),
+  );
   // In a house with daemons, setup is just name and language (see the server step).
   const [inHouse, setInHouse] = useState(false);
   useEffect(() => {
@@ -41,6 +45,9 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
   const [serverName, setServerName] = useState('');
   const [discoverable, setDiscoverable] = useState<api.DiscoverableServer[]>([]);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  // Skipping the server step leaves the user with nowhere to chat yet, so
+  // the last step mustn't tell them their workspace is ready.
+  const [skippedServer, setSkippedServer] = useState(false);
 
   const [currentActor, setCurrentActor] = useState(actor);
 
@@ -105,6 +112,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
     setError(null);
     try {
       await api.createServer({ name: serverName.trim() });
+      setSkippedServer(false);
       setStep('embeds');
     } catch (err) {
       setError((err as Error).message);
@@ -118,6 +126,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
     setError(null);
     try {
       await api.joinServer(server.id);
+      setSkippedServer(false);
       setStep('embeds');
     } catch (err) {
       setError((err as Error).message);
@@ -304,7 +313,14 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
               </div>
             )}
 
-            <button type="button" className="onboarding-skip" onClick={() => setStep('embeds')}>
+            <button
+              type="button"
+              className="onboarding-skip"
+              onClick={() => {
+                setSkippedServer(true);
+                setStep('embeds');
+              }}
+            >
               {t('onboarding.skipForNow')}
             </button>
           </div>
@@ -360,8 +376,10 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
 
         {step === 'done' && (
           <div className="onboarding-step onboarding-done">
-            <h2>{t('onboarding.allSet')}</h2>
-            <p className="onboarding-subtitle">{t('onboarding.doneSubtitle')}</p>
+            <h2>{skippedServer ? t('onboarding.skippedTitle') : t('onboarding.allSet')}</h2>
+            <p className="onboarding-subtitle">
+              {skippedServer ? t('onboarding.skippedSubtitle') : t('onboarding.doneSubtitle')}
+            </p>
             <div className="onboarding-actions">
               <button type="button" className="onboarding-btn primary" onClick={handleFinish}>
                 {t('onboarding.getStarted')}

@@ -156,7 +156,37 @@ export function MessageItem({
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | undefined>();
   const [showProfile, setShowProfile] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | undefined>();
+  // Touch screens (stopgap): there's no hover, so tapping a message shows its
+  // actions. CSS only acts on this under (hover: none).
+  const [touchSelected, setTouchSelected] = useState(false);
+  const onTouchSelect = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select, img, video, audio, [role="button"]'))
+      return;
+    if (window.getSelection()?.toString()) return;
+    setTouchSelected((v) => !v);
+  };
   const messageRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Opening the editor focuses it and brings the whole form (Save included)
+  // into view, so the composer below doesn't hide it.
+  useEffect(() => {
+    if (!editing || !editRef.current) return;
+    const ta = editRef.current;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    ta.closest('.message-edit-form')?.scrollIntoView({ block: 'nearest' });
+  }, [editing]);
+
+  const saveEdit = () => {
+    onEdit?.(editContent);
+    setEditing(false);
+  };
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditContent(message.content);
+  };
 
   useEffect(() => {
     if (highlighted && messageRef.current) {
@@ -243,29 +273,29 @@ export function MessageItem({
   const actionsBlock = editing ? (
     <div className="message-edit-form">
       <textarea
+        ref={editRef}
         className="modal-input"
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter saves, Shift+Enter is a newline, Escape cancels. preventDefault
+          // marks Escape as handled so a side panel doesn't also close on it.
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            saveEdit();
+          }
+        }}
         rows={2}
         style={{ resize: 'vertical', fontFamily: 'inherit' }}
       />
       <div className="message-edit-actions">
-        <button
-          className="message-action-btn"
-          onClick={() => {
-            onEdit?.(editContent);
-            setEditing(false);
-          }}
-        >
+        <button className="message-action-btn" onClick={saveEdit}>
           {t('common.save')}
         </button>
-        <button
-          className="message-action-btn"
-          onClick={() => {
-            setEditing(false);
-            setEditContent(message.content);
-          }}
-        >
+        <button className="message-action-btn" onClick={cancelEdit}>
           {t('common.cancel')}
         </button>
       </div>
@@ -273,7 +303,10 @@ export function MessageItem({
   ) : (
     <div className="message-actions">
       {onReply && (
-        <button className="message-action-btn" onClick={onReply}>
+        <button
+          className={`message-action-btn message-action-reply${replyCount ? ' has-replies' : ''}`}
+          onClick={onReply}
+        >
           {replyCount
             ? replyCount === 1
               ? t('messages.replyOne', { count: replyCount })
@@ -287,7 +320,12 @@ export function MessageItem({
         </button>
       )}
       {canDelete && (
-        <button className="message-action-btn message-action-danger" onClick={onDelete}>
+        <button
+          className="message-action-btn message-action-danger"
+          onClick={() => {
+            if (window.confirm(t('messages.deleteConfirm'))) onDelete?.();
+          }}
+        >
           {t('messages.delete')}
         </button>
       )}
@@ -400,7 +438,10 @@ export function MessageItem({
 
   if (compact) {
     return (
-      <div className="message compact">
+      <div
+        className={`message compact${touchSelected ? ' message-touch-selected' : ''}`}
+        onClick={onTouchSelect}
+      >
         <span className="message-time-hover">{formatTime(message.published, t)}</span>
         <div className={contentClass}>
           {renderWithEmbeds(displayContent, {
@@ -441,7 +482,13 @@ export function MessageItem({
   );
 
   return (
-    <div ref={messageRef} className={`message${highlighted ? ' message-highlighted' : ''}`}>
+    <div
+      ref={messageRef}
+      className={`message${highlighted ? ' message-highlighted' : ''}${
+        touchSelected ? ' message-touch-selected' : ''
+      }`}
+      onClick={onTouchSelect}
+    >
       <div className="message-header">
         {avatarEl}
         <button

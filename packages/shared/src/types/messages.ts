@@ -160,6 +160,10 @@ export interface DMConversation {
   /** Present when the conversation started as a message request.
    *  `incoming` is true for the person who has to accept it. */
   request?: { state: 'pending' | 'accepted'; incoming: boolean };
+  /** Others' messages the viewer hasn't read yet. Absent when none. */
+  unread?: number;
+  /** A house member opened this DM to welcome the viewer when they joined. */
+  welcome?: boolean;
 }
 
 export interface MessageWithAuthor {

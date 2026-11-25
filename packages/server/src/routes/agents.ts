@@ -259,7 +259,7 @@ export default async function agentRoutes(fastify: FastifyInstance) {
     if (kind !== 'agent' && kind !== 'service') {
       return reply.status(400).send({ error: "kind must be 'agent' or 'service'" });
     }
-    // DMs: 'nobody' unless the sponsor sets a different starting
+    // DMs: 'members_of_shared_servers' unless the sponsor sets a different starting
     // policy here. After this the policy is the agent's own (its token
     // can change it; the sponsor's session can't), and the sponsor's
     // choice is recorded on the row and in the audit log.
