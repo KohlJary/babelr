@@ -72,9 +72,14 @@ export function useServers() {
     [selectedServer, servers],
   );
 
-  const refreshServers = useCallback(async () => {
+  /** Refetch the server list; with `selectId`, also select that server. */
+  const refreshServers = useCallback(async (selectId?: string) => {
     const refreshed = await api.getServers();
     setServers(refreshed);
+    if (selectId) {
+      const target = refreshed.find((s) => s.id === selectId);
+      if (target) setSelectedServer(target);
+    }
   }, []);
 
   return {

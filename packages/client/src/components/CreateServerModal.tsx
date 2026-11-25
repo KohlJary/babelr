@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { useDialog } from '../hooks/useDialog';
 
 interface CreateServerModalProps {
   onCreateServer: (name: string, description?: string) => Promise<void>;
@@ -18,6 +19,7 @@ export function CreateServerModal({
   onClose,
 }: CreateServerModalProps) {
   const t = useT();
+  const dialogRef = useDialog(onClose);
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -84,7 +86,13 @@ export function CreateServerModal({
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        className="settings-panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="settings-header">
           <h2>{mode === 'create' ? t('createServer.createTitle') : t('createServer.joinTitle')}</h2>
           <button className="settings-close" onClick={onClose}>

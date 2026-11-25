@@ -3,7 +3,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    include: ['packages/server/src/__tests__/**/*.test.ts'],
+    include: [
+      'packages/server/src/__tests__/**/*.test.ts',
+      'packages/client/src/__tests__/**/*.test.ts',
+    ],
     globals: true,
     testTimeout: 15000,
     hookTimeout: 15000,

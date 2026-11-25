@@ -9,6 +9,7 @@ import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { TypingIndicator } from './TypingIndicator';
 import { useT } from '../i18n/I18nProvider';
+import { useDialog } from '../hooks/useDialog';
 
 interface EventDetailPanelProps {
   event: EventView;
@@ -47,6 +48,7 @@ export function EventDetailPanel({
   onGoToChannel,
 }: EventDetailPanelProps) {
   const t = useT();
+  const dialogRef = useDialog(onClose);
 
   // Embedded event chat via the existing channel message pipeline
   const {
@@ -103,6 +105,9 @@ export function EventDetailPanel({
   return (
     <div className="settings-overlay" onClick={onClose}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
         className="settings-panel settings-panel-wide event-detail-panel"
         onClick={(e) => e.stopPropagation()}
       >

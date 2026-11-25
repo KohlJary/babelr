@@ -41,6 +41,9 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
   const [serverName, setServerName] = useState('');
   const [discoverable, setDiscoverable] = useState<api.DiscoverableServer[]>([]);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  // Skipping the server step leaves the user with nowhere to chat yet, so
+  // the last step mustn't tell them their workspace is ready.
+  const [skippedServer, setSkippedServer] = useState(false);
 
   const [currentActor, setCurrentActor] = useState(actor);
 
@@ -105,6 +108,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
     setError(null);
     try {
       await api.createServer({ name: serverName.trim() });
+      setSkippedServer(false);
       setStep('embeds');
     } catch (err) {
       setError((err as Error).message);
@@ -118,6 +122,7 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
     setError(null);
     try {
       await api.joinServer(server.id);
+      setSkippedServer(false);
       setStep('embeds');
     } catch (err) {
       setError((err as Error).message);
@@ -304,7 +309,14 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
               </div>
             )}
 
-            <button type="button" className="onboarding-skip" onClick={() => setStep('embeds')}>
+            <button
+              type="button"
+              className="onboarding-skip"
+              onClick={() => {
+                setSkippedServer(true);
+                setStep('embeds');
+              }}
+            >
               {t('onboarding.skipForNow')}
             </button>
           </div>
@@ -360,8 +372,10 @@ export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
 
         {step === 'done' && (
           <div className="onboarding-step onboarding-done">
-            <h2>{t('onboarding.allSet')}</h2>
-            <p className="onboarding-subtitle">{t('onboarding.doneSubtitle')}</p>
+            <h2>{skippedServer ? t('onboarding.skippedTitle') : t('onboarding.allSet')}</h2>
+            <p className="onboarding-subtitle">
+              {skippedServer ? t('onboarding.skippedSubtitle') : t('onboarding.doneSubtitle')}
+            </p>
             <div className="onboarding-actions">
               <button type="button" className="onboarding-btn primary" onClick={handleFinish}>
                 {t('onboarding.getStarted')}

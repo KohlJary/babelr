@@ -12,7 +12,11 @@ export interface SidePanelProps {
 export function SidePanel({ title, onClose, children, wide }: SidePanelProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // Escape is for the innermost thing: skip it when something nearer
+      // (an edit box, a picker) already handled it, or a modal is open.
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      onClose();
     },
     [onClose],
   );

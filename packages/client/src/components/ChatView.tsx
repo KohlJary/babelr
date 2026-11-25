@@ -66,6 +66,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const [showNewDM, setShowNewDM] = useState(false);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showPins, setShowPins] = useState(false);
+  // The members list is the default right panel on a server; its × hides
+  // it and the sidebar's Members button brings it back.
+  const [showMembers, setShowMembers] = useState(true);
+  // A one-line, dismissible notice (invite joined / invite failed) in place
+  // of a browser alert.
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  // Set while an /invite/ link is being handled, so the house home doesn't
+  // take over the landing from the server that was just joined.
+  const inviteLanding = useRef(/^\/invite\/\w+$/.test(window.location.pathname));
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   // Which primary view fills the chat panel area. 'chat' is the
@@ -93,7 +102,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   useEffect(() => {
     // Someone who lives in or visits a house with daemons lands on the house.
     void loadHouse().then(() => {
-      if (currentHouse()?.agents.length) {
+      if (currentHouse()?.agents.length && !inviteLanding.current) {
         setActiveViewId((v) => v ?? 'house');
         setDrawerClosed(true);
       }
@@ -337,26 +346,36 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     });
   }, []);
 
+  // A success notice fades on its own; an error stays until dismissed.
+  useEffect(() => {
+    if (notice?.kind !== 'ok') return;
+    const id = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(id);
+  }, [notice]);
+
   // Handle invite links (/invite/:code)
   useEffect(() => {
     const path = window.location.pathname;
     const match = path.match(/^\/invite\/(\w+)$/);
     if (match) {
       const code = match[1];
+      window.history.replaceState(null, '', '/');
       api
         .joinViaInvite(code)
-        .then((res) => {
-          if (res.ok) {
-            alert(`Joined server: ${res.server.name}`);
-            window.history.replaceState(null, '', '/');
-            window.location.reload();
-          }
+        .then(async (res) => {
+          if (!res.ok) throw new Error('invite failed');
+          // Land on the server that was just joined, without a reload.
+          await refreshServers(res.server.id);
+          setDmMode(false);
+          setActiveViewId(null);
+          setViewState({});
+          setNotice({ kind: 'ok', text: t('invite.joined', { name: res.server.name }) });
         })
         .catch(() => {
-          alert('Invalid or expired invite link');
-          window.history.replaceState(null, '', '/');
+          setNotice({ kind: 'error', text: t('invite.invalid') });
         });
     }
+    // Runs once on mount: the invite is in the URL the app was opened with.
   }, []);
 
   // Initialize preferredLanguage from actor profile
@@ -476,6 +495,19 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   return (
     <EmbedHostProvider host={{ actor, onPreviewEmbed: openEmbedPreview }}>
       {!actor.emailVerified && <VerificationBanner />}
+      {notice && (
+        <div className={`app-notice app-notice-${notice.kind}`} role="status">
+          <span className="app-notice-text">{notice.text}</span>
+          <button
+            type="button"
+            className="app-notice-close"
+            onClick={() => setNotice(null)}
+            aria-label={t('common.close')}
+          >
+            &times;
+          </button>
+        </div>
+      )}
       <div className={`app-layout ${drawerClosed ? 'drawer-closed' : ''}`}>
         <ServerSidebar
           servers={servers}
@@ -528,7 +560,17 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           }}
           onCreateChannel={() => setShowCreateChannel(true)}
           onNewDM={() => setShowNewDM(true)}
-          onShowMembers={() => {}}
+          onShowMembers={() => {
+            // The right panel shows one thing at a time; members comes last
+            // in that order, so clear whatever sits in front of it.
+            setEmbedSidebar(null);
+            setThreadMessageId(null);
+            setThreadReplies([]);
+            setShowGlossary(false);
+            setShowPins(false);
+            closeView();
+            setShowMembers(true);
+          }}
           onShowGlossary={() => setShowGlossary(true)}
           onShowServerSettings={
             ['owner', 'admin'].includes(callerRole) ? () => openView('server-settings') : undefined
@@ -835,8 +877,8 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               🪶
             </button>
           )
-        ) : selectedServer && !dmMode && !activeViewId ? (
-          <SidePanel title={t('members.title')} onClose={() => {}}>
+        ) : selectedServer && !dmMode && !activeViewId && showMembers ? (
+          <SidePanel title={t('members.title')} onClose={() => setShowMembers(false)}>
             <MemberList
               serverId={selectedServer.id}
               members={members}
@@ -844,7 +886,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
               callerRole={callerRole}
               presenceStatus={presenceStatus}
               onKick={kick}
-              onClose={() => {}}
+              onClose={() => setShowMembers(false)}
               onRolesChanged={reloadMembers}
             />
           </SidePanel>
