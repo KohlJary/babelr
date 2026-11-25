@@ -15,14 +15,29 @@ export function useChannels(serverId: string | null) {
       return;
     }
 
+    let cancelled = false;
     setLoading(true);
     api
       .getServerChannels(serverId)
       .then((ch) => {
+        if (cancelled) return;
         setChannels(ch);
         setSelectedChannel(ch.length > 0 ? ch[0] : null);
       })
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        // A server we can't read (403) shows no channels rather than an
+        // uncaught rejection; switching servers retries.
+        if (cancelled) return;
+        console.warn('[channels] could not load channels', err);
+        setChannels([]);
+        setSelectedChannel(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [serverId]);
 
   const selectChannel = useCallback(

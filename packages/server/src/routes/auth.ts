@@ -5,6 +5,7 @@ import { eq, and, ne, sql } from 'drizzle-orm';
 import '../types.ts';
 import { actors } from '../db/schema/actors.ts';
 import { collectionItems } from '../db/schema/collections.ts';
+import { serverRoles, serverRoleAssignments } from '../db/schema/roles.ts';
 import type { RegisterInput, LoginInput, ActorProfile } from '@babelr/shared';
 import { lookupActorByHandle } from '../federation/resolve.ts';
 import { broadcastActorUpdate } from '../federation/delivery.ts';
@@ -152,6 +153,18 @@ export default async function authRoutes(fastify: FastifyInstance) {
             properties: { role: 'owner' },
           })
           .onConflictDoNothing();
+        // ...and holds its Admin role, as a server's creator does.
+        const [adminRole] = await db
+          .select({ id: serverRoles.id })
+          .from(serverRoles)
+          .where(and(eq(serverRoles.serverId, defaultServer.id), eq(serverRoles.name, 'Admin')))
+          .limit(1);
+        if (adminRole) {
+          await db
+            .insert(serverRoleAssignments)
+            .values({ serverId: defaultServer.id, actorId: actor.id, roleId: adminRole.id })
+            .onConflictDoNothing();
+        }
       }
 
       fastify.log.info(
