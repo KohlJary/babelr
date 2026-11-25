@@ -534,13 +534,11 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           onCreateChannel={() => setShowCreateChannel(true)}
           onNewDM={() => setShowNewDM(true)}
           onShowMembers={() => {
+            // The members list shows beside a channel, not over a view.
+            closeView();
             setMembersSheet(true);
-            setDrawerClosed(true);
           }}
-          onShowGlossary={() => {
-            setShowGlossary(true);
-            setDrawerClosed(true);
-          }}
+          onShowGlossary={() => setShowGlossary(true)}
           onShowServerSettings={
             ['owner', 'admin'].includes(callerRole) ? () => openView('server-settings') : undefined
           }
