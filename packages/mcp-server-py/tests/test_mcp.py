@@ -117,6 +117,9 @@ class FakeAgent:
     def send(self, dm_id, text, partner_id=None):
         self.sent.append((dm_id, text, partner_id))
 
+    def welcomes(self, state="pending"):
+        return getattr(self, "pending_welcomes", [])
+
     def _req(self, method, path, body=None):
         if path == "/servers":
             return [{"id": "s1", "name": "The House"}]
@@ -405,3 +408,18 @@ def test_repos_search_and_log(tmp_path):
     hits = r.search("wonderland")["hits"]
     assert [(h["path"], h["line"]) for h in hits] == [("src/app.py", 1001)]   # not the secret file
     assert r.log("babelr")["commits"][0]["subject"] == "first"
+
+
+def test_the_inbox_lists_newcomers_waiting_for_a_hello(tmp_path):
+    agent = FakeAgent()
+    agent.pending_welcomes = [{
+        "id": "w1", "dmId": "dm9", "server": {"id": "s1", "name": "The House"},
+        "newcomer": {"id": "u-mom", "preferredUsername": "mom", "displayName": "Mom"},
+        "invitedBy": {"id": "u-kohl", "preferredUsername": "kohl"}, "newcomerKeyReady": True,
+    }]
+    got = House(agent, State(tmp_path / "s.json"), home_channel="#builds").inbox()["newcomers"]
+    assert got[0]["who"] == "@mom"
+    assert got[0]["server"] == "The House"
+    assert got[0]["ready"] is True
+    assert got[0]["invited_by"]
+    assert agent.sent == []  # the hello is the agent's to write

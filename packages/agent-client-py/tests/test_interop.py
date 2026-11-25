@@ -115,3 +115,25 @@ def test_messages_carry_their_reactions():
     got = {m["id"]: m for m in a.messages("dm1", partner_id="p")}
     assert got["m1"]["reactions"] == {"🔒": ["cass-id"]} and got["m1"]["text"] == "hi"
     assert got["m2"]["reactions"] == {}
+
+
+def test_welcome_calls_hit_the_welcome_routes():
+    from babelr_agent.client import Agent
+
+    a = Agent.__new__(Agent)
+    calls = []
+    a._req = lambda method, path, body=None: calls.append((method, path, body)) or []
+    a.welcome_settings()
+    a.set_welcoming("srv")
+    a.set_welcoming("srv", False)
+    a.welcomes()
+    a.welcomes("all")
+    a.welcome_done("w1")
+    assert calls == [
+        ("GET", "/welcome/settings", None),
+        ("PUT", "/servers/srv/welcome", {"welcoming": True}),
+        ("PUT", "/servers/srv/welcome", {"welcoming": False}),
+        ("GET", "/welcomes?state=pending", None),
+        ("GET", "/welcomes?state=all", None),
+        ("POST", "/welcomes/w1/done", None),
+    ]

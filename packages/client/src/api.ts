@@ -18,6 +18,7 @@ import type {
   SuspendAgentResult,
   ServerAgentsResponse,
   DmSettings,
+  WelcomeSetting,
   DmPolicy,
   BlockView,
 } from '@babelr/shared';
@@ -413,6 +414,17 @@ export async function setDMPolicy(dmPolicy: DmPolicy): Promise<DmSettings> {
 
 export async function removeFromDMAllowlist(actorId: string): Promise<DmSettings> {
   return apiFetch(`/auth/dm-allowlist/${actorId}`, { method: 'DELETE' });
+}
+
+export async function getWelcomeSettings(): Promise<WelcomeSetting[]> {
+  return apiFetch('/welcome/settings');
+}
+
+export async function setWelcoming(serverId: string, welcoming: boolean): Promise<WelcomeSetting> {
+  return apiFetch(`/servers/${serverId}/welcome`, {
+    method: 'PUT',
+    body: JSON.stringify({ welcoming }),
+  });
 }
 
 export async function getBlocks(): Promise<BlockView[]> {

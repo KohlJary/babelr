@@ -679,6 +679,11 @@ export const UI_STRINGS = {
   'dmConsent.blockedNone': "You haven't blocked anyone.",
   'dmConsent.unblock': 'Unblock',
   'dmConsent.loadFailed': "Couldn't load your message settings.",
+  'welcome.title': 'Welcoming newcomers',
+  'welcome.hint':
+    "When someone new joins, a conversation with you is waiting in their messages, and you're told so you can say hello. Nobody is added without saying yes here.",
+  'welcome.toggle': 'Welcome newcomers to {server}',
+  'welcome.noKey': 'Open messages once on this device first, so newcomers can encrypt to you.',
   'dm.leave': 'Leave',
   'dm.block': 'Block',
   'dm.moreOptions': 'Conversation options',

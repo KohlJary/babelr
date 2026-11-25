@@ -27,3 +27,4 @@ export {
   agentServerInvites,
 } from './server-agent-grants.ts';
 export { actorBlocks, dmAllowlist, dmRequests, dmDepartures } from './dm-consent.ts';
+export { serverWelcomers, welcomes } from './welcome.ts';

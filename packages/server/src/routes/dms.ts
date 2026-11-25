@@ -10,6 +10,7 @@ import { createMessageInChannel } from './channels.ts';
 import type { DMConversation, CreateMessageInput } from '@babelr/shared';
 import { isActorLike, isSponsoredKind } from '../actor-kind.ts';
 import { writeAuditLog } from '../audit.ts';
+import { catchUpNewcomer } from '../welcome.ts';
 import {
   REFUSED_OPEN,
   acceptRequest,
@@ -206,6 +207,9 @@ export default async function dmRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Not authenticated' });
     }
     const me = request.actor;
+    // A join that wasn't welcomed (see welcome.ts) is welcomed now, so
+    // the welcomers are in this list the first time it loads.
+    await catchUpNewcomer(fastify, me);
     const pending = new Set(await pendingIncomingDMIds(db, me));
     const conversations: DMConversation[] = [];
     for (const id of await dmIdsFor(db, me)) {
