@@ -156,6 +156,16 @@ export function MessageItem({
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | undefined>();
   const [showProfile, setShowProfile] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | undefined>();
+  // Touch screens (stopgap): there's no hover, so tapping a message shows its
+  // actions. CSS only acts on this under (hover: none).
+  const [touchSelected, setTouchSelected] = useState(false);
+  const onTouchSelect = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, select, img, video, audio, [role="button"]'))
+      return;
+    if (window.getSelection()?.toString()) return;
+    setTouchSelected((v) => !v);
+  };
   const messageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -273,7 +283,10 @@ export function MessageItem({
   ) : (
     <div className="message-actions">
       {onReply && (
-        <button className="message-action-btn" onClick={onReply}>
+        <button
+          className={`message-action-btn message-action-reply${replyCount ? ' has-replies' : ''}`}
+          onClick={onReply}
+        >
           {replyCount
             ? replyCount === 1
               ? t('messages.replyOne', { count: replyCount })
@@ -400,7 +413,10 @@ export function MessageItem({
 
   if (compact) {
     return (
-      <div className="message compact">
+      <div
+        className={`message compact${touchSelected ? ' message-touch-selected' : ''}`}
+        onClick={onTouchSelect}
+      >
         <span className="message-time-hover">{formatTime(message.published, t)}</span>
         <div className={contentClass}>
           {renderWithEmbeds(displayContent, {
@@ -441,7 +457,13 @@ export function MessageItem({
   );
 
   return (
-    <div ref={messageRef} className={`message${highlighted ? ' message-highlighted' : ''}`}>
+    <div
+      ref={messageRef}
+      className={`message${highlighted ? ' message-highlighted' : ''}${
+        touchSelected ? ' message-touch-selected' : ''
+      }`}
+      onClick={onTouchSelect}
+    >
       <div className="message-header">
         {avatarEl}
         <button

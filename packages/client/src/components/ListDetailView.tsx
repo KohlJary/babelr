@@ -85,7 +85,7 @@ export function ListDetailView<T>({
   );
 
   return (
-    <div className="list-detail-view">
+    <div className={`list-detail-view${selected ? ' has-selection' : ''}`}>
       <aside className="list-detail-rail">
         {title && <div className="list-detail-title">{title}</div>}
         {onCreate && (
@@ -121,6 +121,12 @@ export function ListDetailView<T>({
         </div>
       </aside>
       <main className="list-detail-main">
+        {selected && (
+          // Phones (stopgap): list and detail stack; this goes back to the list.
+          <button type="button" className="list-detail-back" onClick={() => onSelect(null)}>
+            ‹ {title ?? 'Back'}
+          </button>
+        )}
         {onClose && (
           <button type="button" className="list-detail-close" onClick={onClose} aria-label="Close">
             ×
