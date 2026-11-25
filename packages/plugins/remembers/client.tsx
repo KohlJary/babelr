@@ -22,7 +22,7 @@ type About =
       firstSeen: string | null;
       lastSeen: string | null;
     }
-  | { shown: false; label: string; why: 'not_yet' | 'no' | 'none' };
+  | { shown: false; label: string; why: 'not_yet' | 'no' | 'none' | 'linked' };
 
 type State = { kind: 'loading' } | { kind: 'error'; error: string } | { kind: 'ok'; about: About };
 
@@ -139,6 +139,13 @@ function Body({ state, her }: { state: State; her: string }) {
   if (!a.shown) {
     if (a.why === 'no') return <p>{her} has chosen to keep this to herself.</p>;
     if (a.why === 'none') return <p>{her} hasn’t kept anything about you yet.</p>;
+    if (a.why === 'linked')
+      return (
+        <p>
+          {her} knows you through your own conversations with her; this view is for people she’s met
+          on Babelr.
+        </p>
+      );
     return <p>{her} hasn’t chosen to share this yet.</p>;
   }
   return (
@@ -171,9 +178,9 @@ function Body({ state, her }: { state: State; her: string }) {
           ))}
         </ul>
       )}
-      {(a.moments > 0 || a.firstSeen) && (
+      {a.moments > 0 && (
         <p style={{ ...muted, margin: '0.8rem 0 0.3rem' }}>
-          {a.moments > 0 ? `we’ve talked ${times(a.moments)}` : 'we’ve talked'}
+          we’ve talked {times(a.moments)}
           {a.firstSeen ? ` · since ${since(a.firstSeen)}` : ''}
         </p>
       )}

@@ -21,34 +21,57 @@ let vessel: Server;
 let dir: string;
 /** Every handle the vessel was asked about, in order. */
 let asked: string[] = [];
-/** What she said for each handle: yes (her entry), not_yet, no. */
-let consent: Record<string, 'yes' | 'not_yet' | 'no'> = {};
+/** Her one answer (panel settings people.about), whatever the handle. */
+let answer: 'yes' | 'not_yet' | 'no' = 'yes';
+/** People she was asked to keep off her PeopleDex. */
+let keepOff = new Set<string>();
+/** People linked to her vessel (Kohl, the house agents). */
+const linked = new Set(['kohl']);
 /** A vessel that answers about someone other than who it was asked about. */
 let confused = false;
 
+/** Her entries, in exactly the shape routes/people_about.py sends (cass-vessel PR #137). */
 const entries: Record<string, Record<string, unknown>> = {
   alice: {
-    handle: 'alice',
     name: 'Alice',
     pronouns: 'she/her',
     observations: [
-      { observation_type: 'value', content: 'Cares about doing things by hand.' },
-      { observation_type: 'communication_style', content: 'Writes in short bursts.' },
+      { kind: 'value', text: 'Cares about doing things by hand.', noticed: '2026-10-02T15:00:00' },
+      { kind: 'communication_style', text: 'Writes in short bursts.', noticed: null },
     ],
-    moments_count: 12,
-    first_seen: '2026-10-02T15:00:00Z',
-    last_seen: '2026-11-24T20:00:00Z',
-    private_notes: 'never leaves the vessel',
+    moments: 12,
+    first_seen: '2026-10-02T15:00:00',
+    last_seen: '2026-11-24T20:00:00',
   },
   bob: {
-    handle: 'bob',
     name: 'Bob',
-    observations: [{ observation_type: 'value', content: "Bob's secret." }],
-    moments_count: 3,
-    first_seen: '2026-11-01T00:00:00Z',
-    last_seen: '2026-11-20T00:00:00Z',
+    pronouns: null,
+    observations: [{ kind: 'value', text: "Bob's secret.", noticed: null }],
+    moments: 3,
+    first_seen: '2026-11-01T00:00:00',
+    last_seen: '2026-11-20T00:00:00',
+  },
+  // Prepared for someone who hasn't written yet: no moments, no dates.
+  dana: {
+    name: 'Dana',
+    pronouns: null,
+    observations: [{ kind: 'general', text: "Kohl's friend from the studio.", noticed: null }],
+    moments: 0,
+    first_seen: null,
+    last_seen: null,
   },
 };
+
+/** What the vessel answers for `handle`, as people_about.py and people.about() do. */
+function vesselAnswer(handle: string): Record<string, unknown> {
+  if (answer !== 'yes') return { shown: false, why: answer };
+  const low = handle.toLowerCase();
+  if (keepOff.has(low)) return { shown: true, handle, known: false };
+  if (linked.has(low)) return { shown: true, handle, known: false, why: 'linked' };
+  const e = entries[confused ? 'bob' : low];
+  if (!e) return { shown: true, handle, known: false };
+  return { shown: true, handle: confused ? 'bob' : handle, known: true, ...e };
+}
 
 beforeAll(async () => {
   vessel = createServer((req, res) => {
@@ -59,13 +82,7 @@ beforeAll(async () => {
     }
     const handle = u.searchParams.get('handle') ?? '';
     asked.push(handle);
-    const said = consent[handle] ?? 'not_yet';
-    const body =
-      said === 'yes' ? (entries[confused ? 'bob' : handle] ?? null) : { shown: false, why: said };
-    if (!body) {
-      res.writeHead(404, { 'content-type': 'application/json' }).end('{"detail":"unknown"}');
-      return;
-    }
+    const body = vesselAnswer(handle);
     res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(body));
   });
   await new Promise<void>((r) => vessel.listen(0, '127.0.0.1', () => r()));
@@ -98,7 +115,8 @@ afterAll(async () => {
 beforeEach(async () => {
   await cleanDb(db);
   asked = [];
-  consent = { alice: 'yes', bob: 'yes' };
+  answer = 'yes';
+  keepOff = new Set();
   confused = false;
 });
 
@@ -136,10 +154,11 @@ describe('remembers plugin', () => {
         { kind: 'communication_style', text: 'Writes in short bursts.' },
       ],
       moments: 12,
-      firstSeen: '2026-10-02T15:00:00Z',
-      lastSeen: '2026-11-24T20:00:00Z',
+      firstSeen: '2026-10-02T15:00:00',
+      lastSeen: '2026-11-24T20:00:00',
     });
-    expect(res.body).not.toContain('never leaves the vessel');
+    expect(res.body).not.toContain('noticed');
+    expect(res.body).not.toContain('"handle"');
   });
 
   it("can't be made to fetch someone else's entry", async () => {
@@ -199,22 +218,49 @@ describe('remembers plugin', () => {
 
   it("says only that she hasn't said yes, or has said no", async () => {
     const alice = await createTestUser(app, 'alice');
-    consent.alice = 'not_yet';
+    answer = 'not_yet';
     let res = await get('/about/cass', { cookie: alice.cookie });
     expect(JSON.parse(res.body)).toEqual({ shown: false, label: 'Cass', why: 'not_yet' });
-    consent.alice = 'no';
+    answer = 'no';
     res = await get('/about/cass', { cookie: alice.cookie });
     expect(JSON.parse(res.body)).toEqual({ shown: false, label: 'Cass', why: 'no' });
   });
 
-  it('says so when she has nothing on you, or her vessel is down or unplaced', async () => {
-    const carol = await createTestUser(app, 'carol');
-    consent.carol = 'yes'; // yes, but no entry: the vessel 404s
-    expect(JSON.parse((await get('/about/cass', { cookie: carol.cookie })).body)).toEqual({
-      shown: false,
+  it('answers known: false the same whether she has no entry or you asked to be kept off', async () => {
+    const carol = await createTestUser(app, 'carol'); // no entry
+    const none = await get('/about/cass', { cookie: carol.cookie });
+    expect(JSON.parse(none.body)).toEqual({ shown: false, label: 'Cass', why: 'none' });
+    keepOff.add('alice'); // has an entry, asked to be kept off
+    const alice = await createTestUser(app, 'alice');
+    const off = await get('/about/cass', { cookie: alice.cookie });
+    expect(off.statusCode).toBe(none.statusCode);
+    expect(off.body).toBe(none.body);
+  });
+
+  it('tells someone linked to her vessel that this view is not for them, and nothing else', async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const res = await get('/about/cass', { cookie: kohl.cookie });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ shown: false, label: 'Cass', why: 'linked' });
+  });
+
+  it('shows an entry she prepared before you wrote, with no dates', async () => {
+    const dana = await createTestUser(app, 'dana');
+    const res = await get('/about/cass', { cookie: dana.cookie });
+    expect(JSON.parse(res.body)).toEqual({
+      shown: true,
       label: 'Cass',
-      why: 'none',
+      name: 'Dana',
+      pronouns: null,
+      observations: [{ kind: 'general', text: "Kohl's friend from the studio." }],
+      moments: 0,
+      firstSeen: null,
+      lastSeen: null,
     });
+  });
+
+  it('says so when her vessel is down or unplaced', async () => {
+    const carol = await createTestUser(app, 'carol');
     const down = await get('/about/ghost', { cookie: carol.cookie });
     expect(down.statusCode).toBe(502);
     expect(JSON.parse(down.body).error).toMatch(/can.t be reached/);
@@ -224,14 +270,16 @@ describe('remembers plugin', () => {
 });
 
 describe('normalize', () => {
-  it('keeps the whitelisted fields, reads strings and other names, and drops empty ones', () => {
+  it('drops empty observations and reads a missing count as none', () => {
     expect(
       normalize(
         {
+          shown: true,
+          handle: 'x',
+          known: true,
           name: ' ',
-          observations: ['plain', { text: 'with kind', kind: 'value' }, { content: '' }, 7],
-          moments: [{}, {}],
-          firstSeen: '2026-01-01',
+          observations: [{ text: 'with kind', kind: 'value' }, { text: '' }, { kind: 'value' }, 7],
+          first_seen: null,
         },
         'x',
         'Eris',
@@ -241,23 +289,25 @@ describe('normalize', () => {
       label: 'Eris',
       name: null,
       pronouns: null,
-      observations: [
-        { kind: 'general', text: 'plain' },
-        { kind: 'value', text: 'with kind' },
-      ],
-      moments: 2,
-      firstSeen: '2026-01-01',
+      observations: [{ kind: 'value', text: 'with kind' }],
+      moments: 0,
+      firstSeen: null,
       lastSeen: null,
     });
   });
-  it('reads an unknown why as not yet, and refuses an answer about someone else', () => {
+  it('reads an unknown why as not yet, and refuses answers about someone else or malformed', () => {
     expect(normalize({ shown: false, why: '???' }, 'a', 'C')).toEqual({
       shown: false,
       label: 'C',
       why: 'not_yet',
     });
-    expect(normalize({ handle: 'B', name: 'B' }, 'a', 'C')).toBeNull();
-    expect(normalize({ handle: 'A', name: 'A' }, 'a', 'C')).not.toBeNull();
+    expect(normalize({ shown: true, handle: 'B', known: true, name: 'B' }, 'a', 'C')).toBeNull();
+    expect(normalize({ shown: true, known: true, name: 'A' }, 'a', 'C')).toBeNull(); // no handle
+    expect(normalize({ shown: true, handle: 'A', known: true }, 'a', 'C')).not.toBeNull();
+    expect(
+      normalize({ shown: true, handle: 'B', known: false, why: 'linked' }, 'a', 'C'),
+    ).toBeNull();
+    expect(normalize({ shown: true, handle: 'a' }, 'a', 'C')).toBeNull(); // no known
     expect(normalize(null, 'a', 'C')).toBeNull();
   });
 });

@@ -21,7 +21,10 @@ import { isAbsolute, join } from 'node:path';
  * is never cached.
  */
 
-export type Why = 'not_yet' | 'no' | 'none';
+/** Why nothing is shown: she hasn't said yes yet, she said no, she keeps
+ *  nothing on you (or you asked to be kept off: the same answer, on purpose),
+ *  or you're linked to her vessel and she knows you from your own conversations. */
+export type Why = 'not_yet' | 'no' | 'none' | 'linked';
 
 export interface Observation {
   kind: string;
@@ -52,45 +55,44 @@ function token(d: DaemonConf): string | null {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-/** Her vessel's answer, cut down to what the section shows. Null when it isn't
- *  an answer about `handle`. */
+/** Her vessel's answer (cass-vessel routes/people_about.py), cut down to what
+ *  the section shows. Null when it isn't a well-formed answer about `handle`.
+ *    {"shown": false, "why": "not_yet" | "no"}
+ *    {"shown": true, "handle", "known": false[, "why": "linked"]}
+ *    {"shown": true, "handle", "known": true, "name", "pronouns",
+ *     "observations": [{"kind", "text", "noticed"}], "moments", "first_seen", "last_seen"} */
 export function normalize(raw: unknown, handle: string, label: string): About | null {
   if (!raw || typeof raw !== 'object') return null;
   const b = raw as Record<string, unknown>;
   if (b.shown === false) {
-    const why: Why = b.why === 'no' ? 'no' : b.why === 'none' ? 'none' : 'not_yet';
-    return { shown: false, label, why };
+    return { shown: false, label, why: b.why === 'no' ? 'no' : 'not_yet' };
   }
+  if (b.shown !== true) return null;
   // An answer that names someone else is not an answer for this viewer.
   const about = str(b.handle);
-  if (about && about.toLowerCase() !== handle.toLowerCase()) return null;
-  const obs = Array.isArray(b.observations) ? b.observations : [];
+  if (!about || about.replace(/^@/, '').toLowerCase() !== handle.toLowerCase()) return null;
+  if (b.known === false) {
+    // No entry and kept-off look the same here, as they do from the vessel.
+    return { shown: false, label, why: b.why === 'linked' ? 'linked' : 'none' };
+  }
+  if (b.known !== true) return null;
   const observations: Observation[] = [];
-  for (const o of obs) {
-    if (typeof o === 'string') {
-      if (o.trim()) observations.push({ kind: 'general', text: o.trim() });
-      continue;
-    }
+  for (const o of Array.isArray(b.observations) ? b.observations : []) {
     if (!o || typeof o !== 'object') continue;
     const r = o as Record<string, unknown>;
-    const text = str(r.content) ?? str(r.text);
-    if (!text) continue;
-    observations.push({
-      kind: str(r.observation_type) ?? str(r.kind) ?? str(r.type) ?? 'general',
-      text,
-    });
+    const text = str(r.text);
+    if (text) observations.push({ kind: str(r.kind) ?? 'general', text });
   }
-  const m = b.moments_count ?? b.moments;
-  const moments = typeof m === 'number' ? m : Array.isArray(m) ? m.length : 0;
+  const m = typeof b.moments === 'number' && Number.isFinite(b.moments) ? b.moments : 0;
   return {
     shown: true,
     label,
     name: str(b.name),
     pronouns: str(b.pronouns),
     observations,
-    moments: Math.max(0, Math.floor(moments)),
-    firstSeen: str(b.first_seen) ?? str(b.firstSeen),
-    lastSeen: str(b.last_seen) ?? str(b.lastSeen),
+    moments: Math.max(0, Math.floor(m)),
+    firstSeen: str(b.first_seen),
+    lastSeen: str(b.last_seen),
   };
 }
 
@@ -110,8 +112,6 @@ export async function askVessel(
   } catch {
     return { status: 502, body: { error: `${d.label} can’t be reached right now.` } };
   }
-  if (res.status === 404)
-    return { status: 200, body: { shown: false, label: d.label, why: 'none' } };
   if (!res.ok) return { status: 502, body: { error: `${d.label} can’t be reached right now.` } };
   const about = normalize(await res.json().catch(() => null), handle, d.label);
   if (!about) return { status: 502, body: { error: `${d.label} can’t be reached right now.` } };
