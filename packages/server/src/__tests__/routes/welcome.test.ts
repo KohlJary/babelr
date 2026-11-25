@@ -122,6 +122,10 @@ describe('welcoming newcomers', () => {
     const kohl = await person('kohl');
     const { serverId, code } = await house(kohl);
     const robo = await agentIn(kohl, serverId, 'robo');
+    // robo chose `nobody` itself: the opt-in still lets its welcome through.
+    expect(
+      (await call(robo.token, 'PUT', '/auth/dm-settings', { dmPolicy: 'nobody' })).status,
+    ).toBe(200);
     const eris = await agentIn(kohl, serverId, 'eris');
     await agentIn(kohl, serverId, 'quiet'); // never opts in
 

@@ -28,7 +28,7 @@ export interface CreateAgentInput {
   username: string;
   displayName?: string;
   kind: 'agent' | 'service';
-  /** Initial DM policy (default 'nobody'). Recorded and audited as the
+  /** Initial DM policy (default 'members_of_shared_servers'). Recorded and audited as the
    *  sponsor's choice; after creation only the agent can change it. */
   dmPolicy?: 'anyone' | 'friends' | 'members_of_shared_servers' | 'nobody';
   /** Actor ids the agent accepts DMs from, whatever its policy. */
