@@ -36,6 +36,10 @@ export interface HouseView {
   people: HouseMember[];
   /** Whether this house has an intro (GET /house/intro). */
   hasIntro: boolean;
+  /** The viewer's server's name when they're in exactly one (a guest's view). */
+  serverName?: string | null;
+  /** The viewer arrived through an invite (no "run your own house" pitch). */
+  invited?: boolean;
 }
 
 /** One line of the prologue: a member speaks. `text` null means the

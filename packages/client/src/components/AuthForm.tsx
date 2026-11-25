@@ -174,7 +174,13 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
 
         {showFields && (
           <button type="submit" className="auth-submit" disabled={submitting}>
-            {submitting ? '...' : mode === 'login' ? t('auth.login') : t('auth.createAccount')}
+            {submitting
+              ? mode === 'login'
+                ? t('auth.loggingIn')
+                : t('auth.creatingAccount')
+              : mode === 'login'
+                ? t('auth.login')
+                : t('auth.createAccount')}
           </button>
         )}
 

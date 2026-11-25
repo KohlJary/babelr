@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useLayoutEffect } from 'react';
 import { useT } from '../i18n/I18nProvider';
 import {
   MentionAutocomplete,
@@ -71,8 +71,22 @@ export function MessageInput({ onSend, disabled, onTyping, mentionCandidates }: 
     });
   };
 
+  // The box grows with the draft, up to about six lines (CSS max-height),
+  // then scrolls.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = parseFloat(getComputedStyle(el).maxHeight) || Infinity;
+    const full = el.scrollHeight + (el.offsetHeight - el.clientHeight);
+    el.style.height = `${Math.min(full, max)}px`;
+    el.style.overflowY = full > max ? 'auto' : 'hidden';
+  }, [value]);
+
   // Something hands you words to send (a daemon's room: "this is wrong" puts
   // "You have this wrong about me: …" here). It lands in the draft, never sent.
+  // The caret goes to the end, ready to add to it, but the box shows the
+  // draft from its start, so she reads what it says.
   useEffect(() => {
     const onCompose = (e: Event) => {
       const text = (e as CustomEvent<{ text?: unknown }>).detail?.text;
@@ -81,8 +95,9 @@ export function MessageInput({ onSend, disabled, onTyping, mentionCandidates }: 
       requestAnimationFrame(() => {
         const el = inputRef.current;
         if (!el) return;
-        el.focus();
+        el.focus({ preventScroll: true });
         el.setSelectionRange(text.length, text.length);
+        el.scrollTop = 0;
       });
     };
     window.addEventListener('babelr:compose', onCompose);

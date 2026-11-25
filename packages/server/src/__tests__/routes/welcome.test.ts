@@ -193,6 +193,51 @@ describe('welcoming newcomers', () => {
     expect(logs.every((l) => l.serverId === serverId)).toBe(true);
   });
 
+  it('the newcomer sees which DMs are welcomes, and what she has not read', async () => {
+    const kohl = await person('kohl');
+    const { serverId, code } = await house(kohl);
+    const robo = await agentIn(kohl, serverId, 'robo');
+    await optIn(robo.token, serverId);
+    const mom = await person('mom');
+    expect((await join(mom, code)).status).toBe(200);
+
+    let [dm] = (await call(mom, 'GET', '/dms')).body;
+    expect(dm.welcome).toBe(true);
+    expect(dm.unread).toBeUndefined();
+    // The welcomer's side of it isn't a welcome for him.
+    const [roboDM] = (await call(robo.token, 'GET', '/dms')).body;
+    expect(roboDM.id).toBe(dm.id);
+    expect(roboDM.welcome).toBeUndefined();
+
+    for (const content of ['hello', 'welcome']) {
+      const r = await call(robo.token, 'POST', `/dms/${dm.id}/messages`, {
+        content,
+        properties: enc(),
+      });
+      expect(r.status).toBe(201);
+    }
+    [dm] = (await call(mom, 'GET', '/dms')).body;
+    expect(dm.unread).toBe(2);
+    expect((await call(robo.token, 'GET', '/dms')).body[0].unread).toBeUndefined();
+
+    // Read, then her own reply: nothing unread.
+    expect((await call(mom, 'PUT', `/channels/${dm.id}/read`)).status).toBe(200);
+    expect(
+      (await call(mom, 'POST', `/dms/${dm.id}/messages`, { content: 'hi', properties: enc() }))
+        .status,
+    ).toBe(201);
+    [dm] = (await call(mom, 'GET', '/dms')).body;
+    expect(dm.unread).toBeUndefined();
+    expect((await call(robo.token, 'GET', '/dms')).body[0].unread).toBe(1);
+
+    // A DM she starts herself is not a welcome.
+    const other = await person('aunt');
+    expect((await join(other, code)).status).toBe(200);
+    const mine = await call(mom, 'POST', '/dms', { participantId: other.body.id });
+    expect(mine.status).toBeLessThan(300);
+    expect(mine.body.welcome).toBeUndefined();
+  });
+
   it('is idempotent: retries and rejoins make no second DM', async () => {
     const kohl = await person('kohl');
     const { serverId, code } = await house(kohl);

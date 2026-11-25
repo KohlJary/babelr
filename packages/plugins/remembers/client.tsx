@@ -33,14 +33,17 @@ export async function memoryDaemons(routeBase: string): Promise<string[]> {
   return ((await r.json()) as { daemons?: string[] }).daemons ?? [];
 }
 
+// Neutral nouns: the observation under each is written about you in the
+// third person ("Prefers phone calls to typing."), so a label in the second
+// person ("how you talk") made two voices on one line.
 const KINDS: Record<string, string> = {
-  identity_statement: 'who you are',
-  value: 'what you value',
-  communication_style: 'how you talk',
-  growth_observation: 'growing',
+  identity_statement: 'about you',
+  value: 'values',
+  communication_style: 'way of talking',
+  growth_observation: 'growth',
   contradiction: 'tension',
-  open_question: 'wondering',
-  general: 'noticed',
+  open_question: 'a question she has',
+  general: 'a note',
 };
 function kindLabel(kind: string): string {
   if (KINDS[kind]) return KINDS[kind];

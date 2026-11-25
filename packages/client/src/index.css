@@ -723,6 +723,28 @@ body {
   max-width: 100%;
   color: #777;
 }
+/* Name on the left, the unread count on the right; unread rows read brighter */
+.sidebar-item.sidebar-dm .sidebar-item-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+.sidebar-item.sidebar-dm .sidebar-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-item.sidebar-dm.has-unread .sidebar-item-name {
+  color: #fff;
+  font-weight: 700;
+}
+.sidebar-item.sidebar-dm.has-unread .sidebar-item-preview {
+  color: #cbd5e1;
+}
 
 /* "Agents" / "People" in the DM list */
 .sidebar-section-label {
@@ -1443,6 +1465,30 @@ body {
   border-top: 1px solid #222;
 }
 
+/* Touch screens, once: how to reach a message's actions */
+.tap-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0.75rem 0.25rem;
+  padding: 0.4rem 0.4rem 0.4rem 0.8rem;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #dbeafe;
+  font-size: 0.85rem;
+}
+.tap-hint-ok {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 0.8rem;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: transparent;
+  color: #bfdbfe;
+  cursor: pointer;
+}
+
 .message-input-wrapper.drag-over {
   background: rgba(37, 99, 235, 0.05);
   border-top-color: #2563eb;
@@ -1563,10 +1609,13 @@ body {
   color: #e0e0e0;
   font-size: 0.95rem;
   font-family: inherit;
+  line-height: 1.4;
   resize: none;
   outline: none;
   min-height: 2.5rem;
-  max-height: 8rem;
+  /* About six lines (MessageInput grows the box to here, then it scrolls). */
+  max-height: calc(1.4em * 6 + 1.3rem + 2px);
+  box-sizing: border-box;
 }
 
 .message-input textarea:focus {
@@ -8696,6 +8745,21 @@ textarea.modal-input {
     font-size: 1.2rem;
     cursor: pointer;
   }
+  /* Something new in another conversation */
+  .drawer-toggle.has-unread {
+    position: relative;
+  }
+  .drawer-toggle.has-unread::after {
+    content: '';
+    position: absolute;
+    top: 7px;
+    right: 6px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #3b82f6;
+    box-shadow: 0 0 0 2px #111;
+  }
 
   /* Opening a view closes the drawer (ChatView openView); the view's ☰ bar
      opens it again over the view. */
@@ -9371,6 +9435,22 @@ textarea.modal-input {
   }
   .header-more-menu .header-more-logout {
     color: #f87171;
+  }
+  .header-more-menu .header-more-danger {
+    color: #f87171;
+  }
+  .header-more-sep {
+    margin: 0.25rem 0;
+    border-top: 1px solid #2a2a2a;
+  }
+  /* A DM's Leave / Block live in the header's ⋯ here, so the DM's own
+     band keeps only what has something to say (a request, who left). */
+  .dm-consent-more,
+  .dm-consent-bar > .dm-consent-menu {
+    display: none;
+  }
+  .dm-consent-bar:not(:has(.dm-consent-request, .dm-consent-note, .dm-consent-error)) {
+    display: none;
   }
 
   /* A daemon's room: closed by default at 1024px and below (useRoomOpen),

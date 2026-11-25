@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ArrivalConsentView } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
@@ -11,9 +11,10 @@ import { useT } from '../i18n/I18nProvider';
  * label, name or note) is shown here. They can change the answer later in
  * Settings › Messages.
  */
-export function ArrivalConsent() {
+export function ArrivalConsent({ onSettled }: { onSettled?: () => void } = {}) {
   const t = useT();
   const [queue, setQueue] = useState<ArrivalConsentView[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [link, setLink] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -21,8 +22,16 @@ export function ArrivalConsent() {
     api
       .getArrivals(true)
       .then(setQueue)
-      .catch(() => setQueue([]));
+      .catch(() => setQueue([]))
+      .finally(() => setLoaded(true));
   }, []);
+
+  // Nothing (left) to ask: tell the host, which may now land her somewhere.
+  const settledRef = useRef(onSettled);
+  settledRef.current = onSettled;
+  useEffect(() => {
+    if (loaded && queue.length === 0) settledRef.current?.();
+  }, [loaded, queue.length]);
 
   const current = queue[0];
   if (!current) return null;

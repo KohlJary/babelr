@@ -81,6 +81,51 @@ describe('The House: who lives here', () => {
     expect((await house(kohl.cookie)).agents[0].now).toBeNull();
   });
 
+  it("a guest who came in on an invite sees the server's name and no pitch", async () => {
+    const kohl = await createTestUser(app, 'kohl');
+    const srv = await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: kohl.cookie },
+      payload: { name: 'Demo House' },
+    });
+    expect(srv.statusCode).toBe(201);
+    const serverId = JSON.parse(srv.body).id as string;
+    const inv = await app.inject({
+      method: 'POST',
+      url: `/servers/${serverId}/invites`,
+      headers: { cookie: kohl.cookie },
+      payload: {},
+    });
+    const code = JSON.parse(inv.body).code as string;
+
+    // The sponsor, before anyone's invited: his one server's name, and the pitch.
+    let h = await house(kohl.cookie);
+    expect(h.serverName).toBe('Demo House');
+    expect(h.invited).toBe(false);
+
+    const mom = await createTestUser(app, 'mom');
+    const j = await app.inject({
+      method: 'POST',
+      url: `/invites/${code}/join`,
+      headers: { cookie: mom.cookie },
+    });
+    expect(j.statusCode).toBe(200);
+    h = await house(mom.cookie);
+    expect(h.serverName).toBe('Demo House');
+    expect(h.invited).toBe(true);
+
+    // In two servers there's no one name to use.
+    await app.inject({
+      method: 'POST',
+      url: '/servers',
+      headers: { cookie: kohl.cookie },
+      payload: { name: 'Workshop' },
+    });
+    h = await house(kohl.cookie);
+    expect(h.serverName).toBeNull();
+  });
+
   it("someone who shares no server with an agent doesn't see it", async () => {
     const kohl = await createTestUser(app, 'kohl');
     const luna = await createTestUser(app, 'luna');

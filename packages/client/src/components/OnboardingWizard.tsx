@@ -4,6 +4,7 @@ import type { ActorProfile, ServerView } from '@babelr/shared';
 import { SUPPORTED_LANGUAGES } from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
+import { nameFromUsername } from '../utils/names';
 
 interface OnboardingWizardProps {
   actor: ActorProfile;
@@ -21,9 +22,12 @@ function detectBrowserLanguage(): string {
 export function OnboardingWizard({ actor, onComplete }: OnboardingWizardProps) {
   const t = useT();
   const [step, setStep] = useState<Step>('profile');
-  // Start from the username: an empty field with the username as grey
+  // Start from the username, written like a name ("barbara" -> "Barbara",
+  // "mary_ann" -> "Mary Ann"): an empty field with the username as grey
   // placeholder looked filled in, and Next looked broken.
-  const [displayName, setDisplayName] = useState(actor.displayName ?? actor.preferredUsername);
+  const [displayName, setDisplayName] = useState(
+    actor.displayName ?? nameFromUsername(actor.preferredUsername),
+  );
   // In a house with daemons, setup is just name and language (see the server step).
   const [inHouse, setInHouse] = useState(false);
   useEffect(() => {

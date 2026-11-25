@@ -26,6 +26,7 @@ import { CreateServerModal } from './CreateServerModal';
 import { CreateChannelModal } from './CreateChannelModal';
 import { NewDMModal } from './NewDMModal';
 import { DMConsentBar } from './DMConsentBar';
+import { TapHint } from './TapHint';
 import { MemberList } from './MemberList';
 import { TypingIndicator } from './TypingIndicator';
 import { GlossaryEditor } from './GlossaryEditor';
@@ -114,10 +115,13 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   };
   // The House: members on the rail, the home view, and the intro on a first visit.
   const { house } = useHouseStore();
+  // Set once a newcomer has been landed on her welcome messages, so the
+  // house overview doesn't take the screen back from them.
+  const landedOnMessages = useRef(false);
   useEffect(() => {
     // Someone who lives in or visits a house with daemons lands on the house.
     void loadHouse().then(() => {
-      if (currentHouse()?.agents.length && !inviteLanding.current) {
+      if (currentHouse()?.agents.length && !inviteLanding.current && !landedOnMessages.current) {
         setActiveViewId((v) => v ?? 'house');
         setDrawerClosed(true);
       }
@@ -157,7 +161,17 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const { channels, selectedChannel, selectChannel, createChannel } = useChannels(
     dmMode ? null : (selectedServer?.id ?? null),
   );
-  const { conversations, selectedDM, selectDM, startDM, accept, decline, leave, block } = useDMs();
+  const {
+    conversations,
+    loading: dmsLoading,
+    selectedDM,
+    selectDM,
+    startDM,
+    accept,
+    decline,
+    leave,
+    block,
+  } = useDMs(actor.id, dmMode && !activeViewId);
   // Talk to a house member: open (or start) the DM and show it.
   const openDMWith = (actorId: string) => {
     void (async () => {
@@ -170,6 +184,31 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const e2e = useE2E();
   // Phones: the conversation list is a drawer; picking a conversation closes it.
   const [drawerClosed, setDrawerClosed] = useState(false);
+  // A newcomer the house welcomed lands on her messages, once the consent
+  // screen (if any) is answered: the one welcome DM opened, or with several,
+  // her DM list (the drawer, on a phone). Only while a welcome is still new
+  // to her (unread, or no hello yet); after that the house overview is home.
+  const [arrivalsSettled, setArrivalsSettled] = useState(false);
+  const landingChecked = useRef(false);
+  useEffect(() => {
+    if (landingChecked.current || !arrivalsSettled || dmsLoading) return;
+    landingChecked.current = true;
+    const fresh = conversations.filter((c) => c.welcome && (c.unread || !c.lastMessage));
+    if (fresh.length === 0) return;
+    landedOnMessages.current = true;
+    setDmMode(true);
+    setViewState({});
+    if (fresh.length === 1) {
+      setActiveViewId(null);
+      selectDM(fresh[0].id);
+      setDrawerClosed(true);
+    } else {
+      // The house overview stays in the main pane (desktop shows both);
+      // on a phone the drawer opens over it on her messages.
+      setActiveViewId((v) => v ?? 'house');
+      setDrawerClosed(false);
+    }
+  }, [arrivalsSettled, dmsLoading, conversations, selectDM]);
   // At 1024px and below the members list is a sheet, shown only when asked for.
   const [membersSheet, setMembersSheet] = useState(false);
   // DM list previews, decrypted here (the sidebar never shows ciphertext).
@@ -497,6 +536,35 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
     [activeChannelId, removeMessage],
   );
 
+  // Phones: a DM's Leave and Block, in the header's ⋯ (DMConsentBar keeps
+  // its own ⋯ on wider screens, where the header has no menu).
+  const dmMenuItems = (dm: NonNullable<typeof selectedDM>) => {
+    const other = dm.participants.find((p) => p.id !== actor.id);
+    const fail = (err: unknown) =>
+      setNotice({ kind: 'error', text: err instanceof Error ? err.message : String(err) });
+    return [
+      {
+        label: t('dm.leaveConversation'),
+        onClick: () => {
+          if (window.confirm(t('dm.confirmLeave'))) leave(dm.id).catch(fail);
+        },
+      },
+      ...(other
+        ? [
+            {
+              label: t('dm.blockName', { name: other.displayName ?? other.preferredUsername }),
+              danger: true,
+              onClick: () => {
+                if (window.confirm(t('dm.confirmBlock', { name: other.preferredUsername }))) {
+                  block(other.id).catch(fail);
+                }
+              },
+            },
+          ]
+        : []),
+    ];
+  };
+
   // Derive header display name
   const headerName = dmMode
     ? selectedDM
@@ -565,7 +633,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           </button>
         </div>
       )}
-      <ArrivalConsent />
+      <ArrivalConsent onSettled={() => setArrivalsSettled(true)} />
       <div className={`app-layout ${drawerClosed ? 'drawer-closed' : ''}`}>
         <ServerSidebar
           servers={servers}
@@ -736,6 +804,10 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onOpenSearch={() => setShowSearch(true)}
                 onOpenPins={activeChannelId ? () => setShowPins((v) => !v) : undefined}
                 pinCount={pinnedIds.size || undefined}
+                unreadElsewhere={conversations.some(
+                  (c) => (c.unread ?? 0) > 0 && !(dmMode && c.id === selectedDM?.id),
+                )}
+                menuItems={dmMode && selectedDM ? dmMenuItems(selectedDM) : undefined}
                 onOpenRoom={roomPeer && !roomOpen ? toggleRoom : undefined}
                 roomLabel={
                   roomPeer
@@ -839,6 +911,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                       const name = other?.displayName ?? other?.preferredUsername ?? 'them';
                       return <div className="dm-seen-indicator">Seen by {name}</div>;
                     })()}
+                  <TapHint conversationId={activeChannelId} />
                   <MessageInput
                     onSend={sendMessage}
                     disabled={!activeChannelId || !connected}

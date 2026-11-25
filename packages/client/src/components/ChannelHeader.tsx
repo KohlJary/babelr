@@ -21,6 +21,10 @@ interface ChannelHeaderProps {
   /** Phones: a daemon DM's room opens from this labeled button (desktop has the side rail). */
   onOpenRoom?: () => void;
   roomLabel?: string;
+  /** A conversation other than this one has something new: a dot on ☰. */
+  unreadElsewhere?: boolean;
+  /** Phones: this conversation's own options (a DM's Leave, Block), in the ⋯ menu. */
+  menuItems?: Array<{ label: string; onClick: () => void; danger?: boolean }>;
 }
 
 export function ChannelHeader({
@@ -39,6 +43,8 @@ export function ChannelHeader({
   pinCount,
   onOpenRoom,
   roomLabel,
+  unreadElsewhere,
+  menuItems,
 }: ChannelHeaderProps) {
   const t = useT();
   // Phones (stopgap): the header keeps ☰, the name and a ⋯ menu; the
@@ -53,7 +59,7 @@ export function ChannelHeader({
       {onOpenDrawer && (
         <button
           type="button"
-          className="drawer-toggle"
+          className={`drawer-toggle${unreadElsewhere ? ' has-unread' : ''}`}
           aria-label={t('channelHeader.openDrawer')}
           title={t('channelHeader.openDrawer')}
           onClick={onOpenDrawer}
@@ -145,6 +151,18 @@ export function ChannelHeader({
                   {pinCount ? ` (${pinCount})` : ''}
                 </button>
               )}
+              {menuItems?.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  role="menuitem"
+                  className={item.danger ? 'header-more-danger' : undefined}
+                  onClick={pick(item.onClick)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              {menuItems?.length ? <div className="header-more-sep" /> : null}
               <button type="button" role="menuitem" onClick={pick(onOpenMentions)}>
                 @ {t('channelHeader.mentions')}
               </button>
