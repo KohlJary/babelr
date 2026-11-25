@@ -48,6 +48,10 @@ import {
   clientManifest as daybookManifest,
   setupClient as daybookSetupClient,
 } from '@babelr/plugin-daybook/client-entry';
+import {
+  clientManifest as remembersManifest,
+  setupClient as remembersSetupClient,
+} from '@babelr/plugin-remembers/client-entry';
 
 export interface RegisteredPlugin {
   manifest: PluginManifest;
@@ -68,4 +72,5 @@ export const registeredPlugins: RegisteredPlugin[] = [
   { manifest: musicManifest, setupClient: musicSetupClient },
   { manifest: panelManifest, setupClient: panelSetupClient },
   { manifest: daybookManifest, setupClient: daybookSetupClient },
+  { manifest: remembersManifest, setupClient: remembersSetupClient },
 ];

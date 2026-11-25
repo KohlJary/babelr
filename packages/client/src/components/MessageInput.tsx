@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useT } from '../i18n/I18nProvider';
 import {
   MentionAutocomplete,
@@ -70,6 +70,24 @@ export function MessageInput({ onSend, disabled, onTyping, mentionCandidates }: 
       el?.setSelectionRange(pos, pos);
     });
   };
+
+  // Something hands you words to send (a daemon's room: "this is wrong" puts
+  // "You have this wrong about me: …" here). It lands in the draft, never sent.
+  useEffect(() => {
+    const onCompose = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: unknown }>).detail?.text;
+      if (typeof text !== 'string') return;
+      setValue(text);
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(text.length, text.length);
+      });
+    };
+    window.addEventListener('babelr:compose', onCompose);
+    return () => window.removeEventListener('babelr:compose', onCompose);
+  }, []);
 
   const uploadFile = async (file: File) => {
     setUploading(true);
