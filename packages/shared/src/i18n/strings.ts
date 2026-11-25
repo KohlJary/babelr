@@ -86,6 +86,7 @@ export const UI_STRINGS = {
   'messages.loadMore': 'Load more',
   'messages.edit': 'Edit',
   'messages.delete': 'Delete',
+  'messages.deleteConfirm': 'Delete this message? This cannot be undone.',
   'messages.reply': 'Reply',
   'messages.copyReference': 'Copy reference',
   'messages.lockedEmbed': '🔒 Referenced message (no access)',
@@ -255,6 +256,8 @@ export const UI_STRINGS = {
   // Members
   'members.title': 'Members',
   'members.kick': 'Kick',
+  'members.kickTitle': 'Remove {name} from this server',
+  'members.kickConfirm': 'Kick {name} from this server?',
   'members.role.member': 'member',
   'members.role.moderator': 'moderator',
   'members.role.admin': 'admin',
@@ -719,8 +722,12 @@ export const UI_STRINGS = {
   'twoFactor.recoveryWarning': 'Save these codes somewhere safe. Each can only be used once.',
   'twoFactor.done': 'Done',
 
+  // Invite links
+  'invite.joined': 'You joined {name}.',
+  'invite.invalid': 'That invite link is invalid or has expired.',
+
   // Email verification
-  'verification.banner': 'Please verify your email to unlock all features.',
+  'verification.banner': "Your email address isn't verified yet. Check your inbox for the link.",
   'verification.resend': 'Resend email',
   'verification.sending': 'Sending…',
   'verification.sent': 'Verification email sent!',
@@ -740,6 +747,9 @@ export const UI_STRINGS = {
   'onboarding.doneSubtitle':
     'Your workspace is ready. Start chatting, collaborating, and building.',
   'onboarding.getStarted': 'Get started',
+  'onboarding.skippedTitle': 'One more step: find a server',
+  'onboarding.skippedSubtitle':
+    "You haven't created or joined a server yet, so there's nowhere to chat. Use the + in the server rail on the left to create or join one, or open an invite link.",
 } as const;
 
 export type UIStringKey = keyof typeof UI_STRINGS;

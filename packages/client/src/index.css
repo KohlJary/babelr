@@ -382,6 +382,43 @@ body {
   padding: 1rem 0;
 }
 
+/* Floating one-line notice (invite joined / failed) ---------------- */
+.app-notice {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  font-size: 0.85rem;
+}
+.app-notice-ok .app-notice-text {
+  color: #86efac;
+}
+.app-notice-error .app-notice-text {
+  color: #fca5a5;
+}
+.app-notice-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+}
+.app-notice-close:hover {
+  color: #e2e8f0;
+}
+
 /* Email verification banner ----------------------------------------- */
 .verification-banner {
   display: flex;
@@ -886,8 +923,9 @@ body {
   border-radius: 4px;
   color: #e74c3c;
   cursor: pointer;
-  font-size: 1rem;
-  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  padding: 0.15rem 0.5rem;
   line-height: 1.4;
   transition: all 0.15s;
 }
@@ -6543,6 +6581,12 @@ textarea.modal-input {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+/* The side panel body scrolls; the member list itself mustn't cap its
+   height (the shared .discover-list does, for the join list in modals). */
+.member-list-body .discover-list {
+  max-height: none;
+  overflow: visible;
 }
 .member-list-count {
   font-size: 0.8rem;

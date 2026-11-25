@@ -157,6 +157,26 @@ export function MessageItem({
   const [showProfile, setShowProfile] = useState(false);
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | undefined>();
   const messageRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Opening the editor focuses it and brings the whole form (Save included)
+  // into view, so the composer below doesn't hide it.
+  useEffect(() => {
+    if (!editing || !editRef.current) return;
+    const ta = editRef.current;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    ta.closest('.message-edit-form')?.scrollIntoView({ block: 'nearest' });
+  }, [editing]);
+
+  const saveEdit = () => {
+    onEdit?.(editContent);
+    setEditing(false);
+  };
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditContent(message.content);
+  };
 
   useEffect(() => {
     if (highlighted && messageRef.current) {
@@ -243,29 +263,29 @@ export function MessageItem({
   const actionsBlock = editing ? (
     <div className="message-edit-form">
       <textarea
+        ref={editRef}
         className="modal-input"
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter saves, Shift+Enter is a newline, Escape cancels. preventDefault
+          // marks Escape as handled so a side panel doesn't also close on it.
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelEdit();
+          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            saveEdit();
+          }
+        }}
         rows={2}
         style={{ resize: 'vertical', fontFamily: 'inherit' }}
       />
       <div className="message-edit-actions">
-        <button
-          className="message-action-btn"
-          onClick={() => {
-            onEdit?.(editContent);
-            setEditing(false);
-          }}
-        >
+        <button className="message-action-btn" onClick={saveEdit}>
           {t('common.save')}
         </button>
-        <button
-          className="message-action-btn"
-          onClick={() => {
-            setEditing(false);
-            setEditContent(message.content);
-          }}
-        >
+        <button className="message-action-btn" onClick={cancelEdit}>
           {t('common.cancel')}
         </button>
       </div>
@@ -287,7 +307,12 @@ export function MessageItem({
         </button>
       )}
       {canDelete && (
-        <button className="message-action-btn message-action-danger" onClick={onDelete}>
+        <button
+          className="message-action-btn message-action-danger"
+          onClick={() => {
+            if (window.confirm(t('messages.deleteConfirm'))) onDelete?.();
+          }}
+        >
           {t('messages.delete')}
         </button>
       )}
