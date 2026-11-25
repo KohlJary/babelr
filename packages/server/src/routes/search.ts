@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 import type { FastifyInstance } from 'fastify';
-import { eq, and, sql, lt, gt, inArray } from 'drizzle-orm';
+import { eq, and, sql, lt, gt, desc } from 'drizzle-orm';
 import '../types.ts';
 import { objects } from '../db/schema/objects.ts';
 import { actors } from '../db/schema/actors.ts';
@@ -73,44 +73,63 @@ export default async function searchRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Search query is required' });
     }
 
-    const limit = Math.min(parseInt(request.query.limit ?? String(DEFAULT_LIMIT), 10), 100);
+    const limit = Math.min(parseInt(request.query.limit ?? '', 10) || DEFAULT_LIMIT, 100);
     const filters = parseFilters(q.trim());
 
-    const conditions = [eq(objects.type, 'Note')];
+    const actorUri = request.actor.uri;
 
-    // Full-text search on remaining text (after filters removed)
+    // Only server channels the searcher can read: a member of the server,
+    // and for a private channel a member of the channel too (the same rule
+    // as checkChannelAccess). DMs are left out on purpose: they are E2E
+    // encrypted, so the server only holds ciphertext for them. Before this,
+    // a search without channelId ran over every Note on the instance.
+    const readableChannelIds = sql`(
+      SELECT ch.id FROM objects ch
+      JOIN actors srv ON srv.id = ch.belongs_to
+      JOIN collection_items mem
+        ON mem.collection_uri = srv.followers_uri AND mem.item_uri = ${actorUri}
+      WHERE ch.type = 'OrderedCollection'
+        AND (
+          COALESCE((ch.properties->>'isPrivate')::boolean, false) = false
+          OR EXISTS (
+            SELECT 1 FROM collection_items cm
+            WHERE cm.collection_uri = ch.uri AND cm.item_uri = ${actorUri}
+          )
+        )
+    )`;
+
+    const conditions = [
+      eq(objects.type, 'Note'),
+      sql`${objects.context} IN ${readableChannelIds}`,
+      // Belt and braces: never match on ciphertext.
+      sql`COALESCE((${objects.properties}->>'encrypted')::boolean, false) = false`,
+    ];
+
+    // Full-text search on the remaining text (after filters are removed).
+    // objects.content_search is never populated, so build the vector from
+    // the content here; websearch_to_tsquery takes free text without
+    // throwing on punctuation the way to_tsquery did.
+    const tsVector = sql`to_tsvector('english', COALESCE(${objects.content}, ''))`;
+    const tsQuery = sql`websearch_to_tsquery('english', ${filters.textQuery})`;
     if (filters.textQuery.length > 0) {
-      const searchQuery = filters.textQuery.split(/\s+/).join(' & ');
-      conditions.push(sql`${objects.contentSearch} @@ to_tsquery('english', ${searchQuery})`);
+      conditions.push(sql`${tsVector} @@ ${tsQuery}`);
     }
 
-    // Channel filter — by ID (existing param) or by name (in: operator)
+    // Channel filter: by ID (existing param) or by name (in: operator)
     if (channelId) {
-      const { allowed } = await checkChannelAccess(db, channelId, request.actor!.uri);
+      const { allowed, channel } = await checkChannelAccess(db, channelId, actorUri);
+      if (!channel) return reply.status(404).send({ error: 'Channel not found' });
       if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
       conditions.push(eq(objects.context, channelId));
     } else if (filters.channelName) {
-      // Look up channel by name across servers the user is a member of
-      const channels = await db
-        .select({ id: objects.id })
-        .from(objects)
-        .where(
-          and(
-            eq(objects.type, 'OrderedCollection'),
-            sql`(${objects.properties}->>'name')::text ILIKE ${filters.channelName}`,
-          ),
-        );
-      if (channels.length > 0) {
-        conditions.push(
-          inArray(
-            objects.context,
-            channels.map((c) => c.id),
-          ),
-        );
-      } else {
-        // No matching channel — return empty
-        return { messages: [], hasMore: false };
-      }
+      // By name, among the channels the searcher can read
+      conditions.push(
+        sql`${objects.context} IN (
+          SELECT id FROM objects
+          WHERE id IN ${readableChannelIds}
+            AND (properties->>'name') ILIKE ${filters.channelName}
+        )`,
+      );
     }
 
     // Author filter
@@ -148,22 +167,19 @@ export default async function searchRoutes(fastify: FastifyInstance) {
       }
     }
 
-    // Build the query — use rank if there's a text query, otherwise order by date
+    // Rank if there's a text query, otherwise newest first
     const hasTextQuery = filters.textQuery.length > 0;
-    const searchQuery = hasTextQuery ? filters.textQuery.split(/\s+/).join(' & ') : '';
 
     const rows = await db
-      .select({
-        object: objects,
-        actor: actors,
-        ...(hasTextQuery
-          ? { rank: sql`ts_rank(${objects.contentSearch}, to_tsquery('english', ${searchQuery}))` }
-          : {}),
-      })
+      .select({ object: objects, actor: actors })
       .from(objects)
       .innerJoin(actors, eq(objects.attributedTo, actors.id))
       .where(and(...conditions))
-      .orderBy(hasTextQuery ? sql`ts_rank DESC` : sql`${objects.published} DESC`)
+      .orderBy(
+        ...(hasTextQuery
+          ? [sql`ts_rank(${tsVector}, ${tsQuery}) DESC`, desc(objects.published)]
+          : [desc(objects.published)]),
+      )
       .limit(limit + 1);
 
     const messages: MessageWithAuthor[] = rows.map((row) => ({

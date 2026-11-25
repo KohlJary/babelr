@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-import { useState, useEffect, useCallback, useRef, createElement } from 'react';
+import { useState, useEffect, useCallback, useRef, useReducer, createElement } from 'react';
+import { VIEWS_CHANGED_EVENT } from '../session';
 import type { ActorProfile, MessageWithAuthor, WsServerMessage } from '@babelr/shared';
 import * as api from '../api';
 import { useServers } from '../hooks/useServers';
@@ -17,6 +18,7 @@ import { ChannelSidebar } from './ChannelSidebar';
 import { PluginSidebarSlots } from '../plugins/PluginSidebarSlots';
 import type { SidebarSlotHostContext } from '../plugins/sidebar-registry';
 import { ChannelHeader } from './ChannelHeader';
+import { SearchPanel } from './SearchPanel';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { CreateServerModal } from './CreateServerModal';
@@ -30,6 +32,7 @@ import { ThreadPanel } from './ThreadPanel';
 import { ChannelInviteModal } from './ChannelInviteModal';
 import { VoicePanel } from './VoicePanel';
 import { CallView } from './CallView';
+import { VoiceJoinBar } from './VoiceJoinBar';
 import { EmbedSidebar, type EmbedSidebarTarget } from './EmbedSidebar';
 import { EmbedHostProvider } from './E';
 import { SidePanel } from './SidePanel';
@@ -41,7 +44,7 @@ import { parseWikiRefs, type WikiRefKind } from '@babelr/shared';
 import { getEmbed } from '../embeds/registry';
 import { DaemonRoom, MemberHeader, useRoomOpen } from './DaemonRoom';
 import { getView, listViews, type ViewHostContext, type ViewState } from '../views/registry';
-import { useVoice } from '../hooks/useVoice';
+import { useVoice, type UseVoiceState } from '../hooks/useVoice';
 import { useMembers } from '../hooks/useMembers';
 import { usePresence } from '../hooks/usePresence';
 import { useReactions } from '../hooks/useReactions';
@@ -75,6 +78,14 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   // Set while an /invite/ link is being handled, so the house home doesn't
   // take over the landing from the server that was just joined.
   const inviteLanding = useRef(/^\/invite\/\w+$/.test(window.location.pathname));
+  const [showSearch, setShowSearch] = useState(false);
+  // A plugin's isAvailable answer changed (e.g. Review has something
+  // waiting): redraw the view list now, not on some later render.
+  const [, bumpViews] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    window.addEventListener(VIEWS_CHANGED_EVENT, bumpViews);
+    return () => window.removeEventListener(VIEWS_CHANGED_EVENT, bumpViews);
+  }, []);
   const [showChannelInvite, setShowChannelInvite] = useState(false);
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
   // Which primary view fills the chat panel area. 'chat' is the
@@ -167,6 +178,46 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
   const callerRole = members.find((m) => m.id === actor.id)?.role ?? 'member';
 
   const activeChannelId = dmMode ? (selectedDM?.id ?? null) : (selectedChannel?.id ?? null);
+  // Who the composer offers for @mentions: the server's members, or the
+  // DM's other participants.
+  const mentionCandidates = (dmMode ? (selectedDM?.participants ?? []) : members).filter(
+    (m) => m.id !== actor.id,
+  );
+
+  // Voice: a join that fails (no mic, no permission, a server error) is
+  // remembered against its channel so the channel can say why and offer
+  // a retry (FINDINGS #68).
+  const [voiceJoinError, setVoiceJoinError] = useState<{
+    channelId: string;
+    message: string;
+    kind?: UseVoiceState['errorKind'];
+  } | null>(null);
+  const voiceJoinTargetRef = useRef<string | null>(null);
+  const joinVoice = (channelId: string) => {
+    if (voice.state.channelId === channelId) return;
+    if (voice.state.channelId) voice.leave();
+    const ch = channels.find((c) => c.id === channelId);
+    voiceJoinTargetRef.current = channelId;
+    setVoiceJoinError(null);
+    voice.join(channelId, ch?.uri).catch((err: unknown) => {
+      // A later step threw (socket, timeout, SFU): leave cleanly.
+      voice.leave();
+      setVoiceJoinError({
+        channelId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    });
+  };
+  useEffect(() => {
+    const target = voiceJoinTargetRef.current;
+    if (voice.state.status === 'error' && voice.state.error && target) {
+      setVoiceJoinError({
+        channelId: target,
+        message: voice.state.error,
+        kind: voice.state.errorKind,
+      });
+    }
+  }, [voice.state.status, voice.state.error, voice.state.errorKind]);
 
   // Pinned messages
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
@@ -614,12 +665,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
             })
             .map((v) => ({ id: v.id, label: v.label, icon: v.icon, everywhere: v.everywhere }))}
           onOpenView={openView}
-          onJoinVoice={(channelId) => {
-            if (voice.state.channelId === channelId) return;
-            if (voice.state.channelId) voice.leave();
-            const ch = channels.find((c) => c.id === channelId);
-            void voice.join(channelId, ch?.uri);
-          }}
+          onJoinVoice={joinVoice}
           activeVoiceChannelId={voice.state.channelId}
           pluginSlots={(() => {
             const sidebarHost: SidebarSlotHostContext = {
@@ -667,6 +713,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                 onOpenProfile={() => openView('settings')}
                 onOpenDrawer={() => setDrawerClosed(false)}
                 onOpenMentions={() => openView('mentions')}
+                onOpenSearch={() => setShowSearch(true)}
                 onOpenPins={activeChannelId ? () => setShowPins((v) => !v) : undefined}
                 pinCount={pinnedIds.size || undefined}
               />
@@ -704,6 +751,15 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                     />
                   )}
                   {roomMember && <MemberHeader m={roomMember} />}
+                  {!dmMode && selectedChannel?.channelType === 'voice' && (
+                    <VoiceJoinBar
+                      voice={voice.state}
+                      joinError={
+                        voiceJoinError?.channelId === selectedChannel.id ? voiceJoinError : null
+                      }
+                      onJoin={() => joinVoice(selectedChannel.id)}
+                    />
+                  )}
                   <MessageList
                     messages={messages}
                     loading={loading}
@@ -759,6 +815,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
                     onSend={sendMessage}
                     disabled={!activeChannelId || !connected}
                     onTyping={notifyTyping}
+                    mentionCandidates={mentionCandidates}
                   />
                 </>
               )}
@@ -940,6 +997,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
         {/* Server settings now renders as a registered view. */}
         {/* Profile now renders as the Profile tab within the settings view. */}
         {/* Mentions now renders as a registered view. */}
+        {showSearch && <SearchPanel onClose={() => setShowSearch(false)} />}
         {showChannelInvite && activeChannelId && (
           <ChannelInviteModal
             channelId={activeChannelId}

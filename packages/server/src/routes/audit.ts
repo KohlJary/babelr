@@ -5,7 +5,7 @@ import '../types.ts';
 import { auditLogs } from '../db/schema/audit-logs.ts';
 import { actors } from '../db/schema/actors.ts';
 import { PERMISSIONS } from '@babelr/shared';
-import { hasPermission } from '../permissions.ts';
+import { getEffectivePermissions } from '../permissions.ts';
 import type { AuditLogEntry, AuditLogResponse } from '@babelr/shared';
 
 const DEFAULT_LIMIT = 50;
@@ -21,14 +21,12 @@ export default async function auditRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Not authenticated' });
     }
 
-    if (
-      !(await hasPermission(
-        db,
-        request.params.serverId,
-        request.actor.id,
-        PERMISSIONS.VIEW_AUDIT_LOG,
-      ))
-    ) {
+    // VIEW_AUDIT_LOG is in no default role, so checking it alone refused
+    // the server's own Admin (FINDINGS #52). Anyone who can manage the
+    // server can read what was done to it; VIEW_AUDIT_LOG still grants
+    // read-only access to a custom role.
+    const perms = await getEffectivePermissions(db, request.params.serverId, request.actor.id);
+    if (!perms.has(PERMISSIONS.VIEW_AUDIT_LOG) && !perms.has(PERMISSIONS.MANAGE_SERVER)) {
       return reply.status(403).send({ error: 'Insufficient permissions' });
     }
 

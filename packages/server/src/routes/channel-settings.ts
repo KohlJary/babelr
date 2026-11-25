@@ -73,38 +73,24 @@ export default async function channelSettingsRoutes(fastify: FastifyInstance) {
       const { channelId } = request.params;
       const now = new Date();
 
-      // Check channel exists
-      const [channel] = await db
-        .select()
-        .from(objects)
-        .where(and(eq(objects.id, channelId), eq(objects.type, 'OrderedCollection')))
-        .limit(1);
-
+      const { allowed, channel } = await checkChannelAccess(db, channelId, request.actor.uri);
       if (!channel) {
         return reply.status(404).send({ error: 'Channel not found' });
       }
+      // Only someone who can read the channel can mark it read (this also
+      // keeps a non-participant from federating a DM read receipt).
+      if (!allowed) return reply.status(403).send({ error: 'Not a member of this channel' });
 
-      // Upsert read position
-      const [existing] = await db
-        .select()
-        .from(readPositions)
-        .where(
-          and(eq(readPositions.actorId, request.actor.id), eq(readPositions.channelId, channelId)),
-        )
-        .limit(1);
-
-      if (existing) {
-        await db
-          .update(readPositions)
-          .set({ lastReadAt: now })
-          .where(eq(readPositions.id, existing.id));
-      } else {
-        await db.insert(readPositions).values({
-          actorId: request.actor.id,
-          channelId,
-          lastReadAt: now,
+      // One atomic upsert. The old select-then-insert raced when two tabs
+      // (or a fast channel switch) marked the same channel read at once,
+      // and the loser hit read_positions_actor_channel_idx and returned 500.
+      await db
+        .insert(readPositions)
+        .values({ actorId: request.actor.id, channelId, lastReadAt: now })
+        .onConflictDoUpdate({
+          target: [readPositions.actorId, readPositions.channelId],
+          set: { lastReadAt: now },
         });
-      }
 
       // Federate read receipts for DMs with remote participants
       const channelProps = channel.properties as Record<string, unknown> | null;

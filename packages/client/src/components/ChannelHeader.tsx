@@ -12,6 +12,7 @@ interface ChannelHeaderProps {
   onOpenSettings: () => void;
   onOpenProfile: () => void;
   onOpenMentions: () => void;
+  onOpenSearch?: () => void;
   onOpenPins?: () => void;
   pinCount?: number;
   /** Phones: the conversation list is a drawer; this reopens it. */
@@ -29,6 +30,7 @@ export function ChannelHeader({
   onOpenSettings,
   onOpenProfile,
   onOpenMentions,
+  onOpenSearch,
   onOpenPins,
   pinCount,
 }: ChannelHeaderProps) {
@@ -70,6 +72,17 @@ export function ChannelHeader({
         >
           {actor.displayName ?? actor.preferredUsername}
         </button>
+        {onOpenSearch && (
+          <button
+            type="button"
+            className="settings-btn header-search-btn"
+            onClick={onOpenSearch}
+            title={t('search.open')}
+            aria-label={t('search.open')}
+          >
+            &#128269; {t('search.button')}
+          </button>
+        )}
         {onOpenPins && (
           <button className="settings-btn" onClick={onOpenPins} title="Pinned messages">
             📌{pinCount ? ` ${pinCount}` : ''}

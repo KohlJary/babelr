@@ -259,4 +259,16 @@ export interface PluginClientApi {
       partnerId: string,
     ) => Promise<{ content: string; properties: { encrypted: true; iv: string } }>;
   };
+  /** Whether someone is signed in. setupClient runs at page load, before
+   *  the session is known: a plugin that fetches to decide its own
+   *  availability waits for this instead of fetching into a 401.
+   *  `onChange` calls the listener now with the current value, then on
+   *  every change; it returns an unsubscribe. */
+  session?: {
+    isSignedIn: () => boolean;
+    onChange: (listener: (signedIn: boolean) => void) => () => void;
+  };
+  /** Tell the host an `isAvailable` answer changed, so the sidebar
+   *  re-renders now rather than whenever something else redraws it. */
+  availabilityChanged?: () => void;
 }

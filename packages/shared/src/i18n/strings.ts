@@ -32,6 +32,7 @@ export const UI_STRINGS = {
   'common.search': 'Search',
   'common.find': 'Find',
   'common.error': 'Error',
+  'common.retry': 'Try again',
 
   // Auth
   'auth.login': 'Log in',
@@ -502,6 +503,14 @@ export const UI_STRINGS = {
   'voice.participants': 'Participants',
   'voice.roomFull': 'Voice channel is full (max {max}).',
   'voice.micPermissionDenied': 'Microphone permission denied. Enable it in your browser settings.',
+  'voice.joinFailed': 'Couldn’t join voice.',
+  'voice.micMissing': 'No microphone was found. Connect one, then try again.',
+  'voice.micInsecure':
+    'Voice needs a secure connection (https), so this page can’t use a microphone.',
+  'voice.micUnavailable': 'The browser couldn’t open a microphone ({error}).',
+  'voice.joinError': 'Something went wrong: {error}',
+  'voice.retry': 'Try again',
+  'voice.notJoined': 'You’re not in this voice channel.',
   'voice.connected': 'Connected',
   'voice.youAreMuted': 'You are muted',
   'voice.deafen': 'Deafen (mute all incoming audio)',
@@ -538,6 +547,9 @@ export const UI_STRINGS = {
   // Audit log
   'audit.title': 'Audit Log',
   'audit.noEntries': 'No audit log entries',
+  'audit.forbidden':
+    'You don’t have permission to see this server’s audit log. It takes Manage server or View audit log.',
+  'audit.failed': 'The audit log didn’t load.',
   'audit.loadMore': 'Load more',
   'audit.allCategories': 'All categories',
   'audit.category.server': 'Server',
@@ -578,9 +590,18 @@ export const UI_STRINGS = {
   'dnd.startHour': 'Start',
   'dnd.endHour': 'End',
 
+  // Rate limit (FINDINGS #73)
+  'rateLimit.title': 'Babelr is pausing for a moment.',
+  'rateLimit.body':
+    'Your account made too many requests in the last minute (several open tabs or quick reloads can do it). Nothing is lost; Babelr will reload on its own in {seconds}s.',
+
   // Search
   'search.placeholder': 'Search messages… (from:user in:channel before:date has:file)',
   'search.button': 'Search',
+  'search.open': 'Search messages',
+  'search.close': 'Close search',
+  'search.scope':
+    'Searches messages in the server channels you can read. Direct messages are end-to-end encrypted, so the server can’t search them.',
   'search.failed': 'Search failed',
   'search.noResults': 'No results found',
   'search.hint':

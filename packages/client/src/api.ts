@@ -49,6 +49,58 @@ function retryDelayMs(res: Response, attempt: number): number {
   return Math.min(ms, MAX_RETRY_WAIT_MS);
 }
 
+// When the retries above run out, the account is over its per-minute
+// budget (several tabs or fast reloads can do it). Say so once, for the
+// whole app, and say again when the window has passed so it can reload
+// what failed (FINDINGS #73). Listen with onRateLimitChange.
+const RATE_LIMIT_EVENT = 'babelr:rate-limit';
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+let rateLimitedUntil = 0;
+let rateLimitClearTimer: ReturnType<typeof setTimeout> | undefined;
+
+export interface RateLimitState {
+  /** Epoch ms when requests should work again; 0 when not limited. */
+  until: number;
+  /** Bumped each time a rate-limited window passes. */
+  recoveries: number;
+}
+let rateLimitRecoveries = 0;
+
+function emitRateLimit() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(RATE_LIMIT_EVENT));
+}
+
+function noteRateLimited(res: Response) {
+  const seconds = Number(res.headers.get('retry-after'));
+  const until =
+    Date.now() +
+    (Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : DEFAULT_RATE_LIMIT_WINDOW_MS);
+  if (until <= rateLimitedUntil) return;
+  rateLimitedUntil = until;
+  clearTimeout(rateLimitClearTimer);
+  // A little past the window, so the first request after it lands in a
+  // fresh one.
+  rateLimitClearTimer = setTimeout(
+    () => {
+      rateLimitedUntil = 0;
+      rateLimitRecoveries += 1;
+      emitRateLimit();
+    },
+    until - Date.now() + 1000,
+  );
+  emitRateLimit();
+}
+
+export function getRateLimitState(): RateLimitState {
+  return { until: rateLimitedUntil, recoveries: rateLimitRecoveries };
+}
+
+export function onRateLimitChange(listener: () => void): () => void {
+  window.addEventListener(RATE_LIMIT_EVENT, listener);
+  return () => window.removeEventListener(RATE_LIMIT_EVENT, listener);
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...((options?.headers as Record<string, string>) ?? {}),
@@ -71,6 +123,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
+    if (res.status === 429) noteRateLimited(res);
     const body = await res.json().catch(() => ({ error: res.statusText }));
     throw new ApiError(res.status, body.error ?? res.statusText);
   }
