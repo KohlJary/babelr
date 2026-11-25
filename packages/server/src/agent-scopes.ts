@@ -176,6 +176,18 @@ export const ROUTE_SCOPES: Record<string, ScopeRule> = {
   'POST /blocks': { scope: null, action: 'block.add' },
   'DELETE /blocks/:actorId': { scope: null, action: 'block.remove' },
   'GET /agent-invites': { scope: null, action: 'server.invites' },
+  // Welcoming newcomers (routes/welcome.ts). Opting itself in or out is
+  // its own yes or no, so no scope (the route still wants dms:post to
+  // opt in: a welcomer has to be able to say hello). Its list of
+  // newcomers reads like its DMs.
+  'GET /welcome/settings': { scope: null, action: 'welcome.settings' },
+  'PUT /servers/:serverId/welcome': { scope: null, action: 'welcome.set' },
+  'GET /welcomes': { scope: 'dms:read', action: 'welcome.list' },
+  'POST /welcomes/:welcomeId/done': { scope: 'dms:read', action: 'welcome.done' },
+  // Guest cards: a welcomer daemon reads the cards of people coming in, to
+  // prepare before they arrive (the route shows a non-welcomer only its
+  // own, so none). Making and editing cards stays with people's sessions.
+  'GET /servers/:serverId/guest-cards': { scope: 'dms:read', action: 'guest_cards.read' },
   'POST /agent-invites/:serverId/accept': { scope: null, action: 'server.invite.accept' },
   'POST /agent-invites/:serverId/decline': { scope: null, action: 'server.invite.decline' },
 
@@ -248,6 +260,8 @@ export const CONSENT_ROUTES: ReadonlySet<string> = new Set([
   'DELETE /blocks/:actorId',
   'GET /agent-invites',
   'POST /agent-invites/:serverId/decline',
+  'GET /welcome/settings',
+  'PUT /servers/:serverId/welcome',
 ]);
 
 export function isConsentRoute(method: string, routeUrl: string | undefined): boolean {

@@ -14,6 +14,9 @@ import channelSettingsRoutes from '../routes/channel-settings.ts';
 import serverRoutes from '../routes/servers.ts';
 import dmRoutes from '../routes/dms.ts';
 import dmConsentRoutes from '../routes/dm-consent.ts';
+import welcomeRoutes from '../routes/welcome.ts';
+import guestCardRoutes from '../routes/guest-cards.ts';
+import welcomeTrigger from '../plugins/welcome-trigger.ts';
 import friendsRoutes from '../routes/friends.ts';
 import eventRoutes from '../routes/events.ts';
 import wikiRoutes from '../routes/wiki.ts';
@@ -138,6 +141,7 @@ export async function createTestApp(
   await app.register(cors, { origin: true, credentials: true });
   await app.register(authPlugin);
   if (opts.rateLimit) await app.register(rateLimit, rateLimitOptions);
+  await app.register(welcomeTrigger);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
@@ -148,6 +152,8 @@ export async function createTestApp(
   await app.register(serverRoutes);
   await app.register(dmRoutes);
   await app.register(dmConsentRoutes);
+  await app.register(welcomeRoutes);
+  await app.register(guestCardRoutes);
   await app.register(friendsRoutes);
   await app.register(eventRoutes);
   await app.register(wikiRoutes);

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: MIT
 import { useCallback, useEffect, useState } from 'react';
-import type { BlockView, DmPolicy, DmSettings } from '@babelr/shared';
+import type {
+  ArrivalConsentView,
+  BlockView,
+  DmPolicy,
+  DmSettings,
+  WelcomeSetting,
+} from '@babelr/shared';
 import * as api from '../api';
 import { useT } from '../i18n/I18nProvider';
 import type { UIStringKey } from '@babelr/shared';
@@ -17,6 +23,8 @@ export function DMSettingsTab() {
   const t = useT();
   const [settings, setSettings] = useState<DmSettings | null>(null);
   const [blocks, setBlocks] = useState<BlockView[]>([]);
+  const [welcome, setWelcome] = useState<WelcomeSetting[]>([]);
+  const [arrivals, setArrivals] = useState<ArrivalConsentView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,6 +35,16 @@ export function DMSettingsTab() {
         setBlocks(b);
       })
       .catch(() => setError(t('dmConsent.loadFailed')));
+    // Welcoming is its own call, so an older server without it doesn't
+    // break the rest of this tab.
+    api
+      .getWelcomeSettings()
+      .then(setWelcome)
+      .catch(() => setWelcome([]));
+    api
+      .getArrivals()
+      .then(setArrivals)
+      .catch(() => setArrivals([]));
   }, [t]);
 
   useEffect(load, [load]);
@@ -90,6 +108,67 @@ export function DMSettingsTab() {
           </li>
         ))}
       </ul>
+
+      {welcome.length > 0 && (
+        <>
+          <h4>{t('welcome.title')}</h4>
+          <p className="settings-hint">{t('welcome.hint')}</p>
+          <fieldset className="dm-policy-options" disabled={busy} aria-label={t('welcome.title')}>
+            {welcome.map((w) => (
+              <label key={w.serverId} className="dm-policy-option">
+                <input
+                  type="checkbox"
+                  checked={w.welcoming}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    void act(async () => {
+                      try {
+                        const next = await api.setWelcoming(w.serverId, on);
+                        setWelcome((list) =>
+                          list.map((x) => (x.serverId === next.serverId ? next : x)),
+                        );
+                      } catch (err) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        throw new Error(/key/i.test(msg) ? t('welcome.noKey') : msg);
+                      }
+                    });
+                  }}
+                />
+                <span>{t('welcome.toggle', { server: w.serverName })}</span>
+              </label>
+            ))}
+          </fieldset>
+        </>
+      )}
+
+      {arrivals.length > 0 && (
+        <>
+          <h4>{t('arrival.settingsTitle')}</h4>
+          {arrivals.map((a) => (
+            <div key={a.id} className="arrival-setting">
+              <p className="settings-hint" style={{ whiteSpace: 'pre-wrap' }}>
+                {a.seeds}
+                {a.facts.map((f) => `\n${f.key}: ${f.value}`).join('')}
+              </p>
+              <label className="dm-policy-option">
+                <input
+                  type="checkbox"
+                  checked={a.lookupConsent === true}
+                  disabled={busy}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    void act(async () => {
+                      const next = await api.answerArrival(a.id, on);
+                      setArrivals((list) => list.map((x) => (x.id === next.id ? next : x)));
+                    });
+                  }}
+                />
+                <span>{t('arrival.settingsYes')}</span>
+              </label>
+            </div>
+          ))}
+        </>
+      )}
 
       <h4>{t('dmConsent.blocked')}</h4>
       {blocks.length === 0 && <p className="settings-hint">{t('dmConsent.blockedNone')}</p>}

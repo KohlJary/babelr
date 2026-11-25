@@ -24,6 +24,8 @@ export interface InvitePreview {
   valid: boolean;
   error?: string;
   server?: { id: string; name: string };
+  /** Who made the invite, by name. */
+  invitedBy?: { name: string };
 }
 
 export interface LoginInput {

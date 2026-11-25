@@ -7,6 +7,7 @@ import { useT } from '../i18n/I18nProvider';
 import { RolesPanel } from './RolesPanel';
 import { TabbedView } from './TabbedView';
 import { LittleGuysTab } from './LittleGuysTab';
+import { GuestCardsTab } from './GuestCardsTab';
 
 interface ServerSettingsPanelProps {
   server: ServerView;
@@ -20,6 +21,7 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
   const tabs = [
     { id: 'info', label: t('serverSettings.tabInfo') },
     { id: 'invites', label: t('serverSettings.tabInvites') },
+    { id: 'guests', label: t('guests.tab') },
     { id: 'littleGuys', label: t('serverSettings.tabLittleGuys') },
     { id: 'roles', label: t('serverSettings.tabRoles') },
     { id: 'audit', label: t('serverSettings.tabAudit') },
@@ -36,6 +38,8 @@ export function ServerSettingsPanel({ server, onClose, onUpdated }: ServerSettin
             return <InfoTab server={server} onUpdated={onUpdated} />;
           case 'invites':
             return <InvitesTab serverId={server.id} />;
+          case 'guests':
+            return <GuestCardsTab serverId={server.id} />;
           case 'littleGuys':
             return <LittleGuysTab serverId={server.id} />;
           case 'roles':

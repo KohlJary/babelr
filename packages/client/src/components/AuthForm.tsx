@@ -89,7 +89,11 @@ export function AuthForm({ onLogin, onRegister, error }: AuthFormProps) {
           <div className={invite.valid ? 'auth-notice' : 'auth-error'} role="status">
             {invite.valid && invite.server ? (
               <>
-                <strong>{t('auth.invitedTo', { name: invite.server.name })}</strong>
+                <strong>
+                  {invite.invitedBy
+                    ? t('auth.invitedBy', { who: invite.invitedBy.name, name: invite.server.name })
+                    : t('auth.invitedTo', { name: invite.server.name })}
+                </strong>
                 <div>{t('auth.invitedHint')}</div>
               </>
             ) : (

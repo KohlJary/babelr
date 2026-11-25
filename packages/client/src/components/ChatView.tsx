@@ -6,6 +6,7 @@ import * as api from '../api';
 import { useServers } from '../hooks/useServers';
 import { useChannels } from '../hooks/useChannels';
 import { useDMs } from '../hooks/useDMs';
+import { ArrivalConsent } from './ArrivalConsent';
 import { IntroOverlay } from '../house/IntroOverlay';
 import { currentHouse, loadHouse, maybeAutoplay, useHouseStore } from '../house/store';
 import { useChat } from '../hooks/useChat';
@@ -564,6 +565,7 @@ export function ChatView({ actor, onLogout, onActorUpdate }: ChatViewProps) {
           </button>
         </div>
       )}
+      <ArrivalConsent />
       <div className={`app-layout ${drawerClosed ? 'drawer-closed' : ''}`}>
         <ServerSidebar
           servers={servers}

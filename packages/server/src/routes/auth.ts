@@ -71,12 +71,22 @@ export default async function authRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       const check = await checkInvite(db, request.params.code);
       if (!check.ok) return reply.status(check.status).send({ valid: false, error: check.error });
+      // Who invited you, by name. Never the invite's `for` label or seeds:
+      // those are the inviter's notes to the house (welcome.ts).
+      const [inviter] = await db
+        .select({ preferredUsername: actors.preferredUsername, displayName: actors.displayName })
+        .from(actors)
+        .where(eq(actors.id, check.invite.createdBy))
+        .limit(1);
       return {
         valid: true,
         server: {
           id: check.server.id,
           name: check.server.displayName ?? check.server.preferredUsername,
         },
+        ...(inviter
+          ? { invitedBy: { name: inviter.displayName ?? inviter.preferredUsername } }
+          : {}),
       };
     },
   );

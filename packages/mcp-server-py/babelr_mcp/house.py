@@ -146,7 +146,23 @@ class House:
                         for r in (self.agent._req("GET", "/dms/requests") or [])]
         except BabelrError:
             requests = []
-        return {"new_messages": new, "dm_requests": requests,
+        # Newcomers it opted in to welcoming. The hello is its own to write (send_dm), and
+        # writing it marks the welcome done.
+        try:
+            newcomers = [{"who": "@" + (w.get("newcomer") or {}).get("preferredUsername", ""),
+                          "name": _name(w.get("newcomer")),
+                          "server": (w.get("server") or {}).get("name"),
+                          "invited_by": _name(w["invitedBy"]) if w.get("invitedBy") else None,
+                          "ready": bool(w.get("newcomerKeyReady")),
+                          "invited_as": w.get("invitedAs"),
+                          "card": w.get("card"),
+                          "consented": w.get("consented"),
+                          "note": "Someone new joined and a DM with you is waiting for them. Say hello "
+                                  "with send_dm when ready is true (until then they have no key yet)."}
+                         for w in (self.agent.welcomes() or [])]
+        except BabelrError:
+            newcomers = []
+        return {"new_messages": new, "dm_requests": requests, "newcomers": newcomers,
                 "note": "Messages are what housemates wrote to you. Answer a DM with send_dm, "
                         "a channel message with post_in_channel. In your home channel"
                         + (f" (#{self.home_channel})" if self.home_channel else "")
