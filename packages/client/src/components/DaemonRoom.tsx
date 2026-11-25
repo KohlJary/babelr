@@ -39,6 +39,15 @@ export function useRoomOpen(name: string | null): [boolean, () => void] {
       return !o;
     });
   };
+  // On a phone the room covers the conversation: when it hands you words to
+  // send ("this is wrong"), step aside so you can see them. Not stored.
+  useEffect(() => {
+    const onCompose = () => {
+      if (window.matchMedia?.('(max-width: 768px)').matches) setOpen(false);
+    };
+    window.addEventListener('babelr:compose', onCompose);
+    return () => window.removeEventListener('babelr:compose', onCompose);
+  }, []);
   return [open, toggle];
 }
 

@@ -24,6 +24,7 @@ import recordManifest from '@babelr/plugin-record';
 import musicManifest from '@babelr/plugin-music';
 import panelManifest from '@babelr/plugin-panel';
 import daybookManifest from '@babelr/plugin-daybook';
+import remembersManifest from '@babelr/plugin-remembers';
 
 const manifests: PluginManifest[] = [
   blindsManifest,
@@ -37,6 +38,7 @@ const manifests: PluginManifest[] = [
   musicManifest,
   panelManifest,
   daybookManifest,
+  remembersManifest,
 ];
 
 export const registeredPlugins: PluginManifest[] = manifests;
