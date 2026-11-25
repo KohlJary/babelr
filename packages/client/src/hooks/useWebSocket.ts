@@ -1,84 +1,34 @@
 // SPDX-License-Identifier: MIT
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { WsServerMessage, WsClientMessage } from '@babelr/shared';
+import { getWsConnection } from './wsConnection';
 
-const MAX_RECONNECT_DELAY = 30_000;
-
+/**
+ * Subscribe to the tab's shared /ws connection (see wsConnection.ts).
+ * `enabled` holds the connection open for this caller; `onMessage`
+ * receives every server message while the hook is mounted and enabled.
+ */
 export function useWebSocket(enabled: boolean, onMessage: (msg: WsServerMessage) => void) {
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const conn = getWsConnection();
+  const [connected, setConnected] = useState(() => enabled && conn.isConnected());
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
-  const reconnectDelay = useRef(1000);
 
-  const send = useCallback((msg: WsClientMessage) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
-    }
-  }, []);
+  const send = useCallback((msg: WsClientMessage) => conn.send(msg), [conn]);
 
   useEffect(() => {
     if (!enabled) return;
-
-    let mounted = true;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
-
-    function connect() {
-      if (!mounted) return;
-
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${location.host}/ws`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        if (!mounted) return;
-        setConnected(true);
-        reconnectDelay.current = 1000;
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data) as WsServerMessage;
-          onMessageRef.current(msg);
-          // Re-dispatch as a DOM custom event so plugins can subscribe
-          // to their own namespaced messages without plumbing through
-          // the core WS handler pipeline. Core message types are still
-          // delivered via onMessage above; this is an additive channel
-          // for plugin:<id>:<event> messages.
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('babelr:ws', { detail: msg }));
-          }
-        } catch {
-          // Ignore malformed messages
-        }
-      };
-
-      ws.onclose = () => {
-        if (!mounted) return;
-        setConnected(false);
-        wsRef.current = null;
-
-        // Reconnect with exponential backoff
-        reconnectTimer = setTimeout(() => {
-          reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_DELAY);
-          connect();
-        }, reconnectDelay.current);
-      };
-
-      ws.onerror = () => {
-        ws.close();
-      };
-    }
-
-    connect();
-
+    const offMessage = conn.onMessage((msg) => onMessageRef.current(msg));
+    const offConnected = conn.onConnected(setConnected);
+    const release = conn.acquire();
+    setConnected(conn.isConnected());
     return () => {
-      mounted = false;
-      clearTimeout(reconnectTimer);
-      wsRef.current?.close();
-      wsRef.current = null;
+      offMessage();
+      offConnected();
+      release();
+      setConnected(false);
     };
-  }, [enabled]);
+  }, [enabled, conn]);
 
   return { connected, send };
 }
