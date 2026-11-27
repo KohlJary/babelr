@@ -1693,6 +1693,37 @@ body {
   border-color: #2563eb;
 }
 
+.message-attachment-audio {
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  width: 360px;
+}
+
+.message-attachment-audio audio {
+  display: block;
+  width: 100%;
+}
+
+.message-attachment-audio figcaption {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.message-attachment-audio figcaption a {
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+.message-attachment-video {
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: 6px;
+  border: 1px solid #333;
+}
+
 /* Message input */
 .message-input {
   display: flex;
@@ -9701,6 +9732,7 @@ textarea.modal-input {
     max-width: 100%;
   }
   .message-attachment-img,
+  .message-attachment-video,
   .message-content img {
     max-width: 100%;
     height: auto;
