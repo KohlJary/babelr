@@ -229,6 +229,24 @@ export function MessageItem({
             <a key={i} href={att.url} target="_blank" rel="noopener noreferrer">
               <img src={att.url} alt={att.filename} className="message-attachment-img" />
             </a>
+          ) : att.contentType.startsWith('audio/') ? (
+            // A song or a voice note plays in the message, with its name to download it.
+            <figure key={i} className="message-attachment-audio">
+              <audio controls preload="metadata" src={att.url} />
+              <figcaption>
+                <a href={att.url} target="_blank" rel="noopener noreferrer" download={att.filename}>
+                  {att.filename}
+                </a>
+              </figcaption>
+            </figure>
+          ) : att.contentType.startsWith('video/') ? (
+            <video
+              key={i}
+              controls
+              preload="metadata"
+              src={att.url}
+              className="message-attachment-video"
+            />
           ) : (
             <a
               key={i}
